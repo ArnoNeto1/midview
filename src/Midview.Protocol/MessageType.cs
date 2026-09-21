@@ -8,4 +8,9 @@ public enum MessageType : byte
     StopControl = 4,
     FrameTile = 5,
     InputEvent = 6,
+    BlockInternet = 7,
+    UnblockInternet = 8,
+    BlockDomain = 9,
+    UnblockDomain = 10,
+    CommandAck = 11,
 }
