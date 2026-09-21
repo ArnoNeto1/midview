@@ -51,6 +51,7 @@ public sealed class AgentServer
 
     private void HandleClient(TcpClient tcpClient)
     {
+        using var client = tcpClient;
         using var channel = SecureChannel.AuthenticateAsServer(tcpClient, _serverCertificate, _masterTrustStore);
         var message = channel.Receive();
         var success = _commandHandler.Handle(message.Type, message.Payload);
