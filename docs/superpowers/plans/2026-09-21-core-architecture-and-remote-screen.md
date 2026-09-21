@@ -1,16 +1,16 @@
-# TreezeSuite Core Architecture & Remote Screen Engine Implementation Plan
+# Midview Core Architecture & Remote Screen Engine Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **Progress note (2026-09-21):** Tasks 1-15 are implemented, committed, and passing all automated tests (22/22 across the three test projects) while the project owner was away. Task 16 (end-to-end manual validation) is deliberately not yet done -- it requires actually engaging the input lock and injecting input on a real machine, and doing that unsupervised while the only person who could intervene if the untested lock/unlock code failed was away was judged too risky. Do this task once the project owner is present.
 
-**Goal:** Build the three-process foundation (TreezeAgent, TreezeSession, TreezeMaster) and a working remote screen view/control pipeline with a heartbeat-based input lock, as an independent C#/.NET codebase sharing no source with the GPL-licensed Treezeview fork.
+**Goal:** Build the three-process foundation (MidviewAgent, MidviewSession, MidviewMaster) and a working remote screen view/control pipeline with a heartbeat-based input lock, as an independent C#/.NET codebase sharing no source with the GPL-licensed Treezeview fork.
 
-**Architecture:** A shared `TreezeSuite.Protocol` library (message framing, mutual-TLS secure channel, tile diffing, JPEG tile codec) is consumed by three executables: `TreezeSuite.Agent` (Windows Service; supervises the session process), `TreezeSuite.Session` (per-user-session process; screen capture, input injection, input lock, network server), and `TreezeSuite.Master` (WPF console; connects, views, and controls).
+**Architecture:** A shared `Midview.Protocol` library (message framing, mutual-TLS secure channel, tile diffing, JPEG tile codec) is consumed by three executables: `Midview.Agent` (Windows Service; supervises the session process), `Midview.Session` (per-user-session process; screen capture, input injection, input lock, network server), and `Midview.Master` (WPF console; connects, views, and controls).
 
 **Tech Stack:** C# / .NET 8 (Windows-only, `net8.0-windows`), WPF for the Master UI, `System.Drawing.Common` for capture/encoding (GDI-based, avoids any third-party imaging license), built-in `SslStream` for transport security, xUnit for tests.
 
-**Spec:** `C:\Users\Neto\Desktop\TreezeSuite\docs\superpowers\specs\2026-09-21-core-architecture-and-remote-screen-design.md`
+**Spec:** `C:\Users\Neto\Desktop\Midview\docs\superpowers\specs\2026-09-21-core-architecture-and-remote-screen-design.md`
 
 ## Global Constraints
 
@@ -33,14 +33,14 @@ The spec doesn't name an imaging library, but a reasonable default (SixLabors.Im
 ### Task 1: Solution scaffolding
 
 **Files:**
-- Create: `TreezeSuite.sln`
-- Create: `src/TreezeSuite.Protocol/TreezeSuite.Protocol.csproj`
-- Create: `src/TreezeSuite.Session/TreezeSuite.Session.csproj`
-- Create: `src/TreezeSuite.Agent/TreezeSuite.Agent.csproj`
-- Create: `src/TreezeSuite.Master/TreezeSuite.Master.csproj`
-- Create: `tests/TreezeSuite.Protocol.Tests/TreezeSuite.Protocol.Tests.csproj`
-- Create: `tests/TreezeSuite.Session.Tests/TreezeSuite.Session.Tests.csproj`
-- Create: `tests/TreezeSuite.Agent.Tests/TreezeSuite.Agent.Tests.csproj`
+- Create: `Midview.sln`
+- Create: `src/Midview.Protocol/Midview.Protocol.csproj`
+- Create: `src/Midview.Session/Midview.Session.csproj`
+- Create: `src/Midview.Agent/Midview.Agent.csproj`
+- Create: `src/Midview.Master/Midview.Master.csproj`
+- Create: `tests/Midview.Protocol.Tests/Midview.Protocol.Tests.csproj`
+- Create: `tests/Midview.Session.Tests/Midview.Session.Tests.csproj`
+- Create: `tests/Midview.Agent.Tests/Midview.Agent.Tests.csproj`
 - Create: `.gitignore`
 
 **Interfaces:**
@@ -55,7 +55,7 @@ obj/
 .vs/
 ```
 
-- [x] **Step 2: Create `src/TreezeSuite.Protocol/TreezeSuite.Protocol.csproj`**
+- [x] **Step 2: Create `src/Midview.Protocol/Midview.Protocol.csproj`**
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -70,7 +70,7 @@ obj/
 </Project>
 ```
 
-- [x] **Step 3: Create `src/TreezeSuite.Session/TreezeSuite.Session.csproj`**
+- [x] **Step 3: Create `src/Midview.Session/Midview.Session.csproj`**
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -81,12 +81,12 @@ obj/
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\TreezeSuite.Protocol\TreezeSuite.Protocol.csproj" />
+    <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
 </Project>
 ```
 
-- [x] **Step 4: Create `src/TreezeSuite.Agent/TreezeSuite.Agent.csproj`**
+- [x] **Step 4: Create `src/Midview.Agent/Midview.Agent.csproj`**
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -100,12 +100,12 @@ obj/
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\TreezeSuite.Protocol\TreezeSuite.Protocol.csproj" />
+    <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
 </Project>
 ```
 
-- [x] **Step 5: Create `src/TreezeSuite.Master/TreezeSuite.Master.csproj`**
+- [x] **Step 5: Create `src/Midview.Master/Midview.Master.csproj`**
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -117,14 +117,14 @@ obj/
     <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\TreezeSuite.Protocol\TreezeSuite.Protocol.csproj" />
+    <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
 </Project>
 ```
 
 - [x] **Step 6: Create the three test projects** (identical shape, different `ProjectReference`)
 
-`tests/TreezeSuite.Protocol.Tests/TreezeSuite.Protocol.Tests.csproj`:
+`tests/Midview.Protocol.Tests/Midview.Protocol.Tests.csproj`:
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
@@ -140,38 +140,38 @@ obj/
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\TreezeSuite.Protocol\TreezeSuite.Protocol.csproj" />
+    <ProjectReference Include="..\..\src\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
 </Project>
 ```
 
-`tests/TreezeSuite.Session.Tests/TreezeSuite.Session.Tests.csproj` — same body, but the `ProjectReference` points to `..\..\src\TreezeSuite.Session\TreezeSuite.Session.csproj` **and** `..\..\src\TreezeSuite.Protocol\TreezeSuite.Protocol.csproj` (two references).
+`tests/Midview.Session.Tests/Midview.Session.Tests.csproj` — same body, but the `ProjectReference` points to `..\..\src\Midview.Session\Midview.Session.csproj` **and** `..\..\src\Midview.Protocol\Midview.Protocol.csproj` (two references).
 
-`tests/TreezeSuite.Agent.Tests/TreezeSuite.Agent.Tests.csproj` — same body, `ProjectReference` pointing to `..\..\src\TreezeSuite.Agent\TreezeSuite.Agent.csproj`.
+`tests/Midview.Agent.Tests/Midview.Agent.Tests.csproj` — same body, `ProjectReference` pointing to `..\..\src\Midview.Agent\Midview.Agent.csproj`.
 
 - [x] **Step 7: Create the solution and add every project**
 
 ```bash
-dotnet new sln -n TreezeSuite
-dotnet sln add src/TreezeSuite.Protocol/TreezeSuite.Protocol.csproj
-dotnet sln add src/TreezeSuite.Session/TreezeSuite.Session.csproj
-dotnet sln add src/TreezeSuite.Agent/TreezeSuite.Agent.csproj
-dotnet sln add src/TreezeSuite.Master/TreezeSuite.Master.csproj
-dotnet sln add tests/TreezeSuite.Protocol.Tests/TreezeSuite.Protocol.Tests.csproj
-dotnet sln add tests/TreezeSuite.Session.Tests/TreezeSuite.Session.Tests.csproj
-dotnet sln add tests/TreezeSuite.Agent.Tests/TreezeSuite.Agent.Tests.csproj
+dotnet new sln -n Midview
+dotnet sln add src/Midview.Protocol/Midview.Protocol.csproj
+dotnet sln add src/Midview.Session/Midview.Session.csproj
+dotnet sln add src/Midview.Agent/Midview.Agent.csproj
+dotnet sln add src/Midview.Master/Midview.Master.csproj
+dotnet sln add tests/Midview.Protocol.Tests/Midview.Protocol.Tests.csproj
+dotnet sln add tests/Midview.Session.Tests/Midview.Session.Tests.csproj
+dotnet sln add tests/Midview.Agent.Tests/Midview.Agent.Tests.csproj
 ```
 
 - [x] **Step 8: Verify it builds**
 
 Run: `dotnet build`
-Expected: succeeds with 0 errors (projects are empty except for placeholder `Program.cs`/`App.xaml` files `dotnet new` style templates don't create automatically for a bare `Sdk="Microsoft.NET.Sdk"` csproj with `OutputType=Exe` — if the build complains about a missing entry point, add a one-line `Program.cs` with `Console.WriteLine("TreezeSuite.Session placeholder");` to `Session` and `Agent`, and a minimal `App.xaml`/`App.xaml.cs` pair to `Master` per the standard WPF template; these get replaced by real code in later tasks).
+Expected: succeeds with 0 errors (projects are empty except for placeholder `Program.cs`/`App.xaml` files `dotnet new` style templates don't create automatically for a bare `Sdk="Microsoft.NET.Sdk"` csproj with `OutputType=Exe` — if the build complains about a missing entry point, add a one-line `Program.cs` with `Console.WriteLine("Midview.Session placeholder");` to `Session` and `Agent`, and a minimal `App.xaml`/`App.xaml.cs` pair to `Master` per the standard WPF template; these get replaced by real code in later tasks).
 
 - [x] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "Scaffold TreezeSuite solution: Protocol, Session, Agent, Master projects"
+git commit -m "Scaffold Midview solution: Protocol, Session, Agent, Master projects"
 ```
 
 ---
@@ -179,10 +179,10 @@ git commit -m "Scaffold TreezeSuite solution: Protocol, Session, Agent, Master p
 ### Task 2: Protocol — message types and framing
 
 **Files:**
-- Create: `src/TreezeSuite.Protocol/MessageType.cs`
-- Create: `src/TreezeSuite.Protocol/Message.cs`
-- Create: `src/TreezeSuite.Protocol/MessageFramer.cs`
-- Test: `tests/TreezeSuite.Protocol.Tests/MessageFramerTests.cs`
+- Create: `src/Midview.Protocol/MessageType.cs`
+- Create: `src/Midview.Protocol/Message.cs`
+- Create: `src/Midview.Protocol/MessageFramer.cs`
+- Test: `tests/Midview.Protocol.Tests/MessageFramerTests.cs`
 
 **Interfaces:**
 - Produces: `MessageType` enum, `Message(MessageType Type, byte[] Payload)`, `MessageFramer.Write(Stream, Message)`, `MessageFramer.Read(Stream) -> Message`. Every later task that sends/receives anything over the wire uses these three types.
@@ -190,8 +190,8 @@ git commit -m "Scaffold TreezeSuite solution: Protocol, Session, Agent, Master p
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Protocol.Tests/MessageFramerTests.cs
-using TreezeSuite.Protocol;
+// tests/Midview.Protocol.Tests/MessageFramerTests.cs
+using Midview.Protocol;
 using Xunit;
 
 public class MessageFramerTests
@@ -238,13 +238,13 @@ public class MessageFramerTests
 
 - [x] **Step 2: Run the tests to verify they fail (types don't exist yet)**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: FAIL to compile — `MessageType`, `Message`, `MessageFramer` not found.
 
 - [x] **Step 3: Implement `MessageType.cs`**
 
 ```csharp
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public enum MessageType : byte
 {
@@ -260,7 +260,7 @@ public enum MessageType : byte
 - [x] **Step 4: Implement `Message.cs`**
 
 ```csharp
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public sealed class Message
 {
@@ -280,7 +280,7 @@ public sealed class Message
 ```csharp
 using System.Buffers.Binary;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public static class MessageFramer
 {
@@ -330,13 +330,13 @@ public static class MessageFramer
 
 - [x] **Step 6: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: PASS (3/3)
 
 - [x] **Step 7: Commit**
 
 ```bash
-git add src/TreezeSuite.Protocol/MessageType.cs src/TreezeSuite.Protocol/Message.cs src/TreezeSuite.Protocol/MessageFramer.cs tests/TreezeSuite.Protocol.Tests/MessageFramerTests.cs
+git add src/Midview.Protocol/MessageType.cs src/Midview.Protocol/Message.cs src/Midview.Protocol/MessageFramer.cs tests/Midview.Protocol.Tests/MessageFramerTests.cs
 git commit -m "Add message framing protocol (type + length-prefixed payload)"
 ```
 
@@ -345,23 +345,23 @@ git commit -m "Add message framing protocol (type + length-prefixed payload)"
 ### Task 3: Protocol — trust store and mutual-TLS secure channel
 
 **Files:**
-- Create: `src/TreezeSuite.Protocol/SelfSignedCertificate.cs`
-- Create: `src/TreezeSuite.Protocol/TrustStore.cs`
-- Create: `src/TreezeSuite.Protocol/SecureChannel.cs`
-- Test: `tests/TreezeSuite.Protocol.Tests/SecureChannelTests.cs`
+- Create: `src/Midview.Protocol/SelfSignedCertificate.cs`
+- Create: `src/Midview.Protocol/TrustStore.cs`
+- Create: `src/Midview.Protocol/SecureChannel.cs`
+- Test: `tests/Midview.Protocol.Tests/SecureChannelTests.cs`
 
 **Interfaces:**
 - Consumes: `Message`, `MessageFramer` from Task 2.
-- Produces: `SelfSignedCertificate.Create(string subjectName) -> X509Certificate2`, `TrustStore(IEnumerable<string> trustedThumbprints)` with `IsTrusted(X509Certificate) -> bool`, `SecureChannel.AuthenticateAsServer(TcpClient, X509Certificate2, TrustStore) -> SecureChannel`, `SecureChannel.AuthenticateAsClient(TcpClient, string targetHost, X509Certificate2, TrustStore) -> SecureChannel`, instance methods `Send(Message)` / `Receive() -> Message`. `TreezeSuite.Session`'s server (Task 12) and `TreezeSuite.Master`'s client (Task 15) both build directly on this.
+- Produces: `SelfSignedCertificate.Create(string subjectName) -> X509Certificate2`, `TrustStore(IEnumerable<string> trustedThumbprints)` with `IsTrusted(X509Certificate) -> bool`, `SecureChannel.AuthenticateAsServer(TcpClient, X509Certificate2, TrustStore) -> SecureChannel`, `SecureChannel.AuthenticateAsClient(TcpClient, string targetHost, X509Certificate2, TrustStore) -> SecureChannel`, instance methods `Send(Message)` / `Receive() -> Message`. `Midview.Session`'s server (Task 12) and `Midview.Master`'s client (Task 15) both build directly on this.
 
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Protocol.Tests/SecureChannelTests.cs
+// tests/Midview.Protocol.Tests/SecureChannelTests.cs
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 using Xunit;
 
 public class SecureChannelTests
@@ -430,7 +430,7 @@ public class SecureChannelTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: FAIL to compile — `SelfSignedCertificate`, `TrustStore`, `SecureChannel` not found.
 
 - [x] **Step 3: Implement `SelfSignedCertificate.cs`**
@@ -439,7 +439,7 @@ Expected: FAIL to compile — `SelfSignedCertificate`, `TrustStore`, `SecureChan
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public static class SelfSignedCertificate
 {
@@ -460,7 +460,7 @@ public static class SelfSignedCertificate
 ```csharp
 using System.Security.Cryptography.X509Certificates;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public sealed class TrustStore
 {
@@ -489,7 +489,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public sealed class SecureChannel : IDisposable
 {
@@ -536,13 +536,13 @@ public sealed class SecureChannel : IDisposable
 
 - [x] **Step 6: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: PASS (5/5 including Task 2's tests)
 
 - [x] **Step 7: Commit**
 
 ```bash
-git add src/TreezeSuite.Protocol/SelfSignedCertificate.cs src/TreezeSuite.Protocol/TrustStore.cs src/TreezeSuite.Protocol/SecureChannel.cs tests/TreezeSuite.Protocol.Tests/SecureChannelTests.cs
+git add src/Midview.Protocol/SelfSignedCertificate.cs src/Midview.Protocol/TrustStore.cs src/Midview.Protocol/SecureChannel.cs tests/Midview.Protocol.Tests/SecureChannelTests.cs
 git commit -m "Add trust-store-validated mutual TLS secure channel"
 ```
 
@@ -551,9 +551,9 @@ git commit -m "Add trust-store-validated mutual TLS secure channel"
 ### Task 4: Protocol — tile diffing
 
 **Files:**
-- Create: `src/TreezeSuite.Protocol/TileCoord.cs`
-- Create: `src/TreezeSuite.Protocol/TileDiff.cs`
-- Test: `tests/TreezeSuite.Protocol.Tests/TileDiffTests.cs`
+- Create: `src/Midview.Protocol/TileCoord.cs`
+- Create: `src/Midview.Protocol/TileDiff.cs`
+- Test: `tests/Midview.Protocol.Tests/TileDiffTests.cs`
 
 **Interfaces:**
 - Produces: `TileCoord(int Row, int Column)`, `TileDiff.TileSize` (const), `TileDiff.FindChangedTiles(Bitmap previous, Bitmap current) -> IReadOnlyList<TileCoord>`, `TileDiff.TileRect(int row, int column, int imageWidth, int imageHeight) -> Rectangle`. Task 10's `FramePipeline` calls `FindChangedTiles` every frame and `TileRect` to know what to pass to `TileCodec` (Task 5).
@@ -561,9 +561,9 @@ git commit -m "Add trust-store-validated mutual TLS secure channel"
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Protocol.Tests/TileDiffTests.cs
+// tests/Midview.Protocol.Tests/TileDiffTests.cs
 using System.Drawing;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 using Xunit;
 
 public class TileDiffTests
@@ -620,13 +620,13 @@ public class TileDiffTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: FAIL to compile — `TileCoord`, `TileDiff` not found.
 
 - [x] **Step 3: Implement `TileCoord.cs`**
 
 ```csharp
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public readonly record struct TileCoord(int Row, int Column);
 ```
@@ -636,7 +636,7 @@ public readonly record struct TileCoord(int Row, int Column);
 ```csharp
 using System.Drawing;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public static class TileDiff
 {
@@ -701,13 +701,13 @@ public static class TileDiff
 
 - [x] **Step 5: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: PASS (8/8)
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add src/TreezeSuite.Protocol/TileCoord.cs src/TreezeSuite.Protocol/TileDiff.cs tests/TreezeSuite.Protocol.Tests/TileDiffTests.cs
+git add src/Midview.Protocol/TileCoord.cs src/Midview.Protocol/TileDiff.cs tests/Midview.Protocol.Tests/TileDiffTests.cs
 git commit -m "Add tile-based frame diffing"
 ```
 
@@ -716,19 +716,19 @@ git commit -m "Add tile-based frame diffing"
 ### Task 5: Protocol — JPEG tile codec
 
 **Files:**
-- Create: `src/TreezeSuite.Protocol/TileCodec.cs`
-- Test: `tests/TreezeSuite.Protocol.Tests/TileCodecTests.cs`
+- Create: `src/Midview.Protocol/TileCodec.cs`
+- Test: `tests/Midview.Protocol.Tests/TileCodecTests.cs`
 
 **Interfaces:**
 - Consumes: `TileDiff.TileRect` output (a `Rectangle`) from Task 4.
-- Produces: `TileCodec.EncodeTile(Bitmap source, Rectangle rect, long quality = 75L) -> byte[]`, `TileCodec.DecodeTile(byte[] jpegBytes) -> Bitmap`. Task 10's `FramePipeline` calls `EncodeTile` for each changed tile; `TreezeMaster`'s `ViewControlWindow` (Task 15) calls `DecodeTile` on receipt.
+- Produces: `TileCodec.EncodeTile(Bitmap source, Rectangle rect, long quality = 75L) -> byte[]`, `TileCodec.DecodeTile(byte[] jpegBytes) -> Bitmap`. Task 10's `FramePipeline` calls `EncodeTile` for each changed tile; `MidviewMaster`'s `ViewControlWindow` (Task 15) calls `DecodeTile` on receipt.
 
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Protocol.Tests/TileCodecTests.cs
+// tests/Midview.Protocol.Tests/TileCodecTests.cs
 using System.Drawing;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 using Xunit;
 
 public class TileCodecTests
@@ -775,7 +775,7 @@ public class TileCodecTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: FAIL to compile — `TileCodec` not found.
 
 - [x] **Step 3: Implement `TileCodec.cs`**
@@ -784,7 +784,7 @@ Expected: FAIL to compile — `TileCodec` not found.
 using System.Drawing;
 using System.Drawing.Imaging;
 
-namespace TreezeSuite.Protocol;
+namespace Midview.Protocol;
 
 public static class TileCodec
 {
@@ -810,13 +810,13 @@ public static class TileCodec
 
 - [x] **Step 4: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Protocol.Tests`
+Run: `dotnet test tests/Midview.Protocol.Tests`
 Expected: PASS (10/10)
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add src/TreezeSuite.Protocol/TileCodec.cs tests/TreezeSuite.Protocol.Tests/TileCodecTests.cs
+git add src/Midview.Protocol/TileCodec.cs tests/Midview.Protocol.Tests/TileCodecTests.cs
 git commit -m "Add JPEG tile codec using System.Drawing.Common (no third-party imaging license)"
 ```
 
@@ -842,8 +842,8 @@ git commit -m "Record input-blocking mechanism decision after license review"
 ### Task 7: Session — Windows input device controller
 
 **Files:**
-- Create: `src/TreezeSuite.Session/IInputDeviceController.cs`
-- Create: `src/TreezeSuite.Session/WindowsInputDeviceController.cs`
+- Create: `src/Midview.Session/IInputDeviceController.cs`
+- Create: `src/Midview.Session/WindowsInputDeviceController.cs`
 
 **Interfaces:**
 - Produces: `IInputDeviceController` with `DisableInputDevices()` / `EnableInputDevices()`, and `WindowsInputDeviceController` implementing it. Task 8's `InputLockManager` is constructed with an `IInputDeviceController`; production code passes `WindowsInputDeviceController`, tests pass a fake.
@@ -851,8 +851,8 @@ git commit -m "Record input-blocking mechanism decision after license review"
 - [x] **Step 1: Define the interface**
 
 ```csharp
-// src/TreezeSuite.Session/IInputDeviceController.cs
-namespace TreezeSuite.Session;
+// src/Midview.Session/IInputDeviceController.cs
+namespace Midview.Session;
 
 public interface IInputDeviceController
 {
@@ -868,7 +868,7 @@ If Task 6 chose the SetupDi fallback, implement it as:
 ```csharp
 using System.Runtime.InteropServices;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class WindowsInputDeviceController : IInputDeviceController
 {
@@ -986,7 +986,7 @@ Add a temporary `Console.WriteLine` call in `Program.cs`: call `DisableInputDevi
 - [x] **Step 4: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/IInputDeviceController.cs src/TreezeSuite.Session/WindowsInputDeviceController.cs
+git add src/Midview.Session/IInputDeviceController.cs src/Midview.Session/WindowsInputDeviceController.cs
 git commit -m "Add Windows input device controller (disable/enable keyboard+mouse)"
 ```
 
@@ -995,10 +995,10 @@ git commit -m "Add Windows input device controller (disable/enable keyboard+mous
 ### Task 8: Session — input lock manager with heartbeat auto-unlock
 
 **Files:**
-- Create: `src/TreezeSuite.Session/ISystemClock.cs`
-- Create: `src/TreezeSuite.Session/SystemClock.cs`
-- Create: `src/TreezeSuite.Session/InputLockManager.cs`
-- Test: `tests/TreezeSuite.Session.Tests/InputLockManagerTests.cs`
+- Create: `src/Midview.Session/ISystemClock.cs`
+- Create: `src/Midview.Session/SystemClock.cs`
+- Create: `src/Midview.Session/InputLockManager.cs`
+- Test: `tests/Midview.Session.Tests/InputLockManagerTests.cs`
 
 **Interfaces:**
 - Consumes: `IInputDeviceController` from Task 7.
@@ -1007,8 +1007,8 @@ git commit -m "Add Windows input device controller (disable/enable keyboard+mous
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Session.Tests/InputLockManagerTests.cs
-using TreezeSuite.Session;
+// tests/Midview.Session.Tests/InputLockManagerTests.cs
+using Midview.Session;
 using Xunit;
 
 public class FakeClock : ISystemClock
@@ -1101,14 +1101,14 @@ public class InputLockManagerTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Session.Tests`
+Run: `dotnet test tests/Midview.Session.Tests`
 Expected: FAIL to compile — types not found.
 
 - [x] **Step 3: Implement `ISystemClock.cs` and `SystemClock.cs`**
 
 ```csharp
-// src/TreezeSuite.Session/ISystemClock.cs
-namespace TreezeSuite.Session;
+// src/Midview.Session/ISystemClock.cs
+namespace Midview.Session;
 
 public interface ISystemClock
 {
@@ -1117,8 +1117,8 @@ public interface ISystemClock
 ```
 
 ```csharp
-// src/TreezeSuite.Session/SystemClock.cs
-namespace TreezeSuite.Session;
+// src/Midview.Session/SystemClock.cs
+namespace Midview.Session;
 
 public sealed class SystemClock : ISystemClock
 {
@@ -1129,7 +1129,7 @@ public sealed class SystemClock : ISystemClock
 - [x] **Step 4: Implement `InputLockManager.cs`**
 
 ```csharp
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class InputLockManager
 {
@@ -1193,13 +1193,13 @@ public sealed class InputLockManager
 
 - [x] **Step 5: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Session.Tests`
+Run: `dotnet test tests/Midview.Session.Tests`
 Expected: PASS (5/5)
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/ISystemClock.cs src/TreezeSuite.Session/SystemClock.cs src/TreezeSuite.Session/InputLockManager.cs tests/TreezeSuite.Session.Tests/InputLockManagerTests.cs
+git add src/Midview.Session/ISystemClock.cs src/Midview.Session/SystemClock.cs src/Midview.Session/InputLockManager.cs tests/Midview.Session.Tests/InputLockManagerTests.cs
 git commit -m "Add input lock manager with heartbeat-based auto-unlock safety net"
 ```
 
@@ -1208,8 +1208,8 @@ git commit -m "Add input lock manager with heartbeat-based auto-unlock safety ne
 ### Task 9: Session — screen capture (GDI)
 
 **Files:**
-- Create: `src/TreezeSuite.Session/IScreenCapture.cs`
-- Create: `src/TreezeSuite.Session/GdiScreenCapture.cs`
+- Create: `src/Midview.Session/IScreenCapture.cs`
+- Create: `src/Midview.Session/GdiScreenCapture.cs`
 
 **Interfaces:**
 - Produces: `IScreenCapture` with `CaptureFrame() -> Bitmap`, and `GdiScreenCapture` implementing it against the primary screen's bounds. Task 10's `FramePipeline` is constructed with an `IScreenCapture`; production code passes `GdiScreenCapture`, tests pass a fake that returns pre-made bitmaps.
@@ -1217,10 +1217,10 @@ git commit -m "Add input lock manager with heartbeat-based auto-unlock safety ne
 - [x] **Step 1: Define the interface**
 
 ```csharp
-// src/TreezeSuite.Session/IScreenCapture.cs
+// src/Midview.Session/IScreenCapture.cs
 using System.Drawing;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public interface IScreenCapture
 {
@@ -1234,7 +1234,7 @@ public interface IScreenCapture
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class GdiScreenCapture : IScreenCapture
 {
@@ -1249,7 +1249,7 @@ public sealed class GdiScreenCapture : IScreenCapture
 }
 ```
 
-This needs a reference to `System.Windows.Forms` (for `Screen.PrimaryScreen`) — add `<UseWindowsForms>true</UseWindowsForms>` to `src/TreezeSuite.Session/TreezeSuite.Session.csproj`'s `PropertyGroup`.
+This needs a reference to `System.Windows.Forms` (for `Screen.PrimaryScreen`) — add `<UseWindowsForms>true</UseWindowsForms>` to `src/Midview.Session/Midview.Session.csproj`'s `PropertyGroup`.
 
 - [x] **Step 3: Manually verify**
 
@@ -1258,7 +1258,7 @@ Add a temporary call in `Program.cs`: `new GdiScreenCapture().CaptureFrame().Sav
 - [x] **Step 4: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/IScreenCapture.cs src/TreezeSuite.Session/GdiScreenCapture.cs src/TreezeSuite.Session/TreezeSuite.Session.csproj
+git add src/Midview.Session/IScreenCapture.cs src/Midview.Session/GdiScreenCapture.cs src/Midview.Session/Midview.Session.csproj
 git commit -m "Add GDI-based screen capture"
 ```
 
@@ -1267,20 +1267,20 @@ git commit -m "Add GDI-based screen capture"
 ### Task 10: Session — frame pipeline
 
 **Files:**
-- Create: `src/TreezeSuite.Session/EncodedTile.cs`
-- Create: `src/TreezeSuite.Session/FramePipeline.cs`
-- Test: `tests/TreezeSuite.Session.Tests/FramePipelineTests.cs`
+- Create: `src/Midview.Session/EncodedTile.cs`
+- Create: `src/Midview.Session/FramePipeline.cs`
+- Test: `tests/Midview.Session.Tests/FramePipelineTests.cs`
 
 **Interfaces:**
-- Consumes: `IScreenCapture` (Task 9), `TileDiff` and `TileCodec` (Tasks 4–5) from `TreezeSuite.Protocol`.
+- Consumes: `IScreenCapture` (Task 9), `TileDiff` and `TileCodec` (Tasks 4–5) from `Midview.Protocol`.
 - Produces: `EncodedTile(int Row, int Column, byte[] JpegBytes)`, `FramePipeline(IScreenCapture)` with `CaptureNextFrame() -> IReadOnlyList<EncodedTile>` (empty list on the very first call, since there's no previous frame to diff against — the caller is responsible for a full-frame send on first connect, handled in Task 12). Task 12's `SessionServer` calls `CaptureNextFrame` on a timer and turns each `EncodedTile` into a `FrameTile` message.
 
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Session.Tests/FramePipelineTests.cs
+// tests/Midview.Session.Tests/FramePipelineTests.cs
 using System.Drawing;
-using TreezeSuite.Session;
+using Midview.Session;
 using Xunit;
 
 public class FakeScreenCapture : IScreenCapture
@@ -1353,13 +1353,13 @@ public class FramePipelineTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Session.Tests`
+Run: `dotnet test tests/Midview.Session.Tests`
 Expected: FAIL to compile — types not found.
 
 - [x] **Step 3: Implement `EncodedTile.cs`**
 
 ```csharp
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed record EncodedTile(int Row, int Column, byte[] JpegBytes);
 ```
@@ -1368,9 +1368,9 @@ public sealed record EncodedTile(int Row, int Column, byte[] JpegBytes);
 
 ```csharp
 using System.Drawing;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class FramePipeline
 {
@@ -1410,13 +1410,13 @@ public sealed class FramePipeline
 
 - [x] **Step 5: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Session.Tests`
+Run: `dotnet test tests/Midview.Session.Tests`
 Expected: PASS (3/3)
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/EncodedTile.cs src/TreezeSuite.Session/FramePipeline.cs tests/TreezeSuite.Session.Tests/FramePipelineTests.cs
+git add src/Midview.Session/EncodedTile.cs src/Midview.Session/FramePipeline.cs tests/Midview.Session.Tests/FramePipelineTests.cs
 git commit -m "Add frame pipeline: capture, diff, and JPEG-encode only changed tiles"
 ```
 
@@ -1425,9 +1425,9 @@ git commit -m "Add frame pipeline: capture, diff, and JPEG-encode only changed t
 ### Task 11: Session — input injection
 
 **Files:**
-- Create: `src/TreezeSuite.Session/InputEvent.cs`
-- Create: `src/TreezeSuite.Session/IInputInjector.cs`
-- Create: `src/TreezeSuite.Session/SendInputInjector.cs`
+- Create: `src/Midview.Session/InputEvent.cs`
+- Create: `src/Midview.Session/IInputInjector.cs`
+- Create: `src/Midview.Session/SendInputInjector.cs`
 
 **Interfaces:**
 - Produces: `InputEvent` (a small DTO covering mouse move/click and key down/up), `IInputInjector` with `Inject(InputEvent)`, `SendInputInjector` implementing it via `user32.dll`'s `SendInput`. Task 12's `SessionServer` decodes `InputEvent` messages and calls `Inject`.
@@ -1435,7 +1435,7 @@ git commit -m "Add frame pipeline: capture, diff, and JPEG-encode only changed t
 - [x] **Step 1: Define `InputEvent.cs`**
 
 ```csharp
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public enum InputEventKind
 {
@@ -1452,7 +1452,7 @@ public sealed record InputEvent(InputEventKind Kind, int X, int Y, ushort Virtua
 - [x] **Step 2: Define `IInputInjector.cs`**
 
 ```csharp
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public interface IInputInjector
 {
@@ -1465,7 +1465,7 @@ public interface IInputInjector
 ```csharp
 using System.Runtime.InteropServices;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class SendInputInjector : IInputInjector
 {
@@ -1573,7 +1573,7 @@ Add a temporary call in `Program.cs`: inject a `MouseMove` to the screen center,
 - [x] **Step 5: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/InputEvent.cs src/TreezeSuite.Session/IInputInjector.cs src/TreezeSuite.Session/SendInputInjector.cs
+git add src/Midview.Session/InputEvent.cs src/Midview.Session/IInputInjector.cs src/Midview.Session/SendInputInjector.cs
 git commit -m "Add SendInput-based mouse/keyboard input injection"
 ```
 
@@ -1582,21 +1582,21 @@ git commit -m "Add SendInput-based mouse/keyboard input injection"
 ### Task 12: Session — server tying capture, injection, and lock together
 
 **Files:**
-- Create: `src/TreezeSuite.Session/SessionServer.cs`
-- Modify: `src/TreezeSuite.Session/Program.cs`
+- Create: `src/Midview.Session/SessionServer.cs`
+- Modify: `src/Midview.Session/Program.cs`
 
 **Interfaces:**
 - Consumes: `SecureChannel` (Task 3), `FramePipeline`/`EncodedTile` (Task 10), `IInputInjector`/`InputEvent` (Task 11), `InputLockManager` (Task 8), `MessageType`/`Message` (Task 2).
-- Produces: `SessionServer(TcpListener, X509Certificate2, TrustStore, FramePipeline, IInputInjector, InputLockManager)` with `Run(CancellationToken)`. `Program.cs` constructs and runs it; Task 15's `TreezeMaster` is the client this task's server talks to.
+- Produces: `SessionServer(TcpListener, X509Certificate2, TrustStore, FramePipeline, IInputInjector, InputLockManager)` with `Run(CancellationToken)`. `Program.cs` constructs and runs it; Task 15's `MidviewMaster` is the client this task's server talks to.
 
 - [x] **Step 1: Implement `SessionServer.cs`**
 
 ```csharp
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 
-namespace TreezeSuite.Session;
+namespace Midview.Session;
 
 public sealed class SessionServer
 {
@@ -1737,16 +1737,16 @@ internal static class TileMessageCodec
 ```csharp
 using System.Net;
 using System.Net.Sockets;
-using TreezeSuite.Protocol;
-using TreezeSuite.Session;
+using Midview.Protocol;
+using Midview.Session;
 
 var serverCertificate = SelfSignedCertificate.Create(Environment.MachineName);
-Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's TreezeMaster): {serverCertificate.Thumbprint}");
+Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
 // TODO (later task, not this one): load the actual trusted master thumbprint(s)
 // from a config file instead of accepting a command-line argument.
 var masterThumbprint = args.Length > 0 ? args[0] : throw new ArgumentException(
-    "Pass the trusted TreezeMaster certificate thumbprint as the first argument for this manual test.");
+    "Pass the trusted MidviewMaster certificate thumbprint as the first argument for this manual test.");
 
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
@@ -1761,13 +1761,13 @@ server.Run(CancellationToken.None);
 
 - [x] **Step 4: Verify the project builds**
 
-Run: `dotnet build src/TreezeSuite.Session`
+Run: `dotnet build src/Midview.Session`
 Expected: succeeds with 0 errors.
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add src/TreezeSuite.Session/SessionServer.cs src/TreezeSuite.Session/Program.cs
+git add src/Midview.Session/SessionServer.cs src/Midview.Session/Program.cs
 git commit -m "Add session server tying together capture, injection, and input lock"
 ```
 
@@ -1776,9 +1776,9 @@ git commit -m "Add session server tying together capture, injection, and input l
 ### Task 13: Agent — session process supervisor
 
 **Files:**
-- Create: `src/TreezeSuite.Agent/ISessionProcessLauncher.cs`
-- Create: `src/TreezeSuite.Agent/SessionSupervisor.cs`
-- Test: `tests/TreezeSuite.Agent.Tests/SessionSupervisorTests.cs`
+- Create: `src/Midview.Agent/ISessionProcessLauncher.cs`
+- Create: `src/Midview.Agent/SessionSupervisor.cs`
+- Test: `tests/Midview.Agent.Tests/SessionSupervisorTests.cs`
 
 **Interfaces:**
 - Produces: `ISessionProcessLauncher` with `TryLaunch(out int processId) -> bool` and `IsRunning(int processId) -> bool`; `SessionSupervisor(ISessionProcessLauncher, TimeSpan pollInterval)` with `EnsureRunning()`. Task 14's Windows Service host calls `EnsureRunning()` on a timer.
@@ -1786,8 +1786,8 @@ git commit -m "Add session server tying together capture, injection, and input l
 - [x] **Step 1: Write the failing tests**
 
 ```csharp
-// tests/TreezeSuite.Agent.Tests/SessionSupervisorTests.cs
-using TreezeSuite.Agent;
+// tests/Midview.Agent.Tests/SessionSupervisorTests.cs
+using Midview.Agent;
 using Xunit;
 
 public class FakeSessionProcessLauncher : ISessionProcessLauncher
@@ -1874,13 +1874,13 @@ public class SessionSupervisorTests
 
 - [x] **Step 2: Run the tests to verify they fail**
 
-Run: `dotnet test tests/TreezeSuite.Agent.Tests`
+Run: `dotnet test tests/Midview.Agent.Tests`
 Expected: FAIL to compile — types not found.
 
 - [x] **Step 3: Implement `ISessionProcessLauncher.cs`**
 
 ```csharp
-namespace TreezeSuite.Agent;
+namespace Midview.Agent;
 
 public interface ISessionProcessLauncher
 {
@@ -1892,7 +1892,7 @@ public interface ISessionProcessLauncher
 - [x] **Step 4: Implement `SessionSupervisor.cs`**
 
 ```csharp
-namespace TreezeSuite.Agent;
+namespace Midview.Agent;
 
 public sealed class SessionSupervisor
 {
@@ -1921,13 +1921,13 @@ public sealed class SessionSupervisor
 
 - [x] **Step 5: Run the tests to verify they pass**
 
-Run: `dotnet test tests/TreezeSuite.Agent.Tests`
+Run: `dotnet test tests/Midview.Agent.Tests`
 Expected: PASS (4/4)
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add src/TreezeSuite.Agent/ISessionProcessLauncher.cs src/TreezeSuite.Agent/SessionSupervisor.cs tests/TreezeSuite.Agent.Tests/SessionSupervisorTests.cs
+git add src/Midview.Agent/ISessionProcessLauncher.cs src/Midview.Agent/SessionSupervisor.cs tests/Midview.Agent.Tests/SessionSupervisorTests.cs
 git commit -m "Add session process supervisor with crash-restart logic"
 ```
 
@@ -1936,22 +1936,22 @@ git commit -m "Add session process supervisor with crash-restart logic"
 ### Task 14: Agent — Windows Service host
 
 **Files:**
-- Create: `src/TreezeSuite.Agent/UserSessionProcessLauncher.cs`
-- Create: `src/TreezeSuite.Agent/TreezeAgentWorker.cs`
-- Modify: `src/TreezeSuite.Agent/Program.cs`
+- Create: `src/Midview.Agent/UserSessionProcessLauncher.cs`
+- Create: `src/Midview.Agent/MidviewAgentWorker.cs`
+- Modify: `src/Midview.Agent/Program.cs`
 
 **Interfaces:**
 - Consumes: `ISessionProcessLauncher` (Task 13's interface), `SessionSupervisor` (Task 13).
-- Produces: `UserSessionProcessLauncher` implementing `ISessionProcessLauncher` against the real Windows session APIs; `TreezeAgentWorker : BackgroundService` wiring `SessionSupervisor` into `Microsoft.Extensions.Hosting`. Nothing later in this plan depends on this task; it's the deployable entry point.
+- Produces: `UserSessionProcessLauncher` implementing `ISessionProcessLauncher` against the real Windows session APIs; `MidviewAgentWorker : BackgroundService` wiring `SessionSupervisor` into `Microsoft.Extensions.Hosting`. Nothing later in this plan depends on this task; it's the deployable entry point.
 
 - [x] **Step 1: Implement `UserSessionProcessLauncher.cs`**
 
 ```csharp
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using TreezeSuite.Agent;
+using Midview.Agent;
 
-namespace TreezeSuite.Agent;
+namespace Midview.Agent;
 
 public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
 {
@@ -2067,18 +2067,18 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
 }
 ```
 
-- [x] **Step 2: Implement `TreezeAgentWorker.cs`**
+- [x] **Step 2: Implement `MidviewAgentWorker.cs`**
 
 ```csharp
 using Microsoft.Extensions.Hosting;
 
-namespace TreezeSuite.Agent;
+namespace Midview.Agent;
 
-public sealed class TreezeAgentWorker : BackgroundService
+public sealed class MidviewAgentWorker : BackgroundService
 {
     private readonly SessionSupervisor _supervisor;
 
-    public TreezeAgentWorker(SessionSupervisor supervisor)
+    public MidviewAgentWorker(SessionSupervisor supervisor)
     {
         _supervisor = supervisor;
     }
@@ -2098,19 +2098,19 @@ public sealed class TreezeAgentWorker : BackgroundService
 
 ```csharp
 using Microsoft.Extensions.Hosting;
-using TreezeSuite.Agent;
+using Midview.Agent;
 
-var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "..", "TreezeSuite.Session", "TreezeSuite.Session.exe");
+var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "..", "Midview.Session", "Midview.Session.exe");
 
 var host = Host.CreateDefaultBuilder(args)
-    .UseWindowsService(options => options.ServiceName = "TreezeAgent")
+    .UseWindowsService(options => options.ServiceName = "MidviewAgent")
     .ConfigureServices(services =>
     {
         services.AddSingleton<ISessionProcessLauncher>(
             new UserSessionProcessLauncher(sessionExecutablePath));
         services.AddSingleton(provider => new SessionSupervisor(
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
-        services.AddHostedService<TreezeAgentWorker>();
+        services.AddHostedService<MidviewAgentWorker>();
     })
     .Build();
 
@@ -2119,24 +2119,24 @@ host.Run();
 
 - [x] **Step 4: Verify the project builds**
 
-Run: `dotnet build src/TreezeSuite.Agent`
+Run: `dotnet build src/Midview.Agent`
 Expected: succeeds with 0 errors.
 
 - [x] **Step 5: Manually verify** (needs an actual service install — this cannot be automated in a unit test)
 
 ```bash
-dotnet publish src/TreezeSuite.Agent -c Release -o publish/Agent
-sc.exe create TreezeAgent binPath= "C:\path\to\publish\Agent\TreezeSuite.Agent.exe" start= auto
-sc.exe start TreezeAgent
+dotnet publish src/Midview.Agent -c Release -o publish/Agent
+sc.exe create MidviewAgent binPath= "C:\path\to\publish\Agent\Midview.Agent.exe" start= auto
+sc.exe start MidviewAgent
 ```
 
-Confirm in Task Manager that `TreezeSuite.Session.exe` appears in your interactive session shortly after starting the service. Then end that process manually and confirm the Agent relaunches it within ~5 seconds (matching `PollInterval`). Clean up afterward: `sc.exe stop TreezeAgent`, `sc.exe delete TreezeAgent`.
+Confirm in Task Manager that `Midview.Session.exe` appears in your interactive session shortly after starting the service. Then end that process manually and confirm the Agent relaunches it within ~5 seconds (matching `PollInterval`). Clean up afterward: `sc.exe stop MidviewAgent`, `sc.exe delete MidviewAgent`.
 
 - [x] **Step 6: Commit**
 
 ```bash
-git add src/TreezeSuite.Agent/UserSessionProcessLauncher.cs src/TreezeSuite.Agent/TreezeAgentWorker.cs src/TreezeSuite.Agent/Program.cs
-git commit -m "Add TreezeAgent Windows Service hosting the session supervisor"
+git add src/Midview.Agent/UserSessionProcessLauncher.cs src/Midview.Agent/MidviewAgentWorker.cs src/Midview.Agent/Program.cs
+git commit -m "Add MidviewAgent Windows Service hosting the session supervisor"
 ```
 
 ---
@@ -2144,14 +2144,14 @@ git commit -m "Add TreezeAgent Windows Service hosting the session supervisor"
 ### Task 15: Master — minimal console and view/control window
 
 **Files:**
-- Create: `src/TreezeSuite.Master/MainWindow.xaml`
-- Create: `src/TreezeSuite.Master/MainWindow.xaml.cs`
-- Create: `src/TreezeSuite.Master/ViewControlWindow.xaml`
-- Create: `src/TreezeSuite.Master/ViewControlWindow.xaml.cs`
-- Create: `src/TreezeSuite.Master/ConnectionClient.cs`
+- Create: `src/Midview.Master/MainWindow.xaml`
+- Create: `src/Midview.Master/MainWindow.xaml.cs`
+- Create: `src/Midview.Master/ViewControlWindow.xaml`
+- Create: `src/Midview.Master/ViewControlWindow.xaml.cs`
+- Create: `src/Midview.Master/ConnectionClient.cs`
 
 **Interfaces:**
-- Consumes: `SecureChannel`/`SelfSignedCertificate`/`TrustStore` (Task 3), `MessageType`/`Message` (Task 2), the `TileMessageCodec`/`InputEventCodec` shapes defined in Task 12 (duplicated here as the Master's own copies, since Master and Session don't share an assembly beyond `TreezeSuite.Protocol` — the wire format is the contract, not shared code).
+- Consumes: `SecureChannel`/`SelfSignedCertificate`/`TrustStore` (Task 3), `MessageType`/`Message` (Task 2), the `TileMessageCodec`/`InputEventCodec` shapes defined in Task 12 (duplicated here as the Master's own copies, since Master and Session don't share an assembly beyond `Midview.Protocol` — the wire format is the contract, not shared code).
 - Produces: a runnable WPF app. This is the last task before end-to-end validation (Task 16).
 
 - [x] **Step 1: Implement `ConnectionClient.cs`**
@@ -2159,9 +2159,9 @@ git commit -m "Add TreezeAgent Windows Service hosting the session supervisor"
 ```csharp
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 
-namespace TreezeSuite.Master;
+namespace Midview.Master;
 
 public sealed class ConnectionClient : IDisposable
 {
@@ -2200,10 +2200,10 @@ public sealed class ConnectionClient : IDisposable
 - [x] **Step 2: Implement `MainWindow.xaml`** — a hardcoded single-entry list for this first version (a config-file-backed computer list is a later sub-project, not this one)
 
 ```xml
-<Window x:Class="TreezeSuite.Master.MainWindow"
+<Window x:Class="Midview.Master.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TreezeMaster" Height="200" Width="400">
+        Title="MidviewMaster" Height="200" Width="400">
     <StackPanel Margin="16">
         <TextBlock Text="Host address:" Margin="0,0,0,4" />
         <TextBox x:Name="HostAddressTextBox" Text="localhost" Margin="0,0,0,8" />
@@ -2218,9 +2218,9 @@ public sealed class ConnectionClient : IDisposable
 
 ```csharp
 using System.Windows;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 
-namespace TreezeSuite.Master;
+namespace Midview.Master;
 
 public partial class MainWindow : Window
 {
@@ -2231,7 +2231,7 @@ public partial class MainWindow : Window
 
     private void OnConnectClicked(object sender, RoutedEventArgs e)
     {
-        var masterCertificate = SelfSignedCertificate.Create("TreezeMaster");
+        var masterCertificate = SelfSignedCertificate.Create("MidviewMaster");
         var client = ConnectionClient.Connect(
             HostAddressTextBox.Text, 5901, ThumbprintTextBox.Text, masterCertificate);
 
@@ -2244,10 +2244,10 @@ public partial class MainWindow : Window
 - [x] **Step 4: Implement `ViewControlWindow.xaml`**
 
 ```xml
-<Window x:Class="TreezeSuite.Master.ViewControlWindow"
+<Window x:Class="Midview.Master.ViewControlWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TreezeMaster - Controlling" Height="720" Width="1280"
+        Title="MidviewMaster - Controlling" Height="720" Width="1280"
         Closed="OnWindowClosed">
     <Grid>
         <Image x:Name="ScreenImage" Stretch="None"
@@ -2266,9 +2266,9 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using TreezeSuite.Protocol;
+using Midview.Protocol;
 
-namespace TreezeSuite.Master;
+namespace Midview.Master;
 
 public partial class ViewControlWindow : Window
 {
@@ -2319,7 +2319,7 @@ public partial class ViewControlWindow : Window
 
     private void DrawTile(int row, int column, byte[] jpegBytes)
     {
-        const int tileSize = 64; // must match TreezeSuite.Protocol.TileDiff.TileSize
+        const int tileSize = 64; // must match Midview.Protocol.TileDiff.TileSize
 
         using var stream = new MemoryStream(jpegBytes);
         var decoder = new JpegBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
@@ -2385,14 +2385,14 @@ Note: `OnWindowClosed` sends `StopControl` before disposing the channel — this
 
 - [x] **Step 6: Verify the project builds**
 
-Run: `dotnet build src/TreezeSuite.Master`
+Run: `dotnet build src/Midview.Master`
 Expected: succeeds with 0 errors.
 
 - [x] **Step 7: Commit**
 
 ```bash
-git add src/TreezeSuite.Master/
-git commit -m "Add minimal TreezeMaster console and view/control window"
+git add src/Midview.Master/
+git commit -m "Add minimal MidviewMaster console and view/control window"
 ```
 
 ---
@@ -2401,12 +2401,12 @@ git commit -m "Add minimal TreezeMaster console and view/control window"
 
 No new files — this task runs the whole pipeline and confirms the sub-project's goal is actually met.
 
-- [x] **Step 1: Run `TreezeSuite.Session` locally**, noting the printed certificate thumbprint and passing your own machine's `TreezeMaster` certificate thumbprint as its argument (generate one ad hoc with `SelfSignedCertificate.Create(...)` in a scratch console app, or temporarily log it from `MainWindow.OnConnectClicked` on first run).
+- [x] **Step 1: Run `Midview.Session` locally**, noting the printed certificate thumbprint and passing your own machine's `MidviewMaster` certificate thumbprint as its argument (generate one ad hoc with `SelfSignedCertificate.Create(...)` in a scratch console app, or temporarily log it from `MainWindow.OnConnectClicked` on first run).
 
-  Done 2026-09-21, both processes on the same machine (`localhost`). Added a persisted-per-run master certificate plus a visible thumbprint field to `MainWindow` to make this practical (see the "Show TreezeMaster's own certificate thumbprint in the UI" commit) instead of the scratch-console-app workaround.
-- [x] **Step 2: Run `TreezeSuite.Master`**, enter `localhost` and the Session's printed thumbprint, click Connect.
+  Done 2026-09-21, both processes on the same machine (`localhost`). Added a persisted-per-run master certificate plus a visible thumbprint field to `MainWindow` to make this practical (see the "Show MidviewMaster's own certificate thumbprint in the UI" commit) instead of the scratch-console-app workaround.
+- [x] **Step 2: Run `Midview.Master`**, enter `localhost` and the Session's printed thumbprint, click Connect.
 
-  Done 2026-09-21. Connected successfully; Windows Firewall prompted for `TreezeSuite.Session` on first run (expected for any new network listener) — allowed it.
+  Done 2026-09-21. Connected successfully; Windows Firewall prompted for `Midview.Session` on first run (expected for any new network listener) — allowed it.
 - [x] **Step 3: Confirm the view/control window shows the live desktop**, updating as you change what's on screen (open a window, move it, type somewhere) — this validates capture → diff → encode → transport → decode → render end-to-end.
 
   Done 2026-09-21 and confirmed working: minimized a window on screen and watched the corresponding region of the view/control window update to match within about a second. The full pipeline (capture, tile diff, JPEG encode, network transport, decode, WPF render) is confirmed working end-to-end.
@@ -2419,11 +2419,11 @@ No new files — this task runs the whole pipeline and confirms the sub-project'
 - [ ] **Step 6: Confirm the input lock releases on close**: close the `ViewControlWindow`, confirm physical keyboard/mouse work again immediately.
 
   Not done -- needs the Aluno-25 deployment (see Step 4).
-- [ ] **Step 7: Confirm the heartbeat safety net independently**: reconnect, start controlling, then kill the `TreezeSuite.Master` process directly from Task Manager (not a graceful window close) instead of closing the window. Confirm the Session's physical input unlocks on its own within a few seconds (bounded by the heartbeat timeout), with no manual intervention — this is the single most important check in this whole plan, since it's the exact failure mode chased at length in Treezeview.
+- [ ] **Step 7: Confirm the heartbeat safety net independently**: reconnect, start controlling, then kill the `Midview.Master` process directly from Task Manager (not a graceful window close) instead of closing the window. Confirm the Session's physical input unlocks on its own within a few seconds (bounded by the heartbeat timeout), with no manual intervention — this is the single most important check in this whole plan, since it's the exact failure mode chased at length in Treezeview.
 
   Not done -- needs the Aluno-25 deployment (see Step 4). This is the most important remaining check in the whole plan.
 
-**Deployment prep done 2026-09-21:** published self-contained (no .NET install required on the target) builds to `publish/Session/` and `publish/Master/` via `dotnet publish -r win-x64 --self-contained true`. Copy `publish/Session/` to Aluno-25 by USB (same pattern as Treezeview's installer), run `TreezeSuite.Session.exe <master-thumbprint>` there, and connect from `TreezeSuite.Master.exe` on the teacher's machine as in Steps 1-3 above.
+**Deployment prep done 2026-09-21:** published self-contained (no .NET install required on the target) builds to `publish/Session/` and `publish/Master/` via `dotnet publish -r win-x64 --self-contained true`. Copy `publish/Session/` to Aluno-25 by USB (same pattern as Treezeview's installer), run `Midview.Session.exe <master-thumbprint>` there, and connect from `Midview.Master.exe` on the teacher's machine as in Steps 1-3 above.
 - [ ] **Step 8: If any of the above fails**, use `superpowers:systematic-debugging` before making changes — don't patch symptoms.
 - [ ] **Step 9: Once all checks pass, update the spec's status line** from "Approved for planning" to "Implemented and validated", and commit:
 

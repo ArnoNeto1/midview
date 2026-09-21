@@ -1,4 +1,4 @@
-# TreezeSuite — Core Architecture & Remote Screen Engine (Design)
+# Midview — Core Architecture & Remote Screen Engine (Design)
 
 Date: 2026-09-21
 Status: Approved for planning
@@ -12,7 +12,7 @@ under an exclusive license — any derivative of GPL code must stay GPL, and
 relicensing would require consent from every original Veyon copyright holder,
 which is not practical.
 
-TreezeSuite is a from-scratch rewrite, sharing no source code with Veyon or
+Midview is a from-scratch rewrite, sharing no source code with Veyon or
 Treezeview, so that its owner holds full copyright and can license it however
 they choose in the future (including closed-source or commercial). It will
 eventually reach feature parity with Treezeview: remote screen view/control
@@ -55,18 +55,18 @@ team.
 
 Three processes, replacing Veyon's four (service, server, worker, master):
 
-- **TreezeAgent** — Windows Service, always running as SYSTEM. Installs
-  itself, starts at boot, and launches `TreezeSession` inside whichever
-  desktop session a user is logged into. Supervises `TreezeSession` and
+- **MidviewAgent** — Windows Service, always running as SYSTEM. Installs
+  itself, starts at boot, and launches `MidviewSession` inside whichever
+  desktop session a user is logged into. Supervises `MidviewSession` and
   restarts it if it crashes. Later sub-projects (site blocking) add their
   logic here, since that work needs no desktop access.
-- **TreezeSession** — one process per interactive user session, launched by
-  `TreezeAgent`. Owns screen capture, input injection, the input-lock
+- **MidviewSession** — one process per interactive user session, launched by
+  `MidviewAgent`. Owns screen capture, input injection, the input-lock
   mechanism, and the network listener that accepts connections from
-  `TreezeMaster`. Replaces Veyon's server+worker split: with .NET's
+  `MidviewMaster`. Replaces Veyon's server+worker split: with .NET's
   async/task model, concurrent features are handled safely within one
   process instead of needing separate OS processes per feature.
-- **TreezeMaster** — the teacher's console GUI. For this sub-project: a
+- **MidviewMaster** — the teacher's console GUI. For this sub-project: a
   minimal computer list plus a view/control window, enough to validate the
   full pipeline end-to-end. The fuller console UI (matching Treezeview's
   toolbar-based layout, which the project owner wants to keep as a design
@@ -79,7 +79,7 @@ Three processes, replacing Veyon's four (service, server, worker, master):
 for non-commercial use only, and requires purchasing a commercial license for
 commercial use. Since selling this software is an explicit goal, and buying a
 third-party license is a business decision outside an engineer's authority to
-make unilaterally, TreezeSuite does not use the Interception driver.
+make unilaterally, Midview does not use the Interception driver.
 `WindowsInputDeviceController` (see the implementation plan) instead
 disables/enables the keyboard and mouse device classes via the public,
 no-license-required `SetupDi*` Win32 APIs (Device Manager's own
@@ -91,7 +91,7 @@ requires no third-party dependency at all.
 - **Transport**: TCP with TLS (via .NET's built-in `SslStream`). No relay or
   NAT traversal needed since it's LAN-only.
 - **Authentication**: the teacher's console holds a private key; each
-  `TreezeAgent`/`TreezeSession` trusts its public key — the same trusted-key
+  `MidviewAgent`/`MidviewSession` trusts its public key — the same trusted-key
   concept Treezeview already uses for site-block commands, reimplemented
   independently.
 - **Message framing**: a simple custom length-prefixed binary protocol
@@ -103,7 +103,7 @@ requires no third-party dependency at all.
   by tile; only changed tiles are JPEG-encoded and sent, not the whole
   screen — this is what makes smooth updates achievable without needing a
   full video codec.
-- **Input events**: mouse/keyboard actions in the `TreezeMaster` control
+- **Input events**: mouse/keyboard actions in the `MidviewMaster` control
   window are serialized as small messages and applied on the student side via
   the Windows `SendInput` API. The same message path also drives the
   input-lock mechanism validated in Treezeview.
@@ -114,17 +114,17 @@ Directly informed by the stuck-input-lock bug chased at length in
 Treezeview, where an unlock message could fail to arrive or be silently
 dropped for several different reasons:
 
-- **Heartbeat-based auto-unlock**: `TreezeSession` expects a periodic
-  heartbeat from a connected `TreezeMaster` while input is locked. If no
+- **Heartbeat-based auto-unlock**: `MidviewSession` expects a periodic
+  heartbeat from a connected `MidviewMaster` while input is locked. If no
   heartbeat arrives for a short timeout (network drop, teacher's PC
   freezing, any cause at all), it unlocks automatically — this does not
   depend on any specific "goodbye" message being sent or received correctly,
   closing off this entire class of bug regardless of its cause.
-- **Process crash recovery**: if `TreezeSession` crashes while input is
+- **Process crash recovery**: if `MidviewSession` crashes while input is
   locked, the OS releases the resources it held (matching the behavior
-  already confirmed in Treezeview); `TreezeAgent` detects the crash and
-  restarts `TreezeSession`.
-- **Service supervision**: `TreezeAgent` supervises `TreezeSession` the same
+  already confirmed in Treezeview); `MidviewAgent` detects the crash and
+  restarts `MidviewSession`.
+- **Service supervision**: `MidviewAgent` supervises `MidviewSession` the same
   way for any crash, not just ones related to input-lock.
 
 ## Testing approach

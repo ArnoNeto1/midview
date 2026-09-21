@@ -1,0 +1,14 @@
+<Window x:Class="Midview.Master.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MidviewMaster" Height="320" Width="420">
+    <StackPanel Margin="16">
+        <TextBlock Text="This MidviewMaster's certificate thumbprint (give this to the Session's trust list):" Margin="0,0,0,4" TextWrapping="Wrap" />
+        <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
+        <TextBlock Text="Host address:" Margin="0,0,0,4" />
+        <TextBox x:Name="HostAddressTextBox" Text="localhost" Margin="0,0,0,8" />
+        <TextBlock Text="Trusted certificate thumbprint (Session's):" Margin="0,0,0,4" />
+        <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" />
+        <Button Content="Connect" Click="OnConnectClicked" />
+    </StackPanel>
+</Window>
