@@ -72,12 +72,19 @@ Three processes, replacing Veyon's four (service, server, worker, master):
   toolbar-based layout, which the project owner wants to keep as a design
   reference) is built out alongside later sub-projects' features.
 
-Open item to verify before implementation: the Interception driver, used
-today to block the student's physical keyboard/mouse, is a third-party
-kernel driver with its own license, separate from Veyon's. Its license terms
-need to be checked for compatibility with a closed-source/commercial product
-before reusing it here; if incompatible, an alternative input-blocking
-mechanism needs to be found.
+**Resolved:** checked the Interception driver's actual license files
+(`licenses/non-commercial-usage/LGPL 3.0.txt` and a separate
+`licenses/commercial-usage/` folder containing paid-license documents, in
+`github.com/oblitum/Interception`) — it is dual-licensed: free under LGPL 3.0
+for non-commercial use only, and requires purchasing a commercial license for
+commercial use. Since selling this software is an explicit goal, and buying a
+third-party license is a business decision outside an engineer's authority to
+make unilaterally, TreezeSuite does not use the Interception driver.
+`WindowsInputDeviceController` (see the implementation plan) instead
+disables/enables the keyboard and mouse device classes via the public,
+no-license-required `SetupDi*` Win32 APIs (Device Manager's own
+enable/disable mechanism) — weaker than a live driver-level filter, but
+requires no third-party dependency at all.
 
 ## Network protocol & remote screen pipeline
 
