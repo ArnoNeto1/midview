@@ -1,29 +1,51 @@
 # Midview — Site Blocking (Design)
 
 Date: 2026-09-22
-Status: Approved for planning
+Status: Approved for planning (revised after re-reading Treezeview's actual
+behavior — see note below)
 
 ## Context
 
 Second feature sub-project for Midview, built on the already-implemented
 core architecture (`Midview.Protocol`, `MidviewAgent`, `MidviewSession`,
-`MidviewMaster`). Reimplements Treezeview's site-blocking feature — the
-teacher blocks or unblocks specific domains on a student machine — as
+`MidviewMaster`). Reimplements Treezeview's site-blocking feature as
 independent code, sharing no source with Treezeview (a GPL fork).
+
+**Revision note:** the first draft of this spec incorrectly assumed
+Treezeview's firewall layer blocks a specific domain's resolved IP, as a
+second layer alongside the hosts file. Reading the actual
+`FirewallController.cpp`/`HostsFileManager.cpp` showed these are two
+independent features, not two layers of the same one:
+
+1. **Full internet block** (`FirewallController`): an all-or-nothing
+   toggle — block all outbound traffic except the local network and
+   Midview's own control connections. Used for something like "block
+   everything during a test."
+2. **Specific domain block list** (`HostsFileManager`): a managed set of
+   domain names redirected to `127.0.0.1` via the hosts file, each expanded
+   to both its bare and `www.`-prefixed form. Used for "block this
+   particular site" (e.g. YouTube) while leaving the rest of the internet
+   alone.
+
+Confirmed with the project owner: both are wanted, kept as the two separate
+features they actually are.
 
 ## Requirement established
 
-Replicate Treezeview's current site-blocking behavior exactly: block/unblock
-specific domains by teacher command, no scheduling, no categories. No new
-requirements beyond what already exists.
+Replicate Treezeview's current behavior for both features exactly: no
+scheduling, no domain categories (the "always blocked category list"
+implied by Treezeview's `baseDomains`/`liveDomains` split in
+`HostsFileManager::reconcile` is not part of this — Midview keeps a single
+flat set of currently-blocked domains, since categories were explicitly
+descoped earlier in this project's brainstorming).
 
 ## Architecture
 
-Site blocking must keep working even when no one is logged into the student
-machine (e.g. blocking a domain before the student logs in), so the command
-path cannot go through `MidviewSession` (which only exists while a user is
-logged in). Instead, `MidviewAgent` gets its own TCP+TLS listener, on a
-separate port from `MidviewSession`'s, reusing the same
+Both features must keep working even when no one is logged into the
+student machine (e.g. a block applied before the student logs in), so the
+command path cannot go through `MidviewSession` (which only exists while a
+user is logged in). Instead, `MidviewAgent` gets its own TCP+TLS listener,
+on a separate port from `MidviewSession`'s, reusing the same
 `Midview.Protocol.SecureChannel`/`TrustStore`/`MessageFramer` machinery
 already built — no new protocol layer, just a second listener.
 
@@ -37,77 +59,93 @@ a service restart or reboot.
 
 ## Components
 
-- **New protocol messages** (`Midview.Protocol.MessageType`): `BlockSite`,
-  `UnblockSite`, each carrying a domain name as payload.
+- **New protocol messages** (`Midview.Protocol.MessageType`):
+  `BlockInternet`, `UnblockInternet` (no payload — full on/off toggle), and
+  `BlockDomain`, `UnblockDomain` (a domain name as payload — adds/removes
+  one domain from the managed block list).
 - **`AgentIdentity`** (`MidviewAgent`): loads the persisted certificate from
   disk, generating and saving one on first run.
-- **`SiteBlockState`** (`MidviewAgent`): persists the current set of blocked
-  domains to `%ProgramData%\Midview\blocked-domains.json`, so it can be
-  reapplied if the Agent restarts or the hosts file is reset by something
-  else (antivirus, a Windows update).
-- **`HostsFileManager`** (`MidviewAgent`): adds/removes domain entries in
-  `C:\Windows\System32\drivers\etc\hosts`. Expands every domain to both its
-  bare and `www.`-prefixed forms (blocking `example.com` also blocks
-  `www.example.com` and vice versa), and flushes the DNS cache
-  (`ipconfig /flushdns`) after every change so blocks take effect
-  immediately.
-- **`FirewallController`** (`MidviewAgent`): adds/removes a Windows Firewall
-  rule blocking the domain's resolved IP addresses as a second layer,
-  since hosts-file blocking alone can be bypassed by a browser that ignores
-  the hosts file (e.g. one using DNS-over-HTTPS) or by connecting to the IP
-  directly.
+- **`SiteBlockState`** (`MidviewAgent`): persists both pieces of state to
+  `%ProgramData%\Midview\site-block-state.json` — whether the full internet
+  block is currently on, and the current set of specifically-blocked
+  domains — so both can be reapplied if the Agent restarts or something
+  else resets the hosts file or firewall rules.
+- **`HostsFileManager`** (`MidviewAgent`): given the current full set of
+  blocked domains, rewrites a clearly-marked block within
+  `C:\Windows\System32\drivers\etc\hosts` to match — expanding every domain
+  to both its bare and `www.`-prefixed forms (blocking `example.com` also
+  blocks `www.example.com` and vice versa) — and flushes the DNS cache
+  (`ipconfig /flushdns`) afterward so changes take effect immediately. This
+  is a full reconcile-to-desired-state operation, not an incremental
+  add/remove of hosts file lines: it always rewrites the whole managed
+  block from the current complete domain set.
+- **`FirewallController`** (`MidviewAgent`): applies or removes the
+  full-internet-block firewall rules — allow the local network, allow
+  outbound to `MidviewAgent`'s and `MidviewSession`'s own listening ports
+  (so Midview itself keeps working while blocked), then block all other
+  outbound traffic. Unblocking removes those rules.
 - **`AgentServer`** (`MidviewAgent`): listens on its own port, authenticates
   incoming Master connections via the same trust-store pattern as
-  `MidviewSession`'s `SessionServer`, and handles `BlockSite`/`UnblockSite`
-  messages by updating `HostsFileManager`, `FirewallController`, and
-  `SiteBlockState` together.
-- **`MidviewMaster`** gains a way to send a `BlockSite`/`UnblockSite` command
-  to an Agent and get an acknowledgement back — a short-lived connection per
+  `MidviewSession`'s `SessionServer`, and handles the four message types by
+  updating `FirewallController` or (`HostsFileManager` +
+  `SiteBlockState`) as appropriate.
+- **`MidviewMaster`** gains a way to send any of the four commands to an
+  Agent and get an acknowledgement back — a short-lived connection per
   command (connect, send, get ack, disconnect), unlike the long-lived
   view/control connection to a Session.
 
 ## Data flow
 
-Teacher issues a block/unblock command from `MidviewMaster` → short-lived
-TLS connection to the target's `MidviewAgent` → Agent updates
-`HostsFileManager` (hosts file + DNS flush), `FirewallController` (firewall
-rule), and `SiteBlockState` (persisted JSON) together → sends an
-acknowledgement back → connection closes.
+**Full internet block/unblock:** teacher sends `BlockInternet` or
+`UnblockInternet` from `MidviewMaster` → short-lived TLS connection to the
+target's `MidviewAgent` → Agent applies/removes the firewall rules via
+`FirewallController` → persists the new on/off state in `SiteBlockState` →
+acknowledges → connection closes.
 
-At `MidviewAgent` startup (service start, restart after a crash, or a full
-reboot), it loads `SiteBlockState` from disk and reapplies every entry to
-`HostsFileManager` and `FirewallController` — this is what makes a block
-survive a reboot or recover from something else resetting the hosts file,
-mirroring the same persist-and-reconcile pattern already used for the input
-lock in the core sub-project.
+**Domain block/unblock:** teacher sends `BlockDomain`/`UnblockDomain` with
+one domain name → Agent adds/removes that domain in its in-memory blocked-
+domain set → calls `HostsFileManager` to rewrite the hosts file to match
+the *entire* current set (not just the one changed domain) → persists the
+updated set in `SiteBlockState` → acknowledges → connection closes.
+
+**At `MidviewAgent` startup** (service start, crash restart, or reboot), it
+loads `SiteBlockState` and reapplies both pieces of state: reruns
+`HostsFileManager` with the persisted domain set, and reapplies the
+firewall rules via `FirewallController` if the full block was on — the same
+persist-and-reconcile pattern already used for the input lock in the core
+sub-project.
 
 ## Error handling
 
-- **Reconciliation at startup** (described above) is the primary defense
-  against the hosts file or firewall rules getting reset by something
-  outside Midview's control.
-- **Firewall rule failures** (e.g. a malformed domain, or the Windows
-  Firewall service being unavailable) are logged but don't block the hosts
-  file change from still being applied — hosts-file blocking alone is
-  still useful even if the firewall layer fails for one domain.
-- **Unblock always removes both layers**, even if the corresponding block
-  only partially succeeded when it was first applied (e.g. hosts file
-  entry written but firewall rule failed) — unblock shouldn't require
-  remembering which layer actually succeeded.
+- **Reconciliation at startup** (above) is the primary defense against the
+  hosts file or firewall rules getting reset by something outside
+  Midview's control.
+- **`FirewallController` failures** (e.g. the Windows Firewall service
+  being unavailable) are reported back to the teacher via the
+  acknowledgement rather than silently succeeding — unlike a single failed
+  domain block, a failed full-internet-block is exactly the kind of thing
+  a teacher needs to know didn't actually happen (e.g. before starting a
+  test).
+- **Unblocking is always attempted for every rule/entry**, even if the
+  corresponding block only partially succeeded when first applied —
+  unblock shouldn't require remembering which specific rule succeeded.
 
 ## Testing
 
-- Domain expansion (bare ↔ `www.`), `SiteBlockState` JSON persistence, and
-  the `AgentServer` message handling logic are all ordinary unit tests, no
-  real hosts file or firewall involved.
-- Actually modifying the hosts file and creating firewall rules can only be
-  meaningfully validated live, on a real machine. Lower risk than the input
-  lock (a bad rule doesn't lock anyone out of anything), but still real
-  system state — do this live, with the project owner present, same as the
-  input lock validation.
+- Domain expansion (bare ↔ `www.`), the hosts-file reconcile-to-desired-
+  state logic, `SiteBlockState` JSON persistence, and `AgentServer`'s
+  message handling are all ordinary unit tests, no real hosts file or
+  firewall involved.
+- Actually modifying the hosts file and creating/removing firewall rules
+  can only be meaningfully validated live, on a real machine. The
+  full-internet-block is worth extra care live: test it from a second
+  machine (Aluno-25) rather than the machine you're working from, since a
+  bug there could cut off *all* internet access on whatever machine runs
+  it, same reasoning as the input lock's two-machine testing requirement.
 
 ## Out of scope
 
-Everything other than domain block/unblock: scheduling, categories, a
-"list currently blocked domains" query feature (not requested), and any
-UI beyond `MidviewMaster` being able to send the two commands.
+Domain categories/lists beyond a flat set of currently-blocked domains,
+scheduling, a "list currently blocked domains" query feature (not
+requested), and any UI beyond `MidviewMaster` being able to send the four
+commands.
