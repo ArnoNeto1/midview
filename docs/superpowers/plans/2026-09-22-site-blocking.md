@@ -748,7 +748,7 @@ git commit -m "Add firewall command builders and netsh-based controller for full
 
 **Interfaces:**
 - Consumes: `SiteBlockState` (Task 4), `HostsFileManager.ApplyToFile` (Task 5), `IFirewallController` (Task 6), `MessageType` (Task 1).
-- Produces: `SiteBlockCommandHandler(SiteBlockState state, string statePath, string hostsFilePath, IFirewallController firewallController)` with `bool Handle(MessageType type, byte[] payload)` and `void ReconcileAtStartup()`. Task 8's `AgentServer` calls `Handle` per incoming message; `AgentServerWorker` calls `ReconcileAtStartup()` once at startup.
+- Produces: `SiteBlockCommandHandler(SiteBlockState state, string statePath, string hostsFilePath, IFirewallController firewallController)` with `bool Handle(MessageType type, byte[] payload)` and `bool ReconcileAtStartup()` (returns whether the firewall reconcile succeeded — added after Task 7's own review found the original `void` signature silently discarded that failure). Task 8's `AgentServer` calls `Handle` per incoming message; `AgentServerWorker` calls `ReconcileAtStartup()` once at startup and logs a warning if it returns `false`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1043,7 +1043,10 @@ public sealed class AgentServerWorker : BackgroundService
         var firewallController = new NetshFirewallController(AgentPort, SessionPort);
         var commandHandler = new SiteBlockCommandHandler(state, statePath, hostsFilePath, firewallController);
 
-        commandHandler.ReconcileAtStartup();
+        if (!commandHandler.ReconcileAtStartup())
+        {
+            Console.WriteLine("Warning: failed to reapply the full-internet-block firewall rules at startup — the persisted state says it should be on, but the firewall reconcile failed.");
+        }
 
         var server = new AgentServer(
             new TcpListener(IPAddress.Any, AgentPort), certificate, new TrustStore(trustedMasters), commandHandler);
