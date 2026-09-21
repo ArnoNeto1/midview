@@ -39,28 +39,54 @@ public sealed class SiteBlockCommandHandler
                 return true;
 
             case MessageType.BlockDomain:
-                _state.BlockedDomains.Add(Encoding.UTF8.GetString(payload));
-                HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
+            {
+                var domain = Encoding.UTF8.GetString(payload);
+                _state.BlockedDomains.Add(domain);
+                try
+                {
+                    HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
+                }
+                catch
+                {
+                    _state.BlockedDomains.Remove(domain);
+                    throw;
+                }
                 _state.Save(_statePath);
                 return true;
+            }
 
             case MessageType.UnblockDomain:
-                _state.BlockedDomains.Remove(Encoding.UTF8.GetString(payload));
-                HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
+            {
+                var domain = Encoding.UTF8.GetString(payload);
+                var wasPresent = _state.BlockedDomains.Remove(domain);
+                try
+                {
+                    HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
+                }
+                catch
+                {
+                    if (wasPresent)
+                    {
+                        _state.BlockedDomains.Add(domain);
+                    }
+                    throw;
+                }
                 _state.Save(_statePath);
                 return true;
+            }
 
             default:
                 return false;
         }
     }
 
-    public void ReconcileAtStartup()
+    public bool ReconcileAtStartup()
     {
         HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
         if (_state.InternetBlocked)
         {
-            _firewallController.ApplyBlock();
+            return _firewallController.ApplyBlock();
         }
+        return true;
     }
 }

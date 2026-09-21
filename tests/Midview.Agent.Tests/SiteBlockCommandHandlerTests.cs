@@ -104,9 +104,42 @@ public class SiteBlockCommandHandlerTests
         var freshFirewall = new FakeFirewallController();
         var freshHandler = new SiteBlockCommandHandler(reloadedState, statePath, hostsPath, freshFirewall);
 
-        freshHandler.ReconcileAtStartup();
+        var result = freshHandler.ReconcileAtStartup();
 
+        Assert.True(result);
         Assert.Equal(1, freshFirewall.ApplyBlockCalls);
         Assert.Contains("127.0.0.1 youtube.com", File.ReadAllText(hostsPath));
+    }
+
+    [Fact]
+    public void ReconcileAtStartup_FirewallReapplyFails_ReturnsFalse()
+    {
+        var (handler, statePath, hostsPath, _) = CreateHandler();
+        handler.Handle(MessageType.BlockInternet, Array.Empty<byte>());
+        // Simulate a fresh Agent process with firewall that will fail.
+        var reloadedState = SiteBlockState.Load(statePath);
+        var freshFirewall = new FakeFirewallController { BlockShouldSucceed = false };
+        var freshHandler = new SiteBlockCommandHandler(reloadedState, statePath, hostsPath, freshFirewall);
+
+        var result = freshHandler.ReconcileAtStartup();
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void Handle_BlockDomain_HostsFileApplyThrows_RollsBackInMemoryDomainSet()
+    {
+        var (handler, statePath, _, _) = CreateHandler();
+        // Use a hosts path in a non-existent directory to force ApplyToFile to throw
+        var badHostsPath = Path.Combine(Path.GetTempPath(), $"nonexistent-{Guid.NewGuid()}", "hosts.txt");
+        var firewall = new FakeFirewallController();
+        var badHandler = new SiteBlockCommandHandler(new SiteBlockState(), statePath, badHostsPath, firewall);
+
+        // Attempt to block a domain; ApplyToFile should throw
+        Assert.Throws<DirectoryNotFoundException>(() => badHandler.Handle(MessageType.BlockDomain, Encoding.UTF8.GetBytes("example.com")));
+
+        // Verify the domain was rolled back and not in state
+        var savedState = SiteBlockState.Load(statePath);
+        Assert.DoesNotContain("example.com", savedState.BlockedDomains);
     }
 }
