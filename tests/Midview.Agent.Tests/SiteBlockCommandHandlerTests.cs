@@ -129,17 +129,32 @@ public class SiteBlockCommandHandlerTests
     [Fact]
     public void Handle_BlockDomain_HostsFileApplyThrows_RollsBackInMemoryDomainSet()
     {
-        var (handler, statePath, _, _) = CreateHandler();
-        // Use a hosts path in a non-existent directory to force ApplyToFile to throw
-        var badHostsPath = Path.Combine(Path.GetTempPath(), $"nonexistent-{Guid.NewGuid()}", "hosts.txt");
-        var firewall = new FakeFirewallController();
-        var badHandler = new SiteBlockCommandHandler(new SiteBlockState(), statePath, badHostsPath, firewall);
+        var statePath = Path.Combine(Path.GetTempPath(), $"midview-state-{Guid.NewGuid()}.json");
+        var invalidHostsPath = Path.Combine(Path.GetTempPath(), $"midview-nonexistent-dir-{Guid.NewGuid()}", "hosts.txt");
+        var state = new SiteBlockState();
+        var handler = new SiteBlockCommandHandler(state, statePath, invalidHostsPath, new FakeFirewallController());
 
-        // Attempt to block a domain; ApplyToFile should throw
-        Assert.Throws<DirectoryNotFoundException>(() => badHandler.Handle(MessageType.BlockDomain, Encoding.UTF8.GetBytes("example.com")));
+        Assert.ThrowsAny<Exception>(() => handler.Handle(MessageType.BlockDomain, Encoding.UTF8.GetBytes("example.com")));
 
-        // Verify the domain was rolled back and not in state
-        var savedState = SiteBlockState.Load(statePath);
-        Assert.DoesNotContain("example.com", savedState.BlockedDomains);
+        Assert.DoesNotContain("example.com", state.BlockedDomains);
+    }
+
+    [Fact]
+    public void Handle_UnblockDomain_HostsFileApplyThrows_RollsBackInMemoryDomainSet()
+    {
+        var statePath = Path.Combine(Path.GetTempPath(), $"midview-state-{Guid.NewGuid()}.json");
+        var hostsPath = Path.Combine(Path.GetTempPath(), $"midview-hosts-{Guid.NewGuid()}.txt");
+        File.WriteAllText(hostsPath, "127.0.0.1 localhost\n");
+        var state = new SiteBlockState();
+        state.BlockedDomains.Add("example.com");
+        var handler = new SiteBlockCommandHandler(state, statePath, hostsPath, new FakeFirewallController());
+
+        // Make the hosts path a directory instead of a file, so WriteAllText throws
+        File.Delete(hostsPath);
+        Directory.CreateDirectory(hostsPath);
+
+        Assert.ThrowsAny<Exception>(() => handler.Handle(MessageType.UnblockDomain, Encoding.UTF8.GetBytes("example.com")));
+
+        Assert.Contains("example.com", state.BlockedDomains);
     }
 }
