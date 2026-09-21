@@ -26,7 +26,7 @@ public sealed class AgentServerWorker : BackgroundService
 
         if (!commandHandler.ReconcileAtStartup())
         {
-            Console.WriteLine("Warning: failed to reapply the full-internet-block firewall rules at startup — the persisted state says it should be on, but the firewall reconcile failed.");
+            AgentLog.Warn("Failed to reapply the full-internet-block firewall rules at startup — the persisted state says it should be on, but the firewall reconcile failed.");
         }
 
         var server = new AgentServer(

@@ -24,10 +24,28 @@ public sealed class AgentServer
     public void Run(CancellationToken cancellationToken)
     {
         _listener.Start();
+        using var registration = cancellationToken.Register(() => _listener.Stop());
+
         while (!cancellationToken.IsCancellationRequested)
         {
-            var tcpClient = _listener.AcceptTcpClient();
-            HandleClient(tcpClient);
+            TcpClient tcpClient;
+            try
+            {
+                tcpClient = _listener.AcceptTcpClient();
+            }
+            catch (Exception) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
+            try
+            {
+                HandleClient(tcpClient);
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Error handling a client connection: {ex.Message}");
+            }
         }
     }
 
