@@ -13,6 +13,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new SessionSupervisor(
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
         services.AddHostedService<MidviewAgentWorker>();
+        services.AddHostedService<AgentServerWorker>();
     })
     .Build();
 
