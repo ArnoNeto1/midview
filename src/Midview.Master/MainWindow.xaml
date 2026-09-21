@@ -1,7 +1,7 @@
 <Window x:Class="Midview.Master.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MidviewMaster" Height="320" Width="420">
+        Title="MidviewMaster" Height="520" Width="420">
     <StackPanel Margin="16">
         <TextBlock Text="This MidviewMaster's certificate thumbprint (give this to the Session's trust list):" Margin="0,0,0,4" TextWrapping="Wrap" />
         <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
@@ -10,5 +10,17 @@
         <TextBlock Text="Trusted certificate thumbprint (Session's):" Margin="0,0,0,4" />
         <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" />
         <Button Content="Connect" Click="OnConnectClicked" />
+        <Separator Margin="0,16,0,16" />
+        <TextBlock Text="Agent's certificate thumbprint:" Margin="0,0,0,4" />
+        <TextBox x:Name="AgentThumbprintTextBox" Margin="0,0,0,8" />
+        <TextBlock Text="Domain (for Block/Unblock Domain):" Margin="0,0,0,4" />
+        <TextBox x:Name="DomainTextBox" Margin="0,0,0,8" />
+        <WrapPanel>
+            <Button Content="Block Internet" Click="OnBlockInternetClicked" Margin="0,0,8,4" />
+            <Button Content="Unblock Internet" Click="OnUnblockInternetClicked" Margin="0,0,8,4" />
+            <Button Content="Block Domain" Click="OnBlockDomainClicked" Margin="0,0,8,4" />
+            <Button Content="Unblock Domain" Click="OnUnblockDomainClicked" Margin="0,0,0,4" />
+        </WrapPanel>
+        <TextBlock x:Name="SiteBlockStatusTextBlock" Margin="0,4,0,0" />
     </StackPanel>
 </Window>
