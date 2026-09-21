@@ -2401,13 +2401,29 @@ git commit -m "Add minimal TreezeMaster console and view/control window"
 
 No new files — this task runs the whole pipeline and confirms the sub-project's goal is actually met.
 
-- [ ] **Step 1: Run `TreezeSuite.Session` locally**, noting the printed certificate thumbprint and passing your own machine's `TreezeMaster` certificate thumbprint as its argument (generate one ad hoc with `SelfSignedCertificate.Create(...)` in a scratch console app, or temporarily log it from `MainWindow.OnConnectClicked` on first run).
-- [ ] **Step 2: Run `TreezeSuite.Master`**, enter `localhost` and the Session's printed thumbprint, click Connect.
-- [ ] **Step 3: Confirm the view/control window shows the live desktop**, updating as you change what's on screen (open a window, move it, type somewhere) — this validates capture → diff → encode → transport → decode → render end-to-end.
+- [x] **Step 1: Run `TreezeSuite.Session` locally**, noting the printed certificate thumbprint and passing your own machine's `TreezeMaster` certificate thumbprint as its argument (generate one ad hoc with `SelfSignedCertificate.Create(...)` in a scratch console app, or temporarily log it from `MainWindow.OnConnectClicked` on first run).
+
+  Done 2026-09-21, both processes on the same machine (`localhost`). Added a persisted-per-run master certificate plus a visible thumbprint field to `MainWindow` to make this practical (see the "Show TreezeMaster's own certificate thumbprint in the UI" commit) instead of the scratch-console-app workaround.
+- [x] **Step 2: Run `TreezeSuite.Master`**, enter `localhost` and the Session's printed thumbprint, click Connect.
+
+  Done 2026-09-21. Connected successfully; Windows Firewall prompted for `TreezeSuite.Session` on first run (expected for any new network listener) — allowed it.
+- [x] **Step 3: Confirm the view/control window shows the live desktop**, updating as you change what's on screen (open a window, move it, type somewhere) — this validates capture → diff → encode → transport → decode → render end-to-end.
+
+  Done 2026-09-21 and confirmed working: minimized a window on screen and watched the corresponding region of the view/control window update to match within about a second. The full pipeline (capture, tile diff, JPEG encode, network transport, decode, WPF render) is confirmed working end-to-end.
 - [ ] **Step 4: Confirm mouse/keyboard control works**: click and type inside the view/control window, confirm it actually moves the mouse / types on the Session machine.
+
+  **Not done on 2026-09-21 -- needs two separate machines.** Running Session and Master on the same machine makes this untestable in a meaningful way: locking/injecting input on "the" keyboard/mouse also affects the operator's own ability to drive the Master. Plan: deploy the self-contained publish at `publish/Session/` (already built, see below) to the "Aluno-25" test machine, keep Master on the teacher's machine, same two-machine pattern used throughout Treezeview's own testing.
 - [ ] **Step 5: Confirm the input lock engages**: while controlling, try to use the Session machine's own physical keyboard/mouse directly — it should not respond.
+
+  Not done -- needs the Aluno-25 deployment (see Step 4).
 - [ ] **Step 6: Confirm the input lock releases on close**: close the `ViewControlWindow`, confirm physical keyboard/mouse work again immediately.
+
+  Not done -- needs the Aluno-25 deployment (see Step 4).
 - [ ] **Step 7: Confirm the heartbeat safety net independently**: reconnect, start controlling, then kill the `TreezeSuite.Master` process directly from Task Manager (not a graceful window close) instead of closing the window. Confirm the Session's physical input unlocks on its own within a few seconds (bounded by the heartbeat timeout), with no manual intervention — this is the single most important check in this whole plan, since it's the exact failure mode chased at length in Treezeview.
+
+  Not done -- needs the Aluno-25 deployment (see Step 4). This is the most important remaining check in the whole plan.
+
+**Deployment prep done 2026-09-21:** published self-contained (no .NET install required on the target) builds to `publish/Session/` and `publish/Master/` via `dotnet publish -r win-x64 --self-contained true`. Copy `publish/Session/` to Aluno-25 by USB (same pattern as Treezeview's installer), run `TreezeSuite.Session.exe <master-thumbprint>` there, and connect from `TreezeSuite.Master.exe` on the teacher's machine as in Steps 1-3 above.
 - [ ] **Step 8: If any of the above fails**, use `superpowers:systematic-debugging` before making changes — don't patch symptoms.
 - [ ] **Step 9: Once all checks pass, update the spec's status line** from "Approved for planning" to "Implemented and validated", and commit:
 
