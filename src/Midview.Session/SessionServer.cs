@@ -50,6 +50,11 @@ public sealed class SessionServer
 {
     private const int HeartbeatCheckIntervalMs = 1000;
 
+    // Capture cadence is fully decoupled from message traffic (mouse-move
+    // events alone can arrive far faster than any capture pipeline should
+    // run). ~15 fps matches Veyon's own real-world capture rate.
+    private const int CaptureIntervalMs = 66;
+
     private readonly TcpListener _listener;
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
@@ -95,6 +100,16 @@ public sealed class SessionServer
         using var heartbeatTimer = new System.Threading.Timer(_ => _inputLockManager.CheckHeartbeatTimeout(),
             null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
 
+        // The capture loop runs on its own thread at a fixed cadence,
+        // independent of how often messages arrive on the connection below.
+        // The two threads never touch the channel at the same time from
+        // opposite ends of a single call: this thread only sends
+        // (FrameTile), the loop below only receives -- the one
+        // reader/one writer pattern SslStream supports without locking.
+        using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var captureThread = new Thread(() => CaptureLoop(channel, captureCts)) { IsBackground = true };
+        captureThread.Start();
+
         try
         {
             while (!cancellationToken.IsCancellationRequested && tcpClient.Connected)
@@ -123,16 +138,40 @@ public sealed class SessionServer
                         }
                         break;
                 }
+            }
+        }
+        finally
+        {
+            captureCts.Cancel();
+            captureThread.Join(TimeSpan.FromSeconds(2));
+            _inputLockManager.StopLock(); // safety net: connection ended for any reason
+        }
+    }
+
+    private void CaptureLoop(SecureChannel channel, CancellationTokenSource captureCts)
+    {
+        try
+        {
+            while (!captureCts.IsCancellationRequested)
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
 
                 foreach (var tile in _framePipeline.CaptureNextFrame())
                 {
                     channel.Send(new Midview.Protocol.Message(MessageType.FrameTile, TileMessageCodec.Encode(tile)));
                 }
+
+                var remaining = CaptureIntervalMs - (int)sw.ElapsedMilliseconds;
+                if (remaining > 0)
+                {
+                    captureCts.Token.WaitHandle.WaitOne(remaining);
+                }
             }
         }
-        finally
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _inputLockManager.StopLock(); // safety net: connection ended for any reason
+            Console.WriteLine($"Capture loop stopped: {ex.Message}");
+            captureCts.Cancel(); // connection is likely dead; let the receive loop wind down too
         }
     }
 }
