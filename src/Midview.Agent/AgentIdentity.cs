@@ -13,7 +13,8 @@ public static class AgentIdentity
     {
         if (File.Exists(certificatePath))
         {
-            return new X509Certificate2(certificatePath);
+            return new X509Certificate2(certificatePath, (string?)null,
+                X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.Exportable);
         }
 
         var certificate = SelfSignedCertificate.Create("MidviewAgent");
