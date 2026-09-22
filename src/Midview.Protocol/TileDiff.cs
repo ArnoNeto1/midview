@@ -1,4 +1,6 @@
 using System.Drawing;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 
 namespace Midview.Protocol;
 
@@ -58,23 +60,35 @@ public static class TileDiff
         return new Rectangle(x, y, width, height);
     }
 
-    // NOTE: GetPixel-based comparison is correct but slow (unsuitable for a
-    // final low-latency pipeline). This is intentional for a first working
-    // version -- switch to LockBits + unsafe pointer scanning once the rest
-    // of the pipeline works end-to-end and this is confirmed as the
-    // bottleneck, not before (YAGNI).
+    // Compares raw pixel bytes via LockBits instead of GetPixel (which was
+    // confirmed live to be the pipeline's actual bottleneck -- see the
+    // capture-cadence fix in SessionServer for the other half of that fix).
+    // Bitmaps are always Format32bppArgb here (GdiScreenCapture's own
+    // default), so no per-call format conversion happens.
     private static bool TilesEqual(Bitmap a, Bitmap b, Rectangle rect)
     {
-        for (var y = rect.Top; y < rect.Bottom; y++)
+        var aData = a.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        var bData = b.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
         {
-            for (var x = rect.Left; x < rect.Right; x++)
+            var rowBytes = rect.Width * 4;
+            var aRow = new byte[rowBytes];
+            var bRow = new byte[rowBytes];
+            for (var y = 0; y < rect.Height; y++)
             {
-                if (a.GetPixel(x, y) != b.GetPixel(x, y))
+                Marshal.Copy(IntPtr.Add(aData.Scan0, y * aData.Stride), aRow, 0, rowBytes);
+                Marshal.Copy(IntPtr.Add(bData.Scan0, y * bData.Stride), bRow, 0, rowBytes);
+                if (!aRow.AsSpan().SequenceEqual(bRow))
                 {
                     return false;
                 }
             }
+            return true;
         }
-        return true;
+        finally
+        {
+            a.UnlockBits(aData);
+            b.UnlockBits(bData);
+        }
     }
 }
