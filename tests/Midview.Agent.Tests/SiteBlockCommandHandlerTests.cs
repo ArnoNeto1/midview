@@ -81,6 +81,29 @@ public class SiteBlockCommandHandlerTests
     }
 
     [Fact]
+    public void Handle_BlockDomain_NormalizesMixedCaseAndFullUrlPayload()
+    {
+        var (handler, statePath, _, _) = CreateHandler();
+
+        var result = handler.Handle(MessageType.BlockDomain, Encoding.UTF8.GetBytes("https://YouTube.com/watch?v=x"));
+
+        Assert.True(result);
+        Assert.Contains("youtube.com", SiteBlockState.Load(statePath).BlockedDomains);
+    }
+
+    [Fact]
+    public void Handle_BlockDomain_InvalidPayload_ReturnsFalseAndDoesNotTouchState()
+    {
+        var (handler, statePath, hostsPath, _) = CreateHandler();
+
+        var result = handler.Handle(MessageType.BlockDomain, Encoding.UTF8.GetBytes("not a domain\nwith a newline"));
+
+        Assert.False(result);
+        Assert.Empty(SiteBlockState.Load(statePath).BlockedDomains);
+        Assert.DoesNotContain("BEGIN MIDVIEW", File.ReadAllText(hostsPath));
+    }
+
+    [Fact]
     public void Handle_UnblockDomain_RemovesDomainAndRewritesHostsFile()
     {
         var (handler, statePath, hostsPath, _) = CreateHandler();
@@ -109,6 +132,24 @@ public class SiteBlockCommandHandlerTests
         Assert.True(result);
         Assert.Equal(1, freshFirewall.ApplyBlockCalls);
         Assert.Contains("127.0.0.1 youtube.com", File.ReadAllText(hostsPath));
+    }
+
+    [Fact]
+    public void ReconcileAtStartup_PersistedStateIsUnblocked_AppliesUnblock()
+    {
+        var (handler, statePath, hostsPath, _) = CreateHandler();
+        handler.Handle(MessageType.BlockInternet, Array.Empty<byte>());
+        handler.Handle(MessageType.UnblockInternet, Array.Empty<byte>());
+        // Simulate a fresh Agent process: reload persisted (unblocked) state.
+        var reloadedState = SiteBlockState.Load(statePath);
+        var freshFirewall = new FakeFirewallController();
+        var freshHandler = new SiteBlockCommandHandler(reloadedState, statePath, hostsPath, freshFirewall);
+
+        var result = freshHandler.ReconcileAtStartup();
+
+        Assert.True(result);
+        Assert.Equal(1, freshFirewall.ApplyUnblockCalls);
+        Assert.Equal(0, freshFirewall.ApplyBlockCalls);
     }
 
     [Fact]
