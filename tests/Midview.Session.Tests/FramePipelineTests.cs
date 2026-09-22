@@ -17,14 +17,15 @@ public class FakeScreenCapture : IScreenCapture
 public class FramePipelineTests
 {
     [Fact]
-    public void CaptureNextFrame_FirstCall_ReturnsEmpty()
+    public void CaptureNextFrame_FirstCall_ReturnsAllTilesEncoded()
     {
         var frame = SolidBitmap(128, 128, Color.Red);
         var pipeline = new FramePipeline(new FakeScreenCapture(frame));
 
         var tiles = pipeline.CaptureNextFrame();
 
-        Assert.Empty(tiles);
+        Assert.Equal(4, tiles.Count); // 128x128 is a 2x2 grid of 64x64 tiles
+        Assert.All(tiles, tile => Assert.NotEmpty(tile.JpegBytes));
     }
 
     [Fact]

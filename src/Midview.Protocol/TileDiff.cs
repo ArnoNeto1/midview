@@ -32,6 +32,23 @@ public static class TileDiff
         return changed;
     }
 
+    public static IReadOnlyList<TileCoord> AllTiles(int width, int height)
+    {
+        var columns = (int)Math.Ceiling(width / (double)TileSize);
+        var rows = (int)Math.Ceiling(height / (double)TileSize);
+
+        var tiles = new List<TileCoord>(rows * columns);
+        for (var row = 0; row < rows; row++)
+        {
+            for (var column = 0; column < columns; column++)
+            {
+                tiles.Add(new TileCoord(row, column));
+            }
+        }
+
+        return tiles;
+    }
+
     public static Rectangle TileRect(int row, int column, int imageWidth, int imageHeight)
     {
         var x = column * TileSize;

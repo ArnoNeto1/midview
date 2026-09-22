@@ -46,6 +46,30 @@ public class TileDiffTests
         Assert.Throws<ArgumentException>(() => TileDiff.FindChangedTiles(a, b));
     }
 
+    [Fact]
+    public void AllTiles_128x128_ReturnsAll4TilesInRowMajorOrder()
+    {
+        var tiles = TileDiff.AllTiles(128, 128);
+
+        Assert.Equal(new[]
+        {
+            new TileCoord(0, 0), new TileCoord(0, 1),
+            new TileCoord(1, 0), new TileCoord(1, 1),
+        }, tiles);
+    }
+
+    [Fact]
+    public void AllTiles_SizeNotMultipleOfTileSize_RoundsUpToCoverEdgeTiles()
+    {
+        var tiles = TileDiff.AllTiles(100, 70);
+
+        Assert.Equal(new[]
+        {
+            new TileCoord(0, 0), new TileCoord(0, 1),
+            new TileCoord(1, 0), new TileCoord(1, 1),
+        }, tiles);
+    }
+
     private static void FillSolid(Bitmap bitmap, Color color)
     {
         using var g = Graphics.FromImage(bitmap);
