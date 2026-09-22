@@ -5,7 +5,7 @@ namespace Midview.Protocol;
 
 public static class TileCodec
 {
-    public static byte[] EncodeTile(Bitmap source, Rectangle rect, long quality = 75L)
+    public static byte[] EncodeTile(Bitmap source, Rectangle rect, long quality = 90L)
     {
         using var tile = source.Clone(rect, source.PixelFormat);
         using var stream = new MemoryStream();

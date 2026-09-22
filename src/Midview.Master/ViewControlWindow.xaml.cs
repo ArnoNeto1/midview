@@ -228,6 +228,22 @@ public partial class ViewControlWindow : Window
         RunOrCloseOnFailure(() => _client.SendInputEvent(buffer));
     }
 
+    private void OnDisconnectClicked(object sender, RoutedEventArgs e) => Close();
+
+    private void OnFullscreenClicked(object sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            FullscreenButton.Content = "Tela Cheia";
+        }
+        else
+        {
+            WindowState = WindowState.Maximized;
+            FullscreenButton.Content = "Restaurar";
+        }
+    }
+
     private void OnWindowClosed(object sender, EventArgs e)
     {
         _closing = true;

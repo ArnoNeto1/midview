@@ -3,10 +3,16 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MidviewMaster - Controlling" Height="720" Width="1280"
         Closed="OnWindowClosed" Loaded="OnWindowLoaded">
-    <Grid>
-        <Image x:Name="ScreenImage" Stretch="Uniform"
-               MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
-               MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
-               KeyDown="OnKeyDown" KeyUp="OnKeyUp" Focusable="True" />
-    </Grid>
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#FF2D2D30">
+            <Button x:Name="FullscreenButton" Content="Tela Cheia" Click="OnFullscreenClicked" Padding="10,4" Margin="4" />
+            <Button Content="Desconectar" Click="OnDisconnectClicked" Padding="10,4" Margin="4" />
+        </StackPanel>
+        <Grid Background="Black">
+            <Image x:Name="ScreenImage" Stretch="Uniform"
+                   MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
+                   MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
+                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" Focusable="True" />
+        </Grid>
+    </DockPanel>
 </Window>
