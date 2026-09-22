@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MidviewMaster" Height="520" Width="420">
     <StackPanel Margin="16">
-        <TextBlock Text="This MidviewMaster's certificate thumbprint (give this to the Session's trust list):" Margin="0,0,0,4" TextWrapping="Wrap" />
+        <TextBlock Text="This MidviewMaster's certificate thumbprint (register this once in every Agent/Session's trust list):" Margin="0,0,0,4" TextWrapping="Wrap" />
         <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
+        <TextBlock Text="To authorize another teacher's PC as this same Master, copy this file to the same path there (same thumbprint, no lab machine needs updating):" Margin="0,0,0,4" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
+        <TextBox x:Name="KeyFilePathTextBlock" IsReadOnly="True" Margin="0,0,0,8" FontSize="11" />
         <TextBlock Text="Host address:" Margin="0,0,0,4" />
         <TextBox x:Name="HostAddressTextBox" Text="localhost" Margin="0,0,0,8" />
         <TextBlock Text="Trusted certificate thumbprint (Session's):" Margin="0,0,0,4" />

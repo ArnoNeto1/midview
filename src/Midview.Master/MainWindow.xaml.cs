@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         MyThumbprintTextBlock.Text = _masterCertificate.Thumbprint;
+        KeyFilePathTextBlock.Text = MasterIdentity.DefaultCertificatePath;
     }
 
     private async void OnConnectClicked(object sender, RoutedEventArgs e)

@@ -5,6 +5,12 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
+// This file is a shared, portable credential by design (like Veyon's
+// authentication key), not a per-install identity: copying
+// master-identity.pfx to another teacher's PC gives that PC the exact
+// same certificate (same thumbprint), so it's already trusted on every
+// Agent/Session that has this one thumbprint registered -- no lab
+// machine needs to be touched again to add a second authorized teacher.
 public static class MasterIdentity
 {
     public static string DefaultCertificatePath => Path.Combine(
@@ -15,7 +21,7 @@ public static class MasterIdentity
     {
         if (File.Exists(certificatePath))
         {
-            return new X509Certificate2(certificatePath);
+            return new X509Certificate2(certificatePath, (string?)null, X509KeyStorageFlags.Exportable);
         }
 
         var certificate = SelfSignedCertificate.Create("MidviewMaster");
