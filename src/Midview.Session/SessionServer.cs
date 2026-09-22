@@ -118,9 +118,27 @@ public sealed class SessionServer
 
         try
         {
+            var messageCount = 0;
+            var maxGapMs = 0.0;
+            var gapSw = System.Diagnostics.Stopwatch.StartNew();
+
             while (!cancellationToken.IsCancellationRequested && tcpClient.Connected)
             {
+                var receiveSw = System.Diagnostics.Stopwatch.StartNew();
                 var message = channel.Receive();
+                var receiveMs = receiveSw.Elapsed.TotalMilliseconds;
+
+                var gapMs = gapSw.Elapsed.TotalMilliseconds;
+                gapSw.Restart();
+                maxGapMs = Math.Max(maxGapMs, gapMs);
+                messageCount++;
+                if (messageCount % 50 == 0)
+                {
+                    SessionDiagnostics.Log(
+                        $"messages received={messageCount} lastReceiveBlockedFor={receiveMs:F1}ms maxGapSinceLast50={maxGapMs:F1}ms");
+                    maxGapMs = 0.0;
+                }
+
                 switch (message.Type)
                 {
                     case MessageType.StartControl:
