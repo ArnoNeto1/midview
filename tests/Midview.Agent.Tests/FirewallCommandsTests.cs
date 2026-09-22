@@ -22,11 +22,19 @@ public class FirewallCommandsTests
     }
 
     [Fact]
-    public void BuildBlockCommands_EndsWithBlockAllOutboundRule()
+    public void BuildBlockCommands_SetsBlockOutboundDefaultPolicy()
     {
         var commands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
 
-        Assert.Contains(commands, c => c.Contains("action=block"));
+        Assert.Contains(commands, c => c.Contains("firewallpolicy") && c.Contains("blockinbound,blockoutbound"));
+    }
+
+    [Fact]
+    public void BuildUnblockCommands_RestoresAllowOutboundDefaultPolicy()
+    {
+        var commands = FirewallCommands.BuildUnblockCommands();
+
+        Assert.Contains(commands, c => c.Contains("firewallpolicy") && c.Contains("blockinbound,allowoutbound"));
     }
 
     [Fact]
@@ -35,11 +43,15 @@ public class FirewallCommandsTests
         var blockCommands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
         var unblockCommands = FirewallCommands.BuildUnblockCommands();
 
+        // Policy-set commands (advfirewall set ...) carry no "name=" argument since
+        // they don't create a named rule -- only compare the named rules.
         var blockedRuleNames = blockCommands
+            .Where(c => c.Any(arg => arg.StartsWith("name=")))
             .Select(c => c.First(arg => arg.StartsWith("name=")))
             .OrderBy(n => n)
             .ToList();
         var unblockedRuleNames = unblockCommands
+            .Where(c => c.Any(arg => arg.StartsWith("name=")))
             .Select(c => c.First(arg => arg.StartsWith("name=")))
             .OrderBy(n => n)
             .ToList();
