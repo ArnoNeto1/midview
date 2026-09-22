@@ -54,5 +54,5 @@ public partial class MainWindow : Window
         }
     }
 
-    private const int AgentServerWorkerAgentPort = 5900; // must match Midview.Agent.AgentServerWorker.AgentPort
+    private const int AgentServerWorkerAgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
 }
