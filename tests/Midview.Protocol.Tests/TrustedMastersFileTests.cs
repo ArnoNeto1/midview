@@ -1,4 +1,4 @@
-using Midview.Agent;
+using Midview.Protocol;
 using Xunit;
 
 public class TrustedMastersFileTests

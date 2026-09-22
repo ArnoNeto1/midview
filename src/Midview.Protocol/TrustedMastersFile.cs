@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Midview.Agent;
+namespace Midview.Protocol;
 
 public static class TrustedMastersFile
 {

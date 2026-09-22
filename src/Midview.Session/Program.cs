@@ -6,10 +6,21 @@ using Midview.Session;
 var serverCertificate = SelfSignedCertificate.Create(Environment.MachineName);
 Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
-// TODO (later task, not this one): load the actual trusted master thumbprint(s)
-// from a config file instead of accepting a command-line argument.
-var masterThumbprint = args.Length > 0 ? args[0] : throw new ArgumentException(
-    "Pass the trusted MidviewMaster certificate thumbprint as the first argument for this manual test.");
+// Reuses the same trusted-masters.json the Agent already reads for
+// site-blocking commands -- one registration per machine covers both, so
+// the teacher never has to pass a thumbprint by hand again after the first
+// setup. A command-line argument is still accepted for one-off manual
+// testing without touching that shared file.
+var trustedMastersPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "Midview", "trusted-masters.json");
+var trustedMasters = args.Length > 0 ? new[] { args[0] } : TrustedMastersFile.Load(trustedMastersPath);
+if (trustedMasters.Count == 0)
+{
+    throw new InvalidOperationException(
+        $"No trusted MidviewMaster found. Add its certificate thumbprint to {trustedMastersPath} " +
+        "(the same file the Agent uses), e.g. [\"<thumbprint>\"], or pass it as a command-line argument.");
+}
 
 var inputDeviceController = new WindowsInputDeviceController();
 
@@ -25,7 +36,7 @@ inputDeviceController.EnableInputDevices();
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
-    new TrustStore(new[] { masterThumbprint }),
+    new TrustStore(trustedMasters),
     new GdiScreenCapture(),
     new SendInputInjector(),
     new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)));
