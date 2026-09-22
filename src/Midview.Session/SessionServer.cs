@@ -80,6 +80,12 @@ public sealed class SessionServer
         while (!cancellationToken.IsCancellationRequested)
         {
             var tcpClient = _listener.AcceptTcpClient();
+            // Nagle's algorithm batches/delays small writes waiting to
+            // coalesce them -- exactly wrong for this protocol's frequent
+            // tiny messages (mouse moves, heartbeats, tile updates), adding
+            // real latency to both directions regardless of how fast either
+            // side processes them.
+            tcpClient.NoDelay = true;
             try
             {
                 HandleClient(tcpClient, cancellationToken);

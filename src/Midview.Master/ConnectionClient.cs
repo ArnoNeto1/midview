@@ -18,6 +18,11 @@ public sealed class ConnectionClient : IDisposable
     {
         var tcpClient = new TcpClient();
         tcpClient.Connect(hostAddress, port);
+        // Nagle's algorithm batches/delays small writes waiting to coalesce
+        // them -- exactly wrong for this protocol's frequent tiny messages
+        // (mouse moves, heartbeats, tile updates), adding real latency to
+        // both directions regardless of how fast either side processes them.
+        tcpClient.NoDelay = true;
         var channel = SecureChannel.AuthenticateAsClient(
             tcpClient, hostAddress, masterCertificate, new TrustStore(new[] { targetThumbprint }));
         return new ConnectionClient(channel);
