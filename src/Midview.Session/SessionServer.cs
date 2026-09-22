@@ -75,13 +75,21 @@ public sealed class SessionServer
         while (!cancellationToken.IsCancellationRequested)
         {
             var tcpClient = _listener.AcceptTcpClient();
-            HandleClient(tcpClient, cancellationToken);
+            try
+            {
+                HandleClient(tcpClient, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling a client connection: {ex.Message}");
+            }
         }
     }
 
     private void HandleClient(TcpClient tcpClient, CancellationToken cancellationToken)
     {
-        using var channel = SecureChannel.AuthenticateAsServer(tcpClient, _serverCertificate, _masterTrustStore);
+        using var client = tcpClient;
+        using var channel = SecureChannel.AuthenticateAsServer(client, _serverCertificate, _masterTrustStore);
         var isControlling = false;
 
         using var heartbeatTimer = new System.Threading.Timer(_ => _inputLockManager.CheckHeartbeatTimeout(),
