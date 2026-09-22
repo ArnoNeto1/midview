@@ -1,8 +1,9 @@
 # Midview — Site Blocking (Design)
 
 Date: 2026-09-22
-Status: Approved for planning (revised after re-reading Treezeview's actual
-behavior — see note below)
+Status: Implemented and validated (end-to-end on Aluno-25/Aluno_23: domain
+block/unblock, full-internet block/unblock, and reboot-survival reconciliation
+all confirmed working)
 
 ## Context
 
