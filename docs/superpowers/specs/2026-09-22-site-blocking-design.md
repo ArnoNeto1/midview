@@ -84,7 +84,13 @@ a service restart or reboot.
   full-internet-block firewall rules — allow the local network, allow
   outbound to `MidviewAgent`'s and `MidviewSession`'s own listening ports
   (so Midview itself keeps working while blocked), then block all other
-  outbound traffic. Unblocking removes those rules.
+  outbound traffic. Because Windows Firewall evaluates block rules before
+  allow rules regardless of order, "block all other" is done by setting
+  the profile-wide default outbound policy to block
+  (`firewallpolicy blockinbound,blockoutbound`), not by adding a block-all
+  rule. Unblocking removes the allow rules and restores Windows' default
+  policy (`blockinbound,allowoutbound`); it does not restore whatever
+  policy the machine had before, if that was different.
 - **`AgentServer`** (`MidviewAgent`): listens on its own port, authenticates
   incoming Master connections via the same trust-store pattern as
   `MidviewSession`'s `SessionServer`, and handles the four message types by
@@ -150,3 +156,64 @@ Domain categories/lists beyond a flat set of currently-blocked domains,
 scheduling, a "list currently blocked domains" query feature (not
 requested), and any UI beyond `MidviewMaster` being able to send the four
 commands.
+
+## Review notes (2026-09-22, after implementation)
+
+Checked against the implemented code. Items marked **open** are gaps in the
+current implementation, not yet fixed.
+
+- **Fixed: startup reconcile now works in both directions.** When
+  `InternetBlocked` is false, `ReconcileAtStartup` checks whether any
+  `MidviewSiteBlock_*` rule exists (`IFirewallController.IsBlockPresent`,
+  via `netsh ... show rule`) and runs `ApplyUnblock` if so. Only checking
+  for leftover rules, instead of always unblocking, avoids resetting the
+  machine's default outbound policy on every boot. Remaining gap: if the
+  rules were removed by hand but the block-outbound policy was left
+  behind, this isn't detected.
+- **Fixed: startup errors no longer stop the listener.** Hosts-file and
+  firewall reconcile each run in their own try/catch, log through
+  `AgentLog`, and the listener starts either way. An unreadable
+  `site-block-state.json` is renamed to `site-block-state.json.corrupt`
+  and the Agent starts with nothing blocked.
+- **Open: domain payload is not validated or normalized.** The Master
+  sends the raw text box contents and the Agent writes them straight into
+  the hosts file. This means: a newline in the payload injects arbitrary
+  hosts entries; `YouTube.com` and `youtube.com` are different set entries
+  (unblocking one leaves the other); a trailing space or a pasted URL
+  (`https://youtube.com/watch?...`) blocks nothing; an empty payload writes
+  `127.0.0.1 ` and `127.0.0.1 www.`. The Agent should trim, lowercase,
+  strip any scheme/path/port, and reject anything that isn't a valid
+  hostname.
+- **Fixed: data-directory permissions.** `AgentDataDirectory.EnsureSecure`
+  now enforces the ACL on every Agent start, not only when it creates the
+  directory: SYSTEM and Administrators get full control, Users get
+  read-only (so `MidviewSession`, running as a standard user, can read
+  `trusted-masters.json`). `agent-identity.pfx` gets its own protected
+  ACL (SYSTEM and Administrators only) right after it's loaded or
+  created. `AgentLog` no longer calls `EnsureSecure` and never throws.
+- **Minor: firewall rules pile up.** `netsh ... add rule` doesn't check for
+  duplicates, so every Agent start adds another `MidviewAgentInbound`
+  rule, and every block (including each startup reapply) adds another set
+  of `MidviewSiteBlock_*` rules. Delete-by-name removes all copies, so
+  it's harmless but untidy.
+- **Minor: LAN allow rule assumes `192.168.0.0/16`.** On a lab network in
+  another range (e.g. `10.x`), the LAN isn't reachable during a full
+  block. Midview's own ports still work.
+- **Minor: outbound allow on ports 28900/5901 applies to any remote
+  host.** During a full block, a student could reach an internet server
+  listening on either port. Scoping `remoteip` to the local subnet would
+  close this.
+
+### Known limitations (by design)
+
+- Only the bare and `www.` forms are blocked. Other subdomains
+  (`m.youtube.com`, `music.youtube.com`), alternate domains (`youtu.be`)
+  and CDNs stay reachable. The hosts file has no wildcard support.
+- Tabs that are already open may keep working after a domain block.
+  Browsers keep their own DNS cache and open connections (including QUIC),
+  and `ipconfig /flushdns` doesn't clear those.
+- Only `127.0.0.1` entries are written. Adding `::1` entries would also
+  block the IPv6 route.
+- Windows Defender can flag or revert hosts-file changes for some
+  well-known domains. Startup reconciliation re-applies them on the next
+  Agent start, but not immediately.
