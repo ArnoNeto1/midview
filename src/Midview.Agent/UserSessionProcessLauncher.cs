@@ -37,9 +37,13 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
             try
             {
                 var startupInfo = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>() };
+                // CREATE_NO_WINDOW: Session.exe stays a console app (so running
+                // it by hand for manual testing still prints its thumbprint),
+                // but the auto-launched instance a student would actually see
+                // gets no visible console window.
                 var created = CreateProcessAsUser(
                     primaryToken, _executablePath, null, IntPtr.Zero, IntPtr.Zero, false,
-                    0, IntPtr.Zero, null, ref startupInfo, out var processInfo);
+                    CREATE_NO_WINDOW, IntPtr.Zero, null, ref startupInfo, out var processInfo);
 
                 if (!created)
                 {
@@ -77,6 +81,8 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
 
     private enum SECURITY_IMPERSONATION_LEVEL { SecurityIdentification = 1 }
     private enum TOKEN_TYPE { TokenPrimary = 1 }
+
+    private const uint CREATE_NO_WINDOW = 0x08000000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct STARTUPINFO
