@@ -53,14 +53,28 @@ the thumbprint it stored goes stale every time a student's computer
 restarts — the exact bug class fixed today for the Agent and Master's own
 identities.
 
-Session now persists its identity the same way, at
-`%ProgramData%\Midview\session-identity.pfx` (`SessionIdentity.LoadOrCreate`,
-mirroring `AgentIdentity`/`MasterIdentity`): created once on first launch,
-loaded on every later one, stable thumbprint for the lifetime of the
-machine. This directory is already created and secured by the Agent
-(`AgentDataDirectory.EnsureSecure`), so Session — which the Agent
-auto-launches into the logged-in user's session — reads/writes into a
-location that already exists by the time it runs.
+Session now persists its identity at
+`%ProgramData%\Midview\session-identity.pfx` (`SessionIdentity.LoadOrCreate`
+in `Midview.Protocol`, mirroring `AgentIdentity`/`MasterIdentity`), with a
+stable thumbprint for the lifetime of the machine. Session runs as the
+logged-in student (the Agent launches it with that user's token), who can
+read the Agent's data directory but not write to it — so the Agent,
+running as SYSTEM, creates the file at startup, before `SessionSupervisor`
+first launches Session, and logs its thumbprint to `agent.log`. Session
+only ever loads it (it creates the file itself only when run by hand,
+elevated, on a machine without the Agent).
+
+This depends on the data-directory ACL change described in the
+site-blocking spec's review notes, which had not actually been applied:
+`AgentDataDirectory.EnsureSecure` still set a SYSTEM/Administrators-only
+ACL, and only when creating the directory. It now reapplies the ACL on
+every Agent start with Users read-only (which also lets Session read
+`trusted-masters.json` in a standard student login), and
+`agent-identity.pfx` gets its own SYSTEM/Administrators-only ACL.
+Accepted trade-off: any local user can read `session-identity.pfx`,
+private key included. That's inherent to Session running as the student
+(anything Session can read, the student can), and the worst it allows is
+a student impersonating their own machine's Session to the teacher.
 
 ## Architecture
 
@@ -135,6 +149,14 @@ one-off/unregistered connections. The site-blocking controls
 machine is currently selected/being tested, rather than being permanently
 on-screen fields disconnected from the grid.
 
+Right-clicking a tile offers "Detalhes e bloqueio de sites..." (opens the
+Add/test view prefilled with that machine, which is what scopes the
+site-blocking controls to it) and "Remover da lista". Saving a machine
+whose host address is already in the list replaces that entry. An
+unreadable `known-machines.json` is moved aside to
+`known-machines.json.corrupt` (and reported in the status bar) instead
+of crashing Master or being silently overwritten by the next save.
+
 ## Error handling
 
 - A `RequestThumbnail` failure (capture error, encode error) on the
@@ -146,13 +168,19 @@ on-screen fields disconnected from the grid.
 - Master's per-machine polling connections must not interfere with a
   separately-opened full-control `ViewControlWindow` to the same machine
   — they're independent `SecureChannel` connections to the same
-  `SessionServer`, handled by `SessionServer.Run`'s existing
-  accept-loop-per-client model exactly like any other pair of concurrent
-  clients today. Running both at once means that machine captures a
-  small extra low-res frame every few seconds on top of full control's
-  own feed — a deliberately accepted minor inefficiency (YAGNI) rather
-  than adding coordination logic to pause the preview poll while full
-  control is open, unless it proves to actually matter in practice.
+  `SessionServer`. That took three changes to `SessionServer`, which
+  used to serve one client at a time (a long-lived preview connection
+  would have blocked full control indefinitely): each connection now
+  gets its own thread; the ~15 fps capture thread and the heartbeat
+  watchdog start on `StartControl` instead of on connect; and only a
+  connection that is itself controlling releases the input lock when it
+  ends. `RequestThumbnail` is ignored on a connection that has a capture
+  thread (that thread is the channel's one writer). Running a preview
+  and full control at once means that machine captures a small extra
+  low-res frame every few seconds on top of full control's own feed — a
+  deliberately accepted minor inefficiency (YAGNI) rather than adding
+  coordination logic to pause the preview poll while full control is
+  open, unless it proves to actually matter in practice.
 
 ## Testing
 
@@ -164,7 +192,9 @@ on-screen fields disconnected from the grid.
   a loopback test confirming it responds correctly whether or not a
   control session is concurrently active, mirroring the existing
   `SessionServerTests.cs` pattern.
-- The grid UI and per-machine polling loops are WPF-level code with no
-  existing test coverage precedent in this project (`ViewControlWindow`
-  itself has none) — validated by live testing, not new automated tests,
-  consistent with how the rest of the UI layer has been handled.
+- `KnownMachinesFile` tests live in a new `tests/Midview.Master.Tests`
+  project (Master had none). With it in place, `MachinePreviewPoller`
+  also gets two loopback tests — a thumbnail from a reachable Session,
+  `null` rather than an exception when nothing is listening. The grid UI
+  itself (`MainWindow`, `AddMachineWindow`, `MachineTileViewModel`) is
+  validated by live testing, consistent with `ViewControlWindow`.

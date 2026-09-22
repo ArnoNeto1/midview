@@ -184,7 +184,8 @@ current implementation, not yet fixed.
   `127.0.0.1 ` and `127.0.0.1 www.`. The Agent should trim, lowercase,
   strip any scheme/path/port, and reject anything that isn't a valid
   hostname.
-- **Fixed: data-directory permissions.** `AgentDataDirectory.EnsureSecure`
+- **Fixed: data-directory permissions** (the code change itself landed
+  with the classroom console, after this note was written). `AgentDataDirectory.EnsureSecure`
   now enforces the ACL on every Agent start, not only when it creates the
   directory: SYSTEM and Administrators get full control, Users get
   read-only (so `MidviewSession`, running as a standard user, can read
