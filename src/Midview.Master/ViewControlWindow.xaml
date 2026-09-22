@@ -4,7 +4,7 @@
         Title="MidviewMaster - Controlling" Height="720" Width="1280"
         Closed="OnWindowClosed">
     <Grid>
-        <Image x:Name="ScreenImage" Stretch="None"
+        <Image x:Name="ScreenImage" Stretch="Uniform"
                MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
                KeyDown="OnKeyDown" KeyUp="OnKeyUp" Focusable="True" />
     </Grid>

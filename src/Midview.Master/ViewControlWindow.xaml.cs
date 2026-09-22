@@ -141,20 +141,57 @@ public partial class ViewControlWindow : Window
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        var position = e.GetPosition(ScreenImage);
+        var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
         SendInput(InputEventKind.MouseMove, (int)position.X, (int)position.Y, 0);
     }
 
     private void OnMouseLeftDown(object sender, MouseButtonEventArgs e)
     {
-        var position = e.GetPosition(ScreenImage);
+        var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
         SendInput(InputEventKind.MouseLeftDown, (int)position.X, (int)position.Y, 0);
     }
 
     private void OnMouseLeftUp(object sender, MouseButtonEventArgs e)
     {
-        var position = e.GetPosition(ScreenImage);
+        var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
         SendInput(InputEventKind.MouseLeftUp, (int)position.X, (int)position.Y, 0);
+    }
+
+    // ScreenImage now stretches "Uniform" to always show the whole remote
+    // screen regardless of window size, instead of clipping it at native
+    // pixel size -- so a click's position within the control no longer maps
+    // 1:1 to a remote pixel. This converts back to real bitmap coordinates,
+    // accounting for both the scale factor and any letterboxing offset when
+    // the window's aspect ratio doesn't match the remote screen's.
+    private Point ToBitmapCoordinates(Point controlPosition)
+    {
+        if (_bitmapWidth <= 0 || _bitmapHeight <= 0 || ScreenImage.ActualWidth <= 0 || ScreenImage.ActualHeight <= 0)
+        {
+            return controlPosition;
+        }
+
+        var controlAspect = ScreenImage.ActualWidth / ScreenImage.ActualHeight;
+        var bitmapAspect = (double)_bitmapWidth / _bitmapHeight;
+
+        double renderedWidth, renderedHeight, offsetX, offsetY;
+        if (controlAspect > bitmapAspect)
+        {
+            renderedHeight = ScreenImage.ActualHeight;
+            renderedWidth = renderedHeight * bitmapAspect;
+            offsetX = (ScreenImage.ActualWidth - renderedWidth) / 2;
+            offsetY = 0;
+        }
+        else
+        {
+            renderedWidth = ScreenImage.ActualWidth;
+            renderedHeight = renderedWidth / bitmapAspect;
+            offsetX = 0;
+            offsetY = (ScreenImage.ActualHeight - renderedHeight) / 2;
+        }
+
+        var x = (controlPosition.X - offsetX) * (_bitmapWidth / renderedWidth);
+        var y = (controlPosition.Y - offsetY) * (_bitmapHeight / renderedHeight);
+        return new Point(x, y);
     }
 
     private void OnKeyDown(object sender, KeyEventArgs e) =>
