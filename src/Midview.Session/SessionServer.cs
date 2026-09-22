@@ -58,18 +58,18 @@ public sealed class SessionServer
     private readonly TcpListener _listener;
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
-    private readonly FramePipeline _framePipeline;
+    private readonly IScreenCapture _screenCapture;
     private readonly IInputInjector _inputInjector;
     private readonly InputLockManager _inputLockManager;
 
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
-        FramePipeline framePipeline, IInputInjector inputInjector, InputLockManager inputLockManager)
+        IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
-        _framePipeline = framePipeline;
+        _screenCapture = screenCapture;
         _inputInjector = inputInjector;
         _inputLockManager = inputLockManager;
     }
@@ -106,6 +106,12 @@ public sealed class SessionServer
         using var heartbeatTimer = new System.Threading.Timer(_ => _inputLockManager.CheckHeartbeatTimeout(),
             null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
 
+        // A fresh FramePipeline per connection: it isn't thread-safe, and
+        // reusing one server-wide let a slow-to-stop capture thread from a
+        // previous connection race a new one over the same mutable state
+        // after a reconnect (also left the diff starting from a stale frame).
+        var framePipeline = new FramePipeline(_screenCapture);
+
         // The capture loop runs on its own thread at a fixed cadence,
         // independent of how often messages arrive on the connection below.
         // The two threads never touch the channel at the same time from
@@ -113,7 +119,7 @@ public sealed class SessionServer
         // (FrameTile), the loop below only receives -- the one
         // reader/one writer pattern SslStream supports without locking.
         using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var captureThread = new Thread(() => CaptureLoop(channel, captureCts)) { IsBackground = true };
+        var captureThread = new Thread(() => CaptureLoop(framePipeline, channel, captureCts)) { IsBackground = true };
         captureThread.Start();
 
         try
@@ -172,7 +178,7 @@ public sealed class SessionServer
         }
     }
 
-    private void CaptureLoop(SecureChannel channel, CancellationTokenSource captureCts)
+    private void CaptureLoop(FramePipeline framePipeline, SecureChannel channel, CancellationTokenSource captureCts)
     {
         try
         {
@@ -180,7 +186,7 @@ public sealed class SessionServer
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                foreach (var tile in _framePipeline.CaptureNextFrame())
+                foreach (var tile in framePipeline.CaptureNextFrame())
                 {
                     channel.Send(new Midview.Protocol.Message(MessageType.FrameTile, TileMessageCodec.Encode(tile)));
                 }

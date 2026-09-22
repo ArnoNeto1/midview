@@ -43,7 +43,7 @@ public class SessionServerTests
 
         var server = new SessionServer(
             listener, serverCert, new TrustStore(new[] { clientCert.Thumbprint }),
-            new FramePipeline(capture), injector,
+            capture, injector,
             new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)));
 
         using var stopServer = new CancellationTokenSource();

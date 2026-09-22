@@ -15,7 +15,7 @@ var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
     new TrustStore(new[] { masterThumbprint }),
-    new FramePipeline(new GdiScreenCapture()),
+    new GdiScreenCapture(),
     new SendInputInjector(),
     new InputLockManager(new WindowsInputDeviceController(), new SystemClock(), TimeSpan.FromSeconds(5)));
 
