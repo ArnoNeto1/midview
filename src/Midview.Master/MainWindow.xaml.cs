@@ -1,73 +1,138 @@
+using System.Collections.ObjectModel;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using Midview.Protocol;
 
 namespace Midview.Master;
 
+// The classroom console: one live thumbnail per saved machine, click one to
+// take full control of it (same ViewControlWindow as a manual Connect).
 public partial class MainWindow : Window
 {
     private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
 
+    // The single source of truth for the roster while the app runs; the
+    // file is rewritten from it after every change.
+    private readonly ObservableCollection<MachineTileViewModel> _tiles = new();
+
     public MainWindow()
     {
         InitializeComponent();
-        MyThumbprintTextBlock.Text = _masterCertificate.Thumbprint;
-        KeyFilePathTextBlock.Text = MasterIdentity.DefaultCertificatePath;
+        MachinesItemsControl.ItemsSource = _tiles;
+
+        try
+        {
+            foreach (var machine in KnownMachinesFile.Load(KnownMachinesFile.DefaultPath))
+            {
+                _tiles.Add(new MachineTileViewModel(machine, _masterCertificate));
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusTextBlock.Text = $"Não foi possível ler a lista da turma: {ex.Message}";
+        }
+
+        UpdateEmptyRosterHint();
     }
 
-    private async void OnConnectClicked(object sender, RoutedEventArgs e)
+    private void OnAddMachineClicked(object sender, RoutedEventArgs e) => OpenAddMachineWindow(machine: null);
+
+    private void OnMachineDetailsClicked(object sender, RoutedEventArgs e)
     {
-        ConnectStatusTextBlock.Text = "Connecting...";
-        var hostAddress = HostAddressTextBox.Text;
-        var thumbprint = ThumbprintTextBox.Text;
+        if (((FrameworkElement)sender).DataContext is MachineTileViewModel tile)
+        {
+            OpenAddMachineWindow(tile.Machine);
+        }
+    }
+
+    private void OpenAddMachineWindow(KnownMachine? machine)
+    {
+        var window = new AddMachineWindow(_masterCertificate, machine) { Owner = this };
+        window.MachineSaved += OnMachineSaved;
+        window.Show();
+    }
+
+    // Same host address as a saved machine means "update that machine"
+    // (e.g. its Session was reinstalled and got a new thumbprint), not a
+    // second tile for the same computer.
+    private void OnMachineSaved(KnownMachine machine)
+    {
+        var tile = new MachineTileViewModel(machine, _masterCertificate);
+        var existing = _tiles.FirstOrDefault(t =>
+            string.Equals(t.Machine.HostAddress, machine.HostAddress, StringComparison.OrdinalIgnoreCase));
+        if (existing is null)
+        {
+            _tiles.Add(tile);
+        }
+        else
+        {
+            _tiles[_tiles.IndexOf(existing)] = tile;
+            existing.Dispose();
+        }
+
+        SaveRoster();
+    }
+
+    private void OnRemoveMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTileViewModel tile)
+        {
+            _tiles.Remove(tile);
+            tile.Dispose();
+            SaveRoster();
+        }
+    }
+
+    private void SaveRoster()
+    {
+        try
+        {
+            KnownMachinesFile.Save(KnownMachinesFile.DefaultPath, _tiles.Select(t => t.Machine).ToList());
+            StatusTextBlock.Text = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            StatusTextBlock.Text = $"Não foi possível salvar a lista da turma: {ex.Message}";
+        }
+
+        UpdateEmptyRosterHint();
+    }
+
+    private void UpdateEmptyRosterHint() =>
+        EmptyRosterTextBlock.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+    // Exactly what AddMachineWindow's manual Connect builds, from the saved
+    // entry instead of re-typed fields. Independent of the tile's own preview
+    // connection, which keeps polling alongside full control.
+    private async void OnMachineTileClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not MachineTileViewModel tile)
+        {
+            return;
+        }
+
+        var machine = tile.Machine;
+        StatusTextBlock.Text = $"Conectando a {machine.Name}...";
         try
         {
             var client = await Task.Run(() => ConnectionClient.Connect(
-                hostAddress, 5901, thumbprint, _masterCertificate));
+                machine.HostAddress, MidviewPorts.Session, machine.SessionThumbprint, _masterCertificate));
 
-            ConnectStatusTextBlock.Text = string.Empty;
+            StatusTextBlock.Text = string.Empty;
             var viewControlWindow = new ViewControlWindow(client);
             viewControlWindow.Show();
         }
         catch (Exception ex)
         {
-            ConnectStatusTextBlock.Text = $"Failed: {DescribeException(ex)}";
+            StatusTextBlock.Text = $"Falha ao conectar a {machine.Name}: {ConnectionErrors.Describe(ex)}";
         }
     }
 
-    private async void OnBlockInternetClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.BlockInternet, Array.Empty<byte>());
-
-    private async void OnUnblockInternetClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.UnblockInternet, Array.Empty<byte>());
-
-    private async void OnBlockDomainClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.BlockDomain, Encoding.UTF8.GetBytes(DomainTextBox.Text));
-
-    private async void OnUnblockDomainClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.UnblockDomain, Encoding.UTF8.GetBytes(DomainTextBox.Text));
-
-    private async Task SendAgentCommandAsync(MessageType commandType, byte[] payload)
+    private void OnWindowClosed(object? sender, EventArgs e)
     {
-        SiteBlockStatusTextBlock.Text = "Sending...";
-        var hostAddress = HostAddressTextBox.Text;
-        var thumbprint = AgentThumbprintTextBox.Text;
-        try
+        foreach (var tile in _tiles)
         {
-            var success = await Task.Run(() => AgentCommandClient.SendCommand(
-                hostAddress, AgentServerWorkerAgentPort, thumbprint, _masterCertificate, commandType, payload));
-            SiteBlockStatusTextBlock.Text = success ? "OK" : "Failed";
-        }
-        catch (Exception ex)
-        {
-            SiteBlockStatusTextBlock.Text = $"Failed: {DescribeException(ex)}";
+            tile.Dispose();
         }
     }
-
-    private static string DescribeException(Exception ex) =>
-        ex.InnerException is not null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message;
-
-    private const int AgentServerWorkerAgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
 }

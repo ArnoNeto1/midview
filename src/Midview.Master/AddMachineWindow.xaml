@@ -1,0 +1,34 @@
+<Window x:Class="Midview.Master.AddMachineWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MidviewMaster - Adicionar/testar máquina" Height="680" Width="420">
+    <StackPanel Margin="16">
+        <TextBlock Text="This MidviewMaster's certificate thumbprint (register this once in every Agent/Session's trust list):" Margin="0,0,0,4" TextWrapping="Wrap" />
+        <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
+        <TextBlock Text="To authorize another teacher's PC as this same Master, copy this file to the same path there (same thumbprint, no lab machine needs updating):" Margin="0,0,0,4" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
+        <TextBox x:Name="KeyFilePathTextBlock" IsReadOnly="True" Margin="0,0,0,8" FontSize="11" />
+        <TextBlock Text="Host address:" Margin="0,0,0,4" />
+        <TextBox x:Name="HostAddressTextBox" Text="localhost" Margin="0,0,0,8" />
+        <TextBlock Text="Trusted certificate thumbprint (Session's):" Margin="0,0,0,4" />
+        <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" />
+        <Button Content="Connect" Click="OnConnectClicked" />
+        <TextBlock x:Name="ConnectStatusTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" />
+        <Separator Margin="0,16,0,16" />
+        <TextBlock Text="Agent's certificate thumbprint:" Margin="0,0,0,4" />
+        <TextBox x:Name="AgentThumbprintTextBox" Margin="0,0,0,8" />
+        <TextBlock Text="Domain (for Block/Unblock Domain):" Margin="0,0,0,4" />
+        <TextBox x:Name="DomainTextBox" Margin="0,0,0,8" />
+        <WrapPanel>
+            <Button Content="Block Internet" Click="OnBlockInternetClicked" Margin="0,0,8,4" />
+            <Button Content="Unblock Internet" Click="OnUnblockInternetClicked" Margin="0,0,8,4" />
+            <Button Content="Block Domain" Click="OnBlockDomainClicked" Margin="0,0,8,4" />
+            <Button Content="Unblock Domain" Click="OnUnblockDomainClicked" Margin="0,0,0,4" />
+        </WrapPanel>
+        <TextBlock x:Name="SiteBlockStatusTextBlock" Margin="0,4,0,0" />
+        <Separator Margin="0,16,0,16" />
+        <TextBlock Text="Nome na lista da turma:" Margin="0,0,0,4" />
+        <TextBox x:Name="MachineNameTextBox" Margin="0,0,0,8" />
+        <Button x:Name="SaveToRosterButton" Content="Salvar na lista da turma" Click="OnSaveToRosterClicked" IsEnabled="False" />
+        <TextBlock x:Name="SaveStatusTextBlock" Text="Só dá para salvar depois de um Connect bem-sucedido com o endereço e o thumbprint acima." Margin="0,4,0,0" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
+    </StackPanel>
+</Window>

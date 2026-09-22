@@ -14,9 +14,11 @@ public sealed class AgentServerWorker : BackgroundService
     {
         try
         {
-            var programDataDir = AgentDataDirectory.EnsureSecure();
+            // Already secured by Program.cs, before either hosted service started.
+            var programDataDir = AgentDataDirectory.DirectoryPath;
 
             var certificate = AgentIdentity.LoadOrCreate(AgentIdentity.DefaultCertificatePath);
+            AgentDataDirectory.RestrictToAdministrators(AgentIdentity.DefaultCertificatePath);
             AgentLog.Warn($"Agent certificate thumbprint: {certificate.Thumbprint}");
 
             EnsureInboundFirewallRuleExists(AgentPort);

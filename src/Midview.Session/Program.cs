@@ -3,7 +3,10 @@ using System.Net.Sockets;
 using Midview.Protocol;
 using Midview.Session;
 
-var serverCertificate = SelfSignedCertificate.Create(Environment.MachineName);
+// Persisted, and normally created by the Agent before it launches this
+// process (see SessionIdentity) -- so the thumbprint below stays the same
+// across restarts and the teacher's classroom list keeps working.
+var serverCertificate = SessionIdentity.LoadOrCreate(SessionIdentity.DefaultCertificatePath);
 Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
 // Reuses the same trusted-masters.json the Agent already reads for

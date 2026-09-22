@@ -13,4 +13,6 @@ public enum MessageType : byte
     BlockDomain = 9,
     UnblockDomain = 10,
     CommandAck = 11,
+    RequestThumbnail = 12,
+    ThumbnailFrame = 13,
 }
