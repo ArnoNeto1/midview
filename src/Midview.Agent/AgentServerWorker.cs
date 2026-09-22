@@ -28,9 +28,20 @@ public sealed class AgentServerWorker : BackgroundService
             var firewallController = new NetshFirewallController(AgentPort, SessionPort);
             var commandHandler = new SiteBlockCommandHandler(state, statePath, hostsFilePath, firewallController);
 
-            if (!commandHandler.ReconcileAtStartup())
+            // Isolated from the listener startup below: a hosts-file error here
+            // (e.g. a locked file, antivirus scanning it at boot) must not stop
+            // the Agent from listening at all -- that would lock the teacher out
+            // of sending even an unblock command until the next restart.
+            try
             {
-                AgentLog.Warn("Failed to reapply the full-internet-block firewall rules at startup — the persisted state says it should be on, but the firewall reconcile failed.");
+                if (!commandHandler.ReconcileAtStartup())
+                {
+                    AgentLog.Warn("Failed to reapply the full-internet-block firewall rules at startup — the persisted state says it should be on, but the firewall reconcile failed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Failed to reconcile site-block state at startup: {ex.Message}");
             }
 
             var server = new AgentServer(

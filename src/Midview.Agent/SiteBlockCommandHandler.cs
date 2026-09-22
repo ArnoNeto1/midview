@@ -40,7 +40,11 @@ public sealed class SiteBlockCommandHandler
 
             case MessageType.BlockDomain:
             {
-                var domain = Encoding.UTF8.GetString(payload);
+                var domain = DomainNormalizer.Normalize(Encoding.UTF8.GetString(payload));
+                if (domain is null)
+                {
+                    return false;
+                }
                 _state.BlockedDomains.Add(domain);
                 try
                 {
@@ -57,7 +61,11 @@ public sealed class SiteBlockCommandHandler
 
             case MessageType.UnblockDomain:
             {
-                var domain = Encoding.UTF8.GetString(payload);
+                var domain = DomainNormalizer.Normalize(Encoding.UTF8.GetString(payload));
+                if (domain is null)
+                {
+                    return false;
+                }
                 var wasPresent = _state.BlockedDomains.Remove(domain);
                 try
                 {
@@ -83,10 +91,17 @@ public sealed class SiteBlockCommandHandler
     public bool ReconcileAtStartup()
     {
         HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
+
+        // Always reconcile to the persisted desired state in both directions --
+        // previously this only ever reapplied a block, so a crash between
+        // applying an unblock and saving state (or a partially-succeeded
+        // unblock) left the machine blocked across every future restart.
         if (_state.InternetBlocked)
         {
             return _firewallController.ApplyBlock();
         }
+
+        _firewallController.ApplyUnblock();
         return true;
     }
 }
