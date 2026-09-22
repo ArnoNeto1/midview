@@ -13,6 +13,7 @@ public partial class ViewControlWindow : Window
     private readonly ConnectionClient _client;
     private readonly DispatcherTimer _heartbeatTimer;
     private WriteableBitmap? _screenBitmap;
+    private bool _closing;
 
     public ViewControlWindow(ConnectionClient client)
     {
@@ -22,11 +23,36 @@ public partial class ViewControlWindow : Window
         _client.SendStartControl();
 
         _heartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _heartbeatTimer.Tick += (_, _) => _client.SendHeartbeat();
+        _heartbeatTimer.Tick += (_, _) => RunOrCloseOnFailure(() => _client.SendHeartbeat());
         _heartbeatTimer.Start();
 
         Task.Run(ReceiveLoop);
     }
+
+    // Every send/receive here crosses the network; the connection can die at
+    // any point (the remote side closing, a transient failure, ...). Instead
+    // of letting that exception escape into WPF's dispatcher loop -- which
+    // has no handler and crashes the whole Master app -- this closes just
+    // this window and leaves the rest of the app running.
+    private void RunOrCloseOnFailure(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (IOException)
+        {
+            CloseFromFailure();
+        }
+    }
+
+    private void CloseFromFailure() => Dispatcher.Invoke(() =>
+    {
+        if (!_closing)
+        {
+            Close();
+        }
+    });
 
     private void ReceiveLoop()
     {
@@ -39,6 +65,7 @@ public partial class ViewControlWindow : Window
             }
             catch (IOException)
             {
+                CloseFromFailure();
                 return; // connection closed
             }
 
@@ -51,9 +78,20 @@ public partial class ViewControlWindow : Window
             var column = BitConverter.ToInt32(message.Payload, 4);
             var jpegBytes = message.Payload[8..];
 
-            Dispatcher.Invoke(() => DrawTile(row, column, jpegBytes));
+            try
+            {
+                Dispatcher.Invoke(() => DrawTile(row, column, jpegBytes));
+            }
+            catch (Exception)
+            {
+                // A single malformed/out-of-bounds tile shouldn't take down
+                // the whole view -- just skip it and keep receiving.
+            }
         }
     }
+
+    private int _bitmapWidth;
+    private int _bitmapHeight;
 
     private void DrawTile(int row, int column, byte[] jpegBytes)
     {
@@ -63,15 +101,42 @@ public partial class ViewControlWindow : Window
         var decoder = new JpegBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
         var tileFrame = decoder.Frames[0];
 
-        _screenBitmap ??= new WriteableBitmap(1920, 1080, 96, 96, PixelFormats.Bgra32, null);
+        // The Session's actual screen resolution isn't known ahead of time
+        // (it isn't sent over the wire), so grow the canvas to fit whatever
+        // tile positions actually arrive instead of assuming a fixed size --
+        // a hardcoded guess left the view permanently blank on any machine
+        // with a different resolution.
+        var requiredWidth = column * tileSize + tileFrame.PixelWidth;
+        var requiredHeight = row * tileSize + tileFrame.PixelHeight;
+        if (_screenBitmap is null || requiredWidth > _bitmapWidth || requiredHeight > _bitmapHeight)
+        {
+            GrowCanvas(Math.Max(_bitmapWidth, requiredWidth), Math.Max(_bitmapHeight, requiredHeight));
+        }
 
         var rect = new Int32Rect(column * tileSize, row * tileSize, tileFrame.PixelWidth, tileFrame.PixelHeight);
         var stride = tileFrame.PixelWidth * 4;
         var pixels = new byte[stride * tileFrame.PixelHeight];
         tileFrame.CopyPixels(pixels, stride, 0);
-        _screenBitmap.WritePixels(rect, pixels, stride, 0);
+        _screenBitmap!.WritePixels(rect, pixels, stride, 0);
 
         ScreenImage.Source = _screenBitmap;
+    }
+
+    private void GrowCanvas(int newWidth, int newHeight)
+    {
+        var newBitmap = new WriteableBitmap(newWidth, newHeight, 96, 96, PixelFormats.Bgra32, null);
+        if (_screenBitmap is not null)
+        {
+            var oldRect = new Int32Rect(0, 0, _bitmapWidth, _bitmapHeight);
+            var oldStride = _bitmapWidth * 4;
+            var oldPixels = new byte[oldStride * _bitmapHeight];
+            _screenBitmap.CopyPixels(oldRect, oldPixels, oldStride, 0);
+            newBitmap.WritePixels(oldRect, oldPixels, oldStride, 0);
+        }
+
+        _screenBitmap = newBitmap;
+        _bitmapWidth = newWidth;
+        _bitmapHeight = newHeight;
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)
@@ -105,13 +170,21 @@ public partial class ViewControlWindow : Window
         BitConverter.GetBytes(x).CopyTo(buffer, 1);
         BitConverter.GetBytes(y).CopyTo(buffer, 5);
         BitConverter.GetBytes(virtualKeyCode).CopyTo(buffer, 9);
-        _client.SendInputEvent(buffer);
+        RunOrCloseOnFailure(() => _client.SendInputEvent(buffer));
     }
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
+        _closing = true;
         _heartbeatTimer.Stop();
-        _client.SendStopControl();
+        try
+        {
+            _client.SendStopControl();
+        }
+        catch (IOException)
+        {
+            // Connection may already be dead; closing should never throw.
+        }
         _client.Dispose();
     }
 
