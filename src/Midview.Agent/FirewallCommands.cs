@@ -10,7 +10,7 @@ public static class FirewallCommands
         {
             new[] { "advfirewall", "firewall", "add", "rule",
                 $"name={RuleNamePrefix}_AllowLocalNetwork", "dir=out", "action=allow",
-                "localip=192.168.0.0/16", "remoteip=192.168.0.0/16" },
+                "localip=192.168.0.0/16", "remoteip=LocalSubnet" },
             new[] { "advfirewall", "firewall", "add", "rule",
                 $"name={RuleNamePrefix}_AllowAgentPort", "dir=out", "action=allow",
                 "protocol=TCP", $"remoteport={agentPort}" },
