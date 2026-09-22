@@ -55,6 +55,11 @@ public sealed class SessionServer
     // run). ~15 fps matches Veyon's own real-world capture rate.
     private const int CaptureIntervalMs = 66;
 
+    // The classroom grid's tile size in MidviewMaster; frames are scaled to
+    // fit inside it, keeping their aspect ratio.
+    private const int ThumbnailMaxWidth = 320;
+    private const int ThumbnailMaxHeight = 180;
+
     private readonly TcpListener _listener;
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
@@ -86,14 +91,23 @@ public sealed class SessionServer
             // real latency to both directions regardless of how fast either
             // side processes them.
             tcpClient.NoDelay = true;
-            try
+
+            // Each connection gets its own thread: MidviewMaster keeps a
+            // long-lived thumbnail connection open to every machine in its
+            // classroom grid, so handling one client at a time would leave
+            // a full-control connection waiting behind it forever.
+            var clientThread = new Thread(() =>
             {
-                HandleClient(tcpClient, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error handling a client connection: {ex.Message}");
-            }
+                try
+                {
+                    HandleClient(tcpClient, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error handling a client connection: {ex.Message}");
+                }
+            }) { IsBackground = true };
+            clientThread.Start();
         }
     }
 
@@ -103,24 +117,10 @@ public sealed class SessionServer
         using var channel = SecureChannel.AuthenticateAsServer(client, _serverCertificate, _masterTrustStore);
         var isControlling = false;
 
-        using var heartbeatTimer = new System.Threading.Timer(_ => _inputLockManager.CheckHeartbeatTimeout(),
-            null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
-
-        // A fresh FramePipeline per connection: it isn't thread-safe, and
-        // reusing one server-wide let a slow-to-stop capture thread from a
-        // previous connection race a new one over the same mutable state
-        // after a reconnect (also left the diff starting from a stale frame).
-        var framePipeline = new FramePipeline(_screenCapture);
-
-        // The capture loop runs on its own thread at a fixed cadence,
-        // independent of how often messages arrive on the connection below.
-        // The two threads never touch the channel at the same time from
-        // opposite ends of a single call: this thread only sends
-        // (FrameTile), the loop below only receives -- the one
-        // reader/one writer pattern SslStream supports without locking.
-        using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var captureThread = new Thread(() => CaptureLoop(framePipeline, channel, captureCts)) { IsBackground = true };
-        captureThread.Start();
+        // Started by the first StartControl, never before: a classroom-grid
+        // preview connection only ever asks for thumbnails, so it must not
+        // pay for a ~15 fps capture thread or a heartbeat watchdog.
+        ControlFeed? controlFeed = null;
 
         try
         {
@@ -150,6 +150,7 @@ public sealed class SessionServer
                     case MessageType.StartControl:
                         isControlling = true;
                         _inputLockManager.StartLock();
+                        controlFeed ??= new ControlFeed(_screenCapture, channel, _inputLockManager, cancellationToken);
                         break;
 
                     case MessageType.StopControl:
@@ -167,41 +168,115 @@ public sealed class SessionServer
                             _inputInjector.Inject(InputEventCodec.Decode(message.Payload));
                         }
                         break;
+
+                    // Only on a connection with no capture thread: that thread
+                    // is then this channel's one writer, and SslStream doesn't
+                    // support two threads writing at once.
+                    case MessageType.RequestThumbnail when controlFeed is null:
+                        SendThumbnail(channel);
+                        break;
                 }
             }
         }
         finally
         {
-            captureCts.Cancel();
-            captureThread.Join(TimeSpan.FromSeconds(2));
-            _inputLockManager.StopLock(); // safety net: connection ended for any reason
+            controlFeed?.Dispose();
+            // Safety net for this connection's own lock only: a preview
+            // connection closing must not unlock input that a separate
+            // full-control connection to this machine is still holding.
+            if (isControlling)
+            {
+                _inputLockManager.StopLock();
+            }
         }
     }
 
-    private void CaptureLoop(FramePipeline framePipeline, SecureChannel channel, CancellationTokenSource captureCts)
+    private void SendThumbnail(SecureChannel channel)
     {
+        byte[] jpegBytes;
         try
         {
-            while (!captureCts.IsCancellationRequested)
+            using var frame = _screenCapture.CaptureFrame();
+            jpegBytes = ThumbnailRenderer.Render(frame, ThumbnailMaxWidth, ThumbnailMaxHeight);
+        }
+        catch (Exception ex)
+        {
+            // Not rethrown: one failed capture shouldn't end the connection.
+            // No reply is sent; the Master's poll times out and shows this
+            // machine as offline until its next attempt.
+            Console.WriteLine($"Thumbnail capture failed: {ex.Message}");
+            return;
+        }
+
+        channel.Send(new Midview.Protocol.Message(MessageType.ThumbnailFrame, jpegBytes));
+    }
+
+    // One connection's full-control feed: the fixed-cadence capture thread
+    // streaming FrameTiles, plus the watchdog that releases the input lock
+    // if the Master stops sending heartbeats.
+    private sealed class ControlFeed : IDisposable
+    {
+        private readonly System.Threading.Timer _heartbeatTimer;
+        private readonly CancellationTokenSource _captureCts;
+        private readonly Thread _captureThread;
+
+        public ControlFeed(
+            IScreenCapture screenCapture, SecureChannel channel, InputLockManager inputLockManager,
+            CancellationToken cancellationToken)
+        {
+            _heartbeatTimer = new System.Threading.Timer(_ => inputLockManager.CheckHeartbeatTimeout(),
+                null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
+
+            // A fresh FramePipeline per connection: it isn't thread-safe, and
+            // reusing one server-wide let a slow-to-stop capture thread from a
+            // previous connection race a new one over the same mutable state
+            // after a reconnect (also left the diff starting from a stale frame).
+            var framePipeline = new FramePipeline(screenCapture);
+
+            // The capture loop runs on its own thread at a fixed cadence,
+            // independent of how often messages arrive on the connection.
+            // The two threads never touch the channel at the same time from
+            // opposite ends of a single call: this thread only sends
+            // (FrameTile), HandleClient's loop only receives -- the one
+            // reader/one writer pattern SslStream supports without locking.
+            _captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _captureThread = new Thread(() => CaptureLoop(framePipeline, channel, _captureCts)) { IsBackground = true };
+            _captureThread.Start();
+        }
+
+        public void Dispose()
+        {
+            _captureCts.Cancel();
+            _captureThread.Join(TimeSpan.FromSeconds(2));
+            _heartbeatTimer.Dispose();
+            _captureCts.Dispose();
+        }
+
+        private static void CaptureLoop(FramePipeline framePipeline, SecureChannel channel, CancellationTokenSource captureCts)
+        {
+            try
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-
-                foreach (var tile in framePipeline.CaptureNextFrame())
+                while (!captureCts.IsCancellationRequested)
                 {
-                    channel.Send(new Midview.Protocol.Message(MessageType.FrameTile, TileMessageCodec.Encode(tile)));
-                }
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                var remaining = CaptureIntervalMs - (int)sw.ElapsedMilliseconds;
-                if (remaining > 0)
-                {
-                    captureCts.Token.WaitHandle.WaitOne(remaining);
+                    foreach (var tile in framePipeline.CaptureNextFrame())
+                    {
+                        channel.Send(new Midview.Protocol.Message(MessageType.FrameTile, TileMessageCodec.Encode(tile)));
+                    }
+
+                    var remaining = CaptureIntervalMs - (int)sw.ElapsedMilliseconds;
+                    if (remaining > 0)
+                    {
+                        captureCts.Token.WaitHandle.WaitOne(remaining);
+                    }
                 }
             }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Console.WriteLine($"Capture loop stopped: {ex.Message}");
-            captureCts.Cancel(); // connection is likely dead; let the receive loop wind down too
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Console.WriteLine($"Capture loop stopped: {ex.Message}");
+                captureCts.Cancel(); // connection is likely dead; let the receive loop wind down too
+            }
         }
     }
 }
