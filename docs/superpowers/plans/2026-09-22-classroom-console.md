@@ -2071,7 +2071,7 @@ dotnet publish src/Midview.Master -c Release -r win-x64 --self-contained true -o
 
 - [ ] **Step 7: Persistence.** Close and reopen Master. The tile is still there. `%LOCALAPPDATA%\Midview\known-machines.json` contains the entry, with the Agent thumbprint.
 
-- [ ] **Step 8: Preview-only is cheap.** While Master only shows the grid (no control window open), Aluno-25's `session-perf.log` (next to `Midview.Session.exe`) must **not** grow. `FramePipeline` logs every frame, so it only grows while someone is controlling. `Midview.Session.exe` CPU in Task Manager stays near idle between polls.
+- [ ] **Step 8: Preview-only is cheap.** While Master only shows the grid (no control window open), Aluno-25's `session-perf.log` (next to `Midview.Session.exe`) must grow by only an occasional line: `HandleClient` logs one line per 50 received messages on each connection, so a lone preview connection (Master polls it every ~3 s) adds a line roughly every 150 s. It must **not** grow one line per frame the way it does while someone is controlling, since `FramePipeline` isn't running at all for a preview-only connection. `Midview.Session.exe` CPU in Task Manager stays near idle between polls.
 
 - [ ] **Step 9: Full control from the grid, alongside the preview.** Click the tile. `ViewControlWindow` opens, mouse and keyboard work, and the student's own input is locked. The tile keeps updating every ~3 s behind it. Close the window: the student's input is unlocked again.
 
