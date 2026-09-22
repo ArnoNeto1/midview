@@ -10,6 +10,7 @@
         <TextBlock Text="Trusted certificate thumbprint (Session's):" Margin="0,0,0,4" />
         <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" />
         <Button Content="Connect" Click="OnConnectClicked" />
+        <TextBlock x:Name="ConnectStatusTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" />
         <Separator Margin="0,16,0,16" />
         <TextBlock Text="Agent's certificate thumbprint:" Margin="0,0,0,4" />
         <TextBox x:Name="AgentThumbprintTextBox" Margin="0,0,0,8" />

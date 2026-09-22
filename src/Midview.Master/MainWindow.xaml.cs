@@ -8,7 +8,7 @@ namespace Midview.Master;
 
 public partial class MainWindow : Window
 {
-    private readonly X509Certificate2 _masterCertificate = SelfSignedCertificate.Create("MidviewMaster");
+    private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
 
     public MainWindow()
     {
@@ -16,13 +16,24 @@ public partial class MainWindow : Window
         MyThumbprintTextBlock.Text = _masterCertificate.Thumbprint;
     }
 
-    private void OnConnectClicked(object sender, RoutedEventArgs e)
+    private async void OnConnectClicked(object sender, RoutedEventArgs e)
     {
-        var client = ConnectionClient.Connect(
-            HostAddressTextBox.Text, 5901, ThumbprintTextBox.Text, _masterCertificate);
+        ConnectStatusTextBlock.Text = "Connecting...";
+        var hostAddress = HostAddressTextBox.Text;
+        var thumbprint = ThumbprintTextBox.Text;
+        try
+        {
+            var client = await Task.Run(() => ConnectionClient.Connect(
+                hostAddress, 5901, thumbprint, _masterCertificate));
 
-        var viewControlWindow = new ViewControlWindow(client);
-        viewControlWindow.Show();
+            ConnectStatusTextBlock.Text = string.Empty;
+            var viewControlWindow = new ViewControlWindow(client);
+            viewControlWindow.Show();
+        }
+        catch (Exception ex)
+        {
+            ConnectStatusTextBlock.Text = $"Failed: {DescribeException(ex)}";
+        }
     }
 
     private async void OnBlockInternetClicked(object sender, RoutedEventArgs e) =>
@@ -50,9 +61,12 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            SiteBlockStatusTextBlock.Text = $"Failed: {ex.Message}";
+            SiteBlockStatusTextBlock.Text = $"Failed: {DescribeException(ex)}";
         }
     }
+
+    private static string DescribeException(Exception ex) =>
+        ex.InnerException is not null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message;
 
     private const int AgentServerWorkerAgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
 }
