@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MidviewMaster - Controlling" Height="720" Width="1280"
-        Closed="OnWindowClosed">
+        Closed="OnWindowClosed" Loaded="OnWindowLoaded">
     <Grid>
         <Image x:Name="ScreenImage" Stretch="Uniform"
                MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
+               MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
                KeyDown="OnKeyDown" KeyUp="OnKeyUp" Focusable="True" />
     </Grid>
 </Window>

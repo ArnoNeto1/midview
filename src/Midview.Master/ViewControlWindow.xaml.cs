@@ -29,6 +29,10 @@ public partial class ViewControlWindow : Window
         Task.Run(ReceiveLoop);
     }
 
+    // ScreenImage doesn't receive keyboard focus just by being Focusable and
+    // visible -- without this, KeyDown/KeyUp never fire at all.
+    private void OnWindowLoaded(object sender, RoutedEventArgs e) => ScreenImage.Focus();
+
     // Every send/receive here crosses the network; the connection can die at
     // any point (the remote side closing, a transient failure, ...). Instead
     // of letting that exception escape into WPF's dispatcher loop -- which
@@ -147,6 +151,7 @@ public partial class ViewControlWindow : Window
 
     private void OnMouseLeftDown(object sender, MouseButtonEventArgs e)
     {
+        ScreenImage.Focus(); // clicking into the view should always (re)grab keyboard focus
         var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
         SendInput(InputEventKind.MouseLeftDown, (int)position.X, (int)position.Y, 0);
     }
@@ -155,6 +160,19 @@ public partial class ViewControlWindow : Window
     {
         var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
         SendInput(InputEventKind.MouseLeftUp, (int)position.X, (int)position.Y, 0);
+    }
+
+    private void OnMouseRightDown(object sender, MouseButtonEventArgs e)
+    {
+        ScreenImage.Focus();
+        var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
+        SendInput(InputEventKind.MouseRightDown, (int)position.X, (int)position.Y, 0);
+    }
+
+    private void OnMouseRightUp(object sender, MouseButtonEventArgs e)
+    {
+        var position = ToBitmapCoordinates(e.GetPosition(ScreenImage));
+        SendInput(InputEventKind.MouseRightUp, (int)position.X, (int)position.Y, 0);
     }
 
     // ScreenImage now stretches "Uniform" to always show the whole remote
@@ -225,5 +243,11 @@ public partial class ViewControlWindow : Window
         _client.Dispose();
     }
 
-    private enum InputEventKind : byte { MouseMove = 0, MouseLeftDown = 1, MouseLeftUp = 2, KeyDown = 3, KeyUp = 4 }
+    // Must stay numerically aligned with Midview.Session.InputEventKind --
+    // the wire format is a raw byte, not the enum name.
+    private enum InputEventKind : byte
+    {
+        MouseMove = 0, MouseLeftDown = 1, MouseLeftUp = 2, KeyDown = 3, KeyUp = 4,
+        MouseRightDown = 5, MouseRightUp = 6,
+    }
 }

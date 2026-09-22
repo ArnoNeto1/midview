@@ -11,6 +11,8 @@ public sealed class SendInputInjector : IInputInjector
             InputEventKind.MouseMove => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE),
             InputEventKind.MouseLeftDown => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE),
             InputEventKind.MouseLeftUp => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE),
+            InputEventKind.MouseRightDown => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_RIGHTDOWN | MOUSEEVENTF_ABSOLUTE),
+            InputEventKind.MouseRightUp => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_RIGHTUP | MOUSEEVENTF_ABSOLUTE),
             InputEventKind.KeyDown => KeyboardInput(inputEvent.VirtualKeyCode, keyUp: false),
             InputEventKind.KeyUp => KeyboardInput(inputEvent.VirtualKeyCode, keyUp: true),
             _ => throw new ArgumentOutOfRangeException(nameof(inputEvent)),
@@ -61,6 +63,8 @@ public sealed class SendInputInjector : IInputInjector
     private const uint MOUSEEVENTF_ABSOLUTE = 0x8000;
     private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
     [StructLayout(LayoutKind.Sequential)]
