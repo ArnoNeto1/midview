@@ -35,7 +35,7 @@ public sealed class SecureChannel : IDisposable
                 cert is not null && serverTrustStore.IsTrusted(cert));
 
         var certificates = new X509CertificateCollection { clientCertificate };
-        sslStream.AuthenticateAsClient(targetHost, certificates, SslProtocols.Tls13, checkCertificateRevocation: false);
+        sslStream.AuthenticateAsClient(targetHost, certificates, SslProtocols.None, checkCertificateRevocation: false);
 
         return new SecureChannel(sslStream);
     }
