@@ -8,15 +8,21 @@ public static class FirewallCommands
     {
         return new[]
         {
+            // remoteip=LocalSubnet alone covers this machine regardless of which
+            // private range it's actually on -- an earlier localip=192.168.0.0/16
+            // constraint here made the rule silently match nothing at all on a
+            // 10.x or 172.16-31.x lab network.
             new[] { "advfirewall", "firewall", "add", "rule",
                 $"name={RuleNamePrefix}_AllowLocalNetwork", "dir=out", "action=allow",
-                "localip=192.168.0.0/16", "remoteip=LocalSubnet" },
+                "remoteip=LocalSubnet" },
+            // Scoped to the local subnet too: without this, a student could still
+            // reach an internet server listening on either port while "blocked".
             new[] { "advfirewall", "firewall", "add", "rule",
                 $"name={RuleNamePrefix}_AllowAgentPort", "dir=out", "action=allow",
-                "protocol=TCP", $"remoteport={agentPort}" },
+                "protocol=TCP", $"remoteport={agentPort}", "remoteip=LocalSubnet" },
             new[] { "advfirewall", "firewall", "add", "rule",
                 $"name={RuleNamePrefix}_AllowSessionPort", "dir=out", "action=allow",
-                "protocol=TCP", $"remoteport={sessionPort}" },
+                "protocol=TCP", $"remoteport={sessionPort}", "remoteip=LocalSubnet" },
             // Windows Firewall evaluates block rules before allow rules regardless of
             // add order, so an explicit block-all rule here would silently override the
             // three allow rules above and cut off the LAN and Midview's own ports too.

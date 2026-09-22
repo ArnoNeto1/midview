@@ -9,16 +9,24 @@ public class FirewallCommandsTests
     {
         var commands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
 
-        Assert.Contains(commands, c => c.Contains("localip=192.168.0.0/16"));
+        Assert.Contains(commands, c => c.Contains("remoteip=LocalSubnet") && !c.Any(a => a.StartsWith("remoteport=")));
     }
 
     [Fact]
-    public void BuildBlockCommands_AllowsBothAgentAndSessionPorts()
+    public void BuildBlockCommands_NeverHardcodesA192168LocalIpRange()
     {
         var commands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
 
-        Assert.Contains(commands, c => c.Contains("remoteport=5900"));
-        Assert.Contains(commands, c => c.Contains("remoteport=5901"));
+        Assert.DoesNotContain(commands, c => c.Any(a => a.StartsWith("localip=")));
+    }
+
+    [Fact]
+    public void BuildBlockCommands_AllowsBothAgentAndSessionPortsScopedToLocalSubnet()
+    {
+        var commands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
+
+        Assert.Contains(commands, c => c.Contains("remoteport=5900") && c.Contains("remoteip=LocalSubnet"));
+        Assert.Contains(commands, c => c.Contains("remoteport=5901") && c.Contains("remoteip=LocalSubnet"));
     }
 
     [Fact]
