@@ -2,7 +2,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Midview.Agent;
 
-var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "..", "Midview.Session", "Midview.Session.exe");
+// Deployed today as loose files side by side on each lab machine (no
+// separate per-component folders), so Session.exe lives right next to
+// this exe rather than in a sibling directory.
+var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "Midview.Session.exe");
 
 var host = Host.CreateDefaultBuilder(args)
     .UseWindowsService(options => options.ServiceName = "MidviewAgent")
