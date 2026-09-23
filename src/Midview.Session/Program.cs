@@ -1,9 +1,24 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using Midview.Protocol;
 using Midview.Session;
 
-var serverCertificate = SelfSignedCertificate.Create(Environment.MachineName);
+// Created by the Agent on its first start (Session, as a standard user,
+// can't write there itself), so the thumbprint the teacher registered stays
+// the same across restarts and reboots. The Agent also logs it to
+// %ProgramData%\Midview\agent.log.
+var identityPath = SessionIdentity.DefaultCertificatePath;
+X509Certificate2 serverCertificate;
+if (File.Exists(identityPath))
+{
+    serverCertificate = SessionIdentity.Load(identityPath);
+}
+else
+{
+    Console.WriteLine($"No {identityPath} yet (the Agent creates it on its first start) -- using a temporary certificate whose thumbprint changes on every launch.");
+    serverCertificate = SelfSignedCertificate.Create(Environment.MachineName);
+}
 Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
 // Reuses the same trusted-masters.json the Agent already reads for
@@ -22,16 +37,11 @@ if (trustedMasters.Count == 0)
         "(the same file the Agent uses), e.g. [\"<thumbprint>\"], or pass it as a command-line argument.");
 }
 
-var inputDeviceController = new WindowsInputDeviceController();
-
-// A previous run's lock only clears via StopControl or the heartbeat
-// timeout -- neither can fire if the process (or machine) was killed
-// abruptly (a crash, a reboot mid-session) before either had a chance to
-// run. That leaves input devices disabled at the driver level while a
-// freshly-started process's own InputLockManager believes, incorrectly,
-// that nothing is locked. Unconditionally re-enabling on every startup
-// guarantees a known-good state regardless of how the last run ended.
-inputDeviceController.EnableInputDevices();
+// The input lock itself is applied by the Agent, which re-enables the
+// devices whenever this process's connection to it closes and whenever it
+// starts at boot -- a crash, kill or power cut mid-lock can't leave them
+// disabled, and Session has nothing to clean up at startup.
+using var inputDeviceController = new AgentInputDeviceController();
 
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),

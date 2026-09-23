@@ -1,36 +1,40 @@
 using System.Runtime.InteropServices;
 
-namespace Midview.Session;
+namespace Midview.Agent;
 
+// Runs in the Agent (SYSTEM), not in Session: changing a device's state
+// needs administrator rights, so from Session -- running as a standard
+// student account -- every call here used to fail silently and the input
+// lock simply never locked anything.
+//
+// DICS_DISABLE is persistent: a disabled device stays disabled across
+// reboots, including at the logon screen. That's why the Agent re-enables
+// everything when it starts at boot (see InputLockWorker).
 public sealed class WindowsInputDeviceController : IInputDeviceController
 {
     // GUID_DEVCLASS_KEYBOARD and GUID_DEVCLASS_MOUSE
     private static readonly Guid KeyboardClassGuid = new("4D36E96B-E325-11CE-BFC1-08002BE10318");
     private static readonly Guid MouseClassGuid = new("4D36E96F-E325-11CE-BFC1-08002BE10318");
 
-    public void DisableInputDevices()
-    {
-        SetClassDevicesState(KeyboardClassGuid, enable: false);
-        SetClassDevicesState(MouseClassGuid, enable: false);
-    }
+    // Non-short-circuiting "&": the mouse must still be handled when the keyboard fails.
+    public bool DisableInputDevices() =>
+        SetClassDevicesState(KeyboardClassGuid, enable: false) & SetClassDevicesState(MouseClassGuid, enable: false);
 
-    public void EnableInputDevices()
-    {
-        SetClassDevicesState(KeyboardClassGuid, enable: true);
-        SetClassDevicesState(MouseClassGuid, enable: true);
-    }
+    public bool EnableInputDevices() =>
+        SetClassDevicesState(KeyboardClassGuid, enable: true) & SetClassDevicesState(MouseClassGuid, enable: true);
 
-    private static void SetClassDevicesState(Guid classGuid, bool enable)
+    private static bool SetClassDevicesState(Guid classGuid, bool enable)
     {
         const uint DIGCF_PRESENT = 0x02;
         var deviceInfoSet = SetupDiGetClassDevs(ref classGuid, null, IntPtr.Zero, DIGCF_PRESENT);
         if (deviceInfoSet == IntPtr.Zero || deviceInfoSet.ToInt64() == -1)
         {
-            return;
+            return false;
         }
 
         try
         {
+            var allSucceeded = true;
             var deviceInfoData = new SP_DEVINFO_DATA { cbSize = Marshal.SizeOf<SP_DEVINFO_DATA>() };
             for (uint index = 0; SetupDiEnumDeviceInfo(deviceInfoSet, index, ref deviceInfoData); index++)
             {
@@ -46,10 +50,14 @@ public sealed class WindowsInputDeviceController : IInputDeviceController
                     HwProfile = 0,
                 };
 
-                SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref parameters,
-                    Marshal.SizeOf<SP_PROPCHANGE_PARAMS>());
-                SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
+                // Keeps going after a failure: one device that refuses to
+                // change state mustn't stop the others from being handled.
+                var changed = SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref parameters,
+                        Marshal.SizeOf<SP_PROPCHANGE_PARAMS>())
+                    && SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
+                allSucceeded &= changed;
             }
+            return allSucceeded;
         }
         finally
         {
