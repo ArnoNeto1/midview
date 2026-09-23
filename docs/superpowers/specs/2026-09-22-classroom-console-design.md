@@ -45,22 +45,32 @@ entry as Master's primary view.
 
 ## Prerequisite fix: persisted Session identity
 
-`MidviewSession` currently generates a fresh self-signed certificate on
+`MidviewSession` used to generate a fresh self-signed certificate on
 every launch (`SelfSignedCertificate.Create(Environment.MachineName)` in
 `Program.cs`), by original design, since only one interactive control
 session at a time was ever in scope. A persisted machine list breaks if
 the thumbprint it stored goes stale every time a student's computer
-restarts — the exact bug class fixed today for the Agent and Master's own
-identities.
+restarts — the exact bug class fixed earlier for the Agent and Master's own
+identities. (It also meant the teacher couldn't connect at all once the
+Agent auto-launched Session without a console: the new thumbprint was
+printed where nobody could see it.)
 
-Session now persists its identity the same way, at
-`%ProgramData%\Midview\session-identity.pfx` (`SessionIdentity.LoadOrCreate`,
-mirroring `AgentIdentity`/`MasterIdentity`): created once on first launch,
-loaded on every later one, stable thumbprint for the lifetime of the
-machine. This directory is already created and secured by the Agent
-(`AgentDataDirectory.EnsureSecure`), so Session — which the Agent
-auto-launches into the logged-in user's session — reads/writes into a
-location that already exists by the time it runs.
+**Done (2026-09-23).** Session's identity is persisted at
+`%ProgramData%\Midview\session-identity.pfx` (`SessionIdentity` in
+`Midview.Protocol`). It is **created by the Agent**, not by Session: Session
+runs as the logged-in student, a standard user, and `%ProgramData%\Midview`
+is read-only for Users (`AgentDataDirectory.EnsureSecure`), so Session can
+read the file but never write it. The Agent calls
+`SessionIdentity.EnsureExists` on every start, before `SessionSupervisor`
+launches Session, and logs the thumbprint to
+`%ProgramData%\Midview\agent.log` for the teacher to register. Session
+loads it with `SessionIdentity.Load`; if it doesn't exist yet (Session run
+by hand on a machine where the Agent never ran), Session falls back to a
+temporary certificate and says so on its console.
+
+The private key is readable by the student on purpose: Session runs as that
+student, so anything Session can read, the student can too. All it allows is
+impersonating that same machine's screen to the teacher.
 
 ## Architecture
 

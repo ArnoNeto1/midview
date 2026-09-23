@@ -84,7 +84,9 @@ make unilaterally, Midview does not use the Interception driver.
 disables/enables the keyboard and mouse device classes via the public,
 no-license-required `SetupDi*` Win32 APIs (Device Manager's own
 enable/disable mechanism) — weaker than a live driver-level filter, but
-requires no third-party dependency at all.
+requires no third-party dependency at all. It runs in `MidviewAgent`, not
+`MidviewSession`, since those APIs need administrator rights (see "Input
+lock ownership" under Error handling & robustness).
 
 ## Network protocol & remote screen pipeline
 
@@ -121,9 +123,27 @@ dropped for several different reasons:
   depend on any specific "goodbye" message being sent or received correctly,
   closing off this entire class of bug regardless of its cause.
 - **Process crash recovery**: if `MidviewSession` crashes while input is
-  locked, the OS releases the resources it held (matching the behavior
-  already confirmed in Treezeview); `MidviewAgent` detects the crash and
-  restarts `MidviewSession`.
+  locked, `MidviewAgent` detects the crash and restarts `MidviewSession`.
+  **Correction (2026-09-23):** the original assumption here, that "the OS
+  releases the resources it held", doesn't hold for the device-disable lock
+  Midview actually uses: disabling a device is persistent system state, not
+  a process resource, and it survives reboots too. See "Input lock
+  ownership" below.
+- **Input lock ownership (2026-09-23)**: disabling devices needs
+  administrator rights, and `MidviewSession` runs as the logged-in student
+  (a standard user), so it can't do it itself — every call silently failed
+  and the lock never locked anything. `MidviewAgent` (SYSTEM) now owns
+  `WindowsInputDeviceController`; `MidviewSession` asks for lock/unlock over
+  a local named pipe (`\\.\pipe\MidviewInputLock`, one request byte, one
+  reply byte — `InputLockPipe` in `Midview.Protocol`). The heartbeat logic
+  stays in `MidviewSession`'s `InputLockManager`. The Agent re-enables all
+  keyboard/mouse devices (1) as soon as the pipe connection of the Session
+  holding the lock closes, however it closed (crash, kill, logoff); (2) every
+  time it starts, which is at boot, before anyone can log in — so a power cut
+  mid-lock can't leave the logon screen without a keyboard or mouse; and
+  (3) when the service stops. The client checks that the pipe's server runs
+  in session 0 (services only), so a student's process squatting the pipe
+  name while the Agent restarts isn't mistaken for the Agent.
 - **Service supervision**: `MidviewAgent` supervises `MidviewSession` the same
   way for any crash, not just ones related to input-lock.
 
