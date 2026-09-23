@@ -1,7 +1,8 @@
 # Midview — Classroom Console (Design)
 
 Date: 2026-09-22
-Status: Approved for planning
+Status: Implemented 2026-09-23 (not yet validated live — see "Implementation
+notes" at the end for where the implementation differs from this design)
 
 ## Context
 
@@ -178,3 +179,66 @@ on-screen fields disconnected from the grid.
   existing test coverage precedent in this project (`ViewControlWindow`
   itself has none) — validated by live testing, not new automated tests,
   consistent with how the rest of the UI layer has been handled.
+
+## Implementation notes (2026-09-23)
+
+Where the implementation differs from, or fills in, the design above:
+
+- **Connection kind is decided by the first message.** The error-handling
+  section above assumed `SessionServer` serves any number of concurrent
+  clients. Since the stall/timeout fixes, it serves **one controlling
+  Master at a time** (the input lock and injected input belong to the
+  machine), so a preview connection served the same way would hold that
+  slot permanently and full control could never get in. `SessionServer`
+  now reads the first message after the TLS handshake: `RequestThumbnail`
+  makes it a preview connection (no slot, no capture thread, no
+  `FramePipeline`, no `InputLockManager`); anything else is a control
+  connection, served exactly as before. `ViewControlWindow` already sends
+  `StartControl` first, so the control protocol is unchanged.
+- **Capture failure replies with an empty `ThumbnailFrame`** instead of no
+  reply. With no reply, the Master's poll can only time out, and a reply
+  that arrives late would then pair with the next request — so the Master
+  would have to reconnect on every poll while a screen is locked. The
+  empty reply keeps requests and replies paired, and lets the tile say
+  "Tela indisponível" (machine up, screen not capturable — e.g. Win+L)
+  rather than lumping it in with offline.
+- **Tile states:** "Conectando..." (first poll), the live thumbnail,
+  "Tela indisponível", "Sem usuário logado" (connection refused: the machine
+  is on but nothing listens on 5901 — Session only runs inside a login),
+  "Offline" (connect timeout / unreachable), "Certificado recusado"
+  (either side rejected the other's certificate: wrong Session thumbprint
+  here, or this Master missing from the machine's `trusted-masters.json`),
+  "Sem resposta" (anything else, e.g. a reply timeout). Any failure clears
+  the last thumbnail.
+- **Timing:** poll every 3 s; connect timeout 5 s (Windows takes ~2 s to
+  report a refused connection, and "refused" is what distinguishes "nobody
+  logged in" from "offline"); reply timeout 10 s. Any failure drops the
+  connection and the next poll starts a fresh one. Each machine's poller
+  (`ThumbnailPoller`) runs on its own background thread with its own
+  persistent connection.
+- **Thumbnail size:** fits within 320×180 keeping the screen's aspect ratio
+  (a fixed 320×180 would distort 4:3 or 16:10 lab monitors), JPEG
+  quality 70, never scaled up (`ThumbnailRenderer`).
+- **Roster behavior:** saving a name that already exists (case-insensitive)
+  replaces that entry in place instead of adding a second tile; tiles keep
+  the order machines were added in. Right-click on a tile: "Testar /
+  bloquear sites..." opens `AddMachineWindow` prefilled with that machine
+  (its stored host/thumbprint count as already verified, so renaming it or
+  adding its Agent thumbprint doesn't require reconnecting — changing host
+  or Session thumbprint does), and "Remover da lista da sala" asks for
+  confirmation first. This is how the site-blocking controls are "scoped
+  to the selected machine".
+- **`known-machines.json`** is written with the same temp-file + flush +
+  swap as the Agent's `site-block-state.json`; an unreadable file is kept
+  aside as `known-machines.json.corrupt` and the grid starts empty, with
+  the status bar saying so. Entries missing a required field are dropped
+  on load.
+- **UI text is Portuguese**, including the manual-entry/site-blocking view
+  that moved into `AddMachineWindow` (it was English in the old
+  `MainWindow`).
+- **Tests:** a new `Midview.Master.Tests` project covers `KnownMachinesFile`
+  and `ThumbnailPoller` (loopback against a real `SessionServer`: receives
+  thumbnails, keeps polling, wrong thumbprint, nothing listening, machine
+  coming online later). Like `Midview.Session.Tests`, it needs Windows
+  (WindowsDesktop runtime) to run. The grid and `AddMachineWindow`
+  themselves remain live-tested only, as planned.

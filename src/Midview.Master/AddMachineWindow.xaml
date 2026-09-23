@@ -1,0 +1,41 @@
+<Window x:Class="Midview.Master.AddMachineWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Adicionar / testar máquina" Height="660" Width="440"
+        WindowStartupLocation="CenterOwner">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16">
+            <TextBlock Text="Thumbprint deste MidviewMaster (cadastre uma vez no trusted-masters.json de cada máquina):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
+            <TextBlock Text="Para autorizar o PC de outro professor como este mesmo Master, copie este arquivo para o mesmo caminho lá (mesmo thumbprint, nenhuma máquina do laboratório precisa ser alterada):" Margin="0,0,0,4" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
+            <TextBox x:Name="KeyFilePathTextBlock" IsReadOnly="True" Margin="0,0,0,8" FontSize="11" />
+
+            <Separator Margin="0,8,0,12" />
+
+            <TextBlock Text="Nome na sala (ex.: Aluno-25):" Margin="0,0,0,4" />
+            <TextBox x:Name="NameTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
+            <TextBlock Text="Endereço da máquina:" Margin="0,0,0,4" />
+            <TextBox x:Name="HostAddressTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
+            <TextBlock Text="Thumbprint da Session (está no agent.log da máquina):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
+            <Button Content="Conectar (abre o controle total)" Click="OnConnectClicked" />
+            <TextBlock x:Name="ConnectStatusTextBlock" Margin="0,4,0,8" TextWrapping="Wrap" />
+            <Button x:Name="SaveButton" Content="Salvar na lista da sala" Click="OnSaveClicked" IsEnabled="False" />
+            <TextBlock x:Name="SaveStatusTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
+
+            <Separator Margin="0,16,0,16" />
+
+            <TextBlock Text="Thumbprint do Agent (opcional, para bloqueio de sites):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <TextBox x:Name="AgentThumbprintTextBox" Margin="0,0,0,8" />
+            <TextBlock Text="Domínio (para bloquear/desbloquear domínio):" Margin="0,0,0,4" />
+            <TextBox x:Name="DomainTextBox" Margin="0,0,0,8" />
+            <WrapPanel>
+                <Button Content="Bloquear internet" Click="OnBlockInternetClicked" Margin="0,0,8,4" />
+                <Button Content="Desbloquear internet" Click="OnUnblockInternetClicked" Margin="0,0,8,4" />
+                <Button Content="Bloquear domínio" Click="OnBlockDomainClicked" Margin="0,0,8,4" />
+                <Button Content="Desbloquear domínio" Click="OnUnblockDomainClicked" Margin="0,0,0,4" />
+            </WrapPanel>
+            <TextBlock x:Name="SiteBlockStatusTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>
