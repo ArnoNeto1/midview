@@ -14,16 +14,18 @@ public sealed class AgentServerWorker : BackgroundService
     {
         try
         {
-            var programDataDir = AgentDataDirectory.EnsureSecure();
+            var programDataDir = AgentDataDirectory.DirectoryPath;
 
             var certificate = AgentIdentity.LoadOrCreate(AgentIdentity.DefaultCertificatePath);
-            AgentLog.Warn($"Agent certificate thumbprint: {certificate.Thumbprint}");
 
-            EnsureInboundFirewallRuleExists(AgentPort);
+            EnsureInboundFirewallRuleExists("MidviewAgentInbound", AgentPort);
+            // Session can't add its own rule: it runs as a standard user, and
+            // Windows' "allow access?" prompt needs an administrator.
+            EnsureInboundFirewallRuleExists("MidviewSessionInbound", SessionPort);
 
             var trustedMasters = TrustedMastersFile.Load(Path.Combine(programDataDir, "trusted-masters.json"));
             var statePath = Path.Combine(programDataDir, "site-block-state.json");
-            var state = SiteBlockState.Load(statePath);
+            var state = LoadStateOrStartEmpty(statePath);
             var hostsFilePath = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts");
             var firewallController = new NetshFirewallController(AgentPort, SessionPort);
             var commandHandler = new SiteBlockCommandHandler(state, statePath, hostsFilePath, firewallController);
@@ -66,19 +68,41 @@ public sealed class AgentServerWorker : BackgroundService
         }
     }
 
-    private static void EnsureInboundFirewallRuleExists(int port)
+    // Same reasoning as the reconcile isolation above: state that can't be
+    // read (a corrupt file is already handled inside Load; this covers I/O
+    // errors like a locked file) must not keep the listener from starting.
+    // Nothing blocked is the direction the teacher can always fix remotely.
+    private static SiteBlockState LoadStateOrStartEmpty(string statePath)
+    {
+        try
+        {
+            return SiteBlockState.Load(statePath);
+        }
+        catch (Exception ex)
+        {
+            AgentLog.Warn($"Failed to load site-block state, starting with nothing blocked: {ex.Message}");
+            return new SiteBlockState();
+        }
+    }
+
+    private static void EnsureInboundFirewallRuleExists(string ruleName, int port)
+    {
+        // "add rule" never replaces a rule with the same name, so it's deleted
+        // first -- otherwise every Agent start would add one more copy.
+        RunNetsh("advfirewall", "firewall", "delete", "rule", $"name={ruleName}");
+        RunNetsh("advfirewall", "firewall", "add", "rule",
+            $"name={ruleName}", "dir=in", "action=allow",
+            "protocol=TCP", $"localport={port}");
+    }
+
+    private static void RunNetsh(params string[] args)
     {
         var startInfo = new System.Diagnostics.ProcessStartInfo("netsh.exe")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var arg in new[]
-        {
-            "advfirewall", "firewall", "add", "rule",
-            "name=MidviewAgentInbound", "dir=in", "action=allow",
-            "protocol=TCP", $"localport={port}",
-        })
+        foreach (var arg in args)
         {
             startInfo.ArgumentList.Add(arg);
         }

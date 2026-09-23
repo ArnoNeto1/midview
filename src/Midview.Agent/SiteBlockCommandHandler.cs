@@ -9,6 +9,7 @@ public sealed class SiteBlockCommandHandler
     private readonly string _statePath;
     private readonly string _hostsFilePath;
     private readonly IFirewallController _firewallController;
+    private readonly object _gate = new();
 
     public SiteBlockCommandHandler(
         SiteBlockState state, string statePath, string hostsFilePath, IFirewallController firewallController)
@@ -19,7 +20,17 @@ public sealed class SiteBlockCommandHandler
         _firewallController = firewallController;
     }
 
+    // AgentServer serves connections concurrently, and every command shares the
+    // same state, hosts file and firewall -- so they run one at a time.
     public bool Handle(MessageType type, byte[] payload)
+    {
+        lock (_gate)
+        {
+            return HandleLocked(type, payload);
+        }
+    }
+
+    private bool HandleLocked(MessageType type, byte[] payload)
     {
         switch (type)
         {
@@ -89,6 +100,14 @@ public sealed class SiteBlockCommandHandler
     }
 
     public bool ReconcileAtStartup()
+    {
+        lock (_gate)
+        {
+            return ReconcileLocked();
+        }
+    }
+
+    private bool ReconcileLocked()
     {
         HostsFileManager.ApplyToFile(_hostsFilePath, _state.BlockedDomains);
 

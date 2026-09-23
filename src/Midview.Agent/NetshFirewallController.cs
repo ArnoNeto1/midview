@@ -15,6 +15,12 @@ public sealed class NetshFirewallController : IFirewallController
 
     public bool ApplyBlock()
     {
+        // "No matching rule" is the normal case here, so exit codes are ignored.
+        foreach (var args in FirewallCommands.BuildRemoveRuleCommands())
+        {
+            RunNetsh(args);
+        }
+
         foreach (var args in FirewallCommands.BuildBlockCommands(_agentPort, _sessionPort))
         {
             if (RunNetsh(args) != 0)

@@ -40,6 +40,17 @@ public static class FirewallCommands
             // existing "don't try to be clever, just get to the known-good state"
             // philosophy already used elsewhere in this codebase (see HostsFileManager).
             new[] { "advfirewall", "set", "allprofiles", "firewallpolicy", "blockinbound,allowoutbound" },
+        }.Concat(BuildRemoveRuleCommands()).ToArray();
+    }
+
+    // Deleting by name removes every copy of a rule. Also run before adding
+    // the rules, since "netsh ... add rule" never replaces an existing rule
+    // with the same name: without that, every block (each startup reapply
+    // included) would stack up another copy of each one.
+    public static IReadOnlyList<string[]> BuildRemoveRuleCommands()
+    {
+        return new[]
+        {
             new[] { "advfirewall", "firewall", "delete", "rule", $"name={RuleNamePrefix}_AllowLocalNetwork" },
             new[] { "advfirewall", "firewall", "delete", "rule", $"name={RuleNamePrefix}_AllowAgentPort" },
             new[] { "advfirewall", "firewall", "delete", "rule", $"name={RuleNamePrefix}_AllowSessionPort" },
