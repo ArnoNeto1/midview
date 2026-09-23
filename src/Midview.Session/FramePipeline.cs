@@ -22,10 +22,15 @@ public sealed class FramePipeline
         // The first frame has nothing to diff against. Sending every tile
         // here (instead of none) gives a newly-connected viewer an
         // immediate full picture; every later call only sends what changed.
+        // A resolution change counts as a first frame too: TileDiff can't
+        // compare different sizes, and every tile position moved anyway.
         sw.Restart();
-        var tilesToSend = _previousFrame is null
+        var isFullFrame = _previousFrame is null
+            || _previousFrame.Width != currentFrame.Width
+            || _previousFrame.Height != currentFrame.Height;
+        var tilesToSend = isFullFrame
             ? TileDiff.AllTiles(currentFrame.Width, currentFrame.Height)
-            : TileDiff.FindChangedTiles(_previousFrame, currentFrame);
+            : TileDiff.FindChangedTiles(_previousFrame!, currentFrame);
         var diffMs = sw.Elapsed.TotalMilliseconds;
 
         sw.Restart();

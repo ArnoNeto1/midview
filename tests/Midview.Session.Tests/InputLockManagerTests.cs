@@ -86,4 +86,35 @@ public class InputLockManagerTests
         Assert.Equal(0, controller.EnableCalls);
         Assert.Equal(0, controller.DisableCalls);
     }
+
+    [Fact]
+    public void ConcurrentCallsFromReceiveLoopAndTimer_NeverLeaveDevicesDisabledAfterFinalStop()
+    {
+        var devices = new FakeInputDeviceController();
+        // A real clock with a zero timeout: every timeout check that finds the
+        // lock held releases it, so the timer thread keeps racing the others.
+        var manager = new InputLockManager(devices, new SystemClock(), TimeSpan.Zero);
+
+        var threads = Enumerable.Range(0, 4).Select(seed => new Thread(() =>
+        {
+            var random = new Random(seed);
+            for (var i = 0; i < 5000; i++)
+            {
+                switch (random.Next(4))
+                {
+                    case 0: manager.StartLock(); break;
+                    case 1: manager.StopLock(); break;
+                    case 2: manager.OnHeartbeatReceived(); break;
+                    default: manager.CheckHeartbeatTimeout(); break;
+                }
+            }
+        })).ToList();
+        threads.ForEach(t => t.Start());
+        threads.ForEach(t => t.Join());
+
+        manager.StopLock();
+
+        Assert.False(manager.IsLocked);
+        Assert.Equal(devices.DisableCalls, devices.EnableCalls);
+    }
 }

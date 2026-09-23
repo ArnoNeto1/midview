@@ -27,6 +27,27 @@ public class FakeInputInjector : IInputInjector
     public void Inject(InputEvent inputEvent) => InjectCount++;
 }
 
+// Throws like GdiScreenCapture does while the secure desktop (Win+L, a UAC
+// prompt, Ctrl+Alt+Del) is showing, then recovers.
+public class FailingThenWorkingScreenCapture : IScreenCapture
+{
+    private int _failuresLeft;
+
+    public FailingThenWorkingScreenCapture(int failures)
+    {
+        _failuresLeft = failures;
+    }
+
+    public Bitmap CaptureFrame()
+    {
+        if (_failuresLeft-- > 0)
+        {
+            throw new System.ComponentModel.Win32Exception("The handle is invalid");
+        }
+        return new Bitmap(64, 64);
+    }
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -85,5 +106,102 @@ public class SessionServerTests
         // ~1s at a 66ms capture interval is ~15 captures; assert well under
         // the thousands a message-coupled loop would have produced instead.
         Assert.InRange(capture.CallCount, 1, 60);
+    }
+
+    [Fact]
+    public async Task CaptureFailures_AreRetried_AndFramesStillArrive()
+    {
+        using var harness = new ServerHarness(new FailingThenWorkingScreenCapture(failures: 3));
+        using var master = harness.ConnectMaster();
+
+        var firstMessage = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(MessageType.FrameTile, firstMessage.Type);
+    }
+
+    [Fact]
+    public async Task ConnectionThatNeverHandshakes_DoesNotBlockAMaster()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var stalledClient = new TcpClient();
+        stalledClient.Connect(IPAddress.Loopback, harness.Port); // then sends nothing at all
+
+        // Well under the server's own 10 s handshake timeout.
+        var firstMessage = await Task.Run(() =>
+        {
+            using var master = harness.ConnectMaster();
+            return master.Channel.Receive();
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.FrameTile, firstMessage.Type);
+    }
+
+    private sealed class ServerHarness : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _stopServer = new();
+        private readonly Task _serverTask;
+        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _serverCert =
+            SelfSignedCertificate.Create("session-under-test");
+        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _masterCert =
+            SelfSignedCertificate.Create("master-under-test");
+
+        public ServerHarness(IScreenCapture capture)
+        {
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+            var server = new SessionServer(
+                _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
+                capture, new FakeInputInjector(),
+                new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)));
+            _serverTask = Task.Run(() => server.Run(_stopServer.Token));
+        }
+
+        public int Port { get; }
+
+        public ConnectedMaster ConnectMaster()
+        {
+            var tcpClient = new TcpClient();
+            tcpClient.Connect(IPAddress.Loopback, Port);
+            var channel = SecureChannel.AuthenticateAsClient(
+                tcpClient, "session-under-test", _masterCert, new TrustStore(new[] { _serverCert.Thumbprint }));
+            return new ConnectedMaster(tcpClient, channel);
+        }
+
+        public void Dispose()
+        {
+            _stopServer.Cancel();
+            _listener.Stop(); // unblocks AcceptTcpClient() with an expected exception, as in the test above
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (AggregateException)
+            {
+            }
+            _serverCert.Dispose();
+            _masterCert.Dispose();
+        }
+    }
+
+    private sealed class ConnectedMaster : IDisposable
+    {
+        private readonly TcpClient _tcpClient;
+
+        public ConnectedMaster(TcpClient tcpClient, SecureChannel channel)
+        {
+            _tcpClient = tcpClient;
+            Channel = channel;
+        }
+
+        public SecureChannel Channel { get; }
+
+        public void Dispose()
+        {
+            Channel.Dispose();
+            _tcpClient.Dispose();
+        }
     }
 }

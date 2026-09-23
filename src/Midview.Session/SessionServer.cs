@@ -55,12 +55,30 @@ public sealed class SessionServer
     // run). ~15 fps matches Veyon's own real-world capture rate.
     private const int CaptureIntervalMs = 66;
 
+    private const int CaptureRetryDelayMs = 500;
+
+    // Plenty for a real LAN handshake. Anything on the network can open a
+    // TCP connection and then send nothing; without a timeout that alone
+    // kept every Master out.
+    private const int HandshakeTimeoutMs = 10_000;
+
+    // The Master sends a heartbeat every second for as long as its window is
+    // open, so this much silence means it's gone (powered off, cable pulled)
+    // without closing the connection. Without a timeout, Receive() would wait
+    // forever and no Master could ever connect again. Also how long a new
+    // Master waits for a previous connection to end before giving up.
+    private const int ConnectionTimeoutMs = 15_000;
+
     private readonly TcpListener _listener;
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
     private readonly IScreenCapture _screenCapture;
     private readonly IInputInjector _inputInjector;
     private readonly InputLockManager _inputLockManager;
+
+    // One Master served at a time: the input lock and the injected input
+    // belong to the machine, not to a connection.
+    private readonly SemaphoreSlim _servingSlot = new(1, 1);
 
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
@@ -86,25 +104,65 @@ public sealed class SessionServer
             // real latency to both directions regardless of how fast either
             // side processes them.
             tcpClient.NoDelay = true;
-            try
-            {
-                HandleClient(tcpClient, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error handling a client connection: {ex.Message}");
-            }
+            // Off the accept loop, so a connection stuck in its TLS handshake
+            // can't keep the next one from being accepted.
+            _ = Task.Run(() => HandleClientSafely(tcpClient, cancellationToken));
+        }
+    }
+
+    private void HandleClientSafely(TcpClient tcpClient, CancellationToken cancellationToken)
+    {
+        try
+        {
+            HandleClient(tcpClient, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling a client connection: {ex.Message}");
         }
     }
 
     private void HandleClient(TcpClient tcpClient, CancellationToken cancellationToken)
     {
         using var client = tcpClient;
+        client.ReceiveTimeout = HandshakeTimeoutMs;
+        client.SendTimeout = HandshakeTimeoutMs;
         using var channel = SecureChannel.AuthenticateAsServer(client, _serverCertificate, _masterTrustStore);
+
+        if (!_servingSlot.Wait(ConnectionTimeoutMs, cancellationToken))
+        {
+            Console.WriteLine("Another MidviewMaster is still connected; closing the new connection.");
+            return;
+        }
+
+        try
+        {
+            client.ReceiveTimeout = ConnectionTimeoutMs;
+            client.SendTimeout = ConnectionTimeoutMs;
+            Serve(client, channel, cancellationToken);
+        }
+        finally
+        {
+            _servingSlot.Release();
+        }
+    }
+
+    private void Serve(TcpClient tcpClient, SecureChannel channel, CancellationToken cancellationToken)
+    {
         var isControlling = false;
 
-        using var heartbeatTimer = new System.Threading.Timer(_ => _inputLockManager.CheckHeartbeatTimeout(),
-            null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
+        // An exception escaping a Timer callback would take the whole process down.
+        using var heartbeatTimer = new System.Threading.Timer(_ =>
+        {
+            try
+            {
+                _inputLockManager.CheckHeartbeatTimeout();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Heartbeat check failed: {ex.Message}");
+            }
+        }, null, HeartbeatCheckIntervalMs, HeartbeatCheckIntervalMs);
 
         // A fresh FramePipeline per connection: it isn't thread-safe, and
         // reusing one server-wide let a slow-to-stop capture thread from a
@@ -119,7 +177,7 @@ public sealed class SessionServer
         // (FrameTile), the loop below only receives -- the one
         // reader/one writer pattern SslStream supports without locking.
         using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var captureThread = new Thread(() => CaptureLoop(framePipeline, channel, captureCts)) { IsBackground = true };
+        var captureThread = new Thread(() => CaptureLoop(framePipeline, channel, tcpClient, captureCts)) { IsBackground = true };
         captureThread.Start();
 
         try
@@ -178,7 +236,8 @@ public sealed class SessionServer
         }
     }
 
-    private void CaptureLoop(FramePipeline framePipeline, SecureChannel channel, CancellationTokenSource captureCts)
+    private void CaptureLoop(
+        FramePipeline framePipeline, SecureChannel channel, TcpClient tcpClient, CancellationTokenSource captureCts)
     {
         try
         {
@@ -186,7 +245,24 @@ public sealed class SessionServer
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                foreach (var tile in framePipeline.CaptureNextFrame())
+                IReadOnlyList<EncodedTile> tiles;
+                try
+                {
+                    tiles = framePipeline.CaptureNextFrame();
+                }
+                catch (Exception ex)
+                {
+                    // Capturing fails while the secure desktop is up (Win+L,
+                    // a UAC prompt, Ctrl+Alt+Del) and works again once it's
+                    // gone. Retrying keeps the stream alive; giving up would
+                    // leave the teacher looking at a frozen screen with no
+                    // error, since the connection itself stays open.
+                    Console.WriteLine($"Screen capture failed, retrying: {ex.Message}");
+                    captureCts.Token.WaitHandle.WaitOne(CaptureRetryDelayMs);
+                    continue;
+                }
+
+                foreach (var tile in tiles)
                 {
                     channel.Send(new Midview.Protocol.Message(MessageType.FrameTile, TileMessageCodec.Encode(tile)));
                 }
@@ -200,8 +276,11 @@ public sealed class SessionServer
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Only a failed send gets here, so the connection is dead. Closing
+            // the socket is what actually ends the receive loop's blocked
+            // Receive() -- it isn't watching any cancellation token.
             Console.WriteLine($"Capture loop stopped: {ex.Message}");
-            captureCts.Cancel(); // connection is likely dead; let the receive loop wind down too
+            tcpClient.Close();
         }
     }
 }
