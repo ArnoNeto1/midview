@@ -101,7 +101,7 @@ public class ThumbnailPollerTests
     }
 
     // A real SessionServer on a loopback port, with a fixed-size fake screen.
-    private sealed class LoopbackSession : IDisposable
+    internal sealed class LoopbackSession : IDisposable
     {
         private readonly TcpListener _listener;
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _sessionCertificate;
@@ -116,7 +116,8 @@ public class ThumbnailPollerTests
         public LoopbackSession(
             int port,
             System.Security.Cryptography.X509Certificates.X509Certificate2 sessionCertificate,
-            System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate)
+            System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate,
+            IMessageDisplay? messageDisplay = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, port);
             _sessionCertificate = sessionCertificate;
@@ -126,7 +127,8 @@ public class ThumbnailPollerTests
             var server = new SessionServer(
                 _listener, _sessionCertificate, new TrustStore(new[] { MasterCertificate.Thumbprint }),
                 new FixedSizeCapture(), new NoInput(),
-                new InputLockManager(new NoDevices(), new SystemClock(), TimeSpan.FromSeconds(5)));
+                new InputLockManager(new NoDevices(), new SystemClock(), TimeSpan.FromSeconds(5)),
+                messageDisplay);
             Task.Run(() =>
             {
                 try

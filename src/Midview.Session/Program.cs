@@ -9,6 +9,7 @@ using Midview.Session;
 // resolution and the capture only covers part of the screen. Must run before
 // anything touches the screen.
 System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
+System.Windows.Forms.Application.EnableVisualStyles(); // for the teacher-message window
 
 // Created by the Agent on its first start (Session, as a standard user,
 // can't write there itself), so the thumbprint the teacher registered stays
@@ -55,6 +56,7 @@ var server = new SessionServer(
     new TrustStore(trustedMasters),
     new GdiScreenCapture(),
     new SendInputInjector(),
-    new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)));
+    new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)),
+    new WinFormsMessageDisplay());
 
 server.Run(CancellationToken.None);

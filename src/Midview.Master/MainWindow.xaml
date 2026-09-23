@@ -6,6 +6,7 @@
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#FF2D2D30">
             <Button Content="Adicionar / testar máquina" Click="OnAddMachineClicked" Padding="10,4" Margin="4" />
+            <Button Content="Enviar mensagem para a turma" Click="OnMessageClassClicked" Padding="10,4" Margin="4" />
         </StackPanel>
         <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Bottom" Margin="8,4" TextWrapping="Wrap" />
         <Grid Background="#FFF0F0F0">
@@ -25,6 +26,7 @@
                                     ToolTip="Clique para abrir o controle total. Botão direito para mais opções.">
                                 <Button.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
                                         <MenuItem Header="Testar / bloquear sites..." Click="OnEditMachineClicked" />
                                         <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                     </ContextMenu>

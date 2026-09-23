@@ -4,11 +4,17 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-public static class AgentCommandClient
+// One command, one acknowledgement, over a short-lived connection: the
+// Agent's site-blocking commands, and teacher messages sent to a Session.
+public static class CommandClient
 {
+    // Without this, a machine that's switched off holds a command up for
+    // Windows' own TCP connect timeout (~21 s).
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+
     // Covers a slow command on the Agent's side (a full internet block runs
     // several netsh calls) while still failing -- instead of leaving the
-    // status on "Sending..." forever -- if the Agent never answers.
+    // status on "Sending..." forever -- if the other side never answers.
     private const int TimeoutMs = 20_000;
 
     public static bool SendCommand(
@@ -16,7 +22,10 @@ public static class AgentCommandClient
         MessageType commandType, byte[] payload)
     {
         using var tcpClient = new TcpClient();
-        tcpClient.Connect(hostAddress, port);
+        using (var timeout = new CancellationTokenSource(ConnectTimeout))
+        {
+            tcpClient.ConnectAsync(hostAddress, port, timeout.Token).AsTask().GetAwaiter().GetResult();
+        }
         tcpClient.ReceiveTimeout = TimeoutMs;
         tcpClient.SendTimeout = TimeoutMs;
         using var channel = SecureChannel.AuthenticateAsClient(
