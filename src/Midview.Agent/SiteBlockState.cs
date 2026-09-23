@@ -14,8 +14,22 @@ public sealed class SiteBlockState
             return new SiteBlockState();
         }
 
-        var json = File.ReadAllText(statePath);
-        return JsonSerializer.Deserialize<SiteBlockState>(json) ?? new SiteBlockState();
+        try
+        {
+            var json = File.ReadAllText(statePath);
+            return JsonSerializer.Deserialize<SiteBlockState>(json) ?? new SiteBlockState();
+        }
+        catch (JsonException)
+        {
+            // An unreadable file (a power cut mid-write by an older version,
+            // a bad hand edit) used to stop the Agent from listening at all,
+            // leaving a blocked machine blocked with no way to unblock it
+            // remotely. Starting with nothing blocked is the safe direction:
+            // the teacher can always block again. The file is kept aside, not
+            // deleted, so it can still be looked at.
+            File.Move(statePath, statePath + ".corrupt", overwrite: true);
+            return new SiteBlockState();
+        }
     }
 
     public void Save(string statePath)
@@ -25,6 +39,16 @@ public sealed class SiteBlockState
         {
             Directory.CreateDirectory(directory);
         }
-        File.WriteAllText(statePath, JsonSerializer.Serialize(this));
+
+        // Written in full to a temp file, flushed to disk, then swapped in: a
+        // power cut at any point leaves either the old or the new state, never
+        // a truncated file.
+        var tempPath = statePath + ".tmp";
+        using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            JsonSerializer.Serialize(stream, this);
+            stream.Flush(flushToDisk: true);
+        }
+        File.Move(tempPath, statePath, overwrite: true);
     }
 }

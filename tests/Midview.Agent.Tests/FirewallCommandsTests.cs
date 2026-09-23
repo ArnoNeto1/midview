@@ -66,4 +66,24 @@ public class FirewallCommandsTests
 
         Assert.Equal(blockedRuleNames, unblockedRuleNames);
     }
+
+    [Fact]
+    public void BuildRemoveRuleCommands_DeletesEveryRuleBuildBlockCommandsCreates()
+    {
+        var blockCommands = FirewallCommands.BuildBlockCommands(agentPort: 5900, sessionPort: 5901);
+        var removeCommands = FirewallCommands.BuildRemoveRuleCommands();
+
+        var blockedRuleNames = blockCommands
+            .Where(c => c.Any(arg => arg.StartsWith("name=")))
+            .Select(c => c.First(arg => arg.StartsWith("name=")))
+            .OrderBy(n => n)
+            .ToList();
+        var removedRuleNames = removeCommands
+            .Select(c => c.First(arg => arg.StartsWith("name=")))
+            .OrderBy(n => n)
+            .ToList();
+
+        Assert.All(removeCommands, c => Assert.Equal(new[] { "advfirewall", "firewall", "delete", "rule" }, c.Take(4)));
+        Assert.Equal(blockedRuleNames, removedRuleNames);
+    }
 }

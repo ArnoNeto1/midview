@@ -50,13 +50,13 @@ on a separate port from `MidviewSession`'s, reusing the same
 `Midview.Protocol.SecureChannel`/`TrustStore`/`MessageFramer` machinery
 already built — no new protocol layer, just a second listener.
 
-Unlike `MidviewSession`, which generates a fresh identity certificate every
-run (acceptable there since the teacher reconnects interactively each time),
 `MidviewAgent` is a long-running background service the teacher configures
 once. It generates its identity certificate once and persists it to disk
 (`%ProgramData%\Midview\agent-identity.pfx`), reusing the same certificate
 across restarts so the teacher never has to re-enter a new thumbprint after
-a service restart or reboot.
+a service restart or reboot. (`MidviewSession` originally generated a fresh
+certificate on every run; it now uses a persisted one too, which the Agent
+creates — see the review notes below.)
 
 ## Components
 
@@ -157,52 +157,55 @@ scheduling, a "list currently blocked domains" query feature (not
 requested), and any UI beyond `MidviewMaster` being able to send the four
 commands.
 
-## Review notes (2026-09-22, after implementation)
+## Review notes (2026-09-22, after implementation; updated 2026-09-23)
 
-Checked against the implemented code. Items marked **open** are gaps in the
-current implementation, not yet fixed.
+Checked against the implemented code. The first version of these notes
+listed some fixes as done before they were actually committed, and still
+listed as open some that were already fixed; this version reflects the code
+as of 2026-09-23.
 
-- **Fixed: startup reconcile now works in both directions.** When
-  `InternetBlocked` is false, `ReconcileAtStartup` checks whether any
-  `MidviewSiteBlock_*` rule exists (`IFirewallController.IsBlockPresent`,
-  via `netsh ... show rule`) and runs `ApplyUnblock` if so. Only checking
-  for leftover rules, instead of always unblocking, avoids resetting the
-  machine's default outbound policy on every boot. Remaining gap: if the
-  rules were removed by hand but the block-outbound policy was left
-  behind, this isn't detected.
-- **Fixed: startup errors no longer stop the listener.** Hosts-file and
-  firewall reconcile each run in their own try/catch, log through
-  `AgentLog`, and the listener starts either way. An unreadable
-  `site-block-state.json` is renamed to `site-block-state.json.corrupt`
-  and the Agent starts with nothing blocked.
-- **Open: domain payload is not validated or normalized.** The Master
-  sends the raw text box contents and the Agent writes them straight into
-  the hosts file. This means: a newline in the payload injects arbitrary
-  hosts entries; `YouTube.com` and `youtube.com` are different set entries
-  (unblocking one leaves the other); a trailing space or a pasted URL
-  (`https://youtube.com/watch?...`) blocks nothing; an empty payload writes
-  `127.0.0.1 ` and `127.0.0.1 www.`. The Agent should trim, lowercase,
-  strip any scheme/path/port, and reject anything that isn't a valid
-  hostname.
+- **Fixed: startup reconcile works in both directions.**
+  `ReconcileAtStartup` reapplies the block when `InternetBlocked` is true,
+  and otherwise always runs `ApplyUnblock`. Trade-off: that resets the
+  machine's default outbound policy to Windows' default
+  (`blockinbound,allowoutbound`) on every boot, even when nothing was ever
+  blocked. (An earlier draft of these notes described an
+  `IsBlockPresent` check to avoid that; it was never implemented.)
+- **Fixed: startup errors no longer stop the listener.** The hosts-file and
+  firewall reconcile run in their own try/catch, and so does loading
+  `site-block-state.json`. An unreadable state file (e.g. truncated by a
+  power cut) is renamed to `site-block-state.json.corrupt` and the Agent
+  starts with nothing blocked. `SiteBlockState.Save` writes to a temp file,
+  flushes it to disk and swaps it in, so a power cut can no longer leave a
+  truncated file in the first place.
+- **Fixed: domain payload is validated and normalized** (`DomainNormalizer`):
+  trimmed, lowercased, scheme/path/query/port stripped, and anything that
+  isn't a plain DNS hostname rejected (so a newline can't inject hosts
+  entries, and `YouTube.com`/`https://youtube.com/watch?...` are the same
+  entry as `youtube.com`).
 - **Fixed: data-directory permissions.** `AgentDataDirectory.EnsureSecure`
-  now enforces the ACL on every Agent start, not only when it creates the
-  directory: SYSTEM and Administrators get full control, Users get
-  read-only (so `MidviewSession`, running as a standard user, can read
-  `trusted-masters.json`). `agent-identity.pfx` gets its own protected
-  ACL (SYSTEM and Administrators only) right after it's loaded or
-  created. `AgentLog` no longer calls `EnsureSecure` and never throws.
-- **Minor: firewall rules pile up.** `netsh ... add rule` doesn't check for
-  duplicates, so every Agent start adds another `MidviewAgentInbound`
-  rule, and every block (including each startup reapply) adds another set
-  of `MidviewSiteBlock_*` rules. Delete-by-name removes all copies, so
-  it's harmless but untidy.
-- **Minor: LAN allow rule assumes `192.168.0.0/16`.** On a lab network in
-  another range (e.g. `10.x`), the LAN isn't reachable during a full
-  block. Midview's own ports still work.
-- **Minor: outbound allow on ports 28900/5901 applies to any remote
-  host.** During a full block, a student could reach an internet server
-  listening on either port. Scoping `remoteip` to the local subnet would
-  close this.
+  runs on every Agent start, not only when it creates the directory:
+  SYSTEM and Administrators get full control, Users get read-only (so
+  `MidviewSession`, running as a standard user, can read
+  `trusted-masters.json` and `session-identity.pfx`). `agent-identity.pfx`
+  gets its own protected ACL (SYSTEM and Administrators only) on every
+  start. `AgentLog` no longer calls `EnsureSecure` and never throws.
+- **Fixed: firewall rules no longer pile up.** `MidviewAgentInbound` (and
+  the new `MidviewSessionInbound`, for port 5901 — Session can't add its
+  own rule as a standard user) is deleted before being re-added on every
+  start, and `ApplyBlock` deletes any existing `MidviewSiteBlock_*` rules
+  before adding them.
+- **Fixed: LAN allow rule no longer assumes `192.168.0.0/16`** — it uses
+  `remoteip=LocalSubnet`.
+- **Fixed: outbound allow on ports 28900/5901 is scoped to the local
+  subnet**, so a student can't reach an internet server on either port
+  during a full block.
+- **Fixed: one stalled connection no longer blocks every command.** Any
+  machine on the LAN could open a TCP connection to port 28900 and send
+  nothing, which blocked the (then single-threaded, timeout-less) listener
+  indefinitely — including the teacher's unblock. Each connection is now
+  handled on its own task with a 10 s socket timeout, and
+  `SiteBlockCommandHandler` serializes the commands themselves.
 
 ### Known limitations (by design)
 
