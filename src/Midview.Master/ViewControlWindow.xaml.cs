@@ -212,11 +212,23 @@ public partial class ViewControlWindow : Window
         return new Point(x, y);
     }
 
-    private void OnKeyDown(object sender, KeyEventArgs e) =>
-        SendInput(InputEventKind.KeyDown, 0, 0, (ushort)KeyInterop.VirtualKeyFromKey(e.Key));
+    private void OnKeyDown(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyDown, e);
 
-    private void OnKeyUp(object sender, KeyEventArgs e) =>
-        SendInput(InputEventKind.KeyUp, 0, 0, (ushort)KeyInterop.VirtualKeyFromKey(e.Key));
+    private void OnKeyUp(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyUp, e);
+
+    private void SendKey(InputEventKind kind, KeyEventArgs e)
+    {
+        // WPF reports Alt, F10 and every Alt+key combination as Key.System,
+        // with the real key in SystemKey -- e.Key alone would send a
+        // meaningless code for all of them.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        SendInput(kind, 0, 0, (ushort)KeyInterop.VirtualKeyFromKey(key));
+
+        // Keeps this window from acting on the key itself: Tab and arrows
+        // would move focus away from the view (silently dropping every key
+        // after that), and Alt/F10 would open the window's system menu.
+        e.Handled = true;
+    }
 
     private void SendInput(InputEventKind kind, int x, int y, ushort virtualKeyCode)
     {
