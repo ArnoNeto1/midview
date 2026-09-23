@@ -57,14 +57,15 @@ public sealed class SessionServer
 
     private const int CaptureRetryDelayMs = 500;
 
-    // Plenty for a real LAN handshake. Anything on the network can open a
-    // TCP connection and then send nothing; without a timeout that alone
-    // kept every Master out.
+    // Plenty for a real LAN handshake plus the first message. Anything on
+    // the network can open a TCP connection and then send nothing; without
+    // a timeout that alone kept every Master out.
     private const int HandshakeTimeoutMs = 10_000;
 
-    // The Master sends a heartbeat every second for as long as its window is
-    // open, so this much silence means it's gone (powered off, cable pulled)
-    // without closing the connection. Without a timeout, Receive() would wait
+    // A controlling Master sends a heartbeat every second for as long as its
+    // window is open, and a preview connection asks for a thumbnail every
+    // few seconds, so this much silence means the Master is gone (powered
+    // off, cable pulled) without closing the connection. Without a timeout, Receive() would wait
     // forever and no Master could ever connect again. Also how long a new
     // Master waits for a previous connection to end before giving up.
     private const int ConnectionTimeoutMs = 15_000;
@@ -76,8 +77,9 @@ public sealed class SessionServer
     private readonly IInputInjector _inputInjector;
     private readonly InputLockManager _inputLockManager;
 
-    // One Master served at a time: the input lock and the injected input
-    // belong to the machine, not to a connection.
+    // One controlling Master served at a time: the input lock and the
+    // injected input belong to the machine, not to a connection. Preview
+    // connections (the classroom console's thumbnails) don't take this slot.
     private readonly SemaphoreSlim _servingSlot = new(1, 1);
 
     public SessionServer(
@@ -129,6 +131,24 @@ public sealed class SessionServer
         client.SendTimeout = HandshakeTimeoutMs;
         using var channel = SecureChannel.AuthenticateAsServer(client, _serverCertificate, _masterTrustStore);
 
+        // The first message says what kind of connection this is. Every
+        // Master keeps one preview connection open to each machine in its
+        // grid, so if previews were served like control connections, the
+        // one-at-a-time slot below would always be taken and full control
+        // could never get in. A control connection's first message is
+        // whatever it sends first (ViewControlWindow sends StartControl as
+        // soon as it opens), so the control protocol itself is unchanged.
+        var firstMessage = channel.Receive();
+
+        client.ReceiveTimeout = ConnectionTimeoutMs;
+        client.SendTimeout = ConnectionTimeoutMs;
+
+        if (firstMessage.Type == MessageType.RequestThumbnail)
+        {
+            ServePreview(channel, firstMessage, cancellationToken);
+            return;
+        }
+
         if (!_servingSlot.Wait(ConnectionTimeoutMs, cancellationToken))
         {
             Console.WriteLine("Another MidviewMaster is still connected; closing the new connection.");
@@ -137,9 +157,7 @@ public sealed class SessionServer
 
         try
         {
-            client.ReceiveTimeout = ConnectionTimeoutMs;
-            client.SendTimeout = ConnectionTimeoutMs;
-            Serve(client, channel, cancellationToken);
+            Serve(client, channel, firstMessage, cancellationToken);
         }
         finally
         {
@@ -147,7 +165,42 @@ public sealed class SessionServer
         }
     }
 
-    private void Serve(TcpClient tcpClient, SecureChannel channel, CancellationToken cancellationToken)
+    // Never touches the input lock, the capture thread or FramePipeline:
+    // a preview must work the same whether or not anyone is controlling
+    // this machine.
+    private void ServePreview(
+        SecureChannel channel, Midview.Protocol.Message firstMessage, CancellationToken cancellationToken)
+    {
+        var message = firstMessage;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (message.Type == MessageType.RequestThumbnail)
+            {
+                channel.Send(new Midview.Protocol.Message(MessageType.ThumbnailFrame, RenderThumbnailOrEmpty()));
+            }
+            message = channel.Receive();
+        }
+    }
+
+    // Always answers, even when capture fails (e.g. while the screen is
+    // locked): an empty reply keeps requests and replies paired, so the
+    // Master can show "screen unavailable" instead of treating the machine
+    // as offline and reconnecting on every poll.
+    private byte[] RenderThumbnailOrEmpty()
+    {
+        try
+        {
+            return ThumbnailRenderer.Render(_screenCapture);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Thumbnail capture failed: {ex.Message}");
+            return Array.Empty<byte>();
+        }
+    }
+
+    private void Serve(
+        TcpClient tcpClient, SecureChannel channel, Midview.Protocol.Message firstMessage, CancellationToken cancellationToken)
     {
         var isControlling = false;
 
@@ -186,10 +239,12 @@ public sealed class SessionServer
             var maxGapMs = 0.0;
             var gapSw = System.Diagnostics.Stopwatch.StartNew();
 
+            Midview.Protocol.Message? pendingMessage = firstMessage;
             while (!cancellationToken.IsCancellationRequested && tcpClient.Connected)
             {
                 var receiveSw = System.Diagnostics.Stopwatch.StartNew();
-                var message = channel.Receive();
+                var message = pendingMessage ?? channel.Receive();
+                pendingMessage = null;
                 var receiveMs = receiveSw.Elapsed.TotalMilliseconds;
 
                 var gapMs = gapSw.Elapsed.TotalMilliseconds;
