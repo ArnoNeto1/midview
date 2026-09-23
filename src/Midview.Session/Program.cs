@@ -4,6 +4,12 @@ using System.Security.Cryptography.X509Certificates;
 using Midview.Protocol;
 using Midview.Session;
 
+// Without DPI awareness, Windows scales this process's view of the screen on
+// a display set to 125%/150%: screen bounds come back smaller than the real
+// resolution and the capture only covers part of the screen. Must run before
+// anything touches the screen.
+System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
+
 // Created by the Agent on its first start (Session, as a standard user,
 // can't write there itself), so the thumbprint the teacher registered stays
 // the same across restarts and reboots. The Agent also logs it to
