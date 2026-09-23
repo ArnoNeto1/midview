@@ -61,6 +61,19 @@ public class FramePipelineTests
         Assert.NotEmpty(tiles[0].JpegBytes);
     }
 
+    [Fact]
+    public void CaptureNextFrame_ResolutionChanged_ReturnsAllTilesOfTheNewSize()
+    {
+        var frame1 = SolidBitmap(128, 128, Color.Red);
+        var frame2 = SolidBitmap(192, 64, Color.Red);
+        var pipeline = new FramePipeline(new FakeScreenCapture(frame1, frame2));
+        pipeline.CaptureNextFrame();
+
+        var tiles = pipeline.CaptureNextFrame();
+
+        Assert.Equal(3, tiles.Count); // 192x64 is a 3x1 grid of 64x64 tiles
+    }
+
     private static Bitmap SolidBitmap(int width, int height, Color color)
     {
         var bitmap = new Bitmap(width, height);
