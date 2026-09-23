@@ -124,7 +124,7 @@ public partial class AddMachineWindow : Window
         var thumbprint = AgentThumbprintTextBox.Text.Trim();
         try
         {
-            var success = await Task.Run(() => AgentCommandClient.SendCommand(
+            var success = await Task.Run(() => CommandClient.SendCommand(
                 hostAddress, AgentServerWorkerAgentPort, thumbprint, _masterCertificate, commandType, payload));
             SiteBlockStatusTextBlock.Text = success ? "OK" : "Falhou";
         }

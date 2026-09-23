@@ -20,4 +20,9 @@ public enum MessageType : byte
     // can't be captured right now, e.g. while it's locked).
     RequestThumbnail = 12,
     ThumbnailFrame = 13,
+
+    // A text from the teacher, shown in a window on the student's screen.
+    // Sent to the Session as the only message of a short-lived connection
+    // (UTF-8 payload); answered with one CommandAck.
+    ShowMessage = 14,
 }

@@ -62,6 +62,30 @@ public class FixedSizeScreenCapture : IScreenCapture
     public Bitmap CaptureFrame() => new(_width, _height);
 }
 
+public class RecordingMessageDisplay : IMessageDisplay
+{
+    private readonly List<string> _shown = new();
+
+    public IReadOnlyList<string> Shown
+    {
+        get
+        {
+            lock (_shown)
+            {
+                return _shown.ToList();
+            }
+        }
+    }
+
+    public void Show(string text)
+    {
+        lock (_shown)
+        {
+            _shown.Add(text);
+        }
+    }
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -212,6 +236,49 @@ public class SessionServerTests
         Assert.Empty(second.Payload);
     }
 
+    [Fact]
+    public async Task ShowMessage_ShowsTheTextAndAcknowledges()
+    {
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display);
+        using var sender = harness.ConnectMaster();
+
+        var ack = await Task.Run(() => sender.ShowMessage("Atenção: prova em 5 minutos")).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.CommandAck, ack.Type);
+        Assert.Equal(new byte[] { 1 }, ack.Payload);
+        Assert.Equal(new[] { "Atenção: prova em 5 minutos" }, display.Shown);
+    }
+
+    [Fact]
+    public async Task ShowMessage_NothingToShow_RefusesWithoutShowingAnything()
+    {
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display);
+        using var sender = harness.ConnectMaster();
+
+        var ack = await Task.Run(() => sender.ShowMessage("   ")).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(new byte[] { 0 }, ack.Payload);
+        Assert.Empty(display.Shown);
+    }
+
+    [Fact]
+    public async Task ShowMessage_WhileAnotherMasterIsControlling_IsStillShown()
+    {
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display);
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var sender = harness.ConnectMaster();
+
+        // Well under the 15 s a second controlling Master would wait for the slot.
+        var ack = await Task.Run(() => sender.ShowMessage("Olá")).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(new byte[] { 1 }, ack.Payload);
+    }
+
     private sealed class ServerHarness : IDisposable
     {
         private readonly TcpListener _listener;
@@ -222,7 +289,7 @@ public class SessionServerTests
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _masterCert =
             SelfSignedCertificate.Create("master-under-test");
 
-        public ServerHarness(IScreenCapture capture)
+        public ServerHarness(IScreenCapture capture, IMessageDisplay? messageDisplay = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -231,7 +298,8 @@ public class SessionServerTests
             var server = new SessionServer(
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
-                new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)));
+                new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
+                messageDisplay);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -276,6 +344,12 @@ public class SessionServerTests
 
         // What ViewControlWindow sends as soon as it opens.
         public void StartControl() => Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+
+        public Message ShowMessage(string text)
+        {
+            Channel.Send(new Message(MessageType.ShowMessage, TeacherMessage.Encode(text)));
+            return Channel.Receive();
+        }
 
         public Message RequestThumbnail()
         {

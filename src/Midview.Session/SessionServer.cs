@@ -76,6 +76,7 @@ public sealed class SessionServer
     private readonly IScreenCapture _screenCapture;
     private readonly IInputInjector _inputInjector;
     private readonly InputLockManager _inputLockManager;
+    private readonly IMessageDisplay? _messageDisplay;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -84,7 +85,8 @@ public sealed class SessionServer
 
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
-        IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager)
+        IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
+        IMessageDisplay? messageDisplay = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -92,6 +94,7 @@ public sealed class SessionServer
         _screenCapture = screenCapture;
         _inputInjector = inputInjector;
         _inputLockManager = inputLockManager;
+        _messageDisplay = messageDisplay;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -142,6 +145,15 @@ public sealed class SessionServer
 
         client.ReceiveTimeout = ConnectionTimeoutMs;
         client.SendTimeout = ConnectionTimeoutMs;
+
+        // A teacher message is a one-shot command, like the Agent's: shown,
+        // acknowledged, done. Like previews, it never needs the control slot.
+        if (firstMessage.Type == MessageType.ShowMessage)
+        {
+            var shown = ShowTeacherMessage(firstMessage.Payload);
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, new[] { (byte)(shown ? 1 : 0) }));
+            return;
+        }
 
         if (firstMessage.Type == MessageType.RequestThumbnail)
         {
@@ -196,6 +208,26 @@ public sealed class SessionServer
         {
             Console.WriteLine($"Thumbnail capture failed: {ex.Message}");
             return Array.Empty<byte>();
+        }
+    }
+
+    private bool ShowTeacherMessage(byte[] payload)
+    {
+        var text = TeacherMessage.Decode(payload);
+        if (text is null || _messageDisplay is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _messageDisplay.Show(text);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Showing a teacher message failed: {ex.Message}");
+            return false;
         }
     }
 

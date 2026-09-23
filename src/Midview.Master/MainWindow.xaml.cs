@@ -54,6 +54,27 @@ public partial class MainWindow : Window
 
     private void OnAddMachineClicked(object sender, RoutedEventArgs e) => OpenAddMachineWindow(existing: null);
 
+    private void OnMessageClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para receber a mensagem.";
+            return;
+        }
+        OpenSendMessageWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    private void OnMessageMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenSendMessageWindow(new[] { tile.Machine });
+        }
+    }
+
+    private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets) =>
+        new SendMessageWindow(targets, _masterCertificate) { Owner = this }.Show();
+
     private void OnEditMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)

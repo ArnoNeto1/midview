@@ -1,0 +1,17 @@
+<Window x:Class="Midview.Master.SendMessageWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Enviar mensagem" Height="380" Width="500"
+        WindowStartupLocation="CenterOwner" Loaded="OnWindowLoaded">
+    <DockPanel Margin="16">
+        <TextBlock x:Name="TargetsTextBlock" DockPanel.Dock="Top" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+        <StackPanel DockPanel.Dock="Bottom">
+            <Button x:Name="SendButton" Content="Enviar" Click="OnSendClicked" IsEnabled="False" Margin="0,8,0,0" Padding="10,4" />
+            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+                <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+            </ScrollViewer>
+        </StackPanel>
+        <TextBox x:Name="MessageTextBox" AcceptsReturn="True" TextWrapping="Wrap" FontSize="14"
+                 VerticalScrollBarVisibility="Auto" TextChanged="OnMessageChanged" />
+    </DockPanel>
+</Window>
