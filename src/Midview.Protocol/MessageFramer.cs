@@ -4,6 +4,10 @@ namespace Midview.Protocol;
 
 public static class MessageFramer
 {
+    // Far above anything real (a 64x64 JPEG tile is a few KB); stops a bad or
+    // hostile length prefix from making Read allocate up to 2 GB.
+    public const int MaxMessageLength = 16 * 1024 * 1024;
+
     public static void Write(Stream stream, Message message)
     {
         var length = message.Payload.Length + 1;
@@ -19,7 +23,7 @@ public static class MessageFramer
     {
         var header = ReadExact(stream, 4);
         var length = BinaryPrimitives.ReadInt32BigEndian(header);
-        if (length < 1)
+        if (length < 1 || length > MaxMessageLength)
         {
             throw new InvalidDataException($"Invalid message length {length}");
         }

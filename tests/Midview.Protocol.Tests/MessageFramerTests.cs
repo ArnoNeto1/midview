@@ -40,4 +40,14 @@ public class MessageFramerTests
 
         Assert.Throws<EndOfStreamException>(() => MessageFramer.Read(stream));
     }
+
+    [Fact]
+    public void Read_LengthAboveMaximum_ThrowsInsteadOfAllocating()
+    {
+        var header = new byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header, MessageFramer.MaxMessageLength + 1);
+        var stream = new MemoryStream(header);
+
+        Assert.Throws<InvalidDataException>(() => MessageFramer.Read(stream));
+    }
 }
