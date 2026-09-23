@@ -48,6 +48,20 @@ public class FailingThenWorkingScreenCapture : IScreenCapture
     }
 }
 
+public class FixedSizeScreenCapture : IScreenCapture
+{
+    private readonly int _width;
+    private readonly int _height;
+
+    public FixedSizeScreenCapture(int width, int height)
+    {
+        _width = width;
+        _height = height;
+    }
+
+    public Bitmap CaptureFrame() => new(_width, _height);
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -113,6 +127,7 @@ public class SessionServerTests
     {
         using var harness = new ServerHarness(new FailingThenWorkingScreenCapture(failures: 3));
         using var master = harness.ConnectMaster();
+        master.StartControl();
 
         var firstMessage = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
 
@@ -130,10 +145,71 @@ public class SessionServerTests
         var firstMessage = await Task.Run(() =>
         {
             using var master = harness.ConnectMaster();
+            master.StartControl();
             return master.Channel.Receive();
         }).WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(MessageType.FrameTile, firstMessage.Type);
+    }
+
+    [Fact]
+    public async Task RequestThumbnail_NoControlSession_RepliesWithTheScreenScaledDown()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(1920, 1080));
+        using var preview = harness.ConnectMaster();
+
+        var reply = await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.ThumbnailFrame, reply.Type);
+        using var thumbnail = TileCodec.DecodeTile(reply.Payload);
+        Assert.Equal(ThumbnailRenderer.MaxWidth, thumbnail.Width);
+        Assert.Equal(ThumbnailRenderer.MaxHeight, thumbnail.Height);
+    }
+
+    [Fact]
+    public async Task RequestThumbnail_WhileAnotherMasterIsControlling_StillReplies()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(640, 360));
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var preview = harness.ConnectMaster();
+
+        // Well under the 15 s a second *controlling* Master would wait for
+        // the slot, so this only passes if previews don't need it.
+        var reply = await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(MessageType.ThumbnailFrame, reply.Type);
+        Assert.NotEmpty(reply.Payload);
+    }
+
+    [Fact]
+    public async Task ControlConnection_WhilePreviewIsOpen_IsServed()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(640, 360));
+        using var preview = harness.ConnectMaster();
+        await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+
+        var firstMessage = await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(MessageType.FrameTile, firstMessage.Type);
+    }
+
+    [Fact]
+    public async Task RequestThumbnail_CaptureFails_RepliesEmptyAndKeepsTheConnectionOpen()
+    {
+        using var harness = new ServerHarness(new FailingThenWorkingScreenCapture(failures: int.MaxValue));
+        using var preview = harness.ConnectMaster();
+
+        var first = await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(5));
+        var second = await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.ThumbnailFrame, first.Type);
+        Assert.Empty(first.Payload);
+        Assert.Equal(MessageType.ThumbnailFrame, second.Type);
+        Assert.Empty(second.Payload);
     }
 
     private sealed class ServerHarness : IDisposable
@@ -197,6 +273,15 @@ public class SessionServerTests
         }
 
         public SecureChannel Channel { get; }
+
+        // What ViewControlWindow sends as soon as it opens.
+        public void StartControl() => Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+
+        public Message RequestThumbnail()
+        {
+            Channel.Send(new Message(MessageType.RequestThumbnail, Array.Empty<byte>()));
+            return Channel.Receive();
+        }
 
         public void Dispose()
         {
