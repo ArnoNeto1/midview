@@ -6,6 +6,8 @@ namespace Midview.Master;
 
 public sealed class ConnectionClient : IDisposable
 {
+    public const int SessionPort = 5901; // must match Midview.Session's listener
+
     private readonly SecureChannel _channel;
 
     private ConnectionClient(SecureChannel channel)
