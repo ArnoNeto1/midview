@@ -1,0 +1,72 @@
+MIDVIEW - PACOTE DE INSTALAÇÃO
+==============================
+
+Esta pasta instala o Midview no PC do professor e nas máquinas dos alunos.
+Copie a pasta inteira para um pendrive.
+
+O que tem aqui
+--------------
+  Instalar-Professor.cmd   instala o MidviewMaster no PC do professor
+  Instalar-Aluno.cmd       instala (ou atualiza) o Midview numa máquina de aluno
+  Desinstalar-Aluno.cmd    remove o Midview de uma máquina de aluno
+  trusted-masters.json     os professores autorizados (criado pelo MidviewMaster)
+  maquinas\                uma ficha por máquina instalada (criadas pelo instalador)
+  programa\                os programas e scripts; não mexa
+
+
+Passo a passo
+-------------
+1. No PC do professor, rode Instalar-Professor.cmd e abra
+   "Midview - Sala de aula" na Área de Trabalho.
+
+2. No MidviewMaster, clique em "Instalar nos alunos...", escolha esta pasta
+   e clique em "Autorizar este professor no pacote".
+
+3. Em cada máquina de aluno, rode Instalar-Aluno.cmd (ele pede a senha de
+   administrador). Ao terminar, a máquina deixa a ficha dela na pasta
+   maquinas. Não precisa de internet nem de .NET instalado.
+
+4. Volte ao PC do professor com o pendrive e, em "Instalar nos alunos...",
+   clique em "Importar máquinas instaladas". As máquinas aparecem na grade.
+
+
+Atualizar
+---------
+Gere o pacote novo por cima desta mesma pasta (installer\Gerar-Pacote.ps1
+-Output <esta pasta>): só os programas são trocados, trusted-masters.json e
+maquinas ficam. Depois rode Instalar-Aluno.cmd de novo em cada máquina: a
+identidade da máquina não muda, então não precisa importar de novo. Para o
+professor, rode Instalar-Professor.cmd de novo (com o MidviewMaster
+fechado).
+
+
+Mais de um professor
+--------------------
+Cada professor faz o passo 2 no próprio PC, com o mesmo pacote, antes de
+instalar nos alunos. Quem já está no pacote continua autorizado. Para tirar a
+autorização de alguém, apague trusted-masters.json, autorize de novo só quem
+deve continuar e reinstale nas máquinas.
+
+
+Se o IP das máquinas muda
+-------------------------
+Por padrão o MidviewMaster conecta pelo endereço IP de cada máquina. Se o
+roteador do laboratório troca os IPs, reserve um IP para cada máquina no
+roteador, ou marque "Conectar pelo nome do computador" antes de importar.
+Para conectar pelo nome, a rede precisa encontrar as máquinas pelo nome.
+
+
+Desinstalar
+-----------
+Desinstalar-Aluno.cmd desbloqueia a internet e os sites, reativa teclado e
+mouse, e remove o serviço e o programa. A identidade da máquina fica em
+C:\ProgramData\Midview, para uma reinstalação manter a mesma ficha. Para
+apagar tudo: abra um Prompt de Comando nesta pasta e rode
+  Desinstalar-Aluno.cmd -RemoverDados
+
+
+Onde fica cada coisa na máquina do aluno
+----------------------------------------
+  C:\Program Files\Midview      o programa (serviço MidviewAgent)
+  C:\ProgramData\Midview        identidade, professores autorizados, agent.log
+  Área de Trabalho do aluno     "Arquivos do professor" (arquivos recebidos)

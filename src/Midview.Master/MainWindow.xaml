@@ -6,6 +6,7 @@
     <DockPanel>
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#FF2D2D30">
             <Button Content="Adicionar / testar máquina" Click="OnAddMachineClicked" Padding="10,4" Margin="4" />
+            <Button Content="Instalar nos alunos..." Click="OnLabInstallClicked" Padding="10,4" Margin="4" />
             <Button Content="Enviar mensagem para a turma" Click="OnMessageClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Enviar arquivo para a turma" Click="OnFileClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Fechar programas da turma" Click="OnCloseAppsClassClicked" Padding="10,4" Margin="4" />
