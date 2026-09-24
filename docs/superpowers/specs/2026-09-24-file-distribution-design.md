@@ -24,7 +24,7 @@ Built on the classroom console and the teacher-message work.
   connection reset. The file then follows as `FileChunk` messages of up to
   256 KB, until exactly the declared size has arrived, and a second
   `CommandAck` reports the result: 1 plus the name it was saved under, or 0
-  plus why not. Maximum size 1 GiB.
+  plus why not (both acks carry a `CommandResult`). Maximum size 1 GiB.
 - **File names** (`FileInbox.SafeFileName`): only the last path segment is
   kept (`..\..\x.exe`, `C:\Windows\x.exe` → `x.exe`), characters Windows
   forbids — `:` included, which rules out drive letters and NTFS alternate
@@ -53,7 +53,9 @@ interrupted transfers, and choosing the destination folder per transfer.
 ## Testing
 
 - `FileTransferTests` (Protocol): header round trip (accents, empty file),
-  size out of range, missing name, invalid UTF-8, result round trip.
+  size out of range, missing name, invalid UTF-8. The ack's result layout
+  moved to `CommandResult` (shared with close programs) and is tested in
+  `CommandResultTests`.
 - `FileInboxTests` (Session, Windows-only): name sanitization cases
   (traversal, drive paths, streams, forbidden characters, trailing dots,
   reserved names, empty, too long), never overwriting, nothing left behind

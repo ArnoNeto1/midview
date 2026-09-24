@@ -53,7 +53,7 @@ public static class FileSender
     {
         var reply = channel.Receive();
         return reply.Type == MessageType.CommandAck
-            ? FileTransfer.DecodeResult(reply.Payload)
+            ? CommandResult.Decode(reply.Payload)
             : (false, $"resposta inesperada ({reply.Type})");
     }
 }

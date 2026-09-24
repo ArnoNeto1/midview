@@ -149,6 +149,38 @@ public class FakeChatWindow : IChatWindow
     public void ShowConversationEnded() => Ended = true;
 }
 
+// Records each "close programs" request and answers with fixed counts.
+public class FakeAppCloser : IAppCloser
+{
+    private readonly (int Asked, int Forced) _result;
+    private readonly List<bool> _calls = new();
+
+    public FakeAppCloser(int asked, int forced)
+    {
+        _result = (asked, forced);
+    }
+
+    public IReadOnlyList<bool> ForceFlags
+    {
+        get
+        {
+            lock (_calls)
+            {
+                return _calls.ToList();
+            }
+        }
+    }
+
+    public (int Asked, int Forced) CloseAll(bool force)
+    {
+        lock (_calls)
+        {
+            _calls.Add(force);
+        }
+        return _result;
+    }
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -431,12 +463,12 @@ public class SessionServerTests
         var result = await Task.Run(() =>
         {
             teacher.Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader("a.txt", 3)));
-            Assert.True(FileTransfer.DecodeResult(teacher.Channel.Receive().Payload).Saved);
+            Assert.True(CommandResult.Decode(teacher.Channel.Receive().Payload).Succeeded);
             teacher.Channel.Send(new Message(MessageType.FileChunk, new byte[] { 1, 2, 3, 4 }));
-            return FileTransfer.DecodeResult(teacher.Channel.Receive().Payload);
+            return CommandResult.Decode(teacher.Channel.Receive().Payload);
         }).WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.False(result.Saved);
+        Assert.False(result.Succeeded);
         Assert.Empty(Directory.GetFileSystemEntries(inbox.Directory));
     }
 
@@ -449,11 +481,97 @@ public class SessionServerTests
         var accepted = await Task.Run(() =>
         {
             teacher.Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader("a.txt", 3)));
-            return FileTransfer.DecodeResult(teacher.Channel.Receive().Payload);
+            return CommandResult.Decode(teacher.Channel.Receive().Payload);
         }).WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.False(accepted.Saved);
+        Assert.False(accepted.Succeeded);
         Assert.NotEmpty(accepted.Detail);
+    }
+
+    [Fact]
+    public async Task CloseApps_Ask_AsksWithoutForcing_AndSaysHowManyWindows()
+    {
+        var closer = new FakeAppCloser(asked: 3, forced: 0);
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("3 janela", result.Detail);
+        Assert.Equal(new[] { false }, closer.ForceFlags);
+    }
+
+    [Fact]
+    public async Task CloseApps_Force_SaysHowManyWereEndedByForce()
+    {
+        var closer = new FakeAppCloser(asked: 3, forced: 1);
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Force)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("1 programa(s) encerrado(s) à força", result.Detail);
+        Assert.Equal(new[] { true }, closer.ForceFlags);
+    }
+
+    [Fact]
+    public async Task CloseApps_NothingOpen_SaysSo()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: new FakeAppCloser(asked: 0, forced: 0));
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "nenhum programa para fechar"), result);
+    }
+
+    [Fact]
+    public async Task CloseApps_NoCloser_IsRefused()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(result.Succeeded);
+        Assert.NotEmpty(result.Detail);
+    }
+
+    [Theory]
+    [InlineData(new byte[0])]
+    [InlineData(new byte[] { 7 })]
+    [InlineData(new byte[] { 1, 1 })]
+    public async Task CloseApps_InvalidRequest_IsRefusedWithoutClosingAnything(byte[] payload)
+    {
+        var closer = new FakeAppCloser(asked: 3, forced: 0);
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.CloseApps, payload));
+            return CommandResult.Decode(teacher.Channel.Receive().Payload);
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(closer.ForceFlags);
+    }
+
+    [Fact]
+    public async Task CloseApps_WhileAnotherMasterIsControlling_StillRuns()
+    {
+        var closer = new FakeAppCloser(asked: 2, forced: 0);
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer);
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(result.Succeeded);
     }
 
     private sealed class TempInbox : IDisposable
@@ -499,7 +617,7 @@ public class SessionServerTests
 
         public ServerHarness(
             IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null,
-            FileInbox? fileInbox = null)
+            FileInbox? fileInbox = null, IAppCloser? appCloser = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -509,7 +627,7 @@ public class SessionServerTests
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
                 new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows, fileInbox);
+                messageDisplay, chatWindows, fileInbox, appCloser);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -564,13 +682,19 @@ public class SessionServerTests
         public ((bool Saved, string Detail) Accepted, (bool Saved, string Detail) Result) SendFile(string name, byte[] content)
         {
             Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader(name, content.Length)));
-            var accepted = FileTransfer.DecodeResult(Channel.Receive().Payload);
+            var accepted = CommandResult.Decode(Channel.Receive().Payload);
             for (var offset = 0; offset < content.Length; offset += FileTransfer.ChunkSize)
             {
                 var length = Math.Min(FileTransfer.ChunkSize, content.Length - offset);
                 Channel.Send(new Message(MessageType.FileChunk, content.AsSpan(offset, length).ToArray()));
             }
-            return (accepted, FileTransfer.DecodeResult(Channel.Receive().Payload));
+            return (accepted, CommandResult.Decode(Channel.Receive().Payload));
+        }
+
+        public (bool Succeeded, string Detail) CloseApps(CloseAppsMode mode)
+        {
+            Channel.Send(new Message(MessageType.CloseApps, new[] { (byte)mode }));
+            return CommandResult.Decode(Channel.Receive().Payload);
         }
 
         public Message RequestThumbnail()

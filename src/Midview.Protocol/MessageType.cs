@@ -40,4 +40,18 @@ public enum MessageType : byte
     // CommandAck (see FileTransfer for its payload).
     SendFile = 17,
     FileChunk = 18,
+
+    // Close the student's programs. One byte of payload (CloseAppsMode),
+    // answered with one CommandAck carrying a CommandResult.
+    CloseApps = 19,
+}
+
+public enum CloseAppsMode : byte
+{
+    // Like clicking each window's X: programs with unsaved work ask first.
+    Ask = 0,
+
+    // Ask first, then end whatever is still open after a short grace period
+    // -- unsaved work in those programs is lost.
+    Force = 1,
 }

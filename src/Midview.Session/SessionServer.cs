@@ -79,6 +79,7 @@ public sealed class SessionServer
     private readonly IMessageDisplay? _messageDisplay;
     private readonly IChatWindows? _chatWindows;
     private readonly FileInbox? _fileInbox;
+    private readonly IAppCloser? _appCloser;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -88,7 +89,8 @@ public sealed class SessionServer
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
-        IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null)
+        IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null,
+        IAppCloser? appCloser = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -99,6 +101,7 @@ public sealed class SessionServer
         _messageDisplay = messageDisplay;
         _chatWindows = chatWindows;
         _fileInbox = fileInbox;
+        _appCloser = appCloser;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -169,6 +172,13 @@ public sealed class SessionServer
         if (firstMessage.Type == MessageType.SendFile)
         {
             ReceiveFile(channel, firstMessage);
+            return;
+        }
+
+        if (firstMessage.Type == MessageType.CloseApps)
+        {
+            var (closed, detail) = CloseApps(firstMessage.Payload);
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(closed, detail)));
             return;
         }
 
@@ -297,14 +307,14 @@ public sealed class SessionServer
         }
 
         channel.Send(new Midview.Protocol.Message(
-            MessageType.CommandAck, FileTransfer.EncodeResult(refusal is null, refusal ?? string.Empty)));
+            MessageType.CommandAck, CommandResult.Encode(refusal is null, refusal ?? string.Empty)));
         if (refusal is not null)
         {
             return;
         }
 
         var (saved, detail) = SaveIncomingFile(channel, fileName, size);
-        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, FileTransfer.EncodeResult(saved, detail)));
+        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(saved, detail)));
 
         if (saved)
         {
@@ -335,6 +345,34 @@ public sealed class SessionServer
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return (false, $"não foi possível salvar o arquivo: {ex.Message}");
+        }
+    }
+
+    private (bool Closed, string Detail) CloseApps(byte[] payload)
+    {
+        if (_appCloser is null)
+        {
+            return (false, "esta máquina não fecha programas");
+        }
+        if (payload.Length != 1 || !Enum.IsDefined((CloseAppsMode)payload[0]))
+        {
+            return (false, "pedido inválido");
+        }
+
+        try
+        {
+            var (asked, forced) = _appCloser.CloseAll(force: (CloseAppsMode)payload[0] == CloseAppsMode.Force);
+            var detail = asked == 0 && forced == 0
+                ? "nenhum programa para fechar"
+                : forced == 0
+                    ? $"pedido de fechamento enviado a {asked} janela(s)"
+                    : $"pedido enviado a {asked} janela(s); {forced} programa(s) encerrado(s) à força";
+            return (true, detail);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Closing programs failed: {ex.Message}");
+            return (false, $"falhou: {ex.Message}");
         }
     }
 

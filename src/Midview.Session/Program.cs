@@ -59,6 +59,7 @@ var server = new SessionServer(
     new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)),
     new WinFormsMessageDisplay(),
     new WinFormsChatWindows(),
-    new FileInbox(FileInbox.DefaultDirectory));
+    new FileInbox(FileInbox.DefaultDirectory),
+    new WindowsAppCloser());
 
 server.Run(CancellationToken.None);
