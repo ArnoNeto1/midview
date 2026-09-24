@@ -1,6 +1,5 @@
 using System.IO;
 using System.Net.Sockets;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Midview.Protocol;
 
@@ -87,7 +86,7 @@ public sealed class ThumbnailPoller : IDisposable
 
                 if (!_stop.IsCancellationRequested)
                 {
-                    Unreachable?.Invoke(Describe(ex));
+                    Unreachable?.Invoke(FailureText.Status(ex));
                 }
             }
 
@@ -106,17 +105,4 @@ public sealed class ThumbnailPoller : IDisposable
         tcpClient.SendTimeout = ReplyTimeoutMs;
         return tcpClient;
     }
-
-    private static string Describe(Exception ex) => ex switch
-    {
-        // The machine is on, but nothing listens on the Session's port:
-        // usually nobody is logged in (Session only runs inside a login).
-        SocketException { SocketErrorCode: SocketError.ConnectionRefused } => "Sem usuário logado",
-        SocketException or OperationCanceledException => "Offline",
-        // Either side didn't trust the other's certificate: a wrong Session
-        // thumbprint here, or this Master missing from the machine's
-        // trusted-masters.json.
-        AuthenticationException => "Certificado recusado",
-        _ => "Sem resposta",
-    };
 }

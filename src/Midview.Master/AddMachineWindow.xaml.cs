@@ -130,7 +130,7 @@ public partial class AddMachineWindow : Window
         }
         catch (Exception ex)
         {
-            SiteBlockStatusTextBlock.Text = $"Falhou: {FailureText.Describe(ex)}";
+            SiteBlockStatusTextBlock.Text = $"Falhou: {FailureText.DescribeAgent(ex)}";
         }
     }
 }

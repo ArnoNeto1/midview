@@ -209,7 +209,11 @@ Where the implementation differs from, or fills in, the design above:
   (either side rejected the other's certificate: wrong Session thumbprint
   here, or this Master missing from the machine's `trusted-masters.json`),
   "Sem resposta" (anything else, e.g. a reply timeout). Any failure clears
-  the last thumbnail.
+  the last thumbnail. Later: "Nome não encontrado na rede" when a machine
+  saved by computer name doesn't resolve, and the same statuses (in
+  `FailureText`) now also word every window's per-machine results and
+  connection errors, instead of Windows' or .NET's own messages; only an
+  unexpected error keeps its technical text there.
 - **Timing:** poll every 3 s; connect timeout 5 s (Windows takes ~2 s to
   report a refused connection, and "refused" is what distinguishes "nobody
   logged in" from "offline"); reply timeout 10 s. Any failure drops the
