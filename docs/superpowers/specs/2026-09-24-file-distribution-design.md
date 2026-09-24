@@ -25,7 +25,8 @@ Built on the classroom console and the teacher-message work.
   256 KB, until exactly the declared size has arrived, and a second
   `CommandAck` reports the result: 1 plus the name it was saved under, or 0
   plus why not (both acks carry a `CommandResult`). Maximum size 1 GiB.
-- **File names** (`FileInbox.SafeFileName`): only the last path segment is
+- **File names** (`FileNames.Safe` in `Midview.Protocol`, named
+  `FileInbox.SafeFileName` until file collection reused it): only the last path segment is
   kept (`..\..\x.exe`, `C:\Windows\x.exe` → `x.exe`), characters Windows
   forbids — `:` included, which rules out drive letters and NTFS alternate
   streams — become `_`, trailing dots/spaces are dropped, reserved device
@@ -47,7 +48,8 @@ Built on the classroom console and the teacher-message work.
 
 ## Out of scope
 
-Collecting files back from students, folders (one file at a time), resuming
+Collecting files back from students (its own design:
+`2026-09-24-file-collection-design.md`), folders (one file at a time), resuming
 interrupted transfers, and choosing the destination folder per transfer.
 
 ## Testing
@@ -56,10 +58,11 @@ interrupted transfers, and choosing the destination folder per transfer.
   size out of range, missing name, invalid UTF-8. The ack's result layout
   moved to `CommandResult` (shared with close programs) and is tested in
   `CommandResultTests`.
-- `FileInboxTests` (Session, Windows-only): name sanitization cases
-  (traversal, drive paths, streams, forbidden characters, trailing dots,
-  reserved names, empty, too long), never overwriting, nothing left behind
-  when a transfer doesn't complete.
+- `FileNamesTests` (Protocol; in `FileInboxTests` until the rules moved):
+  name sanitization cases (traversal, drive paths, streams, forbidden
+  characters, trailing dots, reserved names, empty, too long).
+- `FileInboxTests` (Session, Windows-only): never overwriting, nothing left
+  behind when a transfer doesn't complete.
 - `SessionServerTests` (Windows-only): a multi-chunk file is saved and the
   student notified; more bytes than declared is discarded; no inbox is
   refused before anything is streamed.

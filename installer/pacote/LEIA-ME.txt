@@ -70,3 +70,4 @@ Onde fica cada coisa na máquina do aluno
   C:\Program Files\Midview      o programa (serviço MidviewAgent)
   C:\ProgramData\Midview        identidade, professores autorizados, agent.log
   Área de Trabalho do aluno     "Arquivos do professor" (arquivos recebidos)
+                                "Entregar ao professor" (o que o professor recolhe)

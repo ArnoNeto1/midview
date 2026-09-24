@@ -1,0 +1,22 @@
+<Window x:Class="Midview.Master.CollectFilesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Recolher arquivos" Height="420" Width="520"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Traz o que cada aluno colocou na pasta &quot;Entregar ao professor&quot; da Área de Trabalho (subpastas também). Os arquivos continuam no aluno, que recebe um aviso. Até 1000 arquivos e 500 MB por máquina." />
+            <DockPanel Margin="0,0,0,8">
+                <Button x:Name="OpenFolderButton" DockPanel.Dock="Right" Content="Abrir pasta" Click="OnOpenFolderClicked"
+                        IsEnabled="False" Padding="10,4" Margin="8,0,0,0" />
+                <Button x:Name="CollectButton" Content="Recolher" Click="OnCollectClicked" Padding="10,4" />
+            </DockPanel>
+            <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

@@ -9,6 +9,7 @@
             <Button Content="Instalar nos alunos..." Click="OnLabInstallClicked" Padding="10,4" Margin="4" />
             <Button Content="Enviar mensagem para a turma" Click="OnMessageClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Enviar arquivo para a turma" Click="OnFileClassClicked" Padding="10,4" Margin="4" />
+            <Button Content="Recolher arquivos da turma" Click="OnCollectClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Fechar programas da turma" Click="OnCloseAppsClassClicked" Padding="10,4" Margin="4" />
         </StackPanel>
         <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Bottom" Margin="8,4" TextWrapping="Wrap" />
@@ -32,6 +33,7 @@
                                         <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
                                         <MenuItem Header="Conversar (chat)..." Click="OnChatMachineClicked" />
                                         <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
+                                        <MenuItem Header="Recolher arquivos..." Click="OnCollectMachineClicked" />
                                         <MenuItem Header="Fechar programas..." Click="OnCloseAppsMachineClicked" />
                                         <MenuItem Header="Testar / bloquear sites..." Click="OnEditMachineClicked" />
                                         <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />

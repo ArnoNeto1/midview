@@ -15,10 +15,11 @@ public static class FileTransfer
     // Well under MessageFramer.MaxMessageLength.
     public const int ChunkSize = 256 * 1024;
 
-    private const int MaxNameBytes = 1024;
+    public const int MaxNameBytes = 1024;
 
     // SendFile payload: file size (int64, big-endian), then the file name
-    // (UTF-8) -- just a name, never a path; the receiver sanitizes it anyway.
+    // (UTF-8) -- just a name from the teacher, a relative path when
+    // collecting (see FileCollection); the receiver sanitizes it either way.
     public static byte[] EncodeHeader(string fileName, long size)
     {
         var name = Encoding.UTF8.GetBytes(fileName);
