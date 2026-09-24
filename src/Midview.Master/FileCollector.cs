@@ -84,10 +84,10 @@ public static class FileCollector
         {
             return new CollectResult(false, saved, savedBytes, Join(ex.Message, notSaved));
         }
-        catch (IOException ex)
+        catch (IOException)
         {
-            // The connection dropped (the file being received is discarded).
-            return new CollectResult(false, saved, savedBytes, Join($"a conexão caiu: {FailureText.Describe(ex)}", notSaved));
+            // The connection dropped or timed out (the file being received is discarded).
+            return new CollectResult(false, saved, savedBytes, Join("a conexão caiu", notSaved));
         }
     }
 
