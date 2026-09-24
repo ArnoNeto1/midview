@@ -151,6 +151,9 @@ public partial class MainWindow : Window
     private void OpenAddMachineWindow(KnownMachine? existing) =>
         new AddMachineWindow(_masterCertificate, SaveMachine, existing) { Owner = this }.Show();
 
+    private void OnLabInstallClicked(object sender, RoutedEventArgs e) =>
+        new LabInstallWindow(_masterCertificate.Thumbprint, ImportMachines) { Owner = this }.Show();
+
     private void OnRemoveMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)
@@ -205,6 +208,39 @@ public partial class MainWindow : Window
         InsertTile(position, updated);
         UpdateEmptyHint();
         SaveRoster();
+    }
+
+    // Called by LabInstallWindow. As in SaveMachine, the same name means the
+    // same machine: it's replaced in place, and new ones go at the end. The
+    // file is written once for the whole import; a failure to write it
+    // propagates for LabInstallWindow to report.
+    private (int Added, int Updated, int Unchanged) ImportMachines(IReadOnlyList<KnownMachine> machines)
+    {
+        int added = 0, updated = 0, unchanged = 0;
+        foreach (var machine in machines)
+        {
+            var index = _tiles.ToList().FindIndex(tile =>
+                string.Equals(tile.Machine.Name, machine.Name, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                InsertTile(_tiles.Count, machine);
+                added++;
+            }
+            else if (_tiles[index].Machine == machine)
+            {
+                unchanged++;
+            }
+            else
+            {
+                RemoveTileAt(index);
+                InsertTile(index, machine);
+                updated++;
+            }
+        }
+
+        UpdateEmptyHint();
+        SaveRoster();
+        return (added, updated, unchanged);
     }
 
     // Never keeps Master from starting: at worst the grid starts empty and

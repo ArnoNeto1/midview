@@ -1,0 +1,37 @@
+<Window x:Class="Midview.Master.LabInstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Instalar nos alunos" Height="620" Width="540"
+        WindowStartupLocation="CenterOwner">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="16">
+            <TextBlock Text="1. Pacote de instalação" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Copie a pasta Midview-Instalacao (gerada por installer\Gerar-Pacote.ps1) para um pendrive e escolha essa pasta aqui." />
+            <DockPanel Margin="0,0,0,12">
+                <Button DockPanel.Dock="Right" Content="Escolher pasta..." Click="OnChoosePackageClicked" Padding="10,4" Margin="8,0,0,0" />
+                <TextBlock x:Name="PackageTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhuma pasta escolhida." />
+            </DockPanel>
+
+            <TextBlock Text="2. Autorizar este professor" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Grava a identificação deste MidviewMaster no pacote: toda máquina instalada com ele aceita este professor. Autorizações de outros professores que já estejam no pacote são mantidas." />
+            <Button x:Name="AuthorizeButton" Content="Autorizar este professor no pacote" Click="OnAuthorizeClicked" IsEnabled="False" Padding="10,4" />
+            <TextBlock x:Name="AuthorizeResultTextBlock" TextWrapping="Wrap" Margin="0,4,0,12" />
+
+            <TextBlock Text="3. Instalar em cada máquina" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,12"
+                       Text="Em cada máquina de aluno, rode Instalar-Aluno.cmd do pendrive (pede a senha de administrador). Cada máquina deixa uma ficha na pasta &quot;maquinas&quot; do pendrive. Rodar de novo atualiza a instalação." />
+
+            <TextBlock Text="4. Importar as máquinas" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Coloca na lista da sala as máquinas instaladas (uma com o mesmo nome é atualizada)." />
+            <CheckBox x:Name="UseComputerNameCheckBox" Margin="0,0,0,8">
+                <TextBlock TextWrapping="Wrap"
+                           Text="Conectar pelo nome do computador em vez do endereço IP (use se os IPs do laboratório mudam; o nome precisa ser encontrado na rede)." />
+            </CheckBox>
+            <Button x:Name="ImportButton" Content="Importar máquinas instaladas" Click="OnImportClicked" IsEnabled="False" Padding="10,4" />
+            <TextBlock x:Name="ImportResultTextBlock" TextWrapping="Wrap" Margin="0,4,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

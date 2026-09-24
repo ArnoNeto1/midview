@@ -10,6 +10,16 @@ public sealed class AgentServerWorker : BackgroundService
     public const int AgentPort = 28900;
     public const int SessionPort = 5901;
 
+    private const string AgentInboundRuleName = "MidviewAgentInbound";
+    private const string SessionInboundRuleName = "MidviewSessionInbound";
+
+    // The inbound openings added on every start; the uninstaller removes them.
+    public static readonly IReadOnlyList<string> InboundRuleNames = new[] { AgentInboundRuleName, SessionInboundRuleName };
+
+    public static string SiteBlockStatePath => Path.Combine(AgentDataDirectory.DirectoryPath, "site-block-state.json");
+
+    public static string HostsFilePath => Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts");
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -18,15 +28,15 @@ public sealed class AgentServerWorker : BackgroundService
 
             var certificate = AgentIdentity.LoadOrCreate(AgentIdentity.DefaultCertificatePath);
 
-            EnsureInboundFirewallRuleExists("MidviewAgentInbound", AgentPort);
+            EnsureInboundFirewallRuleExists(AgentInboundRuleName, AgentPort);
             // Session can't add its own rule: it runs as a standard user, and
             // Windows' "allow access?" prompt needs an administrator.
-            EnsureInboundFirewallRuleExists("MidviewSessionInbound", SessionPort);
+            EnsureInboundFirewallRuleExists(SessionInboundRuleName, SessionPort);
 
             var trustedMasters = TrustedMastersFile.Load(Path.Combine(programDataDir, "trusted-masters.json"));
-            var statePath = Path.Combine(programDataDir, "site-block-state.json");
+            var statePath = SiteBlockStatePath;
             var state = LoadStateOrStartEmpty(statePath);
-            var hostsFilePath = Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts");
+            var hostsFilePath = HostsFilePath;
             var firewallController = new NetshFirewallController(AgentPort, SessionPort);
             var commandHandler = new SiteBlockCommandHandler(state, statePath, hostsFilePath, firewallController);
 
@@ -95,7 +105,7 @@ public sealed class AgentServerWorker : BackgroundService
             "protocol=TCP", $"localport={port}");
     }
 
-    private static void RunNetsh(params string[] args)
+    internal static void RunNetsh(params string[] args)
     {
         var startInfo = new System.Diagnostics.ProcessStartInfo("netsh.exe")
         {

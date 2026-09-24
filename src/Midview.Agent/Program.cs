@@ -3,6 +3,16 @@ using Microsoft.Extensions.Hosting;
 using Midview.Agent;
 using Midview.Protocol;
 
+// Run by the installer scripts (installer/), not by the service.
+if (args is [InstallCommands.PrepareInstallArgument])
+{
+    return InstallCommands.RunPrepareInstall();
+}
+if (args is [InstallCommands.UninstallCleanupArgument])
+{
+    return InstallCommands.RunUninstallCleanup();
+}
+
 // Deployed today as loose files side by side on each lab machine (no
 // separate per-component folders), so Session.exe lives right next to
 // this exe rather than in a sibling directory.
@@ -29,6 +39,7 @@ var host = Host.CreateDefaultBuilder(args)
     .Build();
 
 host.Run();
+return 0;
 
 // Each step isolated from the others: none of them may keep the Agent from
 // starting (and so from listening for the teacher's commands).

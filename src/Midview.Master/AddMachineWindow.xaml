@@ -5,7 +5,7 @@
         WindowStartupLocation="CenterOwner">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="16">
-            <TextBlock Text="Thumbprint deste MidviewMaster (cadastre uma vez no trusted-masters.json de cada máquina):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <TextBlock Text="Thumbprint deste MidviewMaster (o instalador já o autoriza em cada máquina: veja &quot;Instalar nos alunos...&quot;):" Margin="0,0,0,4" TextWrapping="Wrap" />
             <TextBox x:Name="MyThumbprintTextBlock" IsReadOnly="True" Margin="0,0,0,8" />
             <TextBlock Text="Para autorizar o PC de outro professor como este mesmo Master, copie este arquivo para o mesmo caminho lá (mesmo thumbprint, nenhuma máquina do laboratório precisa ser alterada):" Margin="0,0,0,4" TextWrapping="Wrap" FontSize="11" Foreground="Gray" />
             <TextBox x:Name="KeyFilePathTextBlock" IsReadOnly="True" Margin="0,0,0,8" FontSize="11" />
@@ -16,7 +16,7 @@
             <TextBox x:Name="NameTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
             <TextBlock Text="Endereço da máquina:" Margin="0,0,0,4" />
             <TextBox x:Name="HostAddressTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
-            <TextBlock Text="Thumbprint da Session (está no agent.log da máquina):" Margin="0,0,0,4" TextWrapping="Wrap" />
+            <TextBlock Text="Thumbprint da Session (na ficha da máquina, na pasta maquinas do pacote de instalação, ou no agent.log da máquina):" Margin="0,0,0,4" TextWrapping="Wrap" />
             <TextBox x:Name="ThumbprintTextBox" Margin="0,0,0,8" TextChanged="OnRosterFieldChanged" />
             <Button Content="Conectar (abre o controle total)" Click="OnConnectClicked" />
             <TextBlock x:Name="ConnectStatusTextBlock" Margin="0,4,0,8" TextWrapping="Wrap" />
