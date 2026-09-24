@@ -13,8 +13,6 @@ namespace Midview.Master;
 // here). Still usable for one-off connections to machines never saved.
 public partial class AddMachineWindow : Window
 {
-    private const int AgentServerWorkerAgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
-
     private readonly X509Certificate2 _masterCertificate;
     private readonly Action<KnownMachine?, KnownMachine> _saveToRoster;
 
@@ -125,7 +123,7 @@ public partial class AddMachineWindow : Window
         try
         {
             var success = await Task.Run(() => CommandClient.SendCommand(
-                hostAddress, AgentServerWorkerAgentPort, thumbprint, _masterCertificate, commandType, payload));
+                hostAddress, ConnectionClient.AgentPort, thumbprint, _masterCertificate, commandType, payload));
             SiteBlockStatusTextBlock.Text = success ? "OK" : "Falhou";
         }
         catch (Exception ex)

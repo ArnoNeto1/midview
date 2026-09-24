@@ -139,6 +139,27 @@ public partial class MainWindow : Window
     private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
         new CloseAppsWindow(targets, _masterCertificate) { Owner = this }.Show();
 
+    private void OnPowerClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para desligar.";
+            return;
+        }
+        OpenPowerWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    private void OnPowerMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenPowerWindow(new[] { tile.Machine });
+        }
+    }
+
+    private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets) =>
+        new PowerWindow(targets, _masterCertificate) { Owner = this }.Show();
+
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)

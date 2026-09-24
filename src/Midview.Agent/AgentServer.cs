@@ -14,15 +14,17 @@ public sealed class AgentServer
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
     private readonly SiteBlockCommandHandler _commandHandler;
+    private readonly PowerCommandHandler? _powerHandler;
 
     public AgentServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
-        SiteBlockCommandHandler commandHandler)
+        SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
         _commandHandler = commandHandler;
+        _powerHandler = powerHandler;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -68,6 +70,17 @@ public sealed class AgentServer
         client.SendTimeout = TimeoutMs;
         using var channel = SecureChannel.AuthenticateAsServer(tcpClient, _serverCertificate, _masterTrustStore);
         var message = channel.Receive();
+
+        // Power commands say what happened (a CommandResult, whose first
+        // byte is the same 1/0 the site-blocking commands answer with).
+        if (message.Type == MessageType.Power)
+        {
+            var (succeeded, detail) = _powerHandler?.Handle(message.Payload)
+                ?? (false, "esta máquina não aceita desligamento");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
         var success = _commandHandler.Handle(message.Type, message.Payload);
         channel.Send(new Message(MessageType.CommandAck, new[] { (byte)(success ? 1 : 0) }));
     }

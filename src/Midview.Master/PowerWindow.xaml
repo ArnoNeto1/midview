@@ -1,0 +1,30 @@
+<Window x:Class="Midview.Master.PowerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Desligar ou reiniciar" Height="480" Width="500"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="O Windows mostra ao aluno um aviso com a contagem. Quando o tempo acaba, os programas abertos são fechados sem salvar. Máquinas sem ninguém logado também desligam." />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <RadioButton x:Name="ShutdownRadioButton" GroupName="Action" IsChecked="True" Content="Desligar" Margin="0,0,16,0" Checked="OnActionChanged" />
+                <RadioButton x:Name="RestartRadioButton" GroupName="Action" Content="Reiniciar" Checked="OnActionChanged" />
+            </StackPanel>
+            <RadioButton x:Name="OneMinuteRadioButton" GroupName="Delay" IsChecked="True" Content="Avisar o aluno e esperar 1 minuto" Margin="0,0,0,4" />
+            <RadioButton x:Name="FiveMinutesRadioButton" GroupName="Delay" Content="Avisar o aluno e esperar 5 minutos" Margin="0,0,0,4" />
+            <RadioButton x:Name="NowRadioButton" GroupName="Delay" Content="Agora, sem esperar" Margin="0,0,0,8" />
+            <DockPanel>
+                <Button x:Name="CancelShutdownButton" DockPanel.Dock="Right" Content="Cancelar desligamento" Click="OnCancelShutdownClicked"
+                        Padding="10,4" Margin="8,0,0,0"
+                        ToolTip="Cancela, nas mesmas máquinas, um desligamento ou reinício que ainda está na contagem." />
+                <Button x:Name="RunButton" Content="Desligar" Click="OnRunClicked" Padding="10,4" />
+            </DockPanel>
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

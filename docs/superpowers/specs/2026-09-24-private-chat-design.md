@@ -15,8 +15,8 @@ console and the teacher-message work
 - **Teacher-initiated only.** The Master never listens for connections
   (every connection goes Master → machine), so a student can't start a
   conversation; they can reply for as long as the teacher's side is open.
-  Student-initiated "raise hand" would need the Master to listen and is out
-  of scope here.
+  Student-initiated "raise hand" would need the Master to listen, and was
+  decided against (2026-09-24): it is not planned.
 - **Protocol:** a connection whose first message is `ChatOpen` stays open
   for the whole conversation. `ChatText` (UTF-8, same rules as
   `TextMessage`: trimmed, non-empty, ≤ 2000 characters — renamed from
@@ -47,8 +47,9 @@ console and the teacher-message work
 
 ## Out of scope
 
-Student-initiated conversations, group chat, chat history kept across
-conversations, file sharing in the chat.
+Student-initiated conversations and "raise hand" (decided against, not
+planned), group chat, chat history kept across conversations, file sharing
+in the chat.
 
 ## Testing
 

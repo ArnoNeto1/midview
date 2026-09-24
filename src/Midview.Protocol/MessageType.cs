@@ -49,6 +49,10 @@ public enum MessageType : byte
     // the Session answers with SendFile/FileChunk messages, one file after
     // another, then one CommandAck (see FileCollection).
     CollectFiles = 20,
+
+    // An Agent command: shut down, restart, or call either off (see
+    // PowerCommand). Answered with one CommandAck carrying a CommandResult.
+    Power = 21,
 }
 
 public enum CloseAppsMode : byte
