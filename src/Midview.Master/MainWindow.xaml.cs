@@ -76,6 +76,27 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnFileClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para receber o arquivo.";
+            return;
+        }
+        OpenSendFileWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    private void OnFileMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenSendFileWindow(new[] { tile.Machine });
+        }
+    }
+
+    private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
+        new SendFileWindow(targets, _masterCertificate) { Owner = this }.Show();
+
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)

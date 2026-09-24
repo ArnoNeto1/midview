@@ -7,6 +7,7 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#FF2D2D30">
             <Button Content="Adicionar / testar máquina" Click="OnAddMachineClicked" Padding="10,4" Margin="4" />
             <Button Content="Enviar mensagem para a turma" Click="OnMessageClassClicked" Padding="10,4" Margin="4" />
+            <Button Content="Enviar arquivo para a turma" Click="OnFileClassClicked" Padding="10,4" Margin="4" />
         </StackPanel>
         <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Bottom" Margin="8,4" TextWrapping="Wrap" />
         <Grid Background="#FFF0F0F0">
@@ -28,6 +29,7 @@
                                     <ContextMenu>
                                         <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
                                         <MenuItem Header="Conversar (chat)..." Click="OnChatMachineClicked" />
+                                        <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
                                         <MenuItem Header="Testar / bloquear sites..." Click="OnEditMachineClicked" />
                                         <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                     </ContextMenu>

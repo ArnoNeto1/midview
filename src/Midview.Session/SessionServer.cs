@@ -78,6 +78,7 @@ public sealed class SessionServer
     private readonly InputLockManager _inputLockManager;
     private readonly IMessageDisplay? _messageDisplay;
     private readonly IChatWindows? _chatWindows;
+    private readonly FileInbox? _fileInbox;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -87,7 +88,7 @@ public sealed class SessionServer
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
-        IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null)
+        IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -97,6 +98,7 @@ public sealed class SessionServer
         _inputLockManager = inputLockManager;
         _messageDisplay = messageDisplay;
         _chatWindows = chatWindows;
+        _fileInbox = fileInbox;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -160,6 +162,13 @@ public sealed class SessionServer
         if (firstMessage.Type == MessageType.RequestThumbnail)
         {
             ServePreview(channel, firstMessage, cancellationToken);
+            return;
+        }
+
+        // Like messages, files are one-shot and never need the control slot.
+        if (firstMessage.Type == MessageType.SendFile)
+        {
+            ReceiveFile(channel, firstMessage);
             return;
         }
 
@@ -263,6 +272,81 @@ public sealed class SessionServer
         finally
         {
             window.ShowConversationEnded();
+        }
+    }
+
+    // Accepted or refused up front (a first CommandAck), before the Master
+    // streams anything -- a refusal sent mid-stream would likely be lost to
+    // a connection reset. A second CommandAck reports how it ended.
+    private void ReceiveFile(SecureChannel channel, Midview.Protocol.Message header)
+    {
+        string? refusal;
+        var fileName = string.Empty;
+        long size = 0;
+        if (_fileInbox is null)
+        {
+            refusal = "esta máquina não recebe arquivos";
+        }
+        else if (!FileTransfer.TryDecodeHeader(header.Payload, out fileName, out size))
+        {
+            refusal = "pedido de envio inválido";
+        }
+        else
+        {
+            refusal = _fileInbox.RefusalFor(size);
+        }
+
+        channel.Send(new Midview.Protocol.Message(
+            MessageType.CommandAck, FileTransfer.EncodeResult(refusal is null, refusal ?? string.Empty)));
+        if (refusal is not null)
+        {
+            return;
+        }
+
+        var (saved, detail) = SaveIncomingFile(channel, fileName, size);
+        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, FileTransfer.EncodeResult(saved, detail)));
+
+        if (saved)
+        {
+            TryNotify($"O professor enviou o arquivo \"{detail}\".{Environment.NewLine}" +
+                      $"Ele foi salvo em: {_fileInbox!.DirectoryPath}");
+        }
+    }
+
+    private (bool Saved, string Detail) SaveIncomingFile(SecureChannel channel, string fileName, long size)
+    {
+        try
+        {
+            using var incoming = _fileInbox!.Begin(fileName);
+            long received = 0;
+            while (received < size)
+            {
+                var chunk = channel.Receive();
+                if (chunk.Type != MessageType.FileChunk || chunk.Payload.Length == 0
+                    || received + chunk.Payload.Length > size)
+                {
+                    return (false, "a transferência chegou incompleta ou corrompida");
+                }
+                incoming.Write(chunk.Payload);
+                received += chunk.Payload.Length;
+            }
+            return (true, incoming.Complete());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (false, $"não foi possível salvar o arquivo: {ex.Message}");
+        }
+    }
+
+    private void TryNotify(string text)
+    {
+        try
+        {
+            _messageDisplay?.Show(text);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Showing a notification failed: {ex.Message}");
         }
     }
 

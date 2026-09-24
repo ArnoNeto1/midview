@@ -403,6 +403,80 @@ public class SessionServerTests
         await WaitUntil(() => chats.Opened.Count == 1);
     }
 
+    [Fact]
+    public async Task SendFile_IsSavedInTheInbox_AndTheStudentIsNotified()
+    {
+        using var inbox = new TempInbox();
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display, fileInbox: inbox.Inbox);
+        using var teacher = harness.ConnectMaster();
+        var content = Enumerable.Range(0, FileTransfer.ChunkSize + 1000).Select(i => (byte)i).ToArray();
+
+        var (accepted, result) = await Task.Run(() => teacher.SendFile("Exercício 1.pdf", content)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(accepted.Saved);
+        Assert.Equal((true, "Exercício 1.pdf"), result);
+        Assert.Equal(content, File.ReadAllBytes(Path.Combine(inbox.Directory, "Exercício 1.pdf")));
+        Assert.Single(display.Shown);
+        Assert.Contains("Exercício 1.pdf", display.Shown[0]);
+    }
+
+    [Fact]
+    public async Task SendFile_MoreBytesThanDeclared_IsDiscarded()
+    {
+        using var inbox = new TempInbox();
+        using var harness = new ServerHarness(new CountingScreenCapture(), fileInbox: inbox.Inbox);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader("a.txt", 3)));
+            Assert.True(FileTransfer.DecodeResult(teacher.Channel.Receive().Payload).Saved);
+            teacher.Channel.Send(new Message(MessageType.FileChunk, new byte[] { 1, 2, 3, 4 }));
+            return FileTransfer.DecodeResult(teacher.Channel.Receive().Payload);
+        }).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(result.Saved);
+        Assert.Empty(Directory.GetFileSystemEntries(inbox.Directory));
+    }
+
+    [Fact]
+    public async Task SendFile_NoInbox_IsRefusedBeforeAnythingIsStreamed()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var accepted = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader("a.txt", 3)));
+            return FileTransfer.DecodeResult(teacher.Channel.Receive().Payload);
+        }).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(accepted.Saved);
+        Assert.NotEmpty(accepted.Detail);
+    }
+
+    private sealed class TempInbox : IDisposable
+    {
+        public TempInbox()
+        {
+            Directory = Path.Combine(Path.GetTempPath(), $"midview-inbox-{Guid.NewGuid():N}");
+            Inbox = new FileInbox(Directory);
+        }
+
+        public string Directory { get; }
+
+        public FileInbox Inbox { get; }
+
+        public void Dispose()
+        {
+            if (System.IO.Directory.Exists(Directory))
+            {
+                System.IO.Directory.Delete(Directory, recursive: true);
+            }
+        }
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
@@ -424,7 +498,8 @@ public class SessionServerTests
             SelfSignedCertificate.Create("master-under-test");
 
         public ServerHarness(
-            IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null)
+            IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null,
+            FileInbox? fileInbox = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -434,7 +509,7 @@ public class SessionServerTests
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
                 new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows);
+                messageDisplay, chatWindows, fileInbox);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -484,6 +559,18 @@ public class SessionServerTests
         {
             Channel.Send(new Message(MessageType.ShowMessage, TextMessage.Encode(text)));
             return Channel.Receive();
+        }
+
+        public ((bool Saved, string Detail) Accepted, (bool Saved, string Detail) Result) SendFile(string name, byte[] content)
+        {
+            Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader(name, content.Length)));
+            var accepted = FileTransfer.DecodeResult(Channel.Receive().Payload);
+            for (var offset = 0; offset < content.Length; offset += FileTransfer.ChunkSize)
+            {
+                var length = Math.Min(FileTransfer.ChunkSize, content.Length - offset);
+                Channel.Send(new Message(MessageType.FileChunk, content.AsSpan(offset, length).ToArray()));
+            }
+            return (accepted, FileTransfer.DecodeResult(Channel.Receive().Payload));
         }
 
         public Message RequestThumbnail()

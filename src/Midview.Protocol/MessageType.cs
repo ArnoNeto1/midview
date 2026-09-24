@@ -33,4 +33,11 @@ public enum MessageType : byte
     // nobody is typing.
     ChatOpen = 15,
     ChatText = 16,
+
+    // A file from the teacher. The connection opens with SendFile (a
+    // FileTransfer header: size and name), then carries FileChunk messages
+    // until exactly that many bytes have arrived, and ends with one
+    // CommandAck (see FileTransfer for its payload).
+    SendFile = 17,
+    FileChunk = 18,
 }
