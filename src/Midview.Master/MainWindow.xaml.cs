@@ -97,6 +97,27 @@ public partial class MainWindow : Window
     private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
         new SendFileWindow(targets, _masterCertificate) { Owner = this }.Show();
 
+    private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para fechar programas.";
+            return;
+        }
+        OpenCloseAppsWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    private void OnCloseAppsMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenCloseAppsWindow(new[] { tile.Machine });
+        }
+    }
+
+    private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
+        new CloseAppsWindow(targets, _masterCertificate) { Owner = this }.Show();
+
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)

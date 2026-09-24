@@ -1,0 +1,26 @@
+<Window x:Class="Midview.Master.CloseAppsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Fechar programas" Height="400" Width="500"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Fecha os programas abertos pelo aluno. A área de trabalho, a barra de tarefas e o Midview nunca são fechados." />
+            <RadioButton x:Name="AskRadioButton" GroupName="Mode" IsChecked="True" Margin="0,0,0,4">
+                <TextBlock TextWrapping="Wrap"
+                           Text="Pedir para fechar: como clicar no X de cada janela. Programas com trabalho não salvo perguntam ao aluno antes." />
+            </RadioButton>
+            <RadioButton x:Name="ForceRadioButton" GroupName="Mode" Margin="0,0,0,8">
+                <TextBlock TextWrapping="Wrap"
+                           Text="Forçar: pede para fechar e, após 10 segundos, encerra o que ainda estiver aberto. Trabalho não salvo é perdido." />
+            </RadioButton>
+            <Button x:Name="CloseButton" Content="Fechar programas" Click="OnCloseClicked" Padding="10,4" />
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

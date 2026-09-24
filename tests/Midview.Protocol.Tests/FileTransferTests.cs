@@ -46,12 +46,4 @@ public class FileTransferTests
 
         Assert.False(FileTransfer.TryDecodeHeader(header, out _, out _));
     }
-
-    [Fact]
-    public void Result_RoundTrips()
-    {
-        Assert.Equal((true, "notas (2).pdf"), FileTransfer.DecodeResult(FileTransfer.EncodeResult(true, "notas (2).pdf")));
-        Assert.Equal((false, "sem espaço"), FileTransfer.DecodeResult(FileTransfer.EncodeResult(false, "sem espaço")));
-        Assert.Equal((false, string.Empty), FileTransfer.DecodeResult(Array.Empty<byte>()));
-    }
 }

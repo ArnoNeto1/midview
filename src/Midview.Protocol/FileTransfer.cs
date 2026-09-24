@@ -3,8 +3,9 @@ using System.Text;
 
 namespace Midview.Protocol;
 
-// Wire format for SendFile / FileChunk and the CommandAck that ends a
-// transfer.
+// Wire format for SendFile / FileChunk. Both CommandAcks of a transfer
+// (accepted or refused, then saved or not) carry a CommandResult: on
+// success, the detail is the name the file was saved under.
 public static class FileTransfer
 {
     // Plenty for what a teacher hands out (documents, images, installers),
@@ -52,20 +53,4 @@ public static class FileTransfer
         }
         return fileName.Trim().Length > 0;
     }
-
-    // The CommandAck that ends a transfer: 1 or 0, then UTF-8 detail -- the
-    // name the file was saved under, or why it wasn't.
-    public static byte[] EncodeResult(bool saved, string detail)
-    {
-        var text = Encoding.UTF8.GetBytes(detail);
-        var result = new byte[1 + text.Length];
-        result[0] = (byte)(saved ? 1 : 0);
-        text.CopyTo(result, 1);
-        return result;
-    }
-
-    public static (bool Saved, string Detail) DecodeResult(byte[] payload) =>
-        payload.Length == 0
-            ? (false, string.Empty)
-            : (payload[0] == 1, Encoding.UTF8.GetString(payload, 1, payload.Length - 1));
 }
