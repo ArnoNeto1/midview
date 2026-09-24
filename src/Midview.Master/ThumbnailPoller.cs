@@ -15,10 +15,9 @@ public sealed class ThumbnailPoller : IDisposable
 {
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
 
-    // Without this, an offline machine takes Windows' own TCP connect
-    // timeout (~21 s) to show up as offline. Not much shorter, though:
-    // Windows retries a refused connection for ~2 s before reporting it,
-    // and "refused" is what tells "nobody logged in" apart from "offline".
+    // Not much shorter than this: Windows retries a refused connection for
+    // ~2 s before reporting it, and "refused" is what tells "nobody logged
+    // in" apart from "offline".
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
     private const int ReplyTimeoutMs = 10_000;
 
@@ -101,24 +100,11 @@ public sealed class ThumbnailPoller : IDisposable
 
     private TcpClient ConnectTcp()
     {
-        var tcpClient = new TcpClient();
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
-            timeout.CancelAfter(ConnectTimeout);
-            tcpClient.ConnectAsync(_machine.HostAddress, _port, timeout.Token)
-                .AsTask().GetAwaiter().GetResult();
-
-            tcpClient.NoDelay = true;
-            tcpClient.ReceiveTimeout = ReplyTimeoutMs;
-            tcpClient.SendTimeout = ReplyTimeoutMs;
-            return tcpClient;
-        }
-        catch
-        {
-            tcpClient.Dispose();
-            throw;
-        }
+        var tcpClient = TcpConnect.WithTimeout(_machine.HostAddress, _port, ConnectTimeout, _stop.Token);
+        tcpClient.NoDelay = true;
+        tcpClient.ReceiveTimeout = ReplyTimeoutMs;
+        tcpClient.SendTimeout = ReplyTimeoutMs;
+        return tcpClient;
     }
 
     private static string Describe(Exception ex) => ex switch

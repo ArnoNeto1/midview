@@ -14,8 +14,9 @@ for the whole class or for one machine. Built on the classroom console
 
 - **Protocol:** `MessageType.ShowMessage`, a UTF-8 text payload, sent to
   the Session as the only message of a short-lived connection and answered
-  with one `CommandAck` (1 = shown, 0 = refused). `TeacherMessage` in
-  `Midview.Protocol` holds the rules both sides share: text is trimmed,
+  with one `CommandAck` (1 = shown, 0 = refused). `TextMessage` in
+  `Midview.Protocol` (named `TeacherMessage` until the private chat reused
+  it) holds the rules both sides share: text is trimmed,
   must be non-empty valid UTF-8, and at most 2000 characters (the Master's
   text box enforces the same limit).
 - **Why the Session, not the Agent:** showing a window needs the student's
@@ -46,7 +47,7 @@ scheduled or recurring messages, and message history.
 
 ## Testing
 
-- `TeacherMessageTests` (Protocol): encoding round trip with accents,
+- `TextMessageTests` (Protocol): encoding round trip with accents,
   trimming, empty/whitespace, length limit, invalid UTF-8.
 - `SessionServerTests` (Windows-only): a message is shown and acked;
   whitespace-only is refused without showing anything; a message still

@@ -117,7 +117,8 @@ public class ThumbnailPollerTests
             int port,
             System.Security.Cryptography.X509Certificates.X509Certificate2 sessionCertificate,
             System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate,
-            IMessageDisplay? messageDisplay = null)
+            IMessageDisplay? messageDisplay = null,
+            IChatWindows? chatWindows = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, port);
             _sessionCertificate = sessionCertificate;
@@ -128,7 +129,7 @@ public class ThumbnailPollerTests
                 _listener, _sessionCertificate, new TrustStore(new[] { MasterCertificate.Thumbprint }),
                 new FixedSizeCapture(), new NoInput(),
                 new InputLockManager(new NoDevices(), new SystemClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay);
+                messageDisplay, chatWindows);
             Task.Run(() =>
             {
                 try

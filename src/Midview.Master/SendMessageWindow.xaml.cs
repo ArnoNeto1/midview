@@ -18,7 +18,7 @@ public partial class SendMessageWindow : Window
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        MessageTextBox.MaxLength = TeacherMessage.MaxLength;
+        MessageTextBox.MaxLength = TextMessage.MaxLength;
         TargetsTextBlock.Text = targets.Count == 1
             ? $"Para: {targets[0].Name}"
             : $"Para a turma toda ({targets.Count} máquinas)";
@@ -31,7 +31,7 @@ public partial class SendMessageWindow : Window
 
     private async void OnSendClicked(object sender, RoutedEventArgs e)
     {
-        var payload = TeacherMessage.Encode(MessageTextBox.Text.Trim());
+        var payload = TextMessage.Encode(MessageTextBox.Text.Trim());
         SendButton.IsEnabled = false;
         ResultTextBlock.Text = "Enviando...";
 

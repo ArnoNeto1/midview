@@ -27,6 +27,7 @@
                                 <Button.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
+                                        <MenuItem Header="Conversar (chat)..." Click="OnChatMachineClicked" />
                                         <MenuItem Header="Testar / bloquear sites..." Click="OnEditMachineClicked" />
                                         <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                     </ContextMenu>

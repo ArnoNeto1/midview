@@ -2,12 +2,12 @@ using System.Text;
 
 namespace Midview.Protocol;
 
-// The payload of a ShowMessage: plain UTF-8 text, shared by the Master
-// (which limits what the teacher can type) and the Session (which refuses
-// anything else).
-public static class TeacherMessage
+// The payload of ShowMessage and ChatText: plain UTF-8 text. The same rules
+// apply on both ends -- the side typing limits what can be entered, the side
+// receiving refuses anything else.
+public static class TextMessage
 {
-    // Plenty for a classroom notice, and still fits in one window.
+    // Plenty for a classroom notice or a chat line, and still fits in one window.
     public const int MaxLength = 2000;
 
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
@@ -15,7 +15,7 @@ public static class TeacherMessage
     public static byte[] Encode(string text) => StrictUtf8.GetBytes(text);
 
     // Null when there's nothing worth showing: invalid UTF-8, only
-    // whitespace, or longer than any message the Master lets through.
+    // whitespace, or longer than any sender lets through.
     public static string? Decode(byte[] payload)
     {
         string text;
