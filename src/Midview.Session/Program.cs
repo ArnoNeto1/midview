@@ -58,6 +58,7 @@ var server = new SessionServer(
     new SendInputInjector(),
     new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)),
     new WinFormsMessageDisplay(),
-    new WinFormsChatWindows());
+    new WinFormsChatWindows(),
+    new FileInbox(FileInbox.DefaultDirectory));
 
 server.Run(CancellationToken.None);
