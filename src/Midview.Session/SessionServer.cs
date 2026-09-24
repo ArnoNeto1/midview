@@ -77,6 +77,7 @@ public sealed class SessionServer
     private readonly IInputInjector _inputInjector;
     private readonly InputLockManager _inputLockManager;
     private readonly IMessageDisplay? _messageDisplay;
+    private readonly IChatWindows? _chatWindows;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -86,7 +87,7 @@ public sealed class SessionServer
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
-        IMessageDisplay? messageDisplay = null)
+        IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -95,6 +96,7 @@ public sealed class SessionServer
         _inputInjector = inputInjector;
         _inputLockManager = inputLockManager;
         _messageDisplay = messageDisplay;
+        _chatWindows = chatWindows;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -161,6 +163,14 @@ public sealed class SessionServer
             return;
         }
 
+        // A chat can stay open for the whole lesson, alongside full control
+        // of the same machine, so it doesn't take the control slot either.
+        if (firstMessage.Type == MessageType.ChatOpen)
+        {
+            ServeChat(channel, cancellationToken);
+            return;
+        }
+
         if (!_servingSlot.Wait(ConnectionTimeoutMs, cancellationToken))
         {
             Console.WriteLine("Another MidviewMaster is still connected; closing the new connection.");
@@ -211,9 +221,54 @@ public sealed class SessionServer
         }
     }
 
+    // This thread only receives; the chat window's thread only sends (the
+    // student's lines) -- the one reader/one writer pattern SslStream
+    // supports, with a lock in case the window ever sends from two threads.
+    private void ServeChat(SecureChannel channel, CancellationToken cancellationToken)
+    {
+        if (_chatWindows is null)
+        {
+            return;
+        }
+
+        var sendLock = new object();
+        var window = _chatWindows.Open(text =>
+        {
+            try
+            {
+                lock (sendLock)
+                {
+                    channel.Send(new Midview.Protocol.Message(MessageType.ChatText, TextMessage.Encode(text)));
+                }
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                return false;
+            }
+        });
+
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var message = channel.Receive();
+                // Heartbeats only keep the connection alive; nothing else to do.
+                if (message.Type == MessageType.ChatText && TextMessage.Decode(message.Payload) is { } text)
+                {
+                    window.ShowTeacherMessage(text);
+                }
+            }
+        }
+        finally
+        {
+            window.ShowConversationEnded();
+        }
+    }
+
     private bool ShowTeacherMessage(byte[] payload)
     {
-        var text = TeacherMessage.Decode(payload);
+        var text = TextMessage.Decode(payload);
         if (text is null || _messageDisplay is null)
         {
             return false;

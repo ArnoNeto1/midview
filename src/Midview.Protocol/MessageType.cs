@@ -25,4 +25,12 @@ public enum MessageType : byte
     // Sent to the Session as the only message of a short-lived connection
     // (UTF-8 payload); answered with one CommandAck.
     ShowMessage = 14,
+
+    // Private chat between the teacher and one student. A connection whose
+    // first message is ChatOpen stays open for the whole conversation;
+    // ChatText (a UTF-8 line, see TextMessage) then flows both ways, and the
+    // Master's periodic Heartbeat keeps the connection from timing out while
+    // nobody is typing.
+    ChatOpen = 15,
+    ChatText = 16,
 }

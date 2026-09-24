@@ -8,8 +8,6 @@ namespace Midview.Master;
 // Agent's site-blocking commands, and teacher messages sent to a Session.
 public static class CommandClient
 {
-    // Without this, a machine that's switched off holds a command up for
-    // Windows' own TCP connect timeout (~21 s).
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
     // Covers a slow command on the Agent's side (a full internet block runs
@@ -21,11 +19,7 @@ public static class CommandClient
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
         MessageType commandType, byte[] payload)
     {
-        using var tcpClient = new TcpClient();
-        using (var timeout = new CancellationTokenSource(ConnectTimeout))
-        {
-            tcpClient.ConnectAsync(hostAddress, port, timeout.Token).AsTask().GetAwaiter().GetResult();
-        }
+        using var tcpClient = TcpConnect.WithTimeout(hostAddress, port, ConnectTimeout);
         tcpClient.ReceiveTimeout = TimeoutMs;
         tcpClient.SendTimeout = TimeoutMs;
         using var channel = SecureChannel.AuthenticateAsClient(

@@ -17,6 +17,10 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<MachineTile> _tiles = new();
     private readonly Dictionary<MachineTile, ThumbnailPoller> _pollers = new();
 
+    // At most one conversation per machine: asking again brings the open
+    // one to the front instead of popping a second window up on the student.
+    private readonly Dictionary<string, ChatWindow> _chatWindows = new(StringComparer.OrdinalIgnoreCase);
+
     public MainWindow()
     {
         InitializeComponent();
@@ -70,6 +74,25 @@ public partial class MainWindow : Window
         {
             OpenSendMessageWindow(new[] { tile.Machine });
         }
+    }
+
+    private void OnChatMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
+        {
+            return;
+        }
+
+        if (_chatWindows.TryGetValue(tile.Machine.Name, out var open))
+        {
+            open.Activate();
+            return;
+        }
+
+        var chat = new ChatWindow(tile.Machine, _masterCertificate) { Owner = this };
+        chat.Closed += (_, _) => _chatWindows.Remove(chat.Machine.Name);
+        _chatWindows.Add(tile.Machine.Name, chat);
+        chat.Show();
     }
 
     private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets) =>

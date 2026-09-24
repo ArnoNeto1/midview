@@ -17,7 +17,7 @@ public class CommandClientTests
 
         var shown = await Task.Run(() => CommandClient.SendCommand(
             "127.0.0.1", session.Port, sessionCertificate.Thumbprint, masterCertificate,
-            MessageType.ShowMessage, TeacherMessage.Encode("Intervalo de 10 minutos")))
+            MessageType.ShowMessage, TextMessage.Encode("Intervalo de 10 minutos")))
             .WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.True(shown);
@@ -34,7 +34,7 @@ public class CommandClientTests
         using var masterCertificate = SelfSignedCertificate.Create("master-under-test");
 
         var send = Task.Run(() => CommandClient.SendCommand(
-            "127.0.0.1", port, "ANY", masterCertificate, MessageType.ShowMessage, TeacherMessage.Encode("Olá")));
+            "127.0.0.1", port, "ANY", masterCertificate, MessageType.ShowMessage, TextMessage.Encode("Olá")));
 
         await Assert.ThrowsAsync<SocketException>(() => send.WaitAsync(TimeSpan.FromSeconds(10)));
     }

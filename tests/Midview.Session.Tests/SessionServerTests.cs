@@ -86,6 +86,69 @@ public class RecordingMessageDisplay : IMessageDisplay
     }
 }
 
+// Records what the Session asked the chat window to do, and lets a test
+// type a line "as the student" through the callback it was given.
+public class FakeChatWindows : IChatWindows
+{
+    private readonly List<FakeChatWindow> _opened = new();
+
+    public IReadOnlyList<FakeChatWindow> Opened
+    {
+        get
+        {
+            lock (_opened)
+            {
+                return _opened.ToList();
+            }
+        }
+    }
+
+    public IChatWindow Open(Func<string, bool> sendToTeacher)
+    {
+        var window = new FakeChatWindow(sendToTeacher);
+        lock (_opened)
+        {
+            _opened.Add(window);
+        }
+        return window;
+    }
+}
+
+public class FakeChatWindow : IChatWindow
+{
+    private readonly List<string> _teacherLines = new();
+
+    public FakeChatWindow(Func<string, bool> sendToTeacher)
+    {
+        StudentTypes = sendToTeacher;
+    }
+
+    public Func<string, bool> StudentTypes { get; }
+
+    public bool Ended { get; private set; }
+
+    public IReadOnlyList<string> TeacherLines
+    {
+        get
+        {
+            lock (_teacherLines)
+            {
+                return _teacherLines.ToList();
+            }
+        }
+    }
+
+    public void ShowTeacherMessage(string text)
+    {
+        lock (_teacherLines)
+        {
+            _teacherLines.Add(text);
+        }
+    }
+
+    public void ShowConversationEnded() => Ended = true;
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -279,6 +342,77 @@ public class SessionServerTests
         Assert.Equal(new byte[] { 1 }, ack.Payload);
     }
 
+    [Fact]
+    public async Task Chat_OpensAWindowAndShowsTheTeachersLines_IgnoringHeartbeats()
+    {
+        var chats = new FakeChatWindows();
+        using var harness = new ServerHarness(new CountingScreenCapture(), chatWindows: chats);
+        using var teacher = harness.ConnectMaster();
+
+        teacher.Channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+        teacher.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        teacher.Channel.Send(new Message(MessageType.ChatText, TextMessage.Encode("Tudo certo aí?")));
+
+        await WaitUntil(() => chats.Opened.Count == 1 && chats.Opened[0].TeacherLines.Count == 1);
+        Assert.Equal(new[] { "Tudo certo aí?" }, chats.Opened[0].TeacherLines);
+    }
+
+    [Fact]
+    public async Task Chat_StudentsLineReachesTheTeacher()
+    {
+        var chats = new FakeChatWindows();
+        using var harness = new ServerHarness(new CountingScreenCapture(), chatWindows: chats);
+        using var teacher = harness.ConnectMaster();
+        teacher.Channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+        await WaitUntil(() => chats.Opened.Count == 1);
+
+        Assert.True(chats.Opened[0].StudentTypes("Não consigo abrir o arquivo"));
+
+        var line = await Task.Run(() => teacher.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(MessageType.ChatText, line.Type);
+        Assert.Equal("Não consigo abrir o arquivo", TextMessage.Decode(line.Payload));
+    }
+
+    [Fact]
+    public async Task Chat_TeacherLeaves_EndsTheConversationOnTheStudentsSide()
+    {
+        var chats = new FakeChatWindows();
+        using var harness = new ServerHarness(new CountingScreenCapture(), chatWindows: chats);
+        var teacher = harness.ConnectMaster();
+        teacher.Channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+        await WaitUntil(() => chats.Opened.Count == 1);
+
+        teacher.Dispose();
+
+        await WaitUntil(() => chats.Opened[0].Ended);
+        Assert.False(chats.Opened[0].StudentTypes("alguém aí?"));
+    }
+
+    [Fact]
+    public async Task Chat_WhileAnotherMasterIsControlling_StillOpens()
+    {
+        var chats = new FakeChatWindows();
+        using var harness = new ServerHarness(new CountingScreenCapture(), chatWindows: chats);
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var teacher = harness.ConnectMaster();
+        teacher.Channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+
+        await WaitUntil(() => chats.Opened.Count == 1);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the condition");
+            await Task.Delay(20);
+        }
+    }
+
     private sealed class ServerHarness : IDisposable
     {
         private readonly TcpListener _listener;
@@ -289,7 +423,8 @@ public class SessionServerTests
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _masterCert =
             SelfSignedCertificate.Create("master-under-test");
 
-        public ServerHarness(IScreenCapture capture, IMessageDisplay? messageDisplay = null)
+        public ServerHarness(
+            IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -299,7 +434,7 @@ public class SessionServerTests
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
                 new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay);
+                messageDisplay, chatWindows);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -347,7 +482,7 @@ public class SessionServerTests
 
         public Message ShowMessage(string text)
         {
-            Channel.Send(new Message(MessageType.ShowMessage, TeacherMessage.Encode(text)));
+            Channel.Send(new Message(MessageType.ShowMessage, TextMessage.Encode(text)));
             return Channel.Receive();
         }
 
