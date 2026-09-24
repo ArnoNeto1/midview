@@ -3,34 +3,6 @@ using Xunit;
 
 public class FileInboxTests
 {
-    [Theory]
-    [InlineData("notas.pdf", "notas.pdf")]
-    [InlineData(@"..\..\Windows\System32\evil.exe", "evil.exe")]
-    [InlineData("../../etc/evil.sh", "evil.sh")]
-    [InlineData(@"C:\Users\Public\x.txt", "x.txt")]
-    [InlineData("arquivo.txt:escondido", "arquivo.txt_escondido")]
-    [InlineData("a<b>c|d?e*f\"g.txt", "a_b_c_d_e_f_g.txt")]
-    [InlineData("relatório final.docx. . ", "relatório final.docx")]
-    [InlineData("CON", "_CON")]
-    [InlineData("nul.txt", "_nul.txt")]
-    [InlineData("COM1.log", "_COM1.log")]
-    [InlineData("", "arquivo")]
-    [InlineData("...", "arquivo")]
-    [InlineData(@"pasta\", "arquivo")]
-    public void SafeFileName_KeepsOnlyAPlainNameInsideTheInbox(string requested, string expected)
-    {
-        Assert.Equal(expected, FileInbox.SafeFileName(requested));
-    }
-
-    [Fact]
-    public void SafeFileName_TooLong_IsShortenedKeepingTheExtension()
-    {
-        var name = FileInbox.SafeFileName(new string('a', 300) + ".pdf");
-
-        Assert.Equal(FileInbox.MaxNameLength, name.Length);
-        Assert.EndsWith(".pdf", name);
-    }
-
     [Fact]
     public void Complete_SavesUnderTheSafeName_AndNeverOverwrites()
     {

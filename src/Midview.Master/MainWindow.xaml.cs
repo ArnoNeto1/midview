@@ -97,6 +97,27 @@ public partial class MainWindow : Window
     private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
         new SendFileWindow(targets, _masterCertificate) { Owner = this }.Show();
 
+    private void OnCollectClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para recolher arquivos.";
+            return;
+        }
+        OpenCollectFilesWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    private void OnCollectMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenCollectFilesWindow(new[] { tile.Machine });
+        }
+    }
+
+    private void OpenCollectFilesWindow(IReadOnlyList<KnownMachine> targets) =>
+        new CollectFilesWindow(targets, _masterCertificate) { Owner = this }.Show();
+
     private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
     {
         if (_tiles.Count == 0)

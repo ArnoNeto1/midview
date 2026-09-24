@@ -44,6 +44,11 @@ public enum MessageType : byte
     // Close the student's programs. One byte of payload (CloseAppsMode),
     // answered with one CommandAck carrying a CommandResult.
     CloseApps = 19,
+
+    // Collect the files in the student's "Entregar ao professor" folder:
+    // the Session answers with SendFile/FileChunk messages, one file after
+    // another, then one CommandAck (see FileCollection).
+    CollectFiles = 20,
 }
 
 public enum CloseAppsMode : byte

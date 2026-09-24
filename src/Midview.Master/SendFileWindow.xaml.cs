@@ -45,7 +45,7 @@ public partial class SendFileWindow : Window
         }
         else
         {
-            FileTextBlock.Text = $"{Path.GetFileName(dialog.FileName)} ({DescribeSize(size)})";
+            FileTextBlock.Text = $"{Path.GetFileName(dialog.FileName)} ({SizeText.Describe(size)})";
             _filePath = dialog.FileName;
         }
         ResultTextBlock.Text = string.Empty;
@@ -104,11 +104,4 @@ public partial class SendFileWindow : Window
             return (machine.Name, false, FailureText.Describe(ex));
         }
     }
-
-    private static string DescribeSize(long bytes) => bytes switch
-    {
-        < 1024 => $"{bytes} bytes",
-        < 1024 * 1024 => $"{bytes / 1024.0:F0} KB",
-        _ => $"{bytes / (1024.0 * 1024):F1} MB",
-    };
 }

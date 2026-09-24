@@ -574,6 +574,102 @@ public class SessionServerTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public async Task CollectFiles_SendsEveryFileInTheFolder_AndTellsTheStudent()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "trabalho.docx", new byte[] { 1, 2, 3 });
+        WriteFile(folder.Directory, "site/index.html", Enumerable.Range(0, FileTransfer.ChunkSize + 10).Select(i => (byte)i).ToArray());
+        WriteFile(folder.Directory, "vazio.txt", Array.Empty<byte>());
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display, deliveryFolder: new DeliveryFolder(folder.Directory));
+        using var teacher = harness.ConnectMaster();
+
+        var (files, result) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, string.Empty), result);
+        Assert.Equal(new[] { "site/index.html", "trabalho.docx", "vazio.txt" }, files.Keys.Order());
+        Assert.Equal(new byte[] { 1, 2, 3 }, files["trabalho.docx"]);
+        Assert.Equal(FileTransfer.ChunkSize + 10, files["site/index.html"].Length);
+        Assert.Empty(files["vazio.txt"]);
+        await WaitUntil(() => display.Shown.Count == 1);
+        Assert.Contains("recolheu 3 arquivo(s)", display.Shown[0]);
+        Assert.True(File.Exists(Path.Combine(folder.Directory, "trabalho.docx"))); // nothing is removed
+    }
+
+    [Fact]
+    public async Task CollectFiles_LeavesOutWhatWouldPassTheLimits_AndSaysSo()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "a.txt", new byte[4]);
+        WriteFile(folder.Directory, "b.txt", new byte[20]);
+        WriteFile(folder.Directory, "c.txt", new byte[4]);
+        WriteFile(folder.Directory, "d.txt", new byte[1]);
+        var delivery = new DeliveryFolder(folder.Directory, maxFiles: 2, maxTotalBytes: 10);
+        using var harness = new ServerHarness(new CountingScreenCapture(), deliveryFolder: delivery);
+        using var teacher = harness.ConnectMaster();
+
+        var (files, result) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(new[] { "a.txt", "c.txt" }, files.Keys.Order());
+        Assert.True(result.Succeeded);
+        Assert.StartsWith("2 não enviado(s): b.txt (passaria do limite", result.Detail);
+        Assert.Contains("o que passou de 2 arquivos", result.Detail);
+    }
+
+    [Fact]
+    public async Task CollectFiles_EmptyFolder_StillAnswers_AndTellsTheStudentWhereItIs()
+    {
+        using var folder = new TempInbox();
+        Directory.CreateDirectory(folder.Directory);
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display, deliveryFolder: new DeliveryFolder(folder.Directory));
+        using var teacher = harness.ConnectMaster();
+
+        var (files, result) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Empty(files);
+        Assert.True(result.Succeeded);
+        await WaitUntil(() => display.Shown.Count == 1);
+        Assert.Contains(folder.Directory, display.Shown[0]);
+    }
+
+    [Fact]
+    public async Task CollectFiles_NoDeliveryFolder_IsRefused()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var (files, result) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Empty(files);
+        Assert.False(result.Succeeded);
+        Assert.NotEmpty(result.Detail);
+    }
+
+    [Fact]
+    public async Task CollectFiles_WhileAnotherMasterIsControlling_StillRuns()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "a.txt", new byte[] { 7 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), deliveryFolder: new DeliveryFolder(folder.Directory));
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var teacher = harness.ConnectMaster();
+
+        var (files, _) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(new byte[] { 7 }, files["a.txt"]);
+    }
+
+    private static void WriteFile(string root, string relativePath, byte[] content)
+    {
+        var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, content);
+    }
+
     private sealed class TempInbox : IDisposable
     {
         public TempInbox()
@@ -617,7 +713,7 @@ public class SessionServerTests
 
         public ServerHarness(
             IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null,
-            FileInbox? fileInbox = null, IAppCloser? appCloser = null)
+            FileInbox? fileInbox = null, IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -627,7 +723,7 @@ public class SessionServerTests
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
                 new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows, fileInbox, appCloser);
+                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -689,6 +785,32 @@ public class SessionServerTests
                 Channel.Send(new Message(MessageType.FileChunk, content.AsSpan(offset, length).ToArray()));
             }
             return (accepted, CommandResult.Decode(Channel.Receive().Payload));
+        }
+
+        // Every file the Session sent (relative path -> content), then how it ended.
+        public (Dictionary<string, byte[]> Files, (bool Succeeded, string Detail) Result) CollectFiles()
+        {
+            Channel.Send(new Message(MessageType.CollectFiles, Array.Empty<byte>()));
+            var files = new Dictionary<string, byte[]>();
+            while (true)
+            {
+                var message = Channel.Receive();
+                if (message.Type == MessageType.CommandAck)
+                {
+                    return (files, CommandResult.Decode(message.Payload));
+                }
+                Assert.Equal(MessageType.SendFile, message.Type);
+                Assert.True(FileTransfer.TryDecodeHeader(message.Payload, out var path, out var size));
+                var content = new List<byte>();
+                while (content.Count < size)
+                {
+                    var chunk = Channel.Receive();
+                    Assert.Equal(MessageType.FileChunk, chunk.Type);
+                    content.AddRange(chunk.Payload);
+                }
+                Assert.Equal(size, content.Count);
+                files.Add(path, content.ToArray());
+            }
         }
 
         public (bool Succeeded, string Detail) CloseApps(CloseAppsMode mode)

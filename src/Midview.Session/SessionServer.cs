@@ -80,6 +80,7 @@ public sealed class SessionServer
     private readonly IChatWindows? _chatWindows;
     private readonly FileInbox? _fileInbox;
     private readonly IAppCloser? _appCloser;
+    private readonly DeliveryFolder? _deliveryFolder;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -90,7 +91,7 @@ public sealed class SessionServer
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
         IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null,
-        IAppCloser? appCloser = null)
+        IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -102,6 +103,7 @@ public sealed class SessionServer
         _chatWindows = chatWindows;
         _fileInbox = fileInbox;
         _appCloser = appCloser;
+        _deliveryFolder = deliveryFolder;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -172,6 +174,12 @@ public sealed class SessionServer
         if (firstMessage.Type == MessageType.SendFile)
         {
             ReceiveFile(channel, firstMessage);
+            return;
+        }
+
+        if (firstMessage.Type == MessageType.CollectFiles)
+        {
+            SendCollectedFiles(channel);
             return;
         }
 
@@ -346,6 +354,111 @@ public sealed class SessionServer
         {
             return (false, $"não foi possível salvar o arquivo: {ex.Message}");
         }
+    }
+
+    // The files go out one after another, with no answer from the Master in
+    // between. A file that can't be read (open without sharing, say) or that
+    // would pass the limits is left out and listed in the final CommandAck;
+    // one that fails midway can't be taken back, so the connection just
+    // drops and the Master discards it.
+    private void SendCollectedFiles(SecureChannel channel)
+    {
+        if (_deliveryFolder is null)
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não entrega arquivos")));
+            return;
+        }
+
+        IReadOnlyList<CollectableFile> files;
+        try
+        {
+            files = _deliveryFolder.ListFiles();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, $"a pasta de entrega não pôde ser lida: {ex.Message}")));
+            return;
+        }
+
+        var sent = 0;
+        long bytes = 0;
+        var notSent = new List<string>();
+        var buffer = new byte[FileTransfer.ChunkSize];
+        foreach (var file in files)
+        {
+            if (sent == _deliveryFolder.MaxFiles)
+            {
+                break;
+            }
+            if (System.Text.Encoding.UTF8.GetByteCount(file.RelativePath) > FileTransfer.MaxNameBytes)
+            {
+                notSent.Add($"{file.RelativePath} (caminho longo demais)");
+                continue;
+            }
+
+            FileStream stream;
+            try
+            {
+                stream = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                notSent.Add($"{file.RelativePath} (não pôde ser lido)");
+                continue;
+            }
+
+            using (stream)
+            {
+                var size = stream.Length;
+                if (bytes + size > _deliveryFolder.MaxTotalBytes)
+                {
+                    notSent.Add($"{file.RelativePath} (passaria do limite de {_deliveryFolder.MaxTotalBytes / (1024 * 1024)} MB)");
+                    continue;
+                }
+
+                channel.Send(new Midview.Protocol.Message(MessageType.SendFile, FileTransfer.EncodeHeader(file.RelativePath, size)));
+                for (var remaining = size; remaining > 0;)
+                {
+                    var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (read == 0)
+                    {
+                        throw new IOException($"{file.RelativePath} diminuiu durante o envio");
+                    }
+                    channel.Send(new Midview.Protocol.Message(MessageType.FileChunk, buffer.AsSpan(0, read).ToArray()));
+                    remaining -= read;
+                }
+                sent++;
+                bytes += size;
+            }
+        }
+
+        // The listing stops just past the limit (see DeliveryFolder.ListFiles),
+        // so a full one means files went unsent -- even ones never listed,
+        // when some listed ones were left out above.
+        if (files.Count > _deliveryFolder.MaxFiles)
+        {
+            notSent.Add($"o que passou de {_deliveryFolder.MaxFiles} arquivos");
+        }
+
+        var detail = notSent.Count == 0
+            ? string.Empty
+            : $"{notSent.Count} não enviado(s): {string.Join(", ", notSent.Take(3))}{(notSent.Count > 3 ? $" e mais {notSent.Count - 3}" : string.Empty)}";
+        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(true, detail)));
+
+        var notice = sent > 0
+            ? $"O professor recolheu {sent} arquivo(s) da pasta \"Entregar ao professor\"."
+            : "O professor pediu os arquivos da pasta \"Entregar ao professor\", mas nenhum foi enviado.";
+        if (detail.Length > 0)
+        {
+            notice += $"{Environment.NewLine}{char.ToUpperInvariant(detail[0])}{detail[1..]}.";
+        }
+        if (sent == 0)
+        {
+            notice += $"{Environment.NewLine}A pasta fica em: {_deliveryFolder.DirectoryPath}";
+        }
+        TryNotify(notice);
     }
 
     private (bool Closed, string Detail) CloseApps(byte[] payload)

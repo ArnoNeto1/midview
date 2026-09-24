@@ -50,6 +50,11 @@ if (trustedMasters.Count == 0)
 // disabled, and Session has nothing to clean up at startup.
 using var inputDeviceController = new AgentInputDeviceController();
 
+// The student's "Entregar ao professor" folder, created at login so it's
+// there to put work into before the teacher collects it.
+var deliveryFolder = new DeliveryFolder(DeliveryFolder.DefaultDirectory);
+deliveryFolder.TryCreate();
+
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
@@ -60,6 +65,7 @@ var server = new SessionServer(
     new WinFormsMessageDisplay(),
     new WinFormsChatWindows(),
     new FileInbox(FileInbox.DefaultDirectory),
-    new WindowsAppCloser());
+    new WindowsAppCloser(),
+    deliveryFolder);
 
 server.Run(CancellationToken.None);
