@@ -7,6 +7,7 @@ namespace Midview.Master;
 public sealed class ConnectionClient : IDisposable
 {
     public const int SessionPort = 5901; // must match Midview.Session's listener
+    public const int AgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
 
     private readonly SecureChannel _channel;
 

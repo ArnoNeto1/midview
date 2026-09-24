@@ -57,7 +57,8 @@ public sealed class AgentServerWorker : BackgroundService
             }
 
             var server = new AgentServer(
-                new TcpListener(IPAddress.Any, AgentPort), certificate, new TrustStore(trustedMasters), commandHandler);
+                new TcpListener(IPAddress.Any, AgentPort), certificate, new TrustStore(trustedMasters), commandHandler,
+                new PowerCommandHandler(PowerCommandHandler.RunShutdownExe));
 
             return Task.Run(() =>
             {
