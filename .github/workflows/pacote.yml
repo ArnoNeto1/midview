@@ -1,0 +1,55 @@
+# Builds the lab installation package with installer\Gerar-Pacote.ps1 and
+# checks its scripts, both under Windows PowerShell 5.1 -- the PowerShell
+# lab machines run them with. Run by hand ("Run workflow"), it also keeps
+# the package for download for 7 days (artifact storage is small on the free
+# plan, so not on every run).
+name: Pacote de instalação
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'installer/**'
+      - '.github/workflows/pacote.yml'
+  pull_request:
+    paths:
+      - 'installer/**'
+      - '.github/workflows/pacote.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pacote-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pacote:
+    name: Gerar e conferir o pacote
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # powershell.exe is Windows PowerShell 5.1 (pwsh would be 7).
+      - name: Gerar o pacote (Windows PowerShell 5.1)
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Pacote.ps1 -Output "%RUNNER_TEMP%\Midview-Instalacao"
+
+      - name: Conferir os scripts (Windows PowerShell 5.1)
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote "%RUNNER_TEMP%\Midview-Instalacao"
+
+      - name: Guardar o pacote para download
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Midview-Instalacao
+          path: ${{ runner.temp }}/Midview-Instalacao
+          retention-days: 7

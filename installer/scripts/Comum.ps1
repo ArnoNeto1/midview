@@ -111,11 +111,17 @@ function Get-EnderecosIPv4 {
     catch {
         # Sem Get-NetIPConfiguration: fica só a lista abaixo.
     }
-    foreach ($ip in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue)) {
-        $endereco = $ip.IPAddress
-        if ($endereco -and $endereco -notlike '127.*' -and $endereco -notlike '169.254.*' -and -not $enderecos.Contains($endereco)) {
-            $enderecos.Add($endereco)
+    try {
+        foreach ($ip in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop)) {
+            $endereco = $ip.IPAddress
+            if ($endereco -and $endereco -notlike '127.*' -and $endereco -notlike '169.254.*' -and -not $enderecos.Contains($endereco)) {
+                $enderecos.Add($endereco)
+            }
         }
+    }
+    catch {
+        # Nunca impede a instalação: sem endereço, a ficha ainda pode ser
+        # importada pelo nome do computador.
     }
     return $enderecos.ToArray()
 }

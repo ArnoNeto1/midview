@@ -1,0 +1,49 @@
+# Builds the solution and runs every test on Windows, including the
+# Session and Master tests (and the GDI+ ones in Protocol) that only run
+# there. A Windows runner bills 2x the minutes of a Linux one, so this runs
+# on pushes to master and on pull requests only.
+name: Testes (Windows)
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    name: Build e testes
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build Midview.sln --configuration Release
+
+      # --blame-hang-timeout: a test stuck on a socket fails with a dump
+      # instead of using up the job's 30 minutes.
+      - name: Testes
+        run: >
+          dotnet test Midview.sln --configuration Release --no-build
+          --logger trx --results-directory TestResults
+          --blame-hang-timeout 5m
+
+      - name: Guardar os resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-dos-testes
+          path: TestResults
+          retention-days: 7
