@@ -98,18 +98,21 @@ public class InputLockPipeTests
 
     private static InputLockPipeClient TrustingClient(string pipeName) => new(pipeName, isTrustedServer: _ => true);
 
-    // Created before returning so the client never races the server's
-    // creation; served on a background task like the Agent does.
+    // Created and already waiting before returning, so the client never races
+    // the server (on Windows, a client that connects and leaves before the
+    // wait starts makes the wait fail); served on a background task like the
+    // Agent does.
     private static Task ServeOneConnection(
         string pipeName, InputLockCoordinator coordinator, int? closeAfterRequests = null)
     {
         var server = new NamedPipeServerStream(
             pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        var connected = server.WaitForConnectionAsync();
         return Task.Run(async () =>
         {
             using (server)
             {
-                await server.WaitForConnectionAsync();
+                await connected;
                 Stream stream = closeAfterRequests is int limit ? new RequestLimitedStream(server, limit) : server;
                 InputLockConnection.Serve(stream, coordinator);
             }
