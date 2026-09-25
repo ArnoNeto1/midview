@@ -30,13 +30,25 @@ public sealed class InputLockPipeClient : IDisposable
     private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(15);
 
     private readonly string _pipeName;
+    private readonly Func<SafePipeHandle, bool> _isTrustedServer;
     private readonly object _gate = new();
     private NamedPipeClientStream? _pipe;
 
-    public InputLockPipeClient(string pipeName = InputLockPipe.PipeName)
+    // isTrustedServer is for tests only, which serve the pipe from their own
+    // process rather than from a service; everything else gets
+    // IsServedByAService.
+    public InputLockPipeClient(string pipeName = InputLockPipe.PipeName, Func<SafePipeHandle, bool>? isTrustedServer = null)
     {
         _pipeName = pipeName;
+        _isTrustedServer = isTrustedServer ?? IsServedByAService;
     }
+
+    // Any local process can create a pipe with the Agent's name while the
+    // Agent isn't running (e.g. during a restart) and pretend to lock. Only
+    // services run in session 0, so a server anywhere else can't be the
+    // Agent. (Windows only: elsewhere there are no sessions to check.)
+    public static bool IsServedByAService(SafePipeHandle pipe) =>
+        !OperatingSystem.IsWindows() || (GetNamedPipeServerSessionId(pipe, out var sessionId) && sessionId == 0);
 
     public bool RequestLock() => Send(InputLockPipe.LockRequest);
 
@@ -76,12 +88,7 @@ public sealed class InputLockPipeClient : IDisposable
         try
         {
             pipe.Connect(ConnectTimeoutMs);
-
-            // Any local process can create a pipe with this name while the
-            // Agent isn't running (e.g. during a restart) and pretend to lock.
-            // Only services run in session 0, so a server anywhere else can't
-            // be the Agent.
-            if (OperatingSystem.IsWindows() && !IsServedFromSessionZero(pipe.SafePipeHandle))
+            if (!_isTrustedServer(pipe.SafePipeHandle))
             {
                 throw new UnauthorizedAccessException("The input-lock pipe isn't served from session 0, so it isn't the Agent");
             }
@@ -106,9 +113,6 @@ public sealed class InputLockPipeClient : IDisposable
         }
         return buffer[0];
     }
-
-    private static bool IsServedFromSessionZero(SafePipeHandle pipe) =>
-        GetNamedPipeServerSessionId(pipe, out var sessionId) && sessionId == 0;
 
     public void Dispose()
     {

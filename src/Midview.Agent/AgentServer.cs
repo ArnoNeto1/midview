@@ -44,10 +44,16 @@ public sealed class AgentServer
                 break;
             }
 
-            // Each connection on its own task: anything on the LAN can open a
+            // Each connection on its own thread: anything on the LAN can open a
             // TCP connection and then send nothing, and handled inline that
-            // blocked every command -- the teacher's unblock included.
-            _ = Task.Run(() => HandleClientSafely(tcpClient));
+            // blocked every command -- the teacher's unblock included. A
+            // dedicated thread rather than a thread-pool task, since the
+            // handler blocks (up to TimeoutMs on a stalled handshake): a few
+            // stalled connections must not starve the pool the rest of the
+            // Agent runs on.
+            _ = Task.Factory.StartNew(
+                () => HandleClientSafely(tcpClient), CancellationToken.None,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
     }
 

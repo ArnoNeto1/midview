@@ -4,8 +4,10 @@ using Midview.Protocol;
 using Xunit;
 
 // End to end over a real named pipe: Session's InputLockPipeClient against
-// the Agent's InputLockConnection. (The Agent's pipe ACL and the client's
-// session-0 check are Windows-only and aren't exercised here.)
+// the Agent's InputLockConnection. These tests serve the pipe from their own
+// process, not from a service, so the client is told to trust it (see
+// ServerThatIsNotAService_IsRefused for the real check). The Agent's pipe ACL
+// isn't exercised here.
 public class InputLockPipeTests
 {
     [Fact]
@@ -14,7 +16,7 @@ public class InputLockPipeTests
         var pipeName = UniquePipeName();
         var devices = new FakeInputDeviceController();
         var serverTask = ServeOneConnection(pipeName, new InputLockCoordinator(devices));
-        using var client = new InputLockPipeClient(pipeName);
+        using var client = TrustingClient(pipeName);
 
         Assert.True(client.RequestLock());
         Assert.Equal(1, devices.DisableCalls);
@@ -32,7 +34,7 @@ public class InputLockPipeTests
         var pipeName = UniquePipeName();
         var devices = new FakeInputDeviceController();
         var serverTask = ServeOneConnection(pipeName, new InputLockCoordinator(devices));
-        var client = new InputLockPipeClient(pipeName);
+        var client = TrustingClient(pipeName);
         Assert.True(client.RequestLock());
 
         client.Dispose(); // what a crashed or killed Session looks like from the Agent's side
@@ -58,7 +60,7 @@ public class InputLockPipeTests
         var pipeName = UniquePipeName();
         var devices = new FakeInputDeviceController();
         var coordinator = new InputLockCoordinator(devices);
-        using var client = new InputLockPipeClient(pipeName);
+        using var client = TrustingClient(pipeName);
 
         var firstServer = ServeOneConnection(pipeName, coordinator, closeAfterRequests: 1);
         Assert.True(client.RequestLock());
@@ -69,7 +71,32 @@ public class InputLockPipeTests
         Assert.Equal(2, devices.DisableCalls); // the first connection's lock was released when it closed
     }
 
+    [Fact]
+    public async Task ServerThatIsNotAService_IsRefused()
+    {
+        // The default check means something only on Windows, and only when
+        // the test itself isn't running as a service (in session 0).
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        if (!OperatingSystem.IsWindows() || self.SessionId == 0)
+        {
+            return;
+        }
+
+        var pipeName = UniquePipeName();
+        var devices = new FakeInputDeviceController();
+        var serverTask = ServeOneConnection(pipeName, new InputLockCoordinator(devices));
+        using var client = new InputLockPipeClient(pipeName);
+
+        Assert.False(client.RequestLock());
+        Assert.Equal(0, devices.DisableCalls);
+
+        client.Dispose();
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     private static string UniquePipeName() => $"midview-test-{Guid.NewGuid():N}";
+
+    private static InputLockPipeClient TrustingClient(string pipeName) => new(pipeName, isTrustedServer: _ => true);
 
     // Created before returning so the client never races the server's
     // creation; served on a background task like the Agent does.
