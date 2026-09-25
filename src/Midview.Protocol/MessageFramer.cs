@@ -8,14 +8,21 @@ public static class MessageFramer
     // hostile length prefix from making Read allocate up to 2 GB.
     public const int MaxMessageLength = 16 * 1024 * 1024;
 
+    // One write per message. With separate writes for the length, the type
+    // and the payload, a message with an empty payload ended in a zero-length
+    // write, which SslStream on Windows sends as an empty TLS record. Read
+    // never consumes that record, so a side that answered and closed still
+    // had unread data -- and Windows then resets the connection instead of
+    // closing it, discarding whatever the other side hadn't read yet (seen
+    // on CollectFiles and the Agent's BlockInternet/UnblockInternet). It also
+    // makes every message one record instead of three.
     public static void Write(Stream stream, Message message)
     {
-        var length = message.Payload.Length + 1;
-        var header = new byte[4];
-        BinaryPrimitives.WriteInt32BigEndian(header, length);
-        stream.Write(header, 0, 4);
-        stream.WriteByte((byte)message.Type);
-        stream.Write(message.Payload, 0, message.Payload.Length);
+        var frame = new byte[5 + message.Payload.Length];
+        BinaryPrimitives.WriteInt32BigEndian(frame, message.Payload.Length + 1);
+        frame[4] = (byte)message.Type;
+        message.Payload.CopyTo(frame, 5);
+        stream.Write(frame, 0, frame.Length);
         stream.Flush();
     }
 

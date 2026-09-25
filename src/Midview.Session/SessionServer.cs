@@ -119,8 +119,13 @@ public sealed class SessionServer
             // side processes them.
             tcpClient.NoDelay = true;
             // Off the accept loop, so a connection stuck in its TLS handshake
-            // can't keep the next one from being accepted.
-            _ = Task.Run(() => HandleClientSafely(tcpClient, cancellationToken));
+            // can't keep the next one from being accepted -- and on a thread of
+            // its own, since every handler blocks for as long as its
+            // connection lasts (a whole lesson, for previews and chat): on
+            // thread-pool tasks, those would starve the pool.
+            _ = Task.Factory.StartNew(
+                () => HandleClientSafely(tcpClient, cancellationToken), CancellationToken.None,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
     }
 
