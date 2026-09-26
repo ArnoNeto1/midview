@@ -6,7 +6,8 @@
 #   4. autoriza os professores do pacote;
 #   5. registra e inicia o serviço MidviewAgent;
 #   6. deixa a ficha da máquina na pasta "maquinas" do pacote, para o
-#      professor importar no MidviewMaster.
+#      professor importar no MidviewMaster (com o endereço da placa de rede,
+#      para ligar a máquina pela rede).
 [CmdletBinding()]
 param(
     [string]$Pacote,
@@ -63,7 +64,8 @@ try {
 
     Write-Etapa 'Deixando a ficha desta máquina no pacote'
     $enderecos = @(Get-EnderecosIPv4)
-    $ficha = New-FichaMaquina $env:COMPUTERNAME $enderecos $identidade.sessionThumbprint $identidade.agentThumbprint (Get-Date)
+    $enderecoMac = Get-EnderecoMac
+    $ficha = New-FichaMaquina $env:COMPUTERNAME $enderecos $identidade.sessionThumbprint $identidade.agentThumbprint $enderecoMac (Get-Date)
     $pastaFichas = Join-Path $Pacote 'maquinas'
     $caminhoFicha = Join-Path $pastaFichas "$env:COMPUTERNAME.json"
     $fichaSalva = $true
@@ -85,6 +87,9 @@ try {
     }
     else {
         Write-Warning 'Nenhum endereço IP encontrado: no MidviewMaster, importe conectando pelo nome do computador.'
+    }
+    if ($enderecoMac) {
+        Write-Host "  Placa de rede (para ligar pela rede): $enderecoMac"
     }
     if ($fichaSalva) {
         Write-Host "  Ficha: $caminhoFicha"

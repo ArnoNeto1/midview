@@ -91,6 +91,64 @@ public class ThumbnailPollerTests
         await received.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(10));
     }
 
+    [Fact]
+    public async Task SessionRunning_LearnsTheMacAddressFromTheAgent()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate,
+            new Message(MessageType.WakeAddress, new byte[] { 0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E }));
+        var learned = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+        poller.MacAddressLearned += macAddress => learned.TrySetResult(macAddress);
+        poller.Start();
+
+        Assert.Equal("00-1A-2B-3C-4D-5E", await learned.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
+    public async Task AgentFromBeforeWakeOnLan_IsAskedOnce_AndNothingIsLearned()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, new byte[] { 0 }));
+        var learned = false;
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+        poller.MacAddressLearned += _ => learned = true;
+
+        await ThreeThumbnails(poller);
+
+        Assert.Equal(1, agent.Questions);
+        Assert.False(learned);
+    }
+
+    [Fact]
+    public async Task NoAgentThumbprint_TheAgentIsNeverAsked()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.WakeAddress, new byte[6]));
+        using var poller = new ThumbnailPoller(session.Machine(), session.MasterCertificate, session.Port, agent.Port);
+
+        await ThreeThumbnails(poller);
+
+        Assert.Equal(0, agent.Questions);
+    }
+
+    private static async Task ThreeThumbnails(ThumbnailPoller poller)
+    {
+        var count = 0;
+        var third = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.ThumbnailReceived += _ =>
+        {
+            if (Interlocked.Increment(ref count) == 3)
+            {
+                third.TrySetResult();
+            }
+        };
+        poller.Start();
+        await third.Task.WaitAsync(2 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30));
+    }
+
     private static int FreePort()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);
@@ -160,6 +218,67 @@ public class ThumbnailPollerTests
                 _sessionCertificate.Dispose();
                 MasterCertificate.Dispose();
             }
+        }
+    }
+
+    // Answers every question on a loopback port with the same reply, and
+    // counts the GetWakeAddress questions.
+    private sealed class FakeAgent : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate =
+            SelfSignedCertificate.Create("agent-under-test");
+        private int _questions;
+
+        public FakeAgent(System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, Message reply)
+        {
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            var masters = new TrustStore(new[] { masterCertificate.Thumbprint });
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    TcpClient client;
+                    try
+                    {
+                        client = _listener.AcceptTcpClient();
+                    }
+                    catch (Exception)
+                    {
+                        return; // Dispose stopped the listener
+                    }
+
+                    using (client)
+                    {
+                        try
+                        {
+                            using var channel = SecureChannel.AuthenticateAsServer(client, _certificate, masters);
+                            if (channel.Receive().Type == MessageType.GetWakeAddress)
+                            {
+                                Interlocked.Increment(ref _questions);
+                            }
+                            channel.Send(reply);
+                        }
+                        catch (Exception)
+                        {
+                            // The poller gave up on this connection.
+                        }
+                    }
+                }
+            });
+        }
+
+        public int Port { get; }
+
+        public string Thumbprint => _certificate.Thumbprint;
+
+        public int Questions => Volatile.Read(ref _questions);
+
+        public void Dispose()
+        {
+            _listener.Stop();
+            _certificate.Dispose();
         }
     }
 

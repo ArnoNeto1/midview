@@ -130,13 +130,35 @@ public class InstallPackageTests : IDisposable
         Assert.Null(Assert.Single(InstallPackage.LoadInstalledMachines(_package, false).Machines).AgentThumbprint);
     }
 
+    [Fact]
+    public void LoadInstalledMachines_KeepsTheNetworkCard()
+    {
+        WriteRecord("ALUNO-01", Record("ALUNO-01", macAddress: "\"00:1a:2b:3c:4d:5e\""));
+
+        Assert.Equal("00-1A-2B-3C-4D-5E", Assert.Single(InstallPackage.LoadInstalledMachines(_package, false).Machines).MacAddress);
+    }
+
+    [Theory]
+    [InlineData(null)] // a machine file from before it was recorded
+    [InlineData("null")]
+    [InlineData("\"00-00-00-00-00-00\"")]
+    public void LoadInstalledMachines_WithoutAUsableNetworkCard_StillImports(string? macAddress)
+    {
+        WriteRecord("ALUNO-01", Record("ALUNO-01", macAddress: macAddress));
+
+        Assert.Null(Assert.Single(InstallPackage.LoadInstalledMachines(_package, false).Machines).MacAddress);
+    }
+
     private static string Record(
         string name, string addresses = "[\"192.168.0.21\"]", string sessionThumbprint = SessionThumbprint,
-        string agentThumbprint = $"\"{AgentThumbprint}\"") =>
-        $$"""
-        { "computerName": "{{name}}", "addresses": {{addresses}},
-          "sessionThumbprint": "{{sessionThumbprint}}", "agentThumbprint": {{agentThumbprint}} }
-        """;
+        string agentThumbprint = $"\"{AgentThumbprint}\"", string? macAddress = null)
+    {
+        var macAddressField = macAddress is null ? string.Empty : $", \"macAddress\": {macAddress}";
+        return $$"""
+            { "computerName": "{{name}}", "addresses": {{addresses}},
+              "sessionThumbprint": "{{sessionThumbprint}}", "agentThumbprint": {{agentThumbprint}}{{macAddressField}} }
+            """;
+    }
 
     private void WriteRecord(string name, string json)
     {

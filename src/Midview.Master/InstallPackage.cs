@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -135,7 +136,11 @@ public static class InstallPackage
             return (null, "sem endereço IP (marque \"usar o nome do computador\" para importar pelo nome)");
         }
 
-        return (new KnownMachine(name, host, sessionThumbprint, agentThumbprint), null);
+        // Optional: machine files from before it was recorded don't have it,
+        // and without it Master learns it from the Agent anyway.
+        var macAddress = WakeOnLan.NormalizeMacAddress(record.MacAddress);
+
+        return (new KnownMachine(name, host, sessionThumbprint, agentThumbprint, macAddress), null);
     }
 
     // What installer\scripts\Instalar-Aluno.ps1 writes.
@@ -143,7 +148,8 @@ public static class InstallPackage
         [property: JsonPropertyName("computerName")] string? ComputerName,
         [property: JsonPropertyName("addresses"), JsonConverter(typeof(StringOrListConverter))] List<string?>? Addresses,
         [property: JsonPropertyName("sessionThumbprint")] string? SessionThumbprint,
-        [property: JsonPropertyName("agentThumbprint")] string? AgentThumbprint);
+        [property: JsonPropertyName("agentThumbprint")] string? AgentThumbprint,
+        [property: JsonPropertyName("macAddress")] string? MacAddress);
 
     // Windows PowerShell can write a one-item list as a plain string.
     private sealed class StringOrListConverter : JsonConverter<List<string?>>

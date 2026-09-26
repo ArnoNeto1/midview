@@ -5,8 +5,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // One command, one acknowledgement, over a short-lived connection: the
-// Agent's site-blocking commands, and teacher messages and "close programs"
-// sent to a Session.
+// Agent's site-blocking and power commands, and teacher messages and "close
+// programs" sent to a Session. Also one question, one answer (Ask).
 public static class CommandClient
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
@@ -24,6 +24,13 @@ public static class CommandClient
         var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload);
         return ack.Type == MessageType.CommandAck && ack.Payload.Length > 0 && ack.Payload[0] == 1;
     }
+
+    // For questions answered with something other than a CommandAck (e.g.
+    // the Agent's WakeAddress): the reply as it came.
+    public static Message Ask(
+        string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
+        MessageType questionType, byte[] payload) =>
+        Exchange(hostAddress, port, targetThumbprint, masterCertificate, questionType, payload);
 
     // For commands whose acknowledgement also says what happened (a
     // CommandResult), e.g. how many programs were asked to close.

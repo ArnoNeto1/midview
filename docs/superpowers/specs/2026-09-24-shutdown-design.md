@@ -53,8 +53,9 @@ the lab from `MidviewMaster`: the whole class or one machine.
 
 ## Out of scope
 
-Logging students off without shutting down, turning machines on (Wake-on-LAN),
-scheduled shutdowns (e.g. every day at 18:00), and a custom warning text.
+Logging students off without shutting down, turning machines on (its own
+design: `2026-09-26-wake-on-lan-design.md`), scheduled shutdowns (e.g. every
+day at 18:00), and a custom warning text.
 
 ## Testing
 

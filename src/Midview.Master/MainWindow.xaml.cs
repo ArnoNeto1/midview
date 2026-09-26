@@ -160,6 +160,47 @@ public partial class MainWindow : Window
     private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets) =>
         new PowerWindow(targets, _masterCertificate) { Owner = this }.Show();
 
+    private void OnWakeClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para ligar.";
+            return;
+        }
+        new WakeWindow(() => _tiles.Select(tile => tile.Machine).ToList(), $"Na turma toda ({_tiles.Count} máquinas)")
+        {
+            Owner = this,
+        }.Show();
+    }
+
+    private void OnWakeMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            new WakeWindow(() => new[] { tile.Machine }, $"Em: {tile.Name}") { Owner = this }.Show();
+        }
+    }
+
+    // From a tile's poller, once per Master start. Only written to disk when
+    // it's new or changed (a replaced network card).
+    private void RememberMacAddress(MachineTile tile, string macAddress)
+    {
+        if (!_tiles.Contains(tile) || tile.Machine.MacAddress == macAddress)
+        {
+            return;
+        }
+
+        tile.RememberMacAddress(macAddress);
+        try
+        {
+            SaveRoster();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"A placa de rede de {tile.Name} não pôde ser gravada na lista da sala: {ex.Message}";
+        }
+    }
+
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)
@@ -240,8 +281,11 @@ public partial class MainWindow : Window
         for (var i = _tiles.Count - 1; i >= 0; i--)
         {
             var machine = _tiles[i].Machine;
-            if (machine == original || string.Equals(machine.Name, updated.Name, StringComparison.OrdinalIgnoreCase))
+            if (machine.IsSameEntryAs(original) || string.Equals(machine.Name, updated.Name, StringComparison.OrdinalIgnoreCase))
             {
+                // The window doesn't show the network card; saving from it
+                // must not forget the one learned.
+                updated = updated.KeepingMacAddressOf(machine);
                 RemoveTileAt(i);
                 position = i;
             }
@@ -259,16 +303,20 @@ public partial class MainWindow : Window
     private (int Added, int Updated, int Unchanged) ImportMachines(IReadOnlyList<KnownMachine> machines)
     {
         int added = 0, updated = 0, unchanged = 0;
-        foreach (var machine in machines)
+        foreach (var imported in machines)
         {
             var index = _tiles.ToList().FindIndex(tile =>
-                string.Equals(tile.Machine.Name, machine.Name, StringComparison.OrdinalIgnoreCase));
+                string.Equals(tile.Machine.Name, imported.Name, StringComparison.OrdinalIgnoreCase));
             if (index < 0)
             {
-                InsertTile(_tiles.Count, machine);
+                InsertTile(_tiles.Count, imported);
                 added++;
+                continue;
             }
-            else if (_tiles[index].Machine == machine)
+
+            // A machine file from an older installer has no network card.
+            var machine = imported.KeepingMacAddressOf(_tiles[index].Machine);
+            if (_tiles[index].Machine == machine)
             {
                 unchanged++;
             }
@@ -333,6 +381,7 @@ public partial class MainWindow : Window
             });
         };
         poller.Unreachable += reason => Dispatcher.InvokeAsync(() => tile.ShowStatus(reason));
+        poller.MacAddressLearned += macAddress => Dispatcher.InvokeAsync(() => RememberMacAddress(tile, macAddress));
         _pollers.Add(tile, poller);
         poller.Start();
     }

@@ -17,9 +17,12 @@ public sealed class MachineTile : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public KnownMachine Machine { get; }
+    public KnownMachine Machine { get; private set; }
 
     public string Name => Machine.Name;
+
+    // Nothing on the tile shows it, and nothing the poller uses changes.
+    public void RememberMacAddress(string macAddress) => Machine = Machine with { MacAddress = macAddress };
 
     public ImageSource? Thumbnail
     {
