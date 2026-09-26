@@ -262,8 +262,9 @@ function Set-ExecutavelDoServico([string]$CaminhoServico) {
 
 # Depois de instalar pelo pendrive (ou para desinstalar), nada do que uma
 # atualização pela rede deixou vale mais. Só com o serviço parado e
-# apontando para fora de Midview.update.
-function Remove-RestosDeAtualizacao {
+# apontando para fora de Midview.update. -Obrigatorio (ao desinstalar, quando
+# não fica Agent nenhum para apagar depois) falha se Midview.update ficar.
+function Remove-RestosDeAtualizacao([switch]$Obrigatorio) {
     try {
         if (Get-ScheduledTask -TaskName $TarefaRecuperacao -ErrorAction SilentlyContinue) {
             Unregister-ScheduledTask -TaskName $TarefaRecuperacao -Confirm:$false -ErrorAction Stop
@@ -280,6 +281,9 @@ function Remove-RestosDeAtualizacao {
             Remove-Item -LiteralPath $PastaAtualizacoes -Recurse -Force -ErrorAction Stop
         }
         catch {
+            if ($Obrigatorio) {
+                throw "Não foi possível apagar ${PastaAtualizacoes}: $($_.Exception.Message)"
+            }
             Write-Warning "Não foi possível apagar $PastaAtualizacoes (a próxima atualização pela rede apaga): $($_.Exception.Message)"
         }
     }

@@ -188,6 +188,33 @@ try {
         }
     }
 
+    # What a network update leaves behind (Remove-RestosDeAtualizacao), in
+    # stand-in folders, with a file held open so Midview.update can't go.
+    $PastaAtualizacoes = Join-Path $work 'Midview.update'
+    $PastaEstadoAtualizacao = Join-Path $work 'estado'
+    $TarefaRecuperacao = 'Midview - tarefa de teste que nao existe'
+    New-Item -ItemType Directory -Path (Join-Path $PastaAtualizacoes 'AB12') -Force | Out-Null
+    New-Item -ItemType Directory -Path $PastaEstadoAtualizacao -Force | Out-Null
+    Write-TextoUtf8 (Join-Path $PastaEstadoAtualizacao 'update-state.json') '{}'
+    $held = [IO.File]::Open((Join-Path $PastaAtualizacoes 'AB12\Midview.Agent.dll'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        Remove-RestosDeAtualizacao 3>$null
+        Check $true 'a Midview.update that cannot be deleted only warns after an install'
+        Check (-not (Test-Path -LiteralPath (Join-Path $PastaEstadoAtualizacao 'update-state.json'))) 'the update record is deleted'
+        try {
+            Remove-RestosDeAtualizacao -Obrigatorio 3>$null
+            Check $false 'but it stops an uninstall'
+        }
+        catch {
+            Check ($_.Exception.Message -like "*$PastaAtualizacoes*") 'but it stops an uninstall'
+        }
+    }
+    finally {
+        $held.Dispose()
+    }
+    Remove-RestosDeAtualizacao -Obrigatorio
+    Check (-not (Test-Path -LiteralPath $PastaAtualizacoes)) 'and goes once nothing holds it'
+
     Check ((Split-Path -Leaf (Join-Path $env:ProgramFiles 'Midview')) -eq 'Midview') 'the default install folder is named Midview'
     try {
         Assert-PastaDoMidview 'C:\'

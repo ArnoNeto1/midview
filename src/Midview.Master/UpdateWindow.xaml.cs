@@ -29,6 +29,7 @@ public partial class UpdateWindow : Window
     private string[] _lines = Array.Empty<string>();
     private bool _busy;
     private bool _updating;
+    private bool _closed;
     private volatile bool _stopRequested;
 
     private enum Outcome
@@ -48,8 +49,21 @@ public partial class UpdateWindow : Window
         _masterCertificate = masterCertificate;
         PackageTextBlock.Text = $"Pacote: {packageDirectory}";
         Loaded += async (_, _) => await IdentifyPackageAsync();
+
+        // Also when the window goes with its owner, which ignores a
+        // cancelled Closing: nothing new starts and in-flight work stops
+        // waiting.
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _stopRequested = true;
+            _closing.Cancel();
+        };
     }
 
+    // On opening, and again before every check or update: the package may
+    // have been rebuilt in the same folder since (Gerar-Pacote -Output <the
+    // same folder>).
     private async Task IdentifyPackageAsync()
     {
         try
@@ -61,6 +75,8 @@ public partial class UpdateWindow : Window
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
+            _manifest = null;
+            _fingerprintHex = string.Empty;
             BuildTextBlock.Text = ex.Message;
         }
         UpdateButtons();
@@ -77,7 +93,11 @@ public partial class UpdateWindow : Window
         _busy = true;
         UpdateButtons();
         ProgressTextBlock.Text = "Verificando as versões...";
-        await CheckAllAsync();
+        await IdentifyPackageAsync();
+        if (_manifest is not null)
+        {
+            await CheckAllAsync();
+        }
         ProgressTextBlock.Text = string.Empty;
         _busy = false;
         UpdateButtons();
@@ -114,10 +134,6 @@ public partial class UpdateWindow : Window
 
     private async void OnUpdateClicked(object sender, RoutedEventArgs e)
     {
-        if (_manifest is not { } manifest)
-        {
-            return;
-        }
         if (s_running)
         {
             ProgressTextBlock.Text = "Já há uma atualização pela rede em andamento, em outra janela.";
@@ -129,7 +145,18 @@ public partial class UpdateWindow : Window
         try
         {
             ProgressTextBlock.Text = "Verificando as versões...";
+            await IdentifyPackageAsync();
+            if (_manifest is not { } manifest)
+            {
+                ProgressTextBlock.Text = string.Empty;
+                return;
+            }
+            var packageFingerprint = _fingerprintHex;
             var statuses = await CheckAllAsync();
+            if (_closed)
+            {
+                return;
+            }
             var candidates = Enumerable.Range(0, _machines.Count)
                 .Where(index => statuses[index] is { OldAgent: false, Report: { } report }
                                 && !string.Equals(report.Fingerprint, _fingerprintHex, StringComparison.OrdinalIgnoreCase))
@@ -141,16 +168,25 @@ public partial class UpdateWindow : Window
             }
 
             var newer = candidates.Count(index => UpdateText.IsNewer(statuses[index]!.Report!.Build, manifest.Build));
-            if (!Confirm(candidates.Count, manifest.Build, newer))
+            if (!Confirm(candidates.Count, manifest.Build, newer) || _closed)
             {
                 ProgressTextBlock.Text = string.Empty;
+                return;
+            }
+
+            // Again: another window may have started while this one checked
+            // and asked (all windows share this thread, and nothing is
+            // awaited from here to the assignment).
+            if (s_running)
+            {
+                ProgressTextBlock.Text = "Já há uma atualização pela rede em andamento, em outra janela.";
                 return;
             }
 
             s_running = _updating = true;
             _stopRequested = false;
             UpdateButtons();
-            await RunAsync(candidates);
+            await RunAsync(candidates, packageFingerprint);
         }
         finally
         {
@@ -181,7 +217,9 @@ public partial class UpdateWindow : Window
                == MessageBoxResult.Yes;
     }
 
-    private async Task RunAsync(IReadOnlyList<int> candidates)
+    // packageFingerprint: the build the machines were checked and the
+    // teacher confirmed against.
+    private async Task RunAsync(IReadOnlyList<int> candidates, string packageFingerprint)
     {
         ProgressTextBlock.Text = "Preparando o pacote...";
         UpdatePackage package;
@@ -197,6 +235,12 @@ public partial class UpdateWindow : Window
 
         using (package)
         {
+            if (!string.Equals(Convert.ToHexString(package.Fingerprint), packageFingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                ProgressTextBlock.Text = "O pacote mudou na pasta desde a verificação. Clique em Atualizar de novo.";
+                return;
+            }
+
             // Machines are tried one at a time until one proves the build
             // works (or fails, which stops everything); a machine that
             // refused before trying proves nothing.
@@ -275,7 +319,7 @@ public partial class UpdateWindow : Window
                 (sent, total) => Dispatcher.InvokeAsync(() => SetLine(index, $"• enviando {sent * 100 / Math.Max(1, total)}%")),
                 _closing.Token));
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_closing.IsCancellationRequested)
         {
             SetLine(index, "✗ envio interrompido (a janela foi fechada)");
             return Outcome.Failed;

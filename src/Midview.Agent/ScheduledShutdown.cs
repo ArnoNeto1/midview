@@ -20,6 +20,7 @@ public sealed class ScheduledShutdown
     private readonly Func<string[], int> _runShutdown;
     private readonly object _gate = new();
     private PowerSchedule? _schedule;
+    private DateTime? _startedAt;
 
     public ScheduledShutdown(string statePath, Func<string[], int> runShutdown)
     {
@@ -93,6 +94,13 @@ public sealed class ScheduledShutdown
                 // 1190: a shutdown is already under way, e.g. the teacher's.
                 AgentLog.Warn($"The scheduled shutdown's shutdown.exe exited with code {exitCode}.");
             }
+            if (exitCode is 0 or 1190)
+            {
+                lock (_gate)
+                {
+                    _startedAt = now;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -102,16 +110,26 @@ public sealed class ScheduledShutdown
     }
 
     // The schedule shuts the machine down within window from now, or it
-    // already started and Windows is still counting down its warning. A
-    // network update started then would be cut short.
+    // already started and Windows is still counting down its warning --
+    // counted from when it actually started, which can be up to MaxLateness
+    // after the scheduled time (a machine that woke up late). A network
+    // update started then would be cut short.
     public bool IsDueWithin(DateTime now, TimeSpan window)
     {
+        var countdown = TimeSpan.FromSeconds(PowerSchedule.ShutdownWarningSeconds) + TimeSpan.FromMinutes(1);
+        lock (_gate)
+        {
+            if (_startedAt is { } startedAt && now >= startedAt && now - startedAt <= countdown)
+            {
+                return true;
+            }
+        }
+
         if (Current is not { ShutdownMinute: int minute } schedule)
         {
             return false;
         }
 
-        var countdown = TimeSpan.FromSeconds(PowerSchedule.ShutdownWarningSeconds) + TimeSpan.FromMinutes(1);
         foreach (var date in new[] { now.Date.AddDays(-1), now.Date, now.Date.AddDays(1) })
         {
             var due = date.AddMinutes(minute);

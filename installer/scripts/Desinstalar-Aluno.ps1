@@ -45,7 +45,7 @@ try {
     }
 
     Write-Etapa "Apagando $Destino"
-    Remove-RestosDeAtualizacao
+    Remove-RestosDeAtualizacao -Obrigatorio
     if (Test-Path -LiteralPath $Destino) {
         Remove-Item -LiteralPath $Destino -Recurse -Force
     }
