@@ -6,9 +6,11 @@ $PastaDados = Join-Path $env:ProgramData 'Midview'
 
 # O que a atualização pela rede usa (os mesmos nomes do Midview.Agent, em
 # UpdatePaths): as versões recebidas, a tarefa que desfaz ao ligar a máquina
-# uma atualização interrompida, e o registro da última tentativa.
+# uma atualização interrompida, e a pasta (só do sistema e dos
+# administradores) com a trava e o registro da última tentativa.
 $PastaAtualizacoes = Join-Path $env:ProgramFiles 'Midview.update'
 $TarefaRecuperacao = 'Midview - Recuperar atualização'
+$PastaEstadoAtualizacao = Join-Path $PastaDados 'update'
 $ArquivosDeAtualizacao = @('update-state.json', 'update-state.json.tmp', 'update-confirmed.json', 'update-confirmed.json.tmp')
 
 function Write-Etapa([string]$Texto) {
@@ -190,9 +192,9 @@ function Stop-Midview {
 # Uma atualização pela rede segura update.lock aberto, sem compartilhar, do
 # começo ao fim. Instalar e desinstalar esperam ela terminar e seguram o
 # arquivo até o fim, para nenhuma começar no meio. Devolve o arquivo aberto
-# (feche com .Dispose()), ou $null se o Midview nunca rodou aqui (sem a
-# pasta de dados, não há atualização).
-function Enter-TravaDeAtualizacao([string]$Trava = (Join-Path $PastaDados 'update.lock'), [int]$Segundos = 120) {
+# (feche com .Dispose()), ou $null se nunca houve um Midview com atualização
+# pela rede aqui (sem a pasta dela, não há atualização).
+function Enter-TravaDeAtualizacao([string]$Trava = (Join-Path $PastaEstadoAtualizacao 'update.lock'), [int]$Segundos = 120) {
     if (-not (Test-Path -LiteralPath (Split-Path -Path $Trava -Parent))) {
         return $null
     }
@@ -271,7 +273,7 @@ function Remove-RestosDeAtualizacao {
         Write-Warning "Não foi possível apagar a tarefa agendada `"$TarefaRecuperacao`": $($_.Exception.Message)"
     }
     foreach ($nome in $ArquivosDeAtualizacao) {
-        Remove-Item -LiteralPath (Join-Path $PastaDados $nome) -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $PastaEstadoAtualizacao $nome) -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $PastaAtualizacoes) {
         try {

@@ -70,7 +70,8 @@ undone by the build that was already running.**
 - `GetUpdateStatus` (empty, or an attempt id) → `UpdateStatus` (UTF-8 JSON):
   the installed build's fingerprint and label (or that it's still being
   computed) and the last attempt `{id, state, detail, updatedAt}`, with state
-  `receiving`, `verifying`, `applying`, `provisional`, `committed`,
+  `receiving`, `verifying`, `applying`, `provisional`, `rollbackPending`
+  (switching back failed; the boot recovery does it), `committed`,
   `rolledBack` or `failed`.
 - An Agent from before this answers `CommandAck` to either (its default for
   an unknown command): "Midview anterior à atualização pela rede: atualize
@@ -82,15 +83,23 @@ undone by the build that was already running.**
 On `UpdateOffer`:
 
 - One update at a time: an in-process flag, plus `ProgramData\Midview\
-  update.lock` opened with `FileShare.None` (students can't create it,
-  Windows releases it if the holder dies, the installer scripts can check
-  it). Refused while held: "outra atualização já está em andamento".
+  update\update.lock` opened with `FileShare.None` (Windows releases it if
+  the holder dies, the installer scripts can check it). Refused while held:
+  "outra atualização já está em andamento". The lock, the record and the
+  confirmation live in `ProgramData\Midview\update\`, whose protected ACL
+  (set at creation and on every start) lets only SYSTEM and Administrators
+  in: the data directory lets Users read, and a student who can open a file
+  for reading can hold it open without sharing, which would block the lock
+  or the record's replacement forever.
+- Refused while the last attempt is unfinished (`applying`, `provisional`,
+  `rollbackPending`): "reinicie a máquina".
 - Refused when the machine is about to shut down: the schedule is due
   within 20 minutes, or a delayed shutdown/restart from the teacher is
   still counting down.
 - "Já está nesta versão" when the offered fingerprint is the installed one.
-- Old builds cleaned up; then refused unless the drive has zip + uncompressed
-  total + 500 MB free.
+- Old builds cleaned up; refused if a folder named after the attempt id
+  still exists (only a kept build can: never extracted over); then refused
+  unless the drive has zip + uncompressed total + 500 MB free.
 - The attempt is recorded (`receiving`) and accepted.
 
 Receiving: into `Midview.update\incoming-<id>.zip`, counting and hashing. A
@@ -108,22 +117,33 @@ attempt's files deleted.
 
 Then the receiver launches the applier from **its own, running build**
 (`<running folder>\Midview.Agent.exe --apply-update`), hands over the lock,
-and waits up to 15 s for the record to say `applying`; otherwise it kills
-the applier and records `failed`.
+and waits up to 60 s for the record to say `applying`. Otherwise it kills
+the applier, waits for it to exit and reads the record again: still
+`verifying` means nothing was switched (the applier records `applying`
+before touching the service), so the attempt is `failed` and its files
+deleted; anything else means the applier got further, and the receiver
+starts `--recover-update` to put the old build back.
+
+Every step forward is recorded before it's taken; a state that can't be
+written stops the attempt. Readers open the record with delete sharing and
+the swap is retried, so a status question never makes a save fail.
 
 ## Agent: applying (`--apply-update`, `UpdateApplier`)
 
 Runs from the build that is already installed and working, as SYSTEM, as a
 separate process that outlives the service; its parameters come from the
-record in `ProgramData\Midview\update-state.json` (written as temp file,
+record in `ProgramData\Midview\update\update-state.json` (written as temp file,
 flush, move), none on the command line. The whole body is one try/finally
 with an overall deadline, so every path ends with the service pointing at a
 complete build and running.
 
-1. Take the lock; record `applying`.
+1. Take the lock; record `applying` (if that can't be written, stop:
+   nothing is switched).
 2. Register a one-shot boot task (SYSTEM): `<old build>\Midview.Agent.exe
    --recover-update`.
-3. Switch the binary path to the new build; record `provisional`.
+3. Switch the binary path to the new build (flushed to disk with
+   `RegFlushKey`); record `provisional` (if that can't be written, roll
+   back now).
 4. Restart the service: stop it through the SCM and wait for its process to
    exit (killed after 60 s); end every `Midview.Session` (in all logon
    sessions, a leftover one keeps port 5901); start it (already started by
@@ -131,19 +151,26 @@ complete build and running.
    only start a complete build: the path was switched first.
 5. Confirmation: the new Agent, when a trusted Master asks for the status of
    **this attempt** while it's `provisional`, writes
-   `ProgramData\Midview\update-confirmed.json` (students can't write there).
+   `ProgramData\Midview\update\update-confirmed.json` (students can't
+   open that folder).
    The applier commits when that appears within 5 minutes and the service
    kept the same process the whole time. A crash (new process, or stopped)
    or no confirmation: roll back.
 6. Commit: `committed`, the boot task deleted, the old build kept as the
    previous one. Roll back: switch the path back, restart the same way,
    check the old build stays up for 30 s, record `rolledBack` with the
-   reason, delete the boot task.
+   reason, delete the boot task. If switching back fails: record
+   `rollbackPending` and keep the boot task.
+
+The boot task is deleted only once a final state is on disk; until then
+the next boot finishes the job (a commit that can't be recorded is then
+rolled back: safe, and the teacher can update again).
 
 At boot, `--recover-update` (from the old build): if the last attempt isn't
 `committed`, `rolledBack` or `failed`, switch back to the old build, restart
-the service and record "interrompida; voltou para a versão anterior"; in
-every case delete the boot task.
+the service and record "interrompida; voltou para a versão anterior". The
+task deletes itself once that's recorded (or there was nothing to do); if
+it fails, it stays for the next boot.
 
 This makes a machine safe through a power cut, a scheduled shutdown or an
 applier crash at any step. A new build that doesn't start, can't serve a

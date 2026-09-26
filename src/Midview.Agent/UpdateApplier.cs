@@ -11,7 +11,8 @@ namespace Midview.Agent;
 // folders, and applying or rolling back is switching the service's binary
 // path. The rule every path keeps: the service ends up pointing at a
 // complete build and running, and an attempt that wasn't confirmed ends on
-// the old build.
+// the old build. The boot task goes away only once a final state is on
+// disk: until then, the next boot finishes the job.
 public sealed class UpdateApplier
 {
     private static readonly TimeSpan LockWait = TimeSpan.FromSeconds(15);
@@ -54,11 +55,16 @@ public sealed class UpdateApplier
 
         if (!File.Exists(oldBinary) || !File.Exists(newBinary))
         {
-            Save(record, UpdateStates.Failed, "os arquivos da atualização não estão mais lá");
+            TrySave(ref record, UpdateStates.Failed, "os arquivos da atualização não estão mais lá");
             return 1;
         }
 
-        record = Save(record, UpdateStates.Applying, "aplicando");
+        // The receiver takes "applying" as the sign this process owns the
+        // attempt; without it on disk, nothing is switched.
+        if (!TrySave(ref record, UpdateStates.Applying, "aplicando"))
+        {
+            return 1;
+        }
         UpdateConfirmation.Delete(_paths.ConfirmationPath);
 
         var switched = false;
@@ -67,7 +73,13 @@ public sealed class UpdateApplier
             _recoveryTask.Register(oldBinary);
             _service.SetBinaryPath(newBinary);
             switched = true;
-            record = Save(record, UpdateStates.Provisional, "reiniciando na versão nova");
+
+            // The new build only confirms a provisional attempt.
+            if (!TrySave(ref record, UpdateStates.Provisional, "reiniciando na versão nova"))
+            {
+                RollBack(record, oldBinary, "o registro da atualização não pôde ser gravado");
+                return 1;
+            }
 
             var processId = Restart();
             if (processId == 0)
@@ -94,9 +106,8 @@ public sealed class UpdateApplier
             {
                 RollBack(record, oldBinary, $"erro ao aplicar: {ex.Message}");
             }
-            else
+            else if (TrySave(ref record, UpdateStates.Failed, $"erro ao aplicar: {ex.Message}"))
             {
-                Save(record, UpdateStates.Failed, $"erro ao aplicar: {ex.Message}");
                 TryDeleteRecoveryTask();
             }
             return 1;
@@ -108,12 +119,14 @@ public sealed class UpdateApplier
     }
 
     // At boot, from the old build: an attempt that didn't reach a final
-    // state was interrupted (power cut, shutdown, crash) -- back to the old
-    // build. In every case the task deletes itself.
+    // state was interrupted (power cut, shutdown, crash) or couldn't switch
+    // back -- back to the old build. The task deletes itself once the
+    // attempt is final on disk; if this fails, the next boot tries again.
     public int Recover()
     {
         using var updateLock = UpdateLock.Acquire(_paths.LockPath, TimeSpan.FromMinutes(1), _clock);
         var record = UpdateRecordFile.Load(_paths.StatePath);
+        var done = true;
         try
         {
             if (record is not null && !UpdateStates.IsFinal(record.State))
@@ -122,23 +135,27 @@ public sealed class UpdateApplier
                 {
                     _service.SetBinaryPath(oldBinary);
                     Restart();
-                    Save(record, UpdateStates.RolledBack, "interrompida; voltou para a versão anterior");
+                    done = TrySave(ref record, UpdateStates.RolledBack, "interrompida; voltou para a versão anterior");
                 }
                 else
                 {
-                    Save(record, UpdateStates.Failed, "interrompida");
+                    done = TrySave(ref record, UpdateStates.Failed, "interrompida");
                 }
             }
-            return 0;
+            return done ? 0 : 1;
         }
         catch (Exception ex)
         {
             AgentLog.Warn($"Update recovery failed: {ex.Message}");
+            done = false;
             return 1;
         }
         finally
         {
-            TryDeleteRecoveryTask();
+            if (done)
+            {
+                TryDeleteRecoveryTask();
+            }
             EnsureStarted();
         }
     }
@@ -164,15 +181,20 @@ public sealed class UpdateApplier
         return "a versão nova não foi confirmada pelo MidviewMaster a tempo";
     }
 
+    // A commit that can't be recorded keeps the boot task: the next boot
+    // then goes back to the old build rather than leave an attempt that
+    // looks unfinished forever.
     private void Commit(UpdateRecord record)
     {
-        Save(record, UpdateStates.Committed, record.TargetBuild is { } build ? $"atualizada para {build}" : "atualizada");
-        UpdateConfirmation.Delete(_paths.ConfirmationPath);
-        TryDeleteRecoveryTask();
+        if (TrySave(ref record, UpdateStates.Committed, record.TargetBuild is { } build ? $"atualizada para {build}" : "atualizada"))
+        {
+            UpdateConfirmation.Delete(_paths.ConfirmationPath);
+            TryDeleteRecoveryTask();
+        }
     }
 
-    // Keeps the boot task if switching back fails, so the next boot tries
-    // again.
+    // If switching back fails, the attempt stays unfinished (RollbackPending)
+    // with the boot task in place, so the next boot switches back.
     private void RollBack(UpdateRecord record, string oldBinary, string reason)
     {
         try
@@ -180,16 +202,19 @@ public sealed class UpdateApplier
             _service.SetBinaryPath(oldBinary);
             var processId = Restart();
             var healthy = processId != 0 && StaysUp(processId);
-            Save(record, UpdateStates.RolledBack, healthy
-                ? $"{reason}; voltou para a versão anterior"
-                : $"{reason}; voltou para a versão anterior, mas ela também não ficou de pé (veja a máquina)");
-            UpdateConfirmation.Delete(_paths.ConfirmationPath);
-            TryDeleteRecoveryTask();
+            if (TrySave(ref record, UpdateStates.RolledBack, healthy
+                    ? $"{reason}; voltou para a versão anterior"
+                    : $"{reason}; voltou para a versão anterior, mas ela também não ficou de pé (veja a máquina)"))
+            {
+                UpdateConfirmation.Delete(_paths.ConfirmationPath);
+                TryDeleteRecoveryTask();
+            }
         }
         catch (Exception ex)
         {
             AgentLog.Warn($"Update rollback failed: {ex.Message}");
-            Save(record, UpdateStates.Failed, $"{reason}; e não foi possível voltar para a versão anterior agora ({ex.Message}) — ela volta ao reiniciar a máquina");
+            TrySave(ref record, UpdateStates.RollbackPending,
+                $"{reason}; e não foi possível voltar para a versão anterior agora ({ex.Message}) — ela volta ao reiniciar a máquina");
         }
     }
 
@@ -278,17 +303,21 @@ public sealed class UpdateApplier
         }
     }
 
-    private UpdateRecord Save(UpdateRecord record, string state, string detail)
+    // False when the state couldn't be written: what's on disk is still the
+    // previous state, and the caller must act on that.
+    private bool TrySave(ref UpdateRecord record, string state, string detail)
     {
         var updated = record with { State = state, Detail = detail, UpdatedAt = _clock.Now };
         try
         {
             UpdateRecordFile.Save(_paths.StatePath, updated);
+            record = updated;
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             AgentLog.Warn($"Couldn't save the update record ({state}): {ex.Message}");
+            return false;
         }
-        return updated;
     }
 }

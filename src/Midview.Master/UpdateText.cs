@@ -62,6 +62,7 @@ public static class UpdateText
         UpdateStates.Verifying => "conferindo o pacote...",
         UpdateStates.Applying => "trocando de versão...",
         UpdateStates.Provisional => "reiniciando na versão nova...",
+        UpdateStates.RollbackPending => "volta para a versão anterior quando a máquina reiniciar",
         _ => state,
     };
 }

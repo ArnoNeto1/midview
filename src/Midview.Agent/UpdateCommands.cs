@@ -16,6 +16,14 @@ public static class UpdateCommands
     {
         try
         {
+            try
+            {
+                UpdatePaths.Default.EnsureStateDirectory();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                AgentLog.Warn($"Update {name}: couldn't protect the update folder: {ex.Message}");
+            }
             return step(new UpdateApplier(
                 UpdatePaths.Default, new WindowsServiceControl(), new SchtasksRecoveryTask(), SessionProcesses.KillAll,
                 SystemUpdateClock.Instance));

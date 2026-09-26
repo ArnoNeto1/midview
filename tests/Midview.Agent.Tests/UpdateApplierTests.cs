@@ -183,16 +183,72 @@ public class UpdateApplierTests : IDisposable
     }
 
     [Fact]
-    public void ARollbackThatCantSwitchBack_KeepsTheBootTask()
+    public void ARollbackThatCantSwitchBack_IsLeftToTheBootTask_WhichSwitchesBack()
     {
         HandOver();
         _service.SetPathThrows = path => path == _oldBinary ? new InvalidOperationException("SCM ocupado") : null;
 
         Applier().Apply();
 
-        Assert.Equal(UpdateStates.Failed, Record().State);
+        Assert.Equal(UpdateStates.RollbackPending, Record().State);
         Assert.Contains("ao reiniciar a máquina", Record().Detail);
-        Assert.False(_task.Deleted); // the next boot switches back
+        Assert.False(_task.Deleted);
+
+        // The next boot.
+        _service.SetPathThrows = null;
+        Assert.Equal(0, Applier().Recover());
+
+        Assert.Equal(UpdateStates.RolledBack, Record().State);
+        Assert.Equal(_oldBinary, _service.BinaryPath);
+        Assert.True(_task.Deleted);
+    }
+
+    [Fact]
+    public void AnApplyingStateThatCantBeSaved_SwitchesNothing()
+    {
+        HandOver();
+        BlockRecordWrites();
+
+        Assert.Equal(1, Applier().Apply());
+
+        Assert.DoesNotContain(_service.Calls, call => call.StartsWith("path"));
+        Assert.Null(_task.Registered);
+        Assert.Equal(UpdateStates.Verifying, Record().State);
+    }
+
+    [Fact]
+    public void ACommitThatCantBeSaved_KeepsTheBootTask()
+    {
+        HandOver();
+        _service.OnQuery = service =>
+        {
+            if (service.BinaryPath == _newBinary && service.State == ServiceRunState.Running
+                && UpdateConfirmation.Read(_paths.ConfirmationPath) is null)
+            {
+                UpdateConfirmation.Write(_paths.ConfirmationPath, AttemptId);
+                BlockRecordWrites();
+            }
+        };
+
+        Applier().Apply();
+
+        // Still unfinished on disk, so the boot task must stay to finish it.
+        Assert.Equal(UpdateStates.Provisional, Record().State);
+        Assert.False(_task.Deleted);
+    }
+
+    [Fact]
+    public void Recover_ThatCantSwitchBack_KeepsTheTask_ForTheNextBoot()
+    {
+        HandOver(UpdateStates.Provisional);
+        _service.BinaryPath = _newBinary;
+        _task.Registered = _oldBinary;
+        _service.SetPathThrows = _ => new InvalidOperationException("SCM ocupado");
+
+        Assert.Equal(1, Applier().Recover());
+
+        Assert.Equal(UpdateStates.Provisional, Record().State);
+        Assert.False(_task.Deleted);
     }
 
     [Fact]
@@ -222,6 +278,10 @@ public class UpdateApplierTests : IDisposable
         Assert.Equal(_newBinary, _service.BinaryPath);
         Assert.True(_task.Deleted);
     }
+
+    // The record can still be read, but no new state can be written: the
+    // temp file it's written through can't be created.
+    private void BlockRecordWrites() => Directory.CreateDirectory(_paths.StatePath + ".tmp");
 
     private static string CreateExe(string folder)
     {
