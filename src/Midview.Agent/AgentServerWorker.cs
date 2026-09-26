@@ -20,11 +20,20 @@ public sealed class AgentServerWorker : BackgroundService
 
     public static string HostsFilePath => Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts");
 
-    private readonly ScheduledShutdown _scheduledShutdown;
+    // A program holding port 28900 while the service was stopped (a
+    // student's, during an update) mustn't lock the teacher out until the
+    // next restart: the listener keeps trying.
+    private static readonly TimeSpan ListenerRetryDelay = TimeSpan.FromSeconds(5);
 
-    public AgentServerWorker(ScheduledShutdown scheduledShutdown)
+    private readonly ScheduledShutdown _scheduledShutdown;
+    private readonly PowerCommandHandler _powerHandler;
+    private readonly UpdateReceiver _updateReceiver;
+
+    public AgentServerWorker(ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver)
     {
         _scheduledShutdown = scheduledShutdown;
+        _powerHandler = powerHandler;
+        _updateReceiver = updateReceiver;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -63,19 +72,41 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile site-block state at startup: {ex.Message}");
             }
 
-            var server = new AgentServer(
-                new TcpListener(IPAddress.Any, AgentPort), certificate, new TrustStore(trustedMasters), commandHandler,
-                new PowerCommandHandler(PowerCommandHandler.RunShutdownExe), scheduledShutdown: _scheduledShutdown);
-
-            return Task.Run(() =>
+            var trustStore = new TrustStore(trustedMasters);
+            return Task.Run(async () =>
             {
-                try
+                var failing = false;
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    server.Run(stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    AgentLog.Warn($"AgentServer.Run failed: {ex.Message}");
+                    try
+                    {
+                        var server = new AgentServer(
+                            new TcpListener(IPAddress.Any, AgentPort), certificate, trustStore, commandHandler,
+                            _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver);
+                        if (failing)
+                        {
+                            AgentLog.Warn("AgentServer: listening again.");
+                            failing = false;
+                        }
+                        server.Run(stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (!failing)
+                        {
+                            AgentLog.Warn($"AgentServer.Run failed, retrying every {ListenerRetryDelay.TotalSeconds} s: {ex.Message}");
+                            failing = true;
+                        }
+                    }
+
+                    try
+                    {
+                        await Task.Delay(ListenerRetryDelay, stoppingToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }, stoppingToken);
         }

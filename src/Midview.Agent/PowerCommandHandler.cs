@@ -45,11 +45,28 @@ public sealed class PowerCommandHandler
     private const int NoShutdownInProgress = 1116; // ERROR_NO_SHUTDOWN_IN_PROGRESS
     private const int ShutdownAlreadyScheduled = 1190; // ERROR_SHUTDOWN_IS_SCHEDULED
 
-    private readonly Func<string[], int> _runShutdown;
+    // A delayed shutdown keeps counting down in Windows after the Agent
+    // stops, so a network update started now would be cut short by it.
+    private static readonly TimeSpan PendingMargin = TimeSpan.FromMinutes(2);
 
-    public PowerCommandHandler(Func<string[], int> runShutdown)
+    private readonly Func<string[], int> _runShutdown;
+    private readonly Func<DateTime> _utcNow;
+    private readonly object _gate = new();
+    private DateTime? _pendingUntil;
+
+    public PowerCommandHandler(Func<string[], int> runShutdown, Func<DateTime>? utcNow = null)
     {
         _runShutdown = runShutdown;
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
+    }
+
+    // A shutdown or restart this Agent started is still counting down.
+    public bool IsShutdownPending()
+    {
+        lock (_gate)
+        {
+            return _pendingUntil is { } until && _utcNow() < until;
+        }
     }
 
     public (bool Succeeded, string Detail) Handle(byte[] payload)
@@ -68,6 +85,18 @@ public sealed class PowerCommandHandler
         {
             AgentLog.Warn($"Running shutdown.exe failed: {ex.Message}");
             return (false, $"não foi possível executar o shutdown.exe: {ex.Message}");
+        }
+
+        lock (_gate)
+        {
+            if (action == PowerAction.Cancel && exitCode is 0 or NoShutdownInProgress)
+            {
+                _pendingUntil = null;
+            }
+            else if (action != PowerAction.Cancel && exitCode == 0)
+            {
+                _pendingUntil = _utcNow() + TimeSpan.FromSeconds(delaySeconds) + PendingMargin;
+            }
         }
 
         var verb = action == PowerAction.Restart ? "reinicia" : "desliga";

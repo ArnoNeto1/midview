@@ -72,6 +72,29 @@ public class ScheduledShutdownTests : IDisposable
         Assert.False(ScheduledShutdown.IsDue(
             Weekdays6pm with { ShutdownMinute = null }, Monday.AddHours(17.99), Monday.AddHours(18.01)));
 
+    [Theory]
+    [InlineData(17.5, true)] // due in 30 min... within 40
+    [InlineData(18.05, true)] // fired 3 min ago: Windows is still counting down
+    [InlineData(16.0, false)]
+    [InlineData(18.5, false)]
+    public void IsDueWithin_SoonOrCountingDown(double hour, bool expected)
+    {
+        var scheduled = Create();
+        scheduled.Handle(Weekdays6pm.Encode());
+
+        Assert.Equal(expected, scheduled.IsDueWithin(Monday.AddHours(hour), TimeSpan.FromMinutes(40)));
+    }
+
+    [Fact]
+    public void IsDueWithin_NotOnADayOff_NorWithoutASchedule()
+    {
+        Assert.False(Create().IsDueWithin(Monday.AddHours(17.9), TimeSpan.FromMinutes(20)));
+
+        var scheduled = Create();
+        scheduled.Handle(Weekdays6pm.Encode());
+        Assert.False(scheduled.IsDueWithin(Monday.AddDays(5).AddHours(17.9), TimeSpan.FromMinutes(20)));
+    }
+
     [Fact]
     public void Check_WhenDue_RunsShutdownWithTheScheduledWarning()
     {

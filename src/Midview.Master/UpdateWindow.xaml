@@ -1,0 +1,24 @@
+<Window x:Class="Midview.Master.UpdateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Atualizar pela rede" Height="620" Width="660"
+        WindowStartupLocation="CenterOwner" Closing="OnClosing">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="PackageTextBlock" FontWeight="Bold" TextWrapping="Wrap" />
+            <TextBlock x:Name="BuildTextBlock" TextWrapping="Wrap" Margin="0,4,0,8" Text="Lendo o pacote..." />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Atualiza o programa dos alunos nas máquinas que já têm o Midview, sem passar com o pendrive. Cada máquina troca de versão sozinha e, se a nova não funcionar, volta para a anterior. Só o programa muda: os professores que cada máquina aceita continuam os mesmos (para autorizar ou tirar um professor, reinstale com o pendrive). Uma máquina com um Midview anterior a esta função precisa ser atualizada uma vez com o pendrive." />
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="CheckButton" Content="Verificar versões" Click="OnCheckClicked" Padding="10,4" Margin="0,0,8,0" IsEnabled="False" />
+                <Button x:Name="UpdateButton" Content="Atualizar" Click="OnUpdateClicked" Padding="10,4" Margin="0,0,8,0" IsEnabled="False" />
+                <Button x:Name="StopButton" Content="Parar" Click="OnStopClicked" Padding="10,4" IsEnabled="False"
+                        ToolTip="Não começa mais nenhuma máquina; as que já estão trocando de versão terminam." />
+            </StackPanel>
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

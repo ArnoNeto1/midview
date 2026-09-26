@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -6,19 +7,24 @@ namespace Midview.Master;
 
 // The teacher's side of installing Midview on the lab (see InstallPackage):
 // authorize this Master in the package before going around the lab, then
-// import the machines it was installed on.
+// import the machines it was installed on; later, push a newer package's
+// program to them over the network (UpdateWindow).
 public partial class LabInstallWindow : Window
 {
-    private readonly string _masterThumbprint;
+    private readonly X509Certificate2 _masterCertificate;
     private readonly Func<IReadOnlyList<KnownMachine>, (int Added, int Updated, int Unchanged)> _importToRoster;
+    private readonly Func<IReadOnlyList<KnownMachine>> _roster;
     private string? _packageDirectory;
 
     public LabInstallWindow(
-        string masterThumbprint, Func<IReadOnlyList<KnownMachine>, (int Added, int Updated, int Unchanged)> importToRoster)
+        X509Certificate2 masterCertificate,
+        Func<IReadOnlyList<KnownMachine>, (int Added, int Updated, int Unchanged)> importToRoster,
+        Func<IReadOnlyList<KnownMachine>> roster)
     {
         InitializeComponent();
-        _masterThumbprint = masterThumbprint;
+        _masterCertificate = masterCertificate;
         _importToRoster = importToRoster;
+        _roster = roster;
     }
 
     private void OnChoosePackageClicked(object sender, RoutedEventArgs e)
@@ -41,7 +47,15 @@ public partial class LabInstallWindow : Window
             _packageDirectory = null;
             PackageTextBlock.Text = $"{dialog.FolderName} não é um pacote de instalação (falta {InstallPackage.StudentInstallerFileName}).";
         }
-        AuthorizeButton.IsEnabled = ImportButton.IsEnabled = _packageDirectory is not null;
+        AuthorizeButton.IsEnabled = ImportButton.IsEnabled = NetworkUpdateButton.IsEnabled = _packageDirectory is not null;
+    }
+
+    private void OnNetworkUpdateClicked(object sender, RoutedEventArgs e)
+    {
+        if (_packageDirectory is { } packageDirectory)
+        {
+            new UpdateWindow(packageDirectory, _roster, _masterCertificate) { Owner = this }.Show();
+        }
     }
 
     private void OnAuthorizeClicked(object sender, RoutedEventArgs e)
@@ -53,7 +67,7 @@ public partial class LabInstallWindow : Window
 
         try
         {
-            var authorized = InstallPackage.AuthorizeMaster(packageDirectory, _masterThumbprint);
+            var authorized = InstallPackage.AuthorizeMaster(packageDirectory, _masterCertificate.Thumbprint);
             AuthorizeResultTextBlock.Text = authorized.Count == 1
                 ? "Autorizado. As máquinas instaladas com este pacote vão aceitar este professor."
                 : $"Autorizado. O pacote autoriza {authorized.Count} professores (os outros já estavam nele).";

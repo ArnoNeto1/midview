@@ -249,7 +249,7 @@ public partial class MainWindow : Window
         new AddMachineWindow(_masterCertificate, SaveMachine, existing) { Owner = this }.Show();
 
     private void OnLabInstallClicked(object sender, RoutedEventArgs e) =>
-        new LabInstallWindow(_masterCertificate.Thumbprint, ImportMachines) { Owner = this }.Show();
+        new LabInstallWindow(_masterCertificate, ImportMachines, () => _tiles.Select(tile => tile.Machine).ToList()) { Owner = this }.Show();
 
     private void OnRemoveMachineClicked(object sender, RoutedEventArgs e)
     {

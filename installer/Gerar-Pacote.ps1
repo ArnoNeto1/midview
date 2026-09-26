@@ -40,6 +40,50 @@ function Copy-Text([string]$Source, [string]$Destination, [bool]$WithBom) {
     [IO.File]::WriteAllText($Destination, $text, (New-Object Text.UTF8Encoding $WithBom))
 }
 
+# midview-build.json, next to the student program: what the MidviewMaster
+# needs to push it over the network (BuildManifest in Midview.Protocol) --
+# a label (build time and git commit), the update protocol, and exactly the
+# files published, as '/'-separated paths relative to the folder. Written by
+# hand, without BOM: 5.1's ConvertTo-Json changes one-item lists.
+function Write-BuildManifest([string]$Folder) {
+    $commit = 'local'
+    try {
+        $hash = & git -C $repository rev-parse --short HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $hash) {
+            $commit = "$hash".Trim()
+        }
+    }
+    catch {
+        # No git: the label just says "local".
+    }
+    $label = (Get-Date).ToString('yyyy-MM-dd HH:mm', [Globalization.CultureInfo]::InvariantCulture) + " $commit"
+
+    $separator = [IO.Path]::DirectorySeparatorChar
+    $root = (Get-Item -LiteralPath $Folder).FullName.TrimEnd($separator) + $separator
+    $files = New-Object System.Collections.Generic.List[string]
+    foreach ($file in Get-ChildItem -LiteralPath $Folder -Recurse -File -Force) {
+        $relative = $file.FullName.Substring($root.Length).Replace([string]$separator, '/')
+        if ($relative -ne 'midview-build.json') {
+            $files.Add($relative)
+        }
+    }
+    $files.Sort([StringComparer]::Ordinal)
+
+    $quote = { param($text) '"' + ($text -replace '\\', '\\' -replace '"', '\"') + '"' }
+    $items = foreach ($relative in $files) { '    ' + (& $quote $relative) }
+    $json = @(
+        '{'
+        '  "build": ' + (& $quote $label) + ','
+        '  "updateProtocol": 1,'
+        '  "files": ['
+        ($items -join ",`r`n")
+        '  ]'
+        '}'
+    ) -join "`r`n"
+    [IO.File]::WriteAllText((Join-Path $Folder 'midview-build.json'), $json, (New-Object Text.UTF8Encoding $false))
+    Write-Host "Build $label ($($files.Count) files)" -ForegroundColor Cyan
+}
+
 foreach ($folder in 'aluno', 'professor', 'scripts') {
     $path = Join-Path $programs $folder
     if (Test-Path -LiteralPath $path) {
@@ -54,6 +98,7 @@ foreach ($folder in 'aluno', 'professor', 'scripts') {
 # fine on those, while the Session would break on the Agent's stubs.
 Publish-Project 'Midview.Agent' (Join-Path $programs 'aluno')
 Publish-Project 'Midview.Session' (Join-Path $programs 'aluno')
+Write-BuildManifest (Join-Path $programs 'aluno')
 Publish-Project 'Midview.Master' (Join-Path $programs 'professor')
 
 $scripts = New-Item -ItemType Directory -Path (Join-Path $programs 'scripts') -Force
