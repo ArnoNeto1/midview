@@ -1,0 +1,75 @@
+# Installs Midview on a real Windows machine (the runner, a throwaway VM)
+# with the lab installer, updates it over the network for real -- a good
+# build that must be committed, then a broken one that must roll itself
+# back -- and reinstalls and uninstalls it with the USB scripts. This is
+# what the unit tests can only fake: the service control manager, the
+# switch between builds, the restarts (installer/tests/Testar-Atualizacao.ps1).
+# A Windows runner bills 2x the minutes of a Linux one, so this runs only
+# for changes to what it exercises.
+name: Atualização pela rede (Windows de verdade)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/Midview.Agent/**'
+      - 'src/Midview.Protocol/**'
+      - 'src/Midview.Master/Update*'
+      - 'src/Midview.Master/InstallPackage.cs'
+      - 'installer/**'
+      - 'tests/Midview.E2E/**'
+      - '.github/workflows/atualizacao.yml'
+  pull_request:
+    paths:
+      - 'src/Midview.Agent/**'
+      - 'src/Midview.Protocol/**'
+      - 'src/Midview.Master/Update*'
+      - 'src/Midview.Master/InstallPackage.cs'
+      - 'installer/**'
+      - 'tests/Midview.E2E/**'
+      - '.github/workflows/atualizacao.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atualizacao-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  atualizacao:
+    name: Instalar e atualizar de verdade
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # powershell.exe is Windows PowerShell 5.1, what lab machines run.
+      - name: Gerar o pacote (Windows PowerShell 5.1)
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Pacote.ps1 -Output "%RUNNER_TEMP%\Midview-Instalacao"
+
+      - name: Compilar o professor de teste
+        run: dotnet build tests/Midview.E2E --configuration Release --output "${{ runner.temp }}/professor-de-teste"
+
+      - name: Instalar, atualizar pela rede, voltar, reinstalar e desinstalar
+        shell: cmd
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Atualizacao.ps1
+          -Pacote "%RUNNER_TEMP%\Midview-Instalacao"
+          -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
+          -Registros "%RUNNER_TEMP%\registros"
+
+      - name: Guardar os registros do Agent
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registros-da-atualizacao
+          path: ${{ runner.temp }}/registros
+          retention-days: 7
+          if-no-files-found: ignore
