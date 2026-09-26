@@ -32,7 +32,23 @@ public class UpdateReceiverTests : IDisposable
         _launcher = new FakeLauncher(_paths);
     }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    // Retried: on Windows, a record the Agent's handler thread is still
+    // reading can't be deleted for a moment.
+    public void Dispose()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_root, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 25)
+            {
+                Thread.Sleep(200);
+            }
+        }
+    }
 
     private UpdateReceiver Receiver(byte[]? installedFingerprint = null) => new(
         _paths, _usbFolder, _runningExe, new InstalledBuild(installedFingerprint, "2026-09-20 08:00 0000000"),
@@ -415,6 +431,15 @@ public class UpdateReceiverTests : IDisposable
             Assert.Equal(MessageType.UpdateStatus, status.Type);
             Assert.True(UpdateStatusReport.TryDecode(status.Payload, out var report));
             Assert.Equal(AttemptId, report.Attempt!.Id);
+
+            // The handler goes on verifying after answering; it's done once
+            // the (fake) applier has taken over.
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (Record()?.State != UpdateStates.Applying && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+            }
+            Assert.Equal(UpdateStates.Applying, Record()?.State);
         }
         finally
         {
