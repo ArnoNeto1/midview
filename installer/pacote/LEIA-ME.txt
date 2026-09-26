@@ -56,6 +56,24 @@ roteador, ou marque "Conectar pelo nome do computador" antes de importar.
 Para conectar pelo nome, a rede precisa encontrar as máquinas pelo nome.
 
 
+Ligar as máquinas pela rede
+---------------------------
+"Ligar a turma..." no MidviewMaster liga pela rede as máquinas desligadas
+(Wake-on-LAN). Para isso, em cada máquina de aluno:
+  - na BIOS/UEFI, ative "Wake on LAN" (o nome varia: "Power On by PCI-E",
+    "Resume by LAN"...) e desative "ErP" ou "Deep Sleep", se existir;
+  - a máquina fica na tomada e no cabo de rede (pelo Wi-Fi não liga);
+  - no Windows, nas propriedades da placa de rede, "Wake on Magic Packet"
+    fica ativado e, em "Gerenciamento de Energia", "Permitir que este
+    dispositivo ative o computador" fica marcado (em geral já vem assim).
+O PC do professor precisa estar na mesma rede das máquinas. O MidviewMaster
+conhece a placa de rede de cada máquina pela ficha da instalação, ou aprende
+sozinho na primeira vez que vê a máquina ligada.
+Se uma máquina liga depois de desligada pelo Midview, mas não depois de
+desligada pelo menu Iniciar, desative a "Inicialização rápida" nas Opções de
+Energia do Windows dela.
+
+
 Desinstalar
 -----------
 Desinstalar-Aluno.cmd desbloqueia a internet e os sites, reativa teclado e

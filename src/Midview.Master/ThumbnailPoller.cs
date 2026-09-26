@@ -20,25 +20,41 @@ public sealed class ThumbnailPoller : IDisposable
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
     private const int ReplyTimeoutMs = 10_000;
 
+    // After a failed attempt (an Agent not running, or from before it could
+    // answer); an answer, even "don't know", isn't asked for again.
+    private static readonly TimeSpan MacAddressRetryInterval = TimeSpan.FromMinutes(5);
+
     private readonly KnownMachine _machine;
     private readonly X509Certificate2 _masterCertificate;
     private readonly int _port;
+    private readonly int _agentPort;
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
+    private bool _macAddressAnswered;
+    private DateTime _nextMacAddressAttempt = DateTime.MinValue;
 
-    public ThumbnailPoller(KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort)
+    public ThumbnailPoller(
+        KnownMachine machine, X509Certificate2 masterCertificate,
+        int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
         _port = port;
+        _agentPort = agentPort;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
 
-    // Both raised on the poller's own thread. An empty thumbnail means the
+    // All raised on the poller's own thread. An empty thumbnail means the
     // machine answered but its screen can't be captured right now (e.g. it's
     // locked); the string is a short reason to show on the tile.
     public event Action<byte[]>? ThumbnailReceived;
     public event Action<string>? Unreachable;
+
+    // The MAC address ("AA-BB-CC-DD-EE-FF") of the machine's card on this
+    // network, as its Agent reports it: asked once per poller, the first
+    // time the machine answers -- i.e. once each time Master starts, which
+    // also catches a card that was replaced.
+    public event Action<string>? MacAddressLearned;
 
     public void Start() => _thread.Start();
 
@@ -73,6 +89,8 @@ public sealed class ThumbnailPoller : IDisposable
                 {
                     ThumbnailReceived?.Invoke(reply.Payload);
                 }
+
+                AskForMacAddressOnce();
             }
             catch (Exception ex)
             {
@@ -95,6 +113,34 @@ public sealed class ThumbnailPoller : IDisposable
 
         channel?.Dispose();
         tcpClient?.Dispose();
+    }
+
+    // Only right after a thumbnail, when the machine is known to be on, so
+    // an offline machine never costs a connection timeout here.
+    private void AskForMacAddressOnce()
+    {
+        if (_macAddressAnswered || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
+            || DateTime.UtcNow < _nextMacAddressAttempt || _stop.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            var reply = CommandClient.Ask(
+                _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
+                MessageType.GetWakeAddress, Array.Empty<byte>());
+            _macAddressAnswered = true;
+            if (reply.Type == MessageType.WakeAddress && WakeOnLan.IsUsableMacAddress(reply.Payload)
+                && !_stop.IsCancellationRequested)
+            {
+                MacAddressLearned?.Invoke(WakeOnLan.FormatMacAddress(reply.Payload));
+            }
+        }
+        catch (Exception)
+        {
+            _nextMacAddressAttempt = DateTime.UtcNow + MacAddressRetryInterval;
+        }
     }
 
     private TcpClient ConnectTcp()

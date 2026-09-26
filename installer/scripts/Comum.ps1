@@ -76,17 +76,58 @@ function Write-ProfessoresAutorizados([string]$Caminho, [string[]]$Thumbprints) 
 }
 
 # A ficha que o MidviewMaster importa (InstallPackage.LoadInstalledMachines).
-function New-FichaMaquina([string]$Nome, [string[]]$Enderecos, [string]$SessionThumbprint, [string]$AgentThumbprint, [datetime]$Quando) {
+# Sem o endereço da placa de rede, "macAddress" fica null.
+function New-FichaMaquina([string]$Nome, [string[]]$Enderecos, [string]$SessionThumbprint, [string]$AgentThumbprint, [string]$EnderecoMac, [datetime]$Quando) {
     $itens = foreach ($endereco in $Enderecos) { ConvertTo-TextoJson $endereco }
+    $mac = if ($EnderecoMac) { ConvertTo-TextoJson $EnderecoMac } else { 'null' }
     @(
         '{'
         '  "computerName": ' + (ConvertTo-TextoJson $Nome) + ','
         '  "addresses": [' + ($itens -join ', ') + '],'
         '  "sessionThumbprint": ' + (ConvertTo-TextoJson $SessionThumbprint) + ','
         '  "agentThumbprint": ' + (ConvertTo-TextoJson $AgentThumbprint) + ','
+        '  "macAddress": ' + $mac + ','
         '  "installedAt": ' + (ConvertTo-TextoJson $Quando.ToString('o'))
         '}'
     ) -join "`r`n"
+}
+
+# A mesma regra do MidviewMaster (WakeOnLan.NormalizeMacAddress): 12 dígitos
+# hexadecimais, com ou sem "-" ou ":", que não sejam todos zero nem um
+# endereço de grupo (multicast/broadcast). Devolve "AA-BB-CC-DD-EE-FF".
+function ConvertTo-EnderecoMacNormalizado([string]$Valor) {
+    if (-not $Valor) {
+        return $null
+    }
+    $hex = ($Valor.Trim() -replace '[-:]', '').ToUpperInvariant()
+    if ($hex -notmatch '^[0-9A-F]{12}$' -or $hex -eq '000000000000') {
+        return $null
+    }
+    if ([Convert]::ToInt32($hex.Substring(0, 2), 16) -band 1) {
+        return $null
+    }
+    return (($hex -split '(..)' | Where-Object { $_ }) -join '-')
+}
+
+# O endereço da placa de rede do laboratório (a primeira placa ligada com
+# gateway, como em Get-EnderecosIPv4), para o professor poder ligar a
+# máquina pela rede (Wake-on-LAN). Nunca impede a instalação: sem ele, o
+# MidviewMaster aprende o endereço sozinho quando vê a máquina ligada.
+function Get-EnderecoMac {
+    try {
+        foreach ($configuracao in @(Get-NetIPConfiguration -ErrorAction Stop)) {
+            if ($configuracao.IPv4DefaultGateway -and $configuracao.NetAdapter.Status -eq 'Up') {
+                $mac = ConvertTo-EnderecoMacNormalizado $configuracao.NetAdapter.MacAddress
+                if ($mac) {
+                    return $mac
+                }
+            }
+        }
+    }
+    catch {
+        # Sem Get-NetIPConfiguration: a ficha vai sem o endereço.
+    }
+    return $null
 }
 
 function Write-TextoUtf8([string]$Caminho, [string]$Texto) {

@@ -94,16 +94,27 @@ try {
 
     $when = Get-Date '2026-09-24T10:00:00'
     foreach ($case in @(
-            @{ Name = 'ALUNO-01'; Addresses = @('192.168.0.21') },
-            @{ Name = 'ALUNO-02'; Addresses = @() },
-            @{ Name = 'ALUNO-03'; Addresses = @('10.0.0.3', '192.168.56.1') },
-            @{ Name = 'SALA"1\x'; Addresses = @('10.0.0.4') })) {
-        $json = New-FichaMaquina $case.Name $case.Addresses $session $agent $when
+            @{ Name = 'ALUNO-01'; Addresses = @('192.168.0.21'); Mac = '00-1A-2B-3C-4D-5E' },
+            @{ Name = 'ALUNO-02'; Addresses = @(); Mac = $null },
+            @{ Name = 'ALUNO-03'; Addresses = @('10.0.0.3', '192.168.56.1'); Mac = '00-11-22-33-44-55' },
+            @{ Name = 'SALA"1\x'; Addresses = @('10.0.0.4'); Mac = $null })) {
+        $json = New-FichaMaquina $case.Name $case.Addresses $session $agent $case.Mac $when
         $parsed = $json | ConvertFrom-Json
         Check ($parsed.computerName -eq $case.Name -and $parsed.sessionThumbprint -eq $session -and $parsed.agentThumbprint -eq $agent) "the machine file for $($case.Name) reads back"
         $addresses = @($parsed.addresses)
         Check ($addresses.Count -eq $case.Addresses.Count -and (($addresses -join ',') -eq ($case.Addresses -join ','))) "and keeps its $($case.Addresses.Count) address(es) as a list"
+        Check ($parsed.macAddress -eq $case.Mac) "and its network card ($(if ($case.Mac) { $case.Mac } else { 'none' }))"
     }
+
+    # The same rule as the Master's WakeOnLan.NormalizeMacAddress.
+    Check ((ConvertTo-EnderecoMacNormalizado '00:1a:2b:3c:4d:5e') -eq '00-1A-2B-3C-4D-5E') 'a MAC address is normalized'
+    Check ((ConvertTo-EnderecoMacNormalizado ' 001A2B3C4D5E ') -eq '00-1A-2B-3C-4D-5E') 'a MAC address without separators is normalized'
+    foreach ($bad in @('', '00-1A-2B-3C-4D', '00-1A-2B-3C-4D-ZZ', '00-00-00-00-00-00', 'FF-FF-FF-FF-FF-FF', '01-00-5E-00-00-01')) {
+        Check ($null -eq (ConvertTo-EnderecoMacNormalizado $bad)) "'$bad' is not a network card's MAC address"
+    }
+
+    $mac = Get-EnderecoMac
+    Check ($null -eq $mac -or $mac -match '^([0-9A-F]{2}-){5}[0-9A-F]{2}$') "this machine's network card is found or left out, never garbled ($mac)"
 
     $ficha = Join-Path $work 'ficha.json'
     Write-TextoUtf8 $ficha 'x'

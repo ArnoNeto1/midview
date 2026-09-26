@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -30,10 +31,11 @@ public static class KnownMachinesFile
         {
             var machines = JsonSerializer.Deserialize<List<KnownMachine?>>(File.ReadAllText(path)) ?? new();
             // A hand-edited entry missing a required field would only fail
-            // later, deep inside the UI or a connection attempt.
+            // later, deep inside the UI or a connection attempt. A bad MAC
+            // address is just dropped: Master learns it again from the Agent.
             return machines
                 .Where(m => m is { Name: not null, HostAddress: not null, SessionThumbprint: not null })
-                .Select(m => m!)
+                .Select(m => m! with { MacAddress = WakeOnLan.NormalizeMacAddress(m.MacAddress) })
                 .ToList();
         }
         catch (JsonException)

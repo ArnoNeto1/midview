@@ -53,6 +53,14 @@ public enum MessageType : byte
     // An Agent command: shut down, restart, or call either off (see
     // PowerCommand). Answered with one CommandAck carrying a CommandResult.
     Power = 21,
+
+    // An Agent question, no payload: the MAC address of the network card
+    // this connection arrived through -- the one on the teacher's network,
+    // which the Master needs to turn the machine on later (see WakeOnLan).
+    // Answered with one WakeAddress: the 6 bytes, or empty if the Agent
+    // couldn't tell. An Agent from before this answers CommandAck instead.
+    GetWakeAddress = 22,
+    WakeAddress = 23,
 }
 
 public enum CloseAppsMode : byte
