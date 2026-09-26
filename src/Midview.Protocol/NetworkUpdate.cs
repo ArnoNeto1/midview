@@ -129,13 +129,15 @@ public static class NetworkUpdate
 public sealed record UpdateOffer(byte[] AttemptId, byte[] Fingerprint, long ZipSize, byte[] ZipSha256, long UncompressedSize);
 
 // The states of an update attempt, in the order they happen. The last three
-// are final: nothing more happens to that attempt.
+// are final: nothing more happens to that attempt. RollbackPending is the
+// one detour: switching back failed, and the boot recovery will do it.
 public static class UpdateStates
 {
     public const string Receiving = "receiving";
     public const string Verifying = "verifying";
     public const string Applying = "applying";
     public const string Provisional = "provisional";
+    public const string RollbackPending = "rollbackPending";
     public const string Committed = "committed";
     public const string RolledBack = "rolledBack";
     public const string Failed = "failed";

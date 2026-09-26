@@ -345,8 +345,11 @@ public partial class UpdateWindow : Window
                 case UpdateStates.Committed:
                     SetLine(index, $"✓ atualizada ({UpdateText.ShortBuild(packageBuild)})");
                     return Outcome.Updated;
+                // Not final, but it won't commit: the machine goes back to
+                // the old build when it restarts.
                 case UpdateStates.RolledBack:
                 case UpdateStates.Failed:
+                case UpdateStates.RollbackPending:
                     SetLine(index, $"✗ {attempt.Detail}");
                     return Outcome.Failed;
                 default:

@@ -45,17 +45,23 @@ public sealed class InstalledBuild
     }
 }
 
-// Starts the applier: the running build's own exe, --apply-update, as a
-// separate process (so as SYSTEM, like the service).
+// Starts the applier (--apply-update) or the recovery (--recover-update):
+// the running build's own exe, as a separate process (so as SYSTEM, like
+// the service, and not stopped with it).
 public interface IApplierLauncher
 {
     int Launch();
 
+    void LaunchRecovery();
+
+    // Returns once the process is gone.
     void Kill(int processId);
 }
 
 public sealed class ProcessApplierLauncher : IApplierLauncher
 {
+    private static readonly TimeSpan ExitWait = TimeSpan.FromSeconds(10);
+
     private readonly string _agentExe;
 
     public ProcessApplierLauncher(string agentExe)
@@ -63,19 +69,9 @@ public sealed class ProcessApplierLauncher : IApplierLauncher
         _agentExe = agentExe;
     }
 
-    public int Launch()
-    {
-        var startInfo = new System.Diagnostics.ProcessStartInfo(_agentExe)
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WorkingDirectory = Path.GetDirectoryName(_agentExe)!,
-        };
-        startInfo.ArgumentList.Add(UpdateCommands.ApplyArgument);
-        using var process = System.Diagnostics.Process.Start(startInfo)
-            ?? throw new InvalidOperationException("o processo não iniciou");
-        return process.Id;
-    }
+    public int Launch() => Start(UpdateCommands.ApplyArgument);
+
+    public void LaunchRecovery() => Start(UpdateCommands.RecoverArgument);
 
     public void Kill(int processId)
     {
@@ -83,11 +79,26 @@ public sealed class ProcessApplierLauncher : IApplierLauncher
         {
             using var process = System.Diagnostics.Process.GetProcessById(processId);
             process.Kill();
+            process.WaitForExit(ExitWait);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             // Already gone.
         }
+    }
+
+    private int Start(string argument)
+    {
+        var startInfo = new System.Diagnostics.ProcessStartInfo(_agentExe)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(_agentExe)!,
+        };
+        startInfo.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(startInfo)
+            ?? throw new InvalidOperationException("o processo não iniciou");
+        return process.Id;
     }
 }
 
@@ -99,7 +110,10 @@ public sealed class ProcessApplierLauncher : IApplierLauncher
 public sealed class UpdateReceiver
 {
     private static readonly TimeSpan FingerprintWait = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(15);
+
+    // Well over the applier's own wait for the lock (UpdateApplier.LockWait)
+    // and a slow lab machine's start of a second .NET process.
+    private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(60);
     private const long DiskFloor = 500L * 1024 * 1024;
 
     private readonly UpdatePaths _paths;
@@ -161,7 +175,7 @@ public sealed class UpdateReceiver
                 return;
             }
 
-            var refusal = CheckOffer(offer, out var alreadyInstalled);
+            var refusal = CheckOffer(offer, attemptId, out var alreadyInstalled);
             if (alreadyInstalled)
             {
                 send(Result(true, "já está nesta versão"));
@@ -182,7 +196,7 @@ public sealed class UpdateReceiver
             var problem = ReceiveZip(offer, attemptId, receive);
             if (problem is not null)
             {
-                record = Save(record with { State = UpdateStates.Failed, Detail = problem });
+                record = TrySave(record with { State = UpdateStates.Failed, Detail = problem });
                 DeleteAttemptFiles(attemptId);
                 send(Result(false, problem));
                 return;
@@ -197,7 +211,7 @@ public sealed class UpdateReceiver
             }
             catch (UpdatePackageException ex)
             {
-                record = Save(record with { State = UpdateStates.Failed, Detail = ex.Message });
+                record = TrySave(record with { State = UpdateStates.Failed, Detail = ex.Message });
                 DeleteAttemptFiles(attemptId);
                 return;
             }
@@ -235,7 +249,7 @@ public sealed class UpdateReceiver
             }
             if (record is not null && !UpdateStates.IsFinal(record.State))
             {
-                Save(record with { State = UpdateStates.Failed, Detail = $"interrompida: {ex.Message}" });
+                TrySave(record with { State = UpdateStates.Failed, Detail = $"interrompida: {ex.Message}" });
                 DeleteAttemptFiles(attemptId);
             }
         }
@@ -273,7 +287,7 @@ public sealed class UpdateReceiver
         return new UpdateStatusReport(fingerprint is null ? null : Convert.ToHexString(fingerprint), build, ready, record?.ToReport());
     }
 
-    private string? CheckOffer(UpdateOffer offer, out bool alreadyInstalled)
+    private string? CheckOffer(UpdateOffer offer, string attemptId, out bool alreadyInstalled)
     {
         alreadyInstalled = false;
         if (offer.ZipSize > NetworkUpdate.MaxZipSize || offer.UncompressedSize > NetworkUpdate.MaxUncompressedSize)
@@ -282,7 +296,7 @@ public sealed class UpdateReceiver
         }
 
         var last = UpdateRecordFile.Load(_paths.StatePath);
-        if (last is { State: UpdateStates.Applying or UpdateStates.Provisional })
+        if (last is { State: UpdateStates.Applying or UpdateStates.Provisional or UpdateStates.RollbackPending })
         {
             return "a atualização anterior não terminou; reinicie a máquina para ela ser desfeita e tente de novo";
         }
@@ -309,6 +323,14 @@ public sealed class UpdateReceiver
         }
 
         CleanOldBuilds(last);
+
+        // Only the builds cleanup keeps (the running one, the one before it)
+        // can still have a folder: never extract over one of them.
+        if (Directory.Exists(_paths.BuildFolder(attemptId)) || File.Exists(_paths.BuildFolder(attemptId)))
+        {
+            return "identificador de atualização repetido; tente de novo";
+        }
+
         var needed = offer.ZipSize + offer.UncompressedSize + DiskFloor;
         var free = _freeBytes(_paths.VersionsRoot);
         return free < needed
@@ -421,11 +443,8 @@ public sealed class UpdateReceiver
     // the offered value. Returns the build's label.
     private string ExtractAndVerify(UpdateOffer offer, string attemptId)
     {
+        // New: CheckOffer refused an id whose folder exists, under the lock.
         var folder = _paths.BuildFolder(attemptId);
-        if (Directory.Exists(folder))
-        {
-            Directory.Delete(folder, recursive: true);
-        }
         Directory.CreateDirectory(folder);
         var folderPrefix = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
 
@@ -537,7 +556,11 @@ public sealed class UpdateReceiver
     }
 
     // Waits for the applier to take over (it records "applying" once it
-    // holds the lock); one that doesn't in time is ended.
+    // holds the lock, before it touches the service). One that doesn't in
+    // time is ended, and only then is the record read again: still
+    // "verifying" means it never switched anything, so the attempt can be
+    // failed and its files deleted; anything else means it got further, and
+    // the recovery puts the old build back.
     private void LaunchApplier(UpdateRecord record)
     {
         int processId;
@@ -547,7 +570,7 @@ public sealed class UpdateReceiver
         }
         catch (Exception ex)
         {
-            Save(record with { State = UpdateStates.Failed, Detail = $"o atualizador não pôde ser iniciado: {ex.Message}" });
+            TrySave(record with { State = UpdateStates.Failed, Detail = $"o atualizador não pôde ser iniciado: {ex.Message}" });
             DeleteAttemptFiles(record.AttemptId);
             return;
         }
@@ -555,8 +578,7 @@ public sealed class UpdateReceiver
         var deadline = _clock.Now + HandshakeTimeout;
         while (_clock.Now < deadline)
         {
-            var current = UpdateRecordFile.Load(_paths.StatePath);
-            if (current?.AttemptId == record.AttemptId && current.State != UpdateStates.Verifying)
+            if (TookOver(record))
             {
                 return;
             }
@@ -564,9 +586,28 @@ public sealed class UpdateReceiver
         }
 
         _launcher.Kill(processId);
-        Save(record with { State = UpdateStates.Failed, Detail = "o atualizador não começou a tempo" });
-        DeleteAttemptFiles(record.AttemptId);
+        var current = UpdateRecordFile.Load(_paths.StatePath);
+        if (current is { State: UpdateStates.Verifying } && current.AttemptId == record.AttemptId)
+        {
+            TrySave(record with { State = UpdateStates.Failed, Detail = "o atualizador não começou a tempo" });
+            DeleteAttemptFiles(record.AttemptId);
+            return;
+        }
+
+        AgentLog.Warn($"Network update {record.AttemptId}: the applier was stopped midway (state {current?.State ?? "unreadable"}); starting the recovery.");
+        try
+        {
+            _launcher.LaunchRecovery();
+        }
+        catch (Exception ex)
+        {
+            AgentLog.Warn($"Couldn't start the update recovery; the boot task will do it: {ex.Message}");
+        }
     }
+
+    private bool TookOver(UpdateRecord record) =>
+        UpdateRecordFile.Load(_paths.StatePath) is { } current
+        && current.AttemptId == record.AttemptId && current.State != UpdateStates.Verifying;
 
     // A receive or verify cut short by the Agent restarting.
     private void MarkInterruptedAttempt()
@@ -574,7 +615,7 @@ public sealed class UpdateReceiver
         var record = UpdateRecordFile.Load(_paths.StatePath);
         if (record is { State: UpdateStates.Receiving or UpdateStates.Verifying })
         {
-            Save(record with { State = UpdateStates.Failed, Detail = "interrompida (o Midview reiniciou)" });
+            TrySave(record with { State = UpdateStates.Failed, Detail = "interrompida (o Midview reiniciou)" });
         }
     }
 
@@ -588,18 +629,28 @@ public sealed class UpdateReceiver
         }
     }
 
+    // A step forward that can't be recorded stops the attempt (the
+    // exception reaches Handle's catch): the applier only ever acts on what
+    // the record says.
     private UpdateRecord Save(UpdateRecord record)
     {
         var updated = record with { UpdatedAt = _clock.Now };
+        UpdateRecordFile.Save(_paths.StatePath, updated);
+        return updated;
+    }
+
+    // For failures: best effort.
+    private UpdateRecord TrySave(UpdateRecord record)
+    {
         try
         {
-            UpdateRecordFile.Save(_paths.StatePath, updated);
+            return Save(record);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            AgentLog.Warn($"Couldn't save the update record: {ex.Message}");
+            AgentLog.Warn($"Couldn't save the update record ({record.State}): {ex.Message}");
+            return record with { UpdatedAt = _clock.Now };
         }
-        return updated;
     }
 
     private static Message Result(bool succeeded, string detail) =>

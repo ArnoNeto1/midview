@@ -8,8 +8,8 @@ namespace Midview.Agent;
 
 // Where the pieces of a network update live. VersionsRoot is always under
 // Program Files (students can't create folders there); the record, the
-// confirmation and the lock are in the Agent's data directory, which
-// students can read but not write.
+// confirmation and the lock are in a folder of the Agent's data directory
+// that students can't even open (see EnsureStateDirectory).
 public sealed record UpdatePaths(string VersionsRoot, string DataDirectory)
 {
     public const string ServiceName = "MidviewAgent";
@@ -25,12 +25,50 @@ public sealed record UpdatePaths(string VersionsRoot, string DataDirectory)
     public static string UsbInstallFolder =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Midview");
 
-    public string StatePath => Path.Combine(DataDirectory, "update-state.json");
-    public string ConfirmationPath => Path.Combine(DataDirectory, "update-confirmed.json");
-    public string LockPath => Path.Combine(DataDirectory, "update.lock");
+    public string StateDirectory => Path.Combine(DataDirectory, "update");
+    public string StatePath => Path.Combine(StateDirectory, "update-state.json");
+    public string ConfirmationPath => Path.Combine(StateDirectory, "update-confirmed.json");
+    public string LockPath => Path.Combine(StateDirectory, "update.lock");
 
     public string BuildFolder(string attemptId) => Path.Combine(VersionsRoot, attemptId);
     public string IncomingZip(string attemptId) => Path.Combine(VersionsRoot, $"incoming-{attemptId}.zip");
+
+    // SYSTEM and Administrators only, set at creation and again on every
+    // start. The data directory lets Users read what's in it (the Session
+    // needs that), and a student who can open a file for reading can also
+    // hold it open without sharing: the lock would never be free again, and
+    // the record could never be replaced. Here they can't open anything.
+    public void EnsureStateDirectory()
+    {
+        var directory = new DirectoryInfo(StateDirectory);
+        if (directory.Exists && directory.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new IOException($"{StateDirectory} é um atalho, não uma pasta");
+        }
+        if (!OperatingSystem.IsWindows())
+        {
+            directory.Create();
+            return;
+        }
+
+        var security = new DirectorySecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        foreach (var sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
+        {
+            security.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None,
+                AccessControlType.Allow));
+        }
+        if (directory.Exists)
+        {
+            directory.SetAccessControl(security);
+        }
+        else
+        {
+            directory.Create(security);
+        }
+    }
 
     // Created with its permissions set at creation (SYSTEM and Administrators
     // full, Users read and execute -- the Session runs from here as the
@@ -101,12 +139,15 @@ public sealed record UpdateRecord(
 
 public static class UpdateRecordFile
 {
+    private const int MoveAttempts = 20;
+    private static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(100);
+
     // Missing or unreadable: no attempt to report.
     public static UpdateRecord? Load(string path)
     {
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<UpdateRecord>(File.ReadAllText(path)) : null;
+            return File.Exists(path) ? JsonSerializer.Deserialize<UpdateRecord>(ReadShared(path)) : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -116,9 +157,13 @@ public static class UpdateRecordFile
 
     // Temp file, flushed to disk, then swapped in: a power cut leaves the
     // old record or the new one, never half of one -- the boot recovery
-    // depends on it.
+    // depends on it. Throws if it couldn't be written: callers decide what
+    // an unsaved state means.
     public static void Save(string path, UpdateRecord record) => WriteDurably(path, JsonSerializer.SerializeToUtf8Bytes(record));
 
+    // Readers open with delete sharing, so a status question reading the
+    // record never makes the swap fail; the retries cover anything else
+    // holding it for a moment (an antivirus scan, say).
     internal static void WriteDurably(string path, byte[] content)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -128,7 +173,27 @@ public static class UpdateRecordFile
             stream.Write(content);
             stream.Flush(flushToDisk: true);
         }
-        File.Move(tempPath, path, overwrite: true);
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(tempPath, path, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < MoveAttempts)
+            {
+                Thread.Sleep(MoveRetryDelay);
+            }
+        }
+    }
+
+    internal static byte[] ReadShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 }
 
@@ -147,7 +212,7 @@ public static class UpdateConfirmation
             {
                 return null;
             }
-            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            using var document = JsonDocument.Parse(UpdateRecordFile.ReadShared(path));
             return document.RootElement.TryGetProperty("attemptId", out var id) ? id.GetString() : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -170,9 +235,9 @@ public static class UpdateConfirmation
 }
 
 // One update at a time, across processes: the receiver, the applier and the
-// installer scripts all take ProgramData\Midview\update.lock with
+// installer scripts all take ProgramData\Midview\update\update.lock with
 // FileShare.None. Windows releases it if the holder dies, and students
-// can't create or hold it (they can't write in that directory).
+// can't create or hold it (they can't open anything in that folder).
 public sealed class UpdateLock : IDisposable
 {
     private readonly FileStream _stream;

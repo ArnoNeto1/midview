@@ -71,5 +71,6 @@ public class UpdateTextTests
         Assert.Equal("conferindo o pacote...", UpdateText.DescribeProgress(UpdateStates.Verifying));
         Assert.Equal("trocando de versão...", UpdateText.DescribeProgress(UpdateStates.Applying));
         Assert.Equal("reiniciando na versão nova...", UpdateText.DescribeProgress(UpdateStates.Provisional));
+        Assert.Equal("volta para a versão anterior quando a máquina reiniciar", UpdateText.DescribeProgress(UpdateStates.RollbackPending));
     }
 }

@@ -94,8 +94,17 @@ public sealed class WindowsServiceControl : IServiceControl
             }
         }
 
+        // The SCM wrote ImagePath into the registry, which reaches the disk
+        // lazily; the update record is flushed right after, so this should
+        // be on disk first. RegistryKey.Flush would do nothing here (it only
+        // flushes a key its own instance wrote to). Never thrown: the switch
+        // itself has happened, and callers must know that.
         using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{_serviceName}", writable: true);
-        key?.Flush();
+        var flushed = key is null ? -1 : RegFlushKey(key.Handle);
+        if (flushed != 0)
+        {
+            AgentLog.Warn($"Couldn't flush the service's new binary path to disk (error {flushed}); Windows will write it shortly.");
+        }
     }
 
     public ServiceSnapshot Query()
@@ -282,6 +291,9 @@ public sealed class WindowsServiceControl : IServiceControl
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool ControlService(IntPtr service, uint control, out SERVICE_STATUS status);
+
+    [DllImport("advapi32.dll")]
+    private static extern int RegFlushKey(Microsoft.Win32.SafeHandles.SafeRegistryHandle key);
 
     [DllImport("advapi32.dll", SetLastError = true, EntryPoint = "StartServiceW")]
     private static extern bool StartService(IntPtr service, int argumentCount, IntPtr arguments);

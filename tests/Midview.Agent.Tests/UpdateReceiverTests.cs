@@ -106,10 +106,13 @@ public class UpdateReceiverTests : IDisposable
         Assert.StartsWith("espaço em disco insuficiente", detail);
     }
 
-    [Fact]
-    public void AnUnfinishedEarlierAttempt_IsRefused()
+    [Theory]
+    [InlineData(UpdateStates.Applying)]
+    [InlineData(UpdateStates.Provisional)]
+    [InlineData(UpdateStates.RollbackPending)]
+    public void AnUnfinishedEarlierAttempt_IsRefused(string state)
     {
-        UpdateRecordFile.Save(_paths.StatePath, new UpdateRecord("AA", "FP", null, UpdateStates.Provisional, "", _clock.Now, _runningExe, _runningExe));
+        UpdateRecordFile.Save(_paths.StatePath, new UpdateRecord("AA", "FP", null, state, "", _clock.Now, _runningExe, _runningExe));
 
         var replies = Exchange(Receiver(), Package.Build(_root, Package.GoodFiles), sendChunks: false);
 
@@ -228,7 +231,53 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal(UpdateStates.Failed, Record()!.State);
         Assert.Equal("o atualizador não começou a tempo", Record()!.Detail);
         Assert.Equal(1, _launcher.Kills);
+        Assert.Equal(0, _launcher.Recoveries);
         Assert.False(Directory.Exists(_paths.BuildFolder(AttemptId)));
+    }
+
+    [Fact]
+    public void AnApplierThatTookOverAsItWasEnded_IsLeftToTheRecovery_AndItsBuildKept()
+    {
+        _launcher.TakesOver = false;
+        _launcher.TakesOverAsItsKilled = true;
+
+        Exchange(Receiver(), Package.Build(_root, Package.GoodFiles));
+
+        // It may have switched the service already: nothing of it is undone
+        // here, the recovery puts the old build back.
+        Assert.Equal(UpdateStates.Applying, Record()!.State);
+        Assert.Equal(1, _launcher.Recoveries);
+        Assert.True(File.Exists(Path.Combine(_paths.BuildFolder(AttemptId), UpdatePaths.AgentExeName)));
+    }
+
+    [Fact]
+    public void AnAttemptIdThatNamesAKeptBuild_IsRefused_AndTheBuildLeftAlone()
+    {
+        // The machine runs the build an earlier attempt with this same id
+        // installed.
+        var runningFromUpdate = Path.Combine(_paths.BuildFolder(AttemptId), UpdatePaths.AgentExeName);
+        Directory.CreateDirectory(Path.GetDirectoryName(runningFromUpdate)!);
+        File.WriteAllText(runningFromUpdate, "running");
+        var receiver = new UpdateReceiver(
+            _paths, _usbFolder, runningFromUpdate, new InstalledBuild(null, null), () => false, _ => long.MaxValue, _launcher, _clock);
+
+        var replies = Exchange(receiver, Package.Build(_root, Package.GoodFiles), sendChunks: false);
+
+        Assert.Equal((false, "identificador de atualização repetido; tente de novo"), CommandResult.Decode(Assert.Single(replies).Payload));
+        Assert.Equal("running", File.ReadAllText(runningFromUpdate));
+    }
+
+    [Fact]
+    public void AStepThatCantBeRecorded_IsRefused_BeforeAnythingIsReceived()
+    {
+        Directory.CreateDirectory(_paths.StatePath + ".tmp");
+
+        var replies = Exchange(Receiver(), Package.Build(_root, Package.GoodFiles), sendChunks: false);
+
+        var (succeeded, detail) = CommandResult.Decode(Assert.Single(replies).Payload);
+        Assert.False(succeeded);
+        Assert.StartsWith("erro na máquina", detail);
+        Assert.Equal(0, _launcher.Launches);
     }
 
     [Fact]
@@ -454,20 +503,39 @@ public class UpdateReceiverTests : IDisposable
         }
 
         public bool TakesOver { get; set; } = true;
+
+        // An applier that got going just as the receiver gave up on it.
+        public bool TakesOverAsItsKilled { get; set; }
+
         public int Launches { get; private set; }
         public int Kills { get; private set; }
+        public int Recoveries { get; private set; }
 
         public int Launch()
         {
             Launches++;
             if (TakesOver)
             {
-                var record = UpdateRecordFile.Load(_paths.StatePath)!;
-                UpdateRecordFile.Save(_paths.StatePath, record with { State = UpdateStates.Applying });
+                TakeOver();
             }
             return 4242;
         }
 
-        public void Kill(int processId) => Kills++;
+        public void LaunchRecovery() => Recoveries++;
+
+        public void Kill(int processId)
+        {
+            Kills++;
+            if (TakesOverAsItsKilled)
+            {
+                TakeOver();
+            }
+        }
+
+        private void TakeOver()
+        {
+            var record = UpdateRecordFile.Load(_paths.StatePath)!;
+            UpdateRecordFile.Save(_paths.StatePath, record with { State = UpdateStates.Applying });
+        }
     }
 }

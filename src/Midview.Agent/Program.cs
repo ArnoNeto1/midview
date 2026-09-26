@@ -80,6 +80,10 @@ static void PrepareDataDirectory()
         var thumbprint = SessionIdentity.EnsureExists(SessionIdentity.DefaultCertificatePath);
         AgentLog.Warn($"Session certificate thumbprint: {thumbprint}");
     });
+
+    // Network updates keep their lock and record where students can't
+    // open them (see UpdatePaths.EnsureStateDirectory).
+    TryStep("protect the network update folder", () => UpdatePaths.Default.EnsureStateDirectory());
 }
 
 static int RefuseUnknownArguments(string[] args)
