@@ -20,6 +20,13 @@ public sealed class AgentServerWorker : BackgroundService
 
     public static string HostsFilePath => Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts");
 
+    private readonly ScheduledShutdown _scheduledShutdown;
+
+    public AgentServerWorker(ScheduledShutdown scheduledShutdown)
+    {
+        _scheduledShutdown = scheduledShutdown;
+    }
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -58,7 +65,7 @@ public sealed class AgentServerWorker : BackgroundService
 
             var server = new AgentServer(
                 new TcpListener(IPAddress.Any, AgentPort), certificate, new TrustStore(trustedMasters), commandHandler,
-                new PowerCommandHandler(PowerCommandHandler.RunShutdownExe));
+                new PowerCommandHandler(PowerCommandHandler.RunShutdownExe), scheduledShutdown: _scheduledShutdown);
 
             return Task.Run(() =>
             {

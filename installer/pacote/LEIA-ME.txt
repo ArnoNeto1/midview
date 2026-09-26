@@ -73,6 +73,12 @@ Se uma máquina liga depois de desligada pelo Midview, mas não depois de
 desligada pelo menu Iniciar, desative a "Inicialização rápida" nas Opções de
 Energia do Windows dela.
 
+"Agendar ligar/desligar..." faz isso sozinho nos dias e horários escolhidos.
+Para desligar, cada máquina se desliga sozinha (o aluno é avisado 5 minutos
+antes), mesmo com o PC do professor desligado. Para ligar, quem manda o
+pedido é o PC do professor: ele precisa estar ligado, ou em suspensão, com o
+professor conectado no Windows, no horário de ligar.
+
 
 Desinstalar
 -----------

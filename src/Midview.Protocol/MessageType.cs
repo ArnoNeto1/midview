@@ -61,6 +61,11 @@ public enum MessageType : byte
     // couldn't tell. An Agent from before this answers CommandAck instead.
     GetWakeAddress = 22,
     WakeAddress = 23,
+
+    // An Agent command: the lab's power timetable (see PowerSchedule), which
+    // the Agent keeps and follows by shutting the machine down on its own.
+    // Answered with one CommandAck carrying a CommandResult.
+    SetPowerSchedule = 24,
 }
 
 public enum CloseAppsMode : byte

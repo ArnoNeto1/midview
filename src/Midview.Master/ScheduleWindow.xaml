@@ -1,0 +1,43 @@
+<Window x:Class="Midview.Master.ScheduleWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Agendar ligar e desligar" Height="620" Width="560"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+
+            <TextBlock Text="Nos dias:" Margin="0,0,0,4" />
+            <WrapPanel x:Name="DaysPanel" Margin="0,0,0,12">
+                <CheckBox x:Name="MondayCheckBox" Content="Seg" Margin="0,0,12,0" />
+                <CheckBox x:Name="TuesdayCheckBox" Content="Ter" Margin="0,0,12,0" />
+                <CheckBox x:Name="WednesdayCheckBox" Content="Qua" Margin="0,0,12,0" />
+                <CheckBox x:Name="ThursdayCheckBox" Content="Qui" Margin="0,0,12,0" />
+                <CheckBox x:Name="FridayCheckBox" Content="Sex" Margin="0,0,12,0" />
+                <CheckBox x:Name="SaturdayCheckBox" Content="Sáb" Margin="0,0,12,0" />
+                <CheckBox x:Name="SundayCheckBox" Content="Dom" />
+            </WrapPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <CheckBox x:Name="WakeCheckBox" Content="Ligar às" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBox x:Name="WakeTimeTextBox" Width="60" Text="07:00" />
+            </StackPanel>
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="20,0,0,12"
+                       Text="Este computador manda o pedido para ligar (Wake-on-LAN) no horário: ele precisa estar ligado ou em suspensão, com você conectado no Windows. As máquinas precisam do Wake-on-LAN ativado na BIOS (veja o LEIA-ME do pacote de instalação)." />
+
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <CheckBox x:Name="ShutdownCheckBox" Content="Desligar às" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBox x:Name="ShutdownTimeTextBox" Width="60" Text="18:00" />
+            </StackPanel>
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="20,0,0,12"
+                       Text="Cada máquina desliga sozinha, mesmo com este computador desligado. O aluno é avisado 5 minutos antes, e o que não estiver salvo é perdido. Durante o aviso, &quot;Desligar a turma...&quot; &gt; &quot;Cancelar desligamento&quot; cancela." />
+
+            <Button x:Name="SaveButton" Content="Salvar agendamento" Click="OnSaveClicked" Padding="10,4" HorizontalAlignment="Left" />
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="LastRunTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="Gray" FontSize="11" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

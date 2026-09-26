@@ -20,9 +20,9 @@ public sealed class ThumbnailPoller : IDisposable
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
     private const int ReplyTimeoutMs = 10_000;
 
-    // After a failed attempt (an Agent not running, or from before it could
-    // answer); an answer, even "don't know", isn't asked for again.
-    private static readonly TimeSpan MacAddressRetryInterval = TimeSpan.FromMinutes(5);
+    // After a failed attempt at one of the Agent chores below (an Agent not
+    // running); an answer, even "don't know", isn't asked for again.
+    private static readonly TimeSpan AgentRetryInterval = TimeSpan.FromMinutes(5);
 
     private readonly KnownMachine _machine;
     private readonly X509Certificate2 _masterCertificate;
@@ -30,17 +30,24 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly int _agentPort;
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
+    private readonly Func<PowerSchedule?>? _powerSchedule;
     private bool _macAddressAnswered;
     private DateTime _nextMacAddressAttempt = DateTime.MinValue;
+    private long? _sentScheduleSavedAt;
+    private DateTime _nextScheduleAttempt = DateTime.MinValue;
 
+    // powerSchedule: the teacher's current timetable (read on the poller's
+    // thread), which this machine's Agent is given whenever it changes.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
-        int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort)
+        int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
+        Func<PowerSchedule?>? powerSchedule = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
         _port = port;
         _agentPort = agentPort;
+        _powerSchedule = powerSchedule;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
 
@@ -91,6 +98,7 @@ public sealed class ThumbnailPoller : IDisposable
                 }
 
                 AskForMacAddressOnce();
+                SendPowerScheduleIfChanged();
             }
             catch (Exception ex)
             {
@@ -139,7 +147,32 @@ public sealed class ThumbnailPoller : IDisposable
         }
         catch (Exception)
         {
-            _nextMacAddressAttempt = DateTime.UtcNow + MacAddressRetryInterval;
+            _nextMacAddressAttempt = DateTime.UtcNow + AgentRetryInterval;
+        }
+    }
+
+    // Once per poller and again after each change, so a machine that was
+    // off when the teacher saved the schedule gets it the next time it's on.
+    // An older schedule than the one the Agent has is kept out by the Agent.
+    private void SendPowerScheduleIfChanged()
+    {
+        if (_powerSchedule?.Invoke() is not { } schedule || schedule.SavedAt == _sentScheduleSavedAt
+            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
+            || DateTime.UtcNow < _nextScheduleAttempt || _stop.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            CommandClient.SendCommandForResult(
+                _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
+                MessageType.SetPowerSchedule, schedule.Encode());
+            _sentScheduleSavedAt = schedule.SavedAt;
+        }
+        catch (Exception)
+        {
+            _nextScheduleAttempt = DateTime.UtcNow + AgentRetryInterval;
         }
     }
 

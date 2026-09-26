@@ -16,6 +16,16 @@ public static class ShutdownCommands
             .ToArray(),
     };
 
+    // The lab's timetable (ScheduledShutdown): the same forced shutdown, with
+    // a warning that says it's the schedule rather than the teacher now.
+    public static string[] BuildScheduled(int delaySeconds) =>
+        new[]
+        {
+            "/s", "/f", "/t", delaySeconds.ToString(), "/d", "p:0:0", "/c",
+            $"Desligamento programado: este computador vai desligar em {DescribeDelay(delaySeconds)}. " +
+            "Salve seu trabalho agora: o que não estiver salvo será perdido.",
+        };
+
     public static string DescribeDelay(int delaySeconds) =>
         delaySeconds % 60 == 0
             ? delaySeconds == 60 ? "1 minuto" : $"{delaySeconds / 60} minutos"

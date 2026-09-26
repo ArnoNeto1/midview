@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -21,10 +22,15 @@ public partial class MainWindow : Window
     // one to the front instead of popping a second window up on the student.
     private readonly Dictionary<string, ChatWindow> _chatWindows = new(StringComparer.OrdinalIgnoreCase);
 
+    // The teacher's power timetable; the pollers read it on their own
+    // threads to hand it to each machine's Agent.
+    private PowerSchedule? _powerSchedule;
+
     public MainWindow()
     {
         InitializeComponent();
         MachinesItemsControl.ItemsSource = _tiles;
+        _powerSchedule = LoadPowerSchedule();
 
         foreach (var machine in LoadRoster())
         {
@@ -159,6 +165,14 @@ public partial class MainWindow : Window
 
     private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets) =>
         new PowerWindow(targets, _masterCertificate) { Owner = this }.Show();
+
+    private void OnScheduleClicked(object sender, RoutedEventArgs e) =>
+        new ScheduleWindow(
+            () => _tiles.Select(tile => tile.Machine).ToList(), Volatile.Read(ref _powerSchedule), _masterCertificate,
+            schedule => Volatile.Write(ref _powerSchedule, schedule))
+        {
+            Owner = this,
+        }.Show();
 
     private void OnWakeClassClicked(object sender, RoutedEventArgs e)
     {
@@ -354,6 +368,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private PowerSchedule? LoadPowerSchedule()
+    {
+        try
+        {
+            return PowerScheduleFile.Load(PowerScheduleFile.DefaultPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O agendamento de ligar e desligar não pôde ser lido: {ex.Message}";
+            return null;
+        }
+    }
+
     private void SaveRoster() =>
         KnownMachinesFile.Save(KnownMachinesFile.DefaultPath, _tiles.Select(tile => tile.Machine));
 
@@ -362,7 +389,7 @@ public partial class MainWindow : Window
         var tile = new MachineTile(machine);
         _tiles.Insert(index, tile);
 
-        var poller = new ThumbnailPoller(machine, _masterCertificate);
+        var poller = new ThumbnailPoller(machine, _masterCertificate, powerSchedule: () => Volatile.Read(ref _powerSchedule));
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>

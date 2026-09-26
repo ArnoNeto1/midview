@@ -134,6 +134,41 @@ public class ThumbnailPollerTests
         Assert.Equal(0, agent.Questions);
     }
 
+    [Fact]
+    public async Task PowerSchedule_IsHandedToTheAgentOnce_AndAgainWhenItChanges()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "ok")));
+        var schedule = new PowerSchedule(1000, PowerSchedule.Weekdays, null, 18 * 60);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            () => schedule);
+        var count = 0;
+        var third = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sixth = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.ThumbnailReceived += _ =>
+        {
+            var seen = Interlocked.Increment(ref count);
+            if (seen == 3)
+            {
+                third.TrySetResult();
+            }
+            else if (seen == 6)
+            {
+                sixth.TrySetResult();
+            }
+        };
+        poller.Start();
+        var timeout = 3 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
+
+        await third.Task.WaitAsync(timeout);
+        Assert.Equal(new[] { 1000L }, agent.SchedulesReceived);
+
+        schedule = schedule with { SavedAt = 2000 };
+        await sixth.Task.WaitAsync(timeout);
+        Assert.Equal(new[] { 1000L, 2000L }, agent.SchedulesReceived);
+    }
+
     private static async Task ThreeThumbnails(ThumbnailPoller poller)
     {
         var count = 0;
@@ -222,12 +257,13 @@ public class ThumbnailPollerTests
     }
 
     // Answers every question on a loopback port with the same reply, and
-    // counts the GetWakeAddress questions.
+    // keeps track of the GetWakeAddress and SetPowerSchedule ones.
     private sealed class FakeAgent : IDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate =
             SelfSignedCertificate.Create("agent-under-test");
+        private readonly List<long> _schedulesReceived = new();
         private int _questions;
 
         public FakeAgent(System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, Message reply)
@@ -254,9 +290,18 @@ public class ThumbnailPollerTests
                         try
                         {
                             using var channel = SecureChannel.AuthenticateAsServer(client, _certificate, masters);
-                            if (channel.Receive().Type == MessageType.GetWakeAddress)
+                            var message = channel.Receive();
+                            if (message.Type == MessageType.GetWakeAddress)
                             {
                                 Interlocked.Increment(ref _questions);
+                            }
+                            else if (message.Type == MessageType.SetPowerSchedule
+                                     && PowerSchedule.TryDecode(message.Payload, out var schedule))
+                            {
+                                lock (_schedulesReceived)
+                                {
+                                    _schedulesReceived.Add(schedule.SavedAt);
+                                }
                             }
                             channel.Send(reply);
                         }
@@ -274,6 +319,18 @@ public class ThumbnailPollerTests
         public string Thumbprint => _certificate.Thumbprint;
 
         public int Questions => Volatile.Read(ref _questions);
+
+        // The SavedAt of each SetPowerSchedule received, in order.
+        public long[] SchedulesReceived
+        {
+            get
+            {
+                lock (_schedulesReceived)
+                {
+                    return _schedulesReceived.ToArray();
+                }
+            }
+        }
 
         public void Dispose()
         {
