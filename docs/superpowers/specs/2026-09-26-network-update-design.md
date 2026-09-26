@@ -1,7 +1,7 @@
 # Midview — Update Over the Network (Design)
 
 Date: 2026-09-26
-Status: Draft (under review)
+Status: Design reviewed (five independent critics and a judge); implementing
 
 ## Context
 
@@ -14,123 +14,214 @@ Decided with the owner: **update only**. The first install, and the first
 update of an Agent from before this feature, still take one visit with the
 USB stick. Nothing new is trusted over the network: an update is accepted
 only from a Master the machine already trusts (`trusted-masters.json`,
-mutual TLS with pinned thumbprints) — the same Masters that can already shut
+mutual TLS with pinned thumbprints), the same Masters that can already shut
 it down or block its internet. The owner accepted that this extends what a
 trusted Master can do, from commands to replacing the program that runs as
 SYSTEM.
 
-## Design
+The rule the design guarantees: **the service always points at a complete,
+checked build, and an update that was interrupted or not confirmed is
+undone by the build that was already running.**
 
-### What identifies a version: the package fingerprint
+## Versions side by side, never copied over
 
-`PackageFingerprint.Compute(directory)` (Protocol): SHA-256 over every file
-under the directory, sorted by relative path (ordinal, case-insensitive,
-`/` separators, lower-cased), feeding for each file its path, its length and
-the SHA-256 of its content. The Master computes it over the package's
-`programa\aluno`; the Agent over its own install folder, which the installer
-and the update both mirror from that same folder. Equal fingerprints = same
-build, whatever the zip's timestamps or the build's version number.
+- A USB install puts the program in `C:\Program Files\Midview` (the service's
+  binary path). Updates go to `%ProgramFiles%\Midview.update\<attempt id>\`,
+  one complete folder per attempt, and the update **switches the service's
+  binary path** (`ChangeServiceConfig`, then a registry flush) to the new
+  folder. Nothing is renamed, copied over or deleted while applying;
+  rolling back is switching the path back.
+- `Midview.update` is always under `%ProgramFiles%` (students can't create
+  folders there), created by the Agent with its permissions set at
+  creation: SYSTEM and Administrators full, Users read and execute (the
+  Session is launched from there as the student), inherited. An existing
+  one that is a reparse point, or not owned by SYSTEM or Administrators, is
+  refused.
+- Old builds are cleaned up at the next offer: every build folder that is
+  neither the current nor the previous one, including
+  `Program Files\Midview` once it's neither. Best effort: a folder something
+  still runs from is left for next time.
 
-### Protocol (Agent port 28900, a trusted Master only)
+## What identifies a version: the build manifest
 
-- `UpdateOffer` (72 bytes): fingerprint (32), zip size (int64), zip SHA-256
-  (32). Answered with either:
-  - `UpdateAccepted` (empty): send it; or
-  - `CommandAck` + `CommandResult`: `(true, "já está nesta versão")`, or
-    `(false, reason)` — an update already under way, not enough disk, too
-    big.
-- Then `FileChunk`s (`FileTransfer.ChunkSize`) until exactly the offered
-  size, answered with one `CommandAck` + `CommandResult`: `(true, "recebida;
-  a máquina está se atualizando")` or `(false, reason)`.
-- `GetUpdateStatus` (empty) → `UpdateStatus`: the install folder's current
-  fingerprint (32) and the last update's outcome (UTF-8, may be empty).
-- An Agent from before this answers `CommandAck` `[0]` (an unknown command)
-  to either: "Midview anterior à atualização pela rede: atualize uma vez com
-  o pendrive".
-- Caps: zip ≤ 512 MiB, uncompressed ≤ 1 GiB, ≤ 5000 entries. The student
-  program is ~150–200 MB uncompressed.
+- `Gerar-Pacote.ps1` writes `programa\aluno\midview-build.json`:
+  `{"build": "2026-09-26 19:40 a1b2c3d", "updateProtocol": 1, "files": [...]}`.
+  `build` is a readable label (date and git commit); `files` lists every
+  file of the student program.
+- `PackageFingerprint`: SHA-256 over the manifest and exactly the files it
+  lists (sorted, case-insensitive relative paths; each file's path, length
+  and SHA-256). Files not in the list (e.g. a Session log) are ignored; a
+  listed file that's missing, or a reparse point, fails.
+- The Master fingerprints the package's `programa\aluno`; the Agent
+  fingerprints its running build once per start, in the background.
+- A package without a manifest, or with `updateProtocol` < 1, can't be pushed:
+  "pacote antigo demais para atualizar pela rede".
 
-### Agent: receiving (`UpdateReceiver`, inside `AgentServer`)
+## Protocol (Agent port 28900, a trusted Master only)
 
-- Folders: install folder = the running Agent's own folder (normally
-  `C:\Program Files\Midview`); work folder = its sibling `<install>.update`
-  (`C:\Program Files\Midview.update`): `incoming.zip`, `new\` (extracted),
-  `previous\` (the version being replaced). Both names must start with
-  "Midview" (the installer's rule for folders it mirrors into). The work
-  folder gets an explicit protected ACL (SYSTEM and Administrators full,
-  Users read), so a student can't swap files between verification and
-  apply even with a custom install location.
-- On `UpdateOffer`: refuse if an update is under way (a named mutex the
-  applier holds), if the fingerprint is the install folder's own ("já está
-  nesta versão"), if the size is over the cap, or if the drive has less than
-  3× the size free.
-- Receiving: into a fresh `incoming.zip`, counting bytes and hashing as they
-  arrive; a short, long or wrong-hash transfer is refused.
-- Extracting into a fresh `new\`: every entry's path must be relative, with
-  no `..`, drive, `:` (alternate streams) or reserved device name, and must
-  resolve inside `new\`; entry count and actual bytes written are capped.
-- `new\` must contain `Midview.Agent.exe` and `Midview.Session.exe`, and its
-  fingerprint must equal the offered one (binding what's applied to what was
-  offered, and making `UpdateStatus` match after the restart).
-- Then: launch the applier, delete `incoming.zip`, answer success.
+- `UpdateOffer` (96 bytes): a random attempt id (16), the fingerprint (32),
+  the zip's size (int64) and SHA-256 (32), the uncompressed total (int64).
+  Answered with `UpdateAccepted` (send it), or `CommandAck` + `CommandResult`:
+  `(true, "já está nesta versão")` or `(false, reason)`.
+- Then `FileChunk`s up to exactly the offered size, answered with one
+  `CommandAck` + `CommandResult` as soon as the size and SHA-256 check out:
+  `(true, "recebida")` or `(false, reason)`. Extracting and applying then
+  happen without the connection, reported through the status.
+- `GetUpdateStatus` (empty, or an attempt id) → `UpdateStatus` (UTF-8 JSON):
+  the installed build's fingerprint and label (or that it's still being
+  computed) and the last attempt `{id, state, detail, updatedAt}`, with state
+  `receiving`, `verifying`, `applying`, `provisional`, `committed`,
+  `rolledBack` or `failed`.
+- An Agent from before this answers `CommandAck` to either (its default for
+  an unknown command): "Midview anterior à atualização pela rede: atualize
+  uma vez com o pendrive".
+- Caps: zip ≤ 512 MiB, uncompressed ≤ 1 GiB, ≤ 5000 entries.
 
-### Agent: applying (`Midview.Agent.exe --apply-update`, `UpdateApplier`)
+## Agent: receiving (`UpdateReceiver`)
 
-Launched by the Agent (so as SYSTEM) from `new\Midview.Agent.exe` — never
-from the install folder it replaces — as a separate process that outlives
-the service. It holds the update mutex until it exits.
+On `UpdateOffer`:
 
-1. Stop the `MidviewAgent` service (≤ 60 s); end any `Midview.Session` /
-   `Midview.Agent` process running from the install folder. (Stopping the
-   Agent already re-enables keyboard and mouse.)
-2. Move the install folder to `previous\` (a rename on the same drive;
-   retried for a few seconds while handles close). If it can't, restart the
-   service on the old version and record the failure.
-3. Copy `new\` into the install folder. On failure: remove the partial
-   folder, move `previous\` back, restart the service.
-4. Start the service and check its health: Running within 30 s, port 28900
-   accepting connections within 60 s, still Running after that.
-5. Healthy: record success. Not healthy: stop it, remove the install folder,
-   move `previous\` back, start the service, record "a versão nova não
-   iniciou; voltou para a anterior".
+- One update at a time: an in-process flag, plus `ProgramData\Midview\
+  update.lock` opened with `FileShare.None` (students can't create it,
+  Windows releases it if the holder dies, the installer scripts can check
+  it). Refused while held: "outra atualização já está em andamento".
+- Refused when the machine is about to shut down: the schedule is due
+  within 20 minutes, or a delayed shutdown/restart from the teacher is
+  still counting down.
+- "Já está nesta versão" when the offered fingerprint is the installed one.
+- Old builds cleaned up; then refused unless the drive has zip + uncompressed
+  total + 500 MB free.
+- The attempt is recorded (`receiving`) and accepted.
 
-The outcome goes to `ProgramData\Midview\update-result.json`, which
-`GetUpdateStatus` reports. `previous\` stays until the next update.
-`ProgramData\Midview` (identity, trusted Masters, state) is never touched,
-so thumbprints don't change and nothing needs importing again.
+Receiving: into `Midview.update\incoming-<id>.zip`, counting and hashing. A
+write failure keeps reading and discarding up to the offered size, then
+refuses (a refusal sent mid-stream would be lost to a reset). Short, long or
+wrong hash: refused.
 
-### Master: `UpdateWindow`
+Then, without the connection (`verifying`): extract into
+`Midview.update\<id>\`. Every entry must be a relative path, with no `..`,
+drive, `:` or reserved name, resolving inside the folder; entries and bytes
+actually written are capped; every file is flushed. It must be exactly the
+manifest's files, include `Midview.Agent.exe` and `Midview.Session.exe`, and
+fingerprint to the offered value. Any failure: `failed` with the reason, the
+attempt's files deleted.
+
+Then the receiver launches the applier from **its own, running build**
+(`<running folder>\Midview.Agent.exe --apply-update`), hands over the lock,
+and waits up to 15 s for the record to say `applying`; otherwise it kills
+the applier and records `failed`.
+
+## Agent: applying (`--apply-update`, `UpdateApplier`)
+
+Runs from the build that is already installed and working, as SYSTEM, as a
+separate process that outlives the service; its parameters come from the
+record in `ProgramData\Midview\update-state.json` (written as temp file,
+flush, move), none on the command line. The whole body is one try/finally
+with an overall deadline, so every path ends with the service pointing at a
+complete build and running.
+
+1. Take the lock; record `applying`.
+2. Register a one-shot boot task (SYSTEM): `<old build>\Midview.Agent.exe
+   --recover-update`.
+3. Switch the binary path to the new build; record `provisional`.
+4. Restart the service: stop it through the SCM and wait for its process to
+   exit (killed after 60 s); end every `Midview.Session` (in all logon
+   sessions, a leftover one keeps port 5901); start it (already started by
+   the SCM's own restart-on-failure is fine). SCM restarts during this can
+   only start a complete build: the path was switched first.
+5. Confirmation: the new Agent, when a trusted Master asks for the status of
+   **this attempt** while it's `provisional`, writes
+   `ProgramData\Midview\update-confirmed.json` (students can't write there).
+   The applier commits when that appears within 5 minutes and the service
+   kept the same process the whole time. A crash (new process, or stopped)
+   or no confirmation: roll back.
+6. Commit: `committed`, the boot task deleted, the old build kept as the
+   previous one. Roll back: switch the path back, restart the same way,
+   check the old build stays up for 30 s, record `rolledBack` with the
+   reason, delete the boot task.
+
+At boot, `--recover-update` (from the old build): if the last attempt isn't
+`committed`, `rolledBack` or `failed`, switch back to the old build, restart
+the service and record "interrompida; voltou para a versão anterior"; in
+every case delete the boot task.
+
+This makes a machine safe through a power cut, a scheduled shutdown or an
+applier crash at any step. A new build that doesn't start, can't serve a
+trusted Master (e.g. trusts nobody, TLS broken), crashes, or doesn't know
+the update protocol never confirms and is rolled back. Trade-off: a fix to
+the applier itself only takes effect one update later.
+
+`ProgramData\Midview` (identity, trusted Masters, schedule) is never
+touched: thumbprints don't change, and an update doesn't change which
+teachers a machine accepts (that still takes the USB installer).
+
+## Agent: related changes
+
+- `Program.cs` dispatches on the first argument; an unknown one is logged
+  and exits with an error instead of starting a second, console-mode Agent.
+- The listener retries every few seconds when it can't start (e.g. a
+  student's program holds port 28900 while the service was stopped),
+  instead of giving up until the next restart.
+- Anything a new build needs is done by the Agent at startup and is safe to
+  repeat (as the data directory and firewall rules already are); a network
+  update never runs the installer.
+- The flags `--apply-update` and `--recover-update`, the record's JSON, the
+  lock path and the status payloads are a contract between versions.
+
+## Installer and uninstaller
+
+- `Instalar-Aluno.ps1` waits (up to 2 minutes) while an update holds the
+  lock, sets the service's path through the SCM (`Win32_Service.Change`;
+  a plain registry write isn't seen until a reboot), then deletes the boot
+  task, the update record and `Program Files\Midview.update`.
+- `Desinstalar-Aluno.ps1` waits for the lock the same way, runs
+  `--uninstall-cleanup` from the exe the service actually points at
+  (falling back to `-Destino`), and removes `Midview.update`, the boot task
+  and the update record too.
+
+## Master: `UpdateWindow`
 
 From "Instalar nos alunos...", after choosing the package folder: "5.
-Atualizar pela rede" → "Atualizar as máquinas pela rede...":
+Atualizar pela rede" → "Atualizar as máquinas pela rede...".
 
-- the package and its build (first hex digits of the fingerprint);
-- "Verificar versões": each machine's `UpdateStatus` → "já nesta versão",
-  "versão diferente", offline, "Midview anterior (atualize uma vez com o
-  pendrive)";
-- "Atualizar" (after a confirmation: the Midview on those machines restarts,
-  whoever is using them loses the screen for about a minute; do it outside
-  class): zip `programa\aluno` once (temp file), then at most 4 machines at a
-  time: offer, send (per-machine progress), then ask `GetUpdateStatus` every
-  5 s for up to 3 minutes until the fingerprint matches ("✓ atualizada"),
-  the last outcome reports a failure ("✗ … voltou para a versão
-  anterior"), or time runs out.
-- Machines that were offline are simply run again later.
+- Shows the package's build label. "Verificar versões" asks every machine:
+  "já nesta versão", "instalada: 20/09 (a1b2c3) → pacote: 26/09 (d4e5f6)",
+  "mais nova que o pacote", offline, certificate refused, "Midview anterior
+  (atualize uma vez com o pendrive)", "sem a identidade do Agent (importe a
+  ficha de novo)". Port 28900 always uses the Agent's thumbprint, never the
+  Session's.
+- "Atualizar": checks versions first, then confirms with what will happen:
+  the students can keep working; the teacher loses view and control of
+  those machines for 1 to 3 minutes; keyboard/mouse locks are lifted; open
+  messages and chats close; don't turn the machines off until it finishes;
+  the teachers each machine accepts don't change. An extra confirmation
+  when a machine has a newer build than the package.
+- One machine first; the others only after it commits, at most 4 transfers
+  at a time, each polled on its own every 5 s with its attempt id until its
+  own attempt is `committed` (✓), `rolledBack`/`failed` (✗ with the reason),
+  or the deadline (the applier's limits plus a margin, about 10 minutes)
+  passes ("ainda sem resposta — use Verificar versões depois"). After the
+  upload, a refused or dropped connection means "reiniciando...", not an
+  error. The first rollback stops new machines from starting.
+- "Parar" starts no new machines (those already applying finish). Closing
+  the window mid-run asks first and warns that machines not yet confirmed
+  go back to their previous version. The temporary zip is always deleted.
 
 ## Security
 
 - Who: only trusted Masters (unchanged trust list and TLS pinning).
-- In transit: TLS; plus the zip's SHA-256 and the fingerprint catch a
-  truncated or corrupt transfer and bind the applied files to the offer.
+- In transit: TLS; the zip's SHA-256 and the fingerprint bind the applied
+  files to the offer and catch a corrupt transfer.
 - No code signing yet: a compromised Master, or a tampered package folder,
-  can push anything — as a tampered USB stick can today.
-- A hostile archive can't write outside `new\`, fill the disk or plant
-  files for later: contained paths, caps, protected work folder.
-- It can't brick a machine: a new version that doesn't start is rolled
-  back automatically; the USB installer still works on any state.
+  can push anything, as a tampered USB stick can today. Archive checks
+  (contained paths, caps) protect against a corrupt package, not against
+  the trusted sender.
+- Students can't take part: the build folders, the record, the
+  confirmation and the lock live where standard users can't write, and the
+  confirmation requires a trusted Master's authenticated request.
 
 ## Out of scope
 
 The first install over the network, updating an Agent older than this
 feature, updating the teacher's Master (Instalar-Professor does that), code
-signing, scheduled or partial (delta) updates.
+signing, scheduled or partial (delta) updates, changing the trust list.
