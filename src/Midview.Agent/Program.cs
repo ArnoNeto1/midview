@@ -32,9 +32,11 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new SessionSupervisor(
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
         services.AddSingleton(new InputLockCoordinator(new WindowsInputDeviceController()));
+        services.AddSingleton(_ => new ScheduledShutdown(ScheduledShutdown.DefaultStatePath, PowerCommandHandler.RunShutdownExe));
         services.AddHostedService<MidviewAgentWorker>();
         services.AddHostedService<AgentServerWorker>();
         services.AddHostedService<InputLockWorker>();
+        services.AddHostedService<ScheduledShutdownWorker>();
     })
     .Build();
 

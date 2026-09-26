@@ -17,13 +17,14 @@ public sealed class AgentServer
     private readonly SiteBlockCommandHandler _commandHandler;
     private readonly PowerCommandHandler? _powerHandler;
     private readonly Func<IPAddress, byte[]?> _findWakeAddress;
+    private readonly ScheduledShutdown? _scheduledShutdown;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
     public AgentServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
-        Func<IPAddress, byte[]?>? findWakeAddress = null)
+        Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -31,6 +32,7 @@ public sealed class AgentServer
         _commandHandler = commandHandler;
         _powerHandler = powerHandler;
         _findWakeAddress = findWakeAddress ?? WakeAddressLookup.Find;
+        _scheduledShutdown = scheduledShutdown;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -89,6 +91,14 @@ public sealed class AgentServer
         {
             var (succeeded, detail) = _powerHandler?.Handle(message.Payload)
                 ?? (false, "esta máquina não aceita desligamento");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.SetPowerSchedule)
+        {
+            var (succeeded, detail) = _scheduledShutdown?.Handle(message.Payload)
+                ?? (false, "esta máquina não aceita agendamento");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
         }

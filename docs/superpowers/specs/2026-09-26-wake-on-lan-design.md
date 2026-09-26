@@ -68,7 +68,8 @@ or one machine, on before a lesson without walking to each one.
 ## Out of scope
 
 Waking machines on another network (directed broadcasts through a router),
-scheduled wake-ups, and changing the BIOS or the network card's settings.
+scheduled wake-ups (their own design: `2026-09-26-power-schedule-design.md`),
+and changing the BIOS or the network card's settings.
 
 ## Testing
 

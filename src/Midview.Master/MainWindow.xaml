@@ -13,6 +13,7 @@
             <Button Content="Fechar programas da turma" Click="OnCloseAppsClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Desligar a turma..." Click="OnPowerClassClicked" Padding="10,4" Margin="4" />
             <Button Content="Ligar a turma..." Click="OnWakeClassClicked" Padding="10,4" Margin="4" />
+            <Button Content="Agendar ligar/desligar..." Click="OnScheduleClicked" Padding="10,4" Margin="4" />
         </StackPanel>
         <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Bottom" Margin="8,4" TextWrapping="Wrap" />
         <Grid Background="#FFF0F0F0">
