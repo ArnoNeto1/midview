@@ -31,7 +31,12 @@
                            Text="Conectar pelo nome do computador em vez do endereço IP (use se os IPs do laboratório mudam; o nome precisa ser encontrado na rede)." />
             </CheckBox>
             <Button x:Name="ImportButton" Content="Importar máquinas instaladas" Click="OnImportClicked" IsEnabled="False" Padding="10,4" />
-            <TextBlock x:Name="ImportResultTextBlock" TextWrapping="Wrap" Margin="0,4,0,0" />
+            <TextBlock x:Name="ImportResultTextBlock" TextWrapping="Wrap" Margin="0,4,0,12" />
+
+            <TextBlock Text="5. Atualizar pela rede" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Com um pacote novo (gerado de novo pelo Gerar-Pacote), troca o programa dos alunos nas máquinas da sala sem passar com o pendrive. Só funciona em máquinas que já têm um Midview com esta função." />
+            <Button x:Name="NetworkUpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnNetworkUpdateClicked" IsEnabled="False" Padding="10,4" />
         </StackPanel>
     </ScrollViewer>
 </Window>

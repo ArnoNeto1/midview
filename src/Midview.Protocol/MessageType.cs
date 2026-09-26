@@ -66,6 +66,13 @@ public enum MessageType : byte
     // the Agent keeps and follows by shutting the machine down on its own.
     // Answered with one CommandAck carrying a CommandResult.
     SetPowerSchedule = 24,
+
+    // Updating the student program over the network: an Agent command from
+    // a trusted Master only (see NetworkUpdate for the whole exchange).
+    UpdateOffer = 25,
+    UpdateAccepted = 26,
+    GetUpdateStatus = 27,
+    UpdateStatus = 28,
 }
 
 public enum CloseAppsMode : byte

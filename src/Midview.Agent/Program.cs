@@ -3,14 +3,20 @@ using Microsoft.Extensions.Hosting;
 using Midview.Agent;
 using Midview.Protocol;
 
-// Run by the installer scripts (installer/), not by the service.
-if (args is [InstallCommands.PrepareInstallArgument])
+// The SCM starts the service with no arguments. The installer scripts
+// (installer/) and a network update run the Agent with exactly one known
+// flag; anything else is refused rather than falling through to a second,
+// console-mode Agent running as whoever started it.
+if (args.Length > 0)
 {
-    return InstallCommands.RunPrepareInstall();
-}
-if (args is [InstallCommands.UninstallCleanupArgument])
-{
-    return InstallCommands.RunUninstallCleanup();
+    return args switch
+    {
+        [InstallCommands.PrepareInstallArgument] => InstallCommands.RunPrepareInstall(),
+        [InstallCommands.UninstallCleanupArgument] => InstallCommands.RunUninstallCleanup(),
+        [UpdateCommands.ApplyArgument] => UpdateCommands.RunApply(),
+        [UpdateCommands.RecoverArgument] => UpdateCommands.RunRecover(),
+        _ => RefuseUnknownArguments(args),
+    };
 }
 
 // Deployed today as loose files side by side on each lab machine (no
@@ -33,6 +39,17 @@ var host = Host.CreateDefaultBuilder(args)
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
         services.AddSingleton(new InputLockCoordinator(new WindowsInputDeviceController()));
         services.AddSingleton(_ => new ScheduledShutdown(ScheduledShutdown.DefaultStatePath, PowerCommandHandler.RunShutdownExe));
+        services.AddSingleton(_ => new PowerCommandHandler(PowerCommandHandler.RunShutdownExe));
+        services.AddSingleton(provider =>
+        {
+            var runningExe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, UpdatePaths.AgentExeName);
+            var schedule = provider.GetRequiredService<ScheduledShutdown>();
+            var power = provider.GetRequiredService<PowerCommandHandler>();
+            return new UpdateReceiver(
+                UpdatePaths.Default, UpdatePaths.UsbInstallFolder, runningExe, new InstalledBuild(AppContext.BaseDirectory),
+                () => schedule.IsDueWithin(DateTime.Now, TimeSpan.FromMinutes(20)) || power.IsShutdownPending(),
+                UpdateReceiver.FreeBytesOn, new ProcessApplierLauncher(runningExe), SystemUpdateClock.Instance);
+        });
         services.AddHostedService<MidviewAgentWorker>();
         services.AddHostedService<AgentServerWorker>();
         services.AddHostedService<InputLockWorker>();
@@ -63,6 +80,14 @@ static void PrepareDataDirectory()
         var thumbprint = SessionIdentity.EnsureExists(SessionIdentity.DefaultCertificatePath);
         AgentLog.Warn($"Session certificate thumbprint: {thumbprint}");
     });
+}
+
+static int RefuseUnknownArguments(string[] args)
+{
+    var message = $"Unknown arguments, not starting: {string.Join(' ', args)}";
+    AgentLog.Warn(message);
+    Console.Error.WriteLine(message);
+    return 2;
 }
 
 static void TryStep(string description, Action step)

@@ -69,6 +69,34 @@ public class PowerCommandHandlerTests
     }
 
     [Fact]
+    public void ADelayedShutdown_IsPendingUntilItsTimePlusAMargin_OrCancelled()
+    {
+        var now = new DateTime(2026, 9, 26, 21, 0, 0, DateTimeKind.Utc);
+        var handler = new PowerCommandHandler(_ => 0, () => now);
+        Assert.False(handler.IsShutdownPending());
+
+        handler.Handle(PowerCommand.Encode(PowerAction.Shutdown, 300));
+        Assert.True(handler.IsShutdownPending());
+
+        now = now.AddMinutes(8);
+        Assert.False(handler.IsShutdownPending());
+
+        handler.Handle(PowerCommand.Encode(PowerAction.Restart, 60));
+        handler.Handle(PowerCommand.Encode(PowerAction.Cancel, 0));
+        Assert.False(handler.IsShutdownPending());
+    }
+
+    [Fact]
+    public void ARefusedShutdown_IsNotPending()
+    {
+        var handler = new PowerCommandHandler(_ => 1190);
+
+        handler.Handle(PowerCommand.Encode(PowerAction.Shutdown, 60));
+
+        Assert.False(handler.IsShutdownPending());
+    }
+
+    [Fact]
     public async Task PowerCommand_ThroughTheAgentServer_AnswersWithWhatHappened()
     {
         using var agentCert = SelfSignedCertificate.Create("agent-under-test");

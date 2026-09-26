@@ -101,6 +101,28 @@ public sealed class ScheduledShutdown
         return true;
     }
 
+    // The schedule shuts the machine down within window from now, or it
+    // already started and Windows is still counting down its warning. A
+    // network update started then would be cut short.
+    public bool IsDueWithin(DateTime now, TimeSpan window)
+    {
+        if (Current is not { ShutdownMinute: int minute } schedule)
+        {
+            return false;
+        }
+
+        var countdown = TimeSpan.FromSeconds(PowerSchedule.ShutdownWarningSeconds) + TimeSpan.FromMinutes(1);
+        foreach (var date in new[] { now.Date.AddDays(-1), now.Date, now.Date.AddDays(1) })
+        {
+            var due = date.AddMinutes(minute);
+            if (schedule.IsScheduledOn(date.DayOfWeek) && due - now <= window && now - due <= countdown)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static bool IsDue(PowerSchedule schedule, DateTime previousCheck, DateTime now)
     {
         if (schedule.ShutdownMinute is not int minute || now <= previousCheck)

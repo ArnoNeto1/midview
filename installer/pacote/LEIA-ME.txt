@@ -34,10 +34,23 @@ Atualizar
 ---------
 Gere o pacote novo por cima desta mesma pasta (installer\Gerar-Pacote.ps1
 -Output <esta pasta>): só os programas são trocados, trusted-masters.json e
-maquinas ficam. Depois rode Instalar-Aluno.cmd de novo em cada máquina: a
-identidade da máquina não muda, então não precisa importar de novo. Para o
-professor, rode Instalar-Professor.cmd de novo (com o MidviewMaster
-fechado).
+maquinas ficam. Depois, nas máquinas dos alunos, de um destes jeitos:
+
+  - Pela rede (sem passar com o pendrive): no MidviewMaster, em
+    "Instalar nos alunos...", escolha esta pasta e clique em "Atualizar as
+    máquinas pela rede...". Uma máquina é atualizada primeiro; as outras só
+    depois que ela confirmar que a versão nova funciona. Se a versão nova
+    não funcionar numa máquina, ela volta sozinha para a anterior. Os alunos
+    podem continuar usando o computador; não desligue as máquinas até
+    terminar. Só funciona em máquinas que já têm um Midview com esta função:
+    as instaladas antes dela precisam de uma última vez com o pendrive.
+
+  - Com o pendrive: rode Instalar-Aluno.cmd de novo em cada máquina.
+
+Em nenhum dos dois a identidade da máquina muda, então não precisa importar
+de novo. A atualização pela rede troca só o programa: para autorizar ou
+tirar um professor, reinstale com o pendrive. Para o professor, rode
+Instalar-Professor.cmd de novo (com o MidviewMaster fechado).
 
 
 Mais de um professor
@@ -92,6 +105,8 @@ apagar tudo: abra um Prompt de Comando nesta pasta e rode
 Onde fica cada coisa na máquina do aluno
 ----------------------------------------
   C:\Program Files\Midview      o programa (serviço MidviewAgent)
+  C:\Program Files\Midview.update  as versões recebidas pela rede (a atual
+                                e a anterior)
   C:\ProgramData\Midview        identidade, professores autorizados, agent.log
   Área de Trabalho do aluno     "Arquivos do professor" (arquivos recebidos)
                                 "Entregar ao professor" (o que o professor recolhe)

@@ -1,10 +1,13 @@
 # Instala ou atualiza o Midview nesta máquina de aluno. Rodado por
 # Instalar-Aluno.cmd, como administrador:
-#   1. para a versão anterior, se houver;
+#   1. espera uma atualização pela rede terminar, se houver uma, e para a
+#      versão anterior;
 #   2. copia o programa para C:\Program Files\Midview;
 #   3. prepara a identidade da máquina (Midview.Agent.exe --prepare-install);
 #   4. autoriza os professores do pacote;
-#   5. registra e inicia o serviço MidviewAgent;
+#   5. registra o serviço MidviewAgent nesta cópia (mesmo que uma
+#      atualização pela rede o tenha levado para Midview.update), apaga o que
+#      as atualizações pela rede deixaram e inicia o serviço;
 #   6. deixa a ficha da máquina na pasta "maquinas" do pacote, para o
 #      professor importar no MidviewMaster (com o endereço da placa de rede,
 #      para ligar a máquina pela rede).
@@ -20,6 +23,7 @@ if (-not $Pacote) {
     $Pacote = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
 }
 
+$trava = $null
 try {
     Assert-Administrador
     Assert-PastaDoMidview $Destino
@@ -30,6 +34,7 @@ try {
     }
 
     Write-Etapa 'Parando a versão anterior (se houver)'
+    $trava = Enter-TravaDeAtualizacao
     Stop-Midview
 
     Write-Etapa "Copiando o programa para $Destino"
@@ -50,8 +55,7 @@ try {
     Write-Etapa 'Registrando e iniciando o serviço MidviewAgent'
     $caminhoServico = '"' + $agente + '"'
     if (Get-Service -Name $NomeServico -ErrorAction SilentlyContinue) {
-        # O Set-Service do PowerShell 5.1 não troca o executável; o registro do serviço sim.
-        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\$NomeServico" -Name ImagePath -Value $caminhoServico -Type ExpandString
+        Set-ExecutavelDoServico $caminhoServico
         Set-Service -Name $NomeServico -StartupType Automatic
     }
     else {
@@ -60,6 +64,7 @@ try {
     }
     # Se o serviço cair, o Windows o reinicia: depois de 5 s, 5 s e 1 min.
     & sc.exe failure $NomeServico reset= 86400 actions= restart/5000/restart/5000/restart/60000 | Out-Null
+    Remove-RestosDeAtualizacao
     Start-Service -Name $NomeServico
 
     Write-Etapa 'Deixando a ficha desta máquina no pacote'
@@ -102,4 +107,9 @@ catch {
     Write-Host "A instalação NÃO terminou: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host 'Corrija o problema e rode Instalar-Aluno.cmd de novo.'
     exit 1
+}
+finally {
+    if ($trava) {
+        $trava.Dispose()
+    }
 }

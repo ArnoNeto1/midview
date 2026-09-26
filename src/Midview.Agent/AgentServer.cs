@@ -18,13 +18,15 @@ public sealed class AgentServer
     private readonly PowerCommandHandler? _powerHandler;
     private readonly Func<IPAddress, byte[]?> _findWakeAddress;
     private readonly ScheduledShutdown? _scheduledShutdown;
+    private readonly UpdateReceiver? _updateReceiver;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
     public AgentServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
-        Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null)
+        Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
+        UpdateReceiver? updateReceiver = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -33,6 +35,7 @@ public sealed class AgentServer
         _powerHandler = powerHandler;
         _findWakeAddress = findWakeAddress ?? WakeAddressLookup.Find;
         _scheduledShutdown = scheduledShutdown;
+        _updateReceiver = updateReceiver;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -100,6 +103,25 @@ public sealed class AgentServer
             var (succeeded, detail) = _scheduledShutdown?.Handle(message.Payload)
                 ?? (false, "esta máquina não aceita agendamento");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        // The one exchange that takes more than one message each way (see
+        // NetworkUpdate); the receiver answers everything itself.
+        if (message.Type == MessageType.UpdateOffer)
+        {
+            if (_updateReceiver is null)
+            {
+                channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não aceita atualização pela rede")));
+                return;
+            }
+            _updateReceiver.Handle(message.Payload, channel.Receive, channel.Send);
+            return;
+        }
+
+        if (message.Type == MessageType.GetUpdateStatus && _updateReceiver is not null)
+        {
+            channel.Send(new Message(MessageType.UpdateStatus, _updateReceiver.Status(message.Payload).Encode()));
             return;
         }
 

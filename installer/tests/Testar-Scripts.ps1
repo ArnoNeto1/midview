@@ -52,6 +52,30 @@ foreach ($program in 'aluno\Midview.Agent.exe', 'aluno\Midview.Session.exe', 'pr
     Check (Test-Path -LiteralPath (Join-Path $Pacote "programa\$program")) "the package has $program"
 }
 
+# What the MidviewMaster reads to push the student program over the network
+# (BuildManifest): exactly the files in the folder, besides itself.
+$student = Join-Path $Pacote 'programa\aluno'
+$manifestPath = Join-Path $student 'midview-build.json'
+Check (Test-Path -LiteralPath $manifestPath) 'the student program has midview-build.json'
+if (Test-Path -LiteralPath $manifestPath) {
+    $bytes = [IO.File]::ReadAllBytes($manifestPath)
+    Check (-not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB)) 'midview-build.json has no BOM'
+    $manifest = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
+    Check ($manifest.build -match '^\d{4}-\d{2}-\d{2} \d{2}:\d{2} \S+$') "the build is labelled with its date, time and commit ($($manifest.build))"
+    Check ($manifest.updateProtocol -eq 1) 'the manifest speaks update protocol 1'
+    $listed = @($manifest.files)
+    Check ($listed -contains 'Midview.Agent.exe' -and $listed -contains 'Midview.Session.exe') 'the manifest lists the Agent and the Session'
+    Check (-not ($listed -contains 'midview-build.json')) 'the manifest does not list itself'
+    Check (-not ($listed | Where-Object { $_ -like '*\*' })) "the manifest's paths use '/'"
+    $root = (Get-Item -LiteralPath $student).FullName.TrimEnd('\') + '\'
+    $actual = @(Get-ChildItem -LiteralPath $student -Recurse -File -Force |
+            ForEach-Object { $_.FullName.Substring($root.Length).Replace('\', '/') } |
+            Where-Object { $_ -ne 'midview-build.json' })
+    $missing = @($listed | Where-Object { $actual -notcontains $_ })
+    $unlisted = @($actual | Where-Object { $listed -notcontains $_ })
+    Check ($missing.Count -eq 0 -and $unlisted.Count -eq 0) "the manifest lists exactly the $($actual.Count) files in the folder (missing: $($missing -join ', '); unlisted: $($unlisted -join ', '))"
+}
+
 . (Join-Path $scripts 'Comum.ps1')
 
 $t1 = 'A' * 40
@@ -122,6 +146,47 @@ try {
 
     $addresses = @(Get-EnderecosIPv4)
     Check ($addresses.Count -ge 1 -and -not ($addresses | Where-Object { $_ -like '127.*' -or $_ -like '169.254.*' })) "this machine's IPv4 addresses are found ($($addresses -join ', '))"
+
+    # The service's PathName, as Win32_Service reports it.
+    $exe = 'C:\Program Files\Midview.update\AB12\Midview.Agent.exe'
+    Check ((ConvertFrom-CaminhoDoServico "`"$exe`"") -eq $exe) "a quoted service path is read"
+    Check ((ConvertFrom-CaminhoDoServico "`"$exe`" --flag") -eq $exe) "a quoted service path with arguments is read"
+    Check ((ConvertFrom-CaminhoDoServico 'C:\Midview\Midview.Agent.exe') -eq 'C:\Midview\Midview.Agent.exe') "an unquoted service path is read"
+    Check ($null -eq (ConvertFrom-CaminhoDoServico '') -and $null -eq (ConvertFrom-CaminhoDoServico '"')) "an empty service path is nothing"
+
+    # The lock a network update holds (the Agent's UpdateLock).
+    $lock = Join-Path $work 'update.lock'
+    Check ($null -eq (Enter-TravaDeAtualizacao (Join-Path $work 'nowhere\update.lock') 1)) 'no data folder, no lock to wait for'
+    $held = [IO.File]::Open($lock, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        Enter-TravaDeAtualizacao $lock 2 | Out-Null
+        Check $false 'a held update lock stops the install after the wait'
+    }
+    catch {
+        Check ($_.Exception.Message -like '*atualiza*') 'a held update lock stops the install after the wait'
+    }
+    finally {
+        $held.Dispose()
+    }
+    $mine = Enter-TravaDeAtualizacao $lock 2
+    try {
+        Check ($null -ne $mine) 'a free update lock is taken'
+        $again = $null
+        try {
+            $again = [IO.File]::Open($lock, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        }
+        catch {
+        }
+        Check ($null -eq $again) 'and held until released'
+        if ($again) {
+            $again.Dispose()
+        }
+    }
+    finally {
+        if ($mine) {
+            $mine.Dispose()
+        }
+    }
 
     Check ((Split-Path -Leaf (Join-Path $env:ProgramFiles 'Midview')) -eq 'Midview') 'the default install folder is named Midview'
     try {
