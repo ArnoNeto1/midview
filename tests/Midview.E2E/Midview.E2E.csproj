@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The teacher's side of the real-Windows check of the network update
+       (installer/tests/Testar-Atualizacao.ps1). Built from the Master's own
+       update code, without its window. Not part of the product or of
+       Midview.sln. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Midview.Protocol\Midview.Protocol.csproj" />
+    <Compile Include="..\..\src\Midview.Master\KnownMachine.cs" Link="Master\KnownMachine.cs" />
+    <Compile Include="..\..\src\Midview.Master\ConnectionClient.cs" Link="Master\ConnectionClient.cs" />
+    <Compile Include="..\..\src\Midview.Master\TcpConnect.cs" Link="Master\TcpConnect.cs" />
+    <Compile Include="..\..\src\Midview.Master\InstallPackage.cs" Link="Master\InstallPackage.cs" />
+    <Compile Include="..\..\src\Midview.Master\UpdatePackage.cs" Link="Master\UpdatePackage.cs" />
+    <Compile Include="..\..\src\Midview.Master\UpdateClient.cs" Link="Master\UpdateClient.cs" />
+  </ItemGroup>
+</Project>
