@@ -125,8 +125,9 @@ deleted; anything else means the applier got further, and the receiver
 starts `--recover-update` to put the old build back.
 
 Every step forward is recorded before it's taken; a state that can't be
-written stops the attempt. Readers open the record with delete sharing and
-the swap is retried, so a status question never makes a save fail.
+written stops the attempt. A reader holds the record only while reading it,
+and the swap is retried for 2 s (Windows won't replace an open file), so a
+status question never makes a save fail.
 
 ## Agent: applying (`--apply-update`, `UpdateApplier`)
 

@@ -36,15 +36,21 @@ public class UpdateRecordTests : IDisposable
     }
 
     [Fact]
-    public void Save_WhileTheRecordIsBeingRead_StillReplacesIt()
+    public async Task Save_WhileTheRecordIsBeingRead_WaitsForTheReader_AndReplacesIt()
     {
         UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Provisional));
 
-        // How Load and a status question open it.
-        using (new FileStream(_paths.StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        // A status question reading it (how Load opens it), for longer than
+        // one retry.
+        var reader = new FileStream(_paths.StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var readDone = Task.Run(async () =>
         {
-            UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Committed));
-        }
+            await Task.Delay(300);
+            reader.Dispose();
+        });
+
+        UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Committed));
+        await readDone;
 
         Assert.Equal(UpdateStates.Committed, UpdateRecordFile.Load(_paths.StatePath)!.State);
     }
@@ -62,7 +68,7 @@ public class UpdateRecordTests : IDisposable
     {
         UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Applying));
 
-        using (new FileStream(_paths.StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (new FileStream(_paths.StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
         {
             Assert.Equal(UpdateStates.Applying, UpdateRecordFile.Load(_paths.StatePath)!.State);
         }

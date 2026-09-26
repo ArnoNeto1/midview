@@ -161,9 +161,9 @@ public static class UpdateRecordFile
     // an unsaved state means.
     public static void Save(string path, UpdateRecord record) => WriteDurably(path, JsonSerializer.SerializeToUtf8Bytes(record));
 
-    // Readers open with delete sharing, so a status question reading the
-    // record never makes the swap fail; the retries cover anything else
-    // holding it for a moment (an antivirus scan, say).
+    // Windows won't swap a file in while another handle has it open, even
+    // one shared for delete: the retries (2 s in all) wait out a status
+    // question reading it, or an antivirus scan.
     internal static void WriteDurably(string path, byte[] content)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -190,7 +190,7 @@ public static class UpdateRecordFile
 
     internal static byte[] ReadShared(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var buffer = new MemoryStream();
         stream.CopyTo(buffer);
         return buffer.ToArray();
