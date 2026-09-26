@@ -96,6 +96,30 @@ public class ScheduledShutdownTests : IDisposable
     }
 
     [Fact]
+    public void IsDueWithin_ALateShutdownAfterWakingUp_CountsFromWhenItStarted()
+    {
+        var scheduled = Create();
+        scheduled.Handle(Weekdays6pm.Encode());
+
+        // Asleep from 17:30; woken at 18:10, it still shuts down (MaxLateness).
+        Assert.True(scheduled.Check(Monday.AddHours(17.5), Monday.AddHours(18) + TimeSpan.FromMinutes(10)));
+
+        Assert.True(scheduled.IsDueWithin(Monday.AddHours(18) + TimeSpan.FromMinutes(12), TimeSpan.FromMinutes(20)));
+        Assert.False(scheduled.IsDueWithin(Monday.AddHours(18) + TimeSpan.FromMinutes(20), TimeSpan.FromMinutes(20)));
+    }
+
+    [Fact]
+    public void IsDueWithin_AShutdownThatDidntStart_IsNotCountingDown()
+    {
+        var scheduled = new ScheduledShutdown(_statePath, _ => 5);
+        scheduled.Handle(Weekdays6pm.Encode());
+
+        scheduled.Check(Monday.AddHours(17.5), Monday.AddHours(18) + TimeSpan.FromMinutes(10));
+
+        Assert.False(scheduled.IsDueWithin(Monday.AddHours(18) + TimeSpan.FromMinutes(12), TimeSpan.FromMinutes(20)));
+    }
+
+    [Fact]
     public void Check_WhenDue_RunsShutdownWithTheScheduledWarning()
     {
         var scheduled = Create();

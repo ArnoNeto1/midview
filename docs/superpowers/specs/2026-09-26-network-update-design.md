@@ -94,8 +94,9 @@ On `UpdateOffer`:
 - Refused while the last attempt is unfinished (`applying`, `provisional`,
   `rollbackPending`): "reinicie a máquina".
 - Refused when the machine is about to shut down: the schedule is due
-  within 20 minutes, or a delayed shutdown/restart from the teacher is
-  still counting down.
+  within 20 minutes, or its shutdown (which can start up to 30 minutes
+  late, on a machine that woke up after the time) or a delayed
+  shutdown/restart from the teacher is still counting down.
 - "Já está nesta versão" when the offered fingerprint is the installed one.
 - Old builds cleaned up; refused if a folder named after the attempt id
   still exists (only a kept build can: never extracted over); then refused
@@ -212,7 +213,9 @@ teachers a machine accepts (that still takes the USB installer).
 From "Instalar nos alunos...", after choosing the package folder: "5.
 Atualizar pela rede" → "Atualizar as máquinas pela rede...".
 
-- Shows the package's build label. "Verificar versões" asks every machine:
+- Shows the package's build label, read again before every check and
+  update (the package may have been rebuilt in the same folder); the build
+  pushed must be the one the machines were checked against. "Verificar versões" asks every machine:
   "já nesta versão", "instalada: 20/09 (a1b2c3) → pacote: 26/09 (d4e5f6)",
   "mais nova que o pacote", offline, certificate refused, "Midview anterior
   (atualize uma vez com o pendrive)", "sem a identidade do Agent (importe a
