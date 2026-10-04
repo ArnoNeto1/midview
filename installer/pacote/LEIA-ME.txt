@@ -93,10 +93,36 @@ pedido é o PC do professor: ele precisa estar ligado, ou em suspensão, com o
 professor conectado no Windows, no horário de ligar.
 
 
+Bloquear programas
+------------------
+"Bloquear programas da turma..." (ou "Bloquear programas..." no menu de uma
+máquina) impede que programas abram nas máquinas dos alunos, até você
+liberar:
+  - "Bloquear só os programas escolhidos": só os marcados são fechados quando
+    o aluno os abre; o resto funciona normalmente.
+  - "Permitir só os programas escolhidos": tudo que o aluno abrir é fechado,
+    menos o Windows, o Midview e os programas marcados. É o modo mais rígido
+    (bom para prova); confira a lista antes: um programa que a aula precisa e
+    não foi marcado será fechado.
+Os programas vêm da lista dos que estão abertos nas máquinas da turma (com
+quantas máquinas têm cada um), ou você digita o nome (por exemplo chrome.exe).
+"Liberar tudo" tira o bloqueio. O bloqueio continua valendo se a máquina
+reiniciar ou se o PC do professor for desligado; uma máquina que estava
+desligada recebe o bloqueio quando o MidviewMaster a vir ligada.
+Como funciona: o programa bloqueado abre e é fechado em cerca de 1 segundo, e
+o aluno vê um aviso. Só são fechados programas do aluno logado: nunca o
+Windows, a área de trabalho, o Midview nem programas abertos como
+administrador. Quem renomeia um programa para escapar da lista de bloqueio
+ainda é pego quando o arquivo guarda o nome original; no modo "Permitir só",
+um arquivo que o aluno trouxe (pendrive, Downloads) só passa se for mesmo o
+programa permitido. Se a máquina tiver um Midview anterior a esta função,
+atualize-a (pela rede ou com o pendrive) antes.
+
+
 Desinstalar
 -----------
-Desinstalar-Aluno.cmd desbloqueia a internet e os sites, reativa teclado e
-mouse, e remove o serviço e o programa. A identidade da máquina fica em
+Desinstalar-Aluno.cmd desbloqueia a internet, os sites e os programas, reativa
+teclado e mouse, e remove o serviço e o programa. A identidade da máquina fica em
 C:\ProgramData\Midview, para uma reinstalação manter a mesma ficha. Para
 apagar tudo: abra um Prompt de Comando nesta pasta e rode
   Desinstalar-Aluno.cmd -RemoverDados
