@@ -149,4 +149,23 @@ public class AppBlockRulesTests
         Assert.True(AppBlockRules.ShouldEnd(AllowOnly(), Process("explorer.exe", inTrusted: false)));
         Assert.True(AppBlockRules.ShouldEnd(AllowOnly(), Process("midviewsession.exe", inTrusted: false)));
     }
+
+    [Fact]
+    public void MatchesBlockList_IsAboutTheListedName_NotTheFence()
+    {
+        Assert.True(AppBlockRules.MatchesBlockList(BlockList("chrome.exe"), Process("chrome.exe", elevated: true)));
+        Assert.True(AppBlockRules.MatchesBlockList(BlockList("chrome.exe"), Process("jogo.exe", originalFilename: "chrome.exe")));
+        Assert.False(AppBlockRules.MatchesBlockList(BlockList("chrome.exe"), Process("winword.exe")));
+        Assert.False(AppBlockRules.MatchesBlockList(AllowOnly("chrome.exe"), Process("chrome.exe")));
+    }
+
+    [Fact]
+    public void LeftAloneBecause_SaysWhichPartOfTheFenceKeptAProgramOut()
+    {
+        Assert.Null(AppBlockRules.LeftAloneBecause(Process("chrome.exe")));
+        Assert.Contains("interactive session", AppBlockRules.LeftAloneBecause(Process("chrome.exe", sessionId: 0)));
+        Assert.Contains("logged on", AppBlockRules.LeftAloneBecause(Process("chrome.exe", ownedBySessionUser: false)));
+        Assert.Contains("elevated", AppBlockRules.LeftAloneBecause(Process("chrome.exe", elevated: true)));
+        Assert.Contains("protected", AppBlockRules.LeftAloneBecause(Process("explorer.exe", inWindows: true)));
+    }
 }

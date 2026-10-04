@@ -40,6 +40,7 @@ public sealed class AppBlockEnforcer
     private static readonly TimeSpan EndFailedRetry = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan UndecidedRetry = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan NoticeInterval = TimeSpan.FromSeconds(30);
+    private const int MaxUndecidedLogged = 20;
 
     private readonly IProcessInspector _inspector;
     private readonly Func<DateTime> _utcNow;
@@ -52,6 +53,8 @@ public sealed class AppBlockEnforcer
     private readonly Dictionary<(int SessionId, string Program), DateTime> _lastNotice = new();
     private AppBlockPolicy _policy = AppBlockPolicy.Lifted(0);
     private long _generation;
+    private long _summarizedGeneration = -1;
+    private int _undecidedLogged;
 
     public AppBlockEnforcer(IProcessInspector inspector, Func<DateTime>? utcNow = null)
     {
@@ -66,7 +69,9 @@ public sealed class AppBlockEnforcer
             _policy = policy;
             _generation++;
             _seen.Clear();
+            _undecidedLogged = 0;
         }
+        AgentLog.Warn($"Program blocking now follows: {policy.Mode}, {policy.Programs.Count} program(s).");
     }
 
     // Returns how many processes were ended.
@@ -108,6 +113,7 @@ public sealed class AppBlockEnforcer
         }
 
         var ended = 0;
+        int candidates = 0, undecided = 0;
         var notices = new List<(int SessionId, string Message)>();
         var log = new List<string>();
         foreach (var process in toInspect)
@@ -126,12 +132,28 @@ public sealed class AppBlockEnforcer
 
                 if (facts is null)
                 {
+                    undecided++;
                     _seen[process] = now + UndecidedRetry;
+                    if (_undecidedLogged < MaxUndecidedLogged)
+                    {
+                        _undecidedLogged++;
+                        log.Add($"Program blocking can't tell yet whose process {process.ProcessId} (session {process.SessionId}) is.");
+                    }
                     continue;
+                }
+                if (AppBlockRules.IsCandidate(facts))
+                {
+                    candidates++;
                 }
                 if (!forbidden)
                 {
                     _seen[process] = null;
+                    // A program the teacher named that is left alone: say why, so that
+                    // "it doesn't block" can be answered from the log.
+                    if (AppBlockRules.MatchesBlockList(policy, facts) && AppBlockRules.LeftAloneBecause(facts) is { } reason)
+                    {
+                        log.Add($"Program blocking left {facts.ImageName} (process {process.ProcessId}) alone: {reason}.");
+                    }
                     continue;
                 }
 
@@ -150,6 +172,16 @@ public sealed class AppBlockEnforcer
                     _seen[process] = now + EndFailedRetry;
                     log.Add($"Program blocking couldn't end {facts.ImageName} (process {process.ProcessId}).");
                 }
+            }
+        }
+
+        lock (_gate)
+        {
+            // What the first look under a policy found, once per policy.
+            if (generation == _generation && _summarizedGeneration != generation)
+            {
+                _summarizedGeneration = generation;
+                log.Add($"Program blocking looked at {running.Count} interactive process(es): {candidates} the student's own, {undecided} not told yet, {ended} ended.");
             }
         }
 
