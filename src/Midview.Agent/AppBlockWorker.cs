@@ -14,10 +14,18 @@ public sealed class AppBlockWorker : BackgroundService
     {
         _enforcer = enforcer;
         _enforcer.Apply(handler.Current);
+        if (handler.Current.IsActive && UacCheck.Warning() is { } warning)
+        {
+            AgentLog.Warn($"Program blocking is on, but {warning}.");
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Everything below is synchronous until the first delay: yield first
+        // so the host's startup isn't held up by it.
+        await Task.Yield();
+
         var failing = false;
         while (!stoppingToken.IsCancellationRequested)
         {

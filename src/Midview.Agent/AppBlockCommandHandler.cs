@@ -12,13 +12,17 @@ public sealed class AppBlockCommandHandler
 {
     private readonly string _statePath;
     private readonly Action<AppBlockPolicy> _apply;
+    private readonly Func<string?> _warning;
     private readonly object _gate = new();
     private AppBlockPolicy _policy;
 
-    public AppBlockCommandHandler(string statePath, Action<AppBlockPolicy> apply)
+    // warning: something that stops the block from working as the teacher
+    // expects on this machine, said in the answer when a block is applied.
+    public AppBlockCommandHandler(string statePath, Action<AppBlockPolicy> apply, Func<string?>? warning = null)
     {
         _statePath = statePath;
         _apply = apply;
+        _warning = warning ?? (() => null);
         _policy = Load(statePath) ?? AppBlockPolicy.Lifted(0);
     }
 
@@ -26,13 +30,7 @@ public sealed class AppBlockCommandHandler
 
     public AppBlockPolicy Current
     {
-        get
-        {
-            lock (_gate)
-            {
-                return _policy;
-            }
-        }
+        get => Volatile.Read(ref _policy);
     }
 
     public (bool Succeeded, string Detail) Handle(byte[] payload)
@@ -66,9 +64,9 @@ public sealed class AppBlockCommandHandler
                 return (false, $"não foi possível gravar o bloqueio: {ex.Message}");
             }
 
-            _policy = policy;
+            Volatile.Write(ref _policy, policy);
             _apply(policy);
-            return (true, Describe(policy));
+            return (true, policy.IsActive && _warning() is { } warning ? $"{Describe(policy)} (atenção: {warning})" : Describe(policy));
         }
     }
 
@@ -93,18 +91,20 @@ public sealed class AppBlockCommandHandler
             return null;
         }
 
+        AppBlockPolicy? policy;
         try
         {
             var stored = JsonSerializer.Deserialize<StoredPolicy>(File.ReadAllText(path));
-            var policy = stored is null ? null : new AppBlockPolicy(stored.SavedAt, stored.Mode, stored.Programs ?? new List<string>());
-            if (policy is not null && policy.IsValid())
+            policy = stored is null ? null : new AppBlockPolicy(stored.SavedAt, stored.Mode, stored.Programs ?? new List<string>());
+            if (policy is null || !policy.IsValid())
             {
-                return policy;
+                throw new JsonException("invalid program block");
             }
-            throw new JsonException("invalid program block");
+            return policy;
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
         {
+            // The content is bad: kept aside, so it isn't read (and fails) at every start.
             AgentLog.Warn($"Couldn't read the program block, blocking nothing: {ex.Message}");
             try
             {
@@ -114,6 +114,13 @@ public sealed class AppBlockCommandHandler
             {
                 // Left in place; it's read again (and fails again) next start.
             }
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Couldn't read it (locked, antivirus, permissions): the file may be fine, so it
+            // stays where it is and is read again at the next start.
+            AgentLog.Warn($"Couldn't read the program block file, blocking nothing: {ex.Message}");
             return null;
         }
     }

@@ -466,6 +466,8 @@ public partial class MainWindow : Window
         };
         poller.Unreachable += reason => Dispatcher.InvokeAsync(() => tile.ShowStatus(reason));
         poller.MacAddressLearned += macAddress => Dispatcher.InvokeAsync(() => RememberMacAddress(tile, macAddress));
+        poller.AppBlockObserved += status => Dispatcher.InvokeAsync(() =>
+            tile.BlockBadge = AppBlockText.Badge(status, classBlockExpected: Volatile.Read(ref _appBlockPolicy) is { IsActive: true }));
         _pollers.Add(tile, poller);
         poller.Start();
     }

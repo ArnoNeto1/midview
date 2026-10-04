@@ -28,7 +28,7 @@ public static class OpenProgramsList
             {
                 continue;
             }
-            var exeName = AppBlockPolicy.NormalizeExeName(described.ExeName);
+            var exeName = AppBlockPolicy.ProgramName(described.ExeName);
             if (exeName is null || ProtectedPrograms.IsProtected(exeName))
             {
                 continue;

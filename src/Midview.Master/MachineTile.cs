@@ -9,6 +9,7 @@ public sealed class MachineTile : INotifyPropertyChanged
 {
     private ImageSource? _thumbnail;
     private string _status = "Conectando...";
+    private string _blockBadge = string.Empty;
 
     public MachineTile(KnownMachine machine)
     {
@@ -42,6 +43,21 @@ public sealed class MachineTile : INotifyPropertyChanged
         {
             _status = value;
             OnPropertyChanged();
+        }
+    }
+
+    // A short line under the name when programs are blocked on the machine
+    // ("🔒 3 bloqueados"); empty when they aren't.
+    public string BlockBadge
+    {
+        get => _blockBadge;
+        set
+        {
+            if (_blockBadge != value)
+            {
+                _blockBadge = value;
+                OnPropertyChanged();
+            }
         }
     }
 

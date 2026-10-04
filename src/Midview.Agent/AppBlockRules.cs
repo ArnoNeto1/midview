@@ -2,19 +2,25 @@ using Midview.Protocol;
 
 namespace Midview.Agent;
 
-// Who owns a program's image file: installed by an administrator (or
-// Windows itself), created by the logged-on student, or unknown.
+// Who owns a program's image file, as far as program blocking can tell:
+// installed by Windows or an administrator (owner SYSTEM, Administrators or
+// TrustedInstaller), created by the logged-on student, or anything else --
+// another user, or an owner that couldn't be read (FAT/exFAT volumes have
+// none). Only a positively known trusted owner earns any protection.
 public enum FileOwnerKind
 {
-    Unknown,
-    Installed,
+    Other,
+    Trusted,
     Student,
 }
 
 // What the Agent knows about one running process, gathered by
 // WindowsProcessInspector. Names are normalized exe names (see
 // AppBlockPolicy.NormalizeExeName); OriginalFilename is null when the file
-// has no version information.
+// has no version information. InWindowsFolder: the image is under the
+// Windows folder; InTrustedFolder: under the Windows folder, Program Files
+// (either) or the Agent's own folder -- places a standard user can't write
+// (except a few folders under Windows that the owner check covers).
 public sealed record ProcessFacts(
     int ProcessId,
     DateTime StartTime,
@@ -24,6 +30,7 @@ public sealed record ProcessFacts(
     string ImageName,
     string? OriginalFilename,
     bool InWindowsFolder,
+    bool InTrustedFolder,
     FileOwnerKind FileOwner,
     string DisplayName);
 
@@ -37,6 +44,15 @@ public static class AppBlockRules
     private static readonly HashSet<string> WindowsHelpers = new(StringComparer.Ordinal)
     {
         "msedgewebview2.exe",
+    };
+
+    // Programs that run whatever the student types or drops on them. They
+    // live in the Windows folder, but "allow only" is meant to keep a student
+    // inside the chosen programs: here they need to be allowed like any other.
+    private static readonly HashSet<string> ScriptHosts = new(StringComparer.Ordinal)
+    {
+        "cmd.exe", "powershell.exe", "pwsh.exe", "powershell_ise.exe", "wscript.exe", "cscript.exe",
+        "mshta.exe", "wsl.exe", "bash.exe",
     };
 
     public static bool ShouldEnd(AppBlockPolicy policy, ProcessFacts process)
@@ -65,23 +81,28 @@ public static class AppBlockRules
         && !process.IsElevated
         && !IsProtected(process);
 
-    // A protected name (Midview's included) loses its protection only when
-    // the file is known to be the student's own: a program renamed to look
-    // like part of Windows. When in doubt, it stays protected.
+    // A protected name (Midview's included) is protected only where it is
+    // known to be the real thing: in a place a student can't write, with a
+    // trusted owner. A file that merely carries the name -- on a USB stick,
+    // in Downloads, on a share, or one whose owner couldn't be read -- gets
+    // no protection.
     public static bool IsProtected(ProcessFacts process) =>
-        process.FileOwner != FileOwnerKind.Student && ProtectedPrograms.IsProtected(process.ImageName);
+        ProtectedPrograms.IsProtected(process.ImageName)
+        && process.InTrustedFolder
+        && process.FileOwner == FileOwnerKind.Trusted;
 
-    // In the Windows folder and not the student's own file (some folders
-    // under it are writable by standard users), or an installed Windows
-    // helper.
+    // In the Windows folder with a trusted owner (some folders under it are
+    // writable by standard users, and what a student puts there is theirs),
+    // and not a script host; or an installed Windows helper.
     public static bool IsWindowsItself(ProcessFacts process) =>
-        process.FileOwner != FileOwnerKind.Student
-        && (process.InWindowsFolder || WindowsHelpers.Contains(process.ImageName));
+        process.FileOwner == FileOwnerKind.Trusted
+        && ((process.InWindowsFolder && !ScriptHosts.Contains(process.ImageName))
+            || (process.InTrustedFolder && WindowsHelpers.Contains(process.ImageName)));
 
-    // By name; a file the student brought in must also be that program by
-    // its version information.
+    // By name; unless an administrator installed the file, it must also be
+    // that program by its version information.
     private static bool IsAllowed(HashSet<string> listed, ProcessFacts process) =>
         listed.Contains(process.ImageName)
-        && (process.FileOwner != FileOwnerKind.Student
+        && (process.FileOwner == FileOwnerKind.Trusted
             || (process.OriginalFilename is { } original && listed.Contains(original)));
 }

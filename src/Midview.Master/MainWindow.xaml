@@ -54,6 +54,17 @@
                                                    TextAlignment="Center" TextWrapping="Wrap" />
                                     </Grid>
                                     <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,4,0,0" HorizontalAlignment="Center" />
+                                    <TextBlock Text="{Binding BlockBadge}" FontSize="11" Foreground="#B00020" HorizontalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding BlockBadge}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
                             </Button>
                         </DataTemplate>

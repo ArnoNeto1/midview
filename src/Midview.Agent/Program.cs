@@ -54,7 +54,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider =>
         {
             var enforcer = provider.GetRequiredService<AppBlockEnforcer>();
-            return new AppBlockCommandHandler(AppBlockCommandHandler.DefaultStatePath, enforcer.Apply);
+            return new AppBlockCommandHandler(AppBlockCommandHandler.DefaultStatePath, enforcer.Apply, UacCheck.Warning);
         });
         services.AddHostedService<MidviewAgentWorker>();
         services.AddHostedService<AgentServerWorker>();

@@ -29,9 +29,12 @@ public sealed record AppBlockPolicy(long SavedAt, AppBlockMode Mode, IReadOnlyLi
 {
     public const byte FormatVersion = 1;
     public const int MaxPrograms = 200;
-    public const int MaxNameLength = 64;
+    // Bytes of UTF-8: the length is one byte on the wire.
+    public const int MaxNameLength = 255;
 
-    private static readonly Regex ExeNamePattern = new(@"^[a-z0-9 ._()+-]{1,60}\.exe$", RegexOptions.CultureInvariant);
+    // Any file name Windows allows (accents and other scripts included), with
+    // no wildcard, path or control/format character, ending in .exe.
+    private static readonly Regex ExeNamePattern = new(@"^[^\p{C}\\/:*?""<>|]{1,100}\.exe$", RegexOptions.CultureInvariant);
 
     public static AppBlockPolicy Lifted(long savedAt) => new(savedAt, AppBlockMode.None, Array.Empty<string>());
 
@@ -54,7 +57,29 @@ public sealed record AppBlockPolicy(long SavedAt, AppBlockMode Mode, IReadOnlyLi
         {
             name += ".exe";
         }
-        return ExeNamePattern.IsMatch(name) ? name : null;
+        return ExeNamePattern.IsMatch(name) && Encoding.UTF8.GetByteCount(name) <= MaxNameLength ? name : null;
+    }
+
+    // The program name of a running image or of a version resource's
+    // original file name: like NormalizeExeName, and a file that isn't named
+    // .exe -- LibreOffice's soffice.bin, a .com or .scr, an apphost whose
+    // version resource says MyApp.dll -- is known by its name with .exe, the
+    // name the teacher sees and chooses. Null when no such name exists.
+    public static string? ProgramName(string? fileName)
+    {
+        if (NormalizeExeName(fileName) is { } normalized)
+        {
+            return normalized;
+        }
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var name = fileName.Trim().Replace('\\', '/');
+        name = name[(name.LastIndexOf('/') + 1)..];
+        var dot = name.LastIndexOf('.');
+        return dot > 0 ? NormalizeExeName(name[..dot] + ".exe") : null;
     }
 
     // Every name normalized and unprotected, no duplicates, none for None.
@@ -68,7 +93,7 @@ public sealed record AppBlockPolicy(long SavedAt, AppBlockMode Mode, IReadOnlyLi
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var program in Programs)
         {
-            if (NormalizeExeName(program) != program || ProtectedPrograms.IsProtected(program) || !seen.Add(program))
+            if (program is null || NormalizeExeName(program) != program || ProtectedPrograms.IsProtected(program) || !seen.Add(program))
             {
                 return false;
             }
@@ -172,8 +197,9 @@ public static class ProtectedPrograms
         "csrss.exe", "winlogon.exe", "wininit.exe", "services.exe", "lsass.exe", "smss.exe", "svchost.exe",
         "userinit.exe", "logonui.exe",
 
-        // Accessibility
+        // Accessibility (Windows' own, and the screen readers schools use)
         "narrator.exe", "osk.exe", "magnify.exe", "atbroker.exe", "utilman.exe",
+        "nvda.exe", "nvda_slave.exe", "nvda_uiaccess.exe", "nvda_nouiaccess.exe", "jfw.exe", "dosvox.exe",
 
         // Consent and security prompts
         "consent.exe", "credentialuibroker.exe", "securityhealthsystray.exe", "securityhealthhost.exe",

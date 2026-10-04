@@ -106,6 +106,57 @@ public class AppBlockEnforcerTests
     }
 
     [Fact]
+    public void AProcessThatCantBeToldAboutYet_IsLookedAtAgainSoon_NotLeftAloneForGood()
+    {
+        var enforcer = Create();
+        enforcer.Apply(BlockList("chrome.exe"));
+        var chrome = _inspector.Start("chrome.exe", gone: true);
+
+        Assert.Equal(0, enforcer.EnforceOnce());
+        _inspector.Reveal(chrome, "chrome.exe");
+
+        // Not yet: it was just looked at.
+        Assert.Equal(0, enforcer.EnforceOnce());
+
+        _now += TimeSpan.FromSeconds(3);
+        Assert.Equal(1, enforcer.EnforceOnce());
+        Assert.Equal(new[] { chrome }, _inspector.Ended);
+    }
+
+    [Fact]
+    public void ALiftWhileProcessesAreBeingInspected_EndsNothingMore()
+    {
+        var enforcer = Create();
+        enforcer.Apply(BlockList("chrome.exe"));
+        _inspector.Start("chrome.exe");
+        _inspector.Start("chrome.exe");
+        _inspector.OnInspect = () => enforcer.Apply(AppBlockPolicy.Lifted(2));
+
+        Assert.Equal(0, enforcer.EnforceOnce());
+
+        Assert.Empty(_inspector.Ended);
+        Assert.Equal(0, enforcer.EnforceOnce());
+    }
+
+    [Fact]
+    public void ANewPolicyWhileProcessesAreBeingInspected_IsAppliedToEverythingOnTheNextTick()
+    {
+        var enforcer = Create();
+        enforcer.Apply(BlockList("winword.exe"));
+        _inspector.Start("chrome.exe");
+        _inspector.OnInspect = () =>
+        {
+            _inspector.OnInspect = null;
+            enforcer.Apply(BlockList("chrome.exe"));
+        };
+
+        // The decision taken under the old policy is dropped...
+        Assert.Equal(0, enforcer.EnforceOnce());
+        // ...and the process is looked at again under the new one.
+        Assert.Equal(1, enforcer.EnforceOnce());
+    }
+
+    [Fact]
     public void ANoticeThatFails_NeverStopsEnforcing()
     {
         var enforcer = Create();
@@ -132,15 +183,26 @@ public class AppBlockEnforcerTests
             var process = new RunningProcess(_nextId++, _nextId, SessionId: 1);
             _processes[process] = gone
                 ? null
-                : new ProcessFacts(process.ProcessId, DateTime.UnixEpoch, 1, true, false, imageName, null, false,
-                    FileOwnerKind.Installed, displayName ?? imageName);
+                : new ProcessFacts(process.ProcessId, DateTime.UnixEpoch, 1, true, false, imageName, null, false, true,
+                    FileOwnerKind.Trusted, displayName ?? imageName);
             return process;
         }
+
+        // What Inspect couldn't tell at first (nobody logged on yet, say) becomes known.
+        public void Reveal(RunningProcess process, string imageName) =>
+            _processes[process] = new ProcessFacts(process.ProcessId, DateTime.UnixEpoch, 1, true, false, imageName, null, false, true,
+                FileOwnerKind.Trusted, imageName);
+
+        public Action? OnInspect { get; set; }
 
         public IReadOnlyList<RunningProcess> ListInteractive() =>
             _processes.Keys.Where(process => !Ended.Contains(process)).ToList();
 
-        public ProcessFacts? Inspect(RunningProcess process) => _processes[process];
+        public ProcessFacts? Inspect(RunningProcess process)
+        {
+            OnInspect?.Invoke();
+            return _processes[process];
+        }
 
         public bool End(RunningProcess process)
         {

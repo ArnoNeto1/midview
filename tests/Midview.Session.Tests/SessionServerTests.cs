@@ -150,6 +150,18 @@ public class FakeChatWindow : IChatWindow
 }
 
 // Records each "close programs" request and answers with fixed counts.
+public class FakeOpenProgramsLister : IOpenProgramsLister
+{
+    private readonly IReadOnlyList<OpenProgram> _programs;
+
+    public FakeOpenProgramsLister(params OpenProgram[] programs)
+    {
+        _programs = programs;
+    }
+
+    public IReadOnlyList<OpenProgram> List() => _programs;
+}
+
 public class FakeAppCloser : IAppCloser
 {
     private readonly (int Asked, int Forced) _result;
@@ -528,6 +540,60 @@ public class SessionServerTests
     }
 
     [Fact]
+    public async Task ListOpenPrograms_AnswersWithWhatTheStudentHasOpen()
+    {
+        var lister = new FakeOpenProgramsLister(new OpenProgram("chrome.exe", "Google Chrome", 2), new OpenProgram("winword.exe", "Word", 1));
+        using var harness = new ServerHarness(new CountingScreenCapture(), openPrograms: lister);
+        using var teacher = harness.ConnectMaster();
+
+        var reply = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.ListOpenPrograms, Array.Empty<byte>()));
+            return teacher.Channel.Receive();
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.OpenPrograms, reply.Type);
+        Assert.True(OpenProgramsReport.TryDecode(reply.Payload, out var programs));
+        Assert.Equal(new[] { "chrome.exe", "winword.exe" }, programs.Select(program => program.ExeName));
+    }
+
+    [Fact]
+    public async Task ListOpenPrograms_IsAnsweredWhileAnotherMasterControlsTheMachine()
+    {
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), openPrograms: new FakeOpenProgramsLister(new OpenProgram("chrome.exe", "Google Chrome", 1)));
+        using var controlling = harness.ConnectMaster();
+        controlling.StartControl();
+        await Task.Delay(500); // long enough for the control to be under way
+
+        using var asking = harness.ConnectMaster();
+        var reply = await Task.Run(() =>
+        {
+            asking.Channel.Send(new Message(MessageType.ListOpenPrograms, Array.Empty<byte>()));
+            return asking.Channel.Receive();
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.OpenPrograms, reply.Type);
+    }
+
+    [Fact]
+    public async Task ListOpenPrograms_WithoutALister_AnswersAnEmptyList()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var reply = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.ListOpenPrograms, Array.Empty<byte>()));
+            return teacher.Channel.Receive();
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.OpenPrograms, reply.Type);
+        Assert.True(OpenProgramsReport.TryDecode(reply.Payload, out var programs));
+        Assert.Empty(programs);
+    }
+
+    [Fact]
     public async Task CloseApps_NoCloser_IsRefused()
     {
         using var harness = new ServerHarness(new CountingScreenCapture());
@@ -713,7 +779,8 @@ public class SessionServerTests
 
         public ServerHarness(
             IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null,
-            FileInbox? fileInbox = null, IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null)
+            FileInbox? fileInbox = null, IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null,
+            IOpenProgramsLister? openPrograms = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -723,7 +790,7 @@ public class SessionServerTests
                 _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
                 capture, new FakeInputInjector(),
                 new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder);
+                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 

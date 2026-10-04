@@ -129,6 +129,38 @@ public class AppBlockCommandHandlerTests : IDisposable
     }
 
     [Fact]
+    public void AFileWithANullProgram_IsTreatedAsCorrupt()
+    {
+        File.WriteAllText(_path, """{"SavedAt":5,"Mode":1,"Programs":[null]}""");
+
+        Assert.False(Create().Current.IsActive);
+        Assert.True(File.Exists(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void AFileThatCantBeReadRightNow_BlocksNothing_ButIsLeftWhereItIs()
+    {
+        File.WriteAllText(_path, """{"SavedAt":5,"Mode":1,"Programs":["chrome.exe"]}""");
+        using var locked = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        // Not content that is bad: nothing is set aside, and nothing throws.
+        var handler = Create();
+
+        Assert.False(handler.Current.IsActive);
+        Assert.False(File.Exists(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void AWarning_IsAppendedToTheAnswerOfABlock_ButNotToALift()
+    {
+        var handler = new AppBlockCommandHandler(_path, _applied.Add, () => "o UAC está desligado");
+
+        Assert.Equal("bloqueando 1 programa(s) (atenção: o UAC está desligado)",
+            handler.Handle(Encoded(10, AppBlockMode.BlockList, "chrome.exe")).Detail);
+        Assert.Equal("nenhum programa bloqueado", handler.Handle(AppBlockPolicy.Lifted(20).Encode()).Detail);
+    }
+
+    [Fact]
     public async Task ThroughTheAgentServer_SetAndGetAppBlock_WorkAndTheOldAnswerIsRecognizable()
     {
         using var agentCert = SelfSignedCertificate.Create("agent-under-test");

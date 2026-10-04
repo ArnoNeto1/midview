@@ -206,6 +206,61 @@ public class ThumbnailPollerTests
         Assert.Equal(new[] { 1000L, 2000L }, agent.BlocksReceived);
     }
 
+    [Fact]
+    public async Task AppBlock_AnAgentThatDidNotTakeIt_IsNotMarkedDelivered_AndIsTriedAgain()
+    {
+        using var session = new LoopbackSession();
+        // An older Agent answers with a bare ack, which reads as "no".
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(false, string.Empty)));
+        var policy = new AppBlockPolicy(1000, AppBlockMode.BlockList, new[] { "chrome.exe" });
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            appBlockPolicy: () => policy, agentRetryInterval: TimeSpan.Zero);
+
+        await ThreeThumbnails(poller);
+
+        Assert.True(agent.BlocksReceived.Length >= 2, $"expected the block to be sent again, got {agent.BlocksReceived.Length}");
+    }
+
+    [Fact]
+    public async Task AppBlockObserved_ReportsWhatTheAgentFollows()
+    {
+        using var session = new LoopbackSession();
+        var followed = new AppBlockPolicy(1000, AppBlockMode.AllowOnly, new[] { "winword.exe" });
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "ok")))
+        {
+            StatusReply = new Message(MessageType.AppBlockStatus, followed.Encode()),
+        };
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+        var observed = new TaskCompletionSource<AppBlockClient.StatusResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.AppBlockObserved += status => observed.TrySetResult(status);
+
+        poller.Start();
+        var status = await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.NotNull(status);
+        Assert.False(status!.OldAgent);
+        Assert.True(followed.SameRulesAs(status.Policy!));
+    }
+
+    [Fact]
+    public async Task AppBlockObserved_AnAgentFromBeforeTheFeature_IsReportedAsOld()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, string.Empty)));
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+        var observed = new TaskCompletionSource<AppBlockClient.StatusResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.AppBlockObserved += status => observed.TrySetResult(status);
+
+        poller.Start();
+        var status = await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.NotNull(status);
+        Assert.True(status!.OldAgent);
+    }
+
     private static async Task ThreeThumbnails(ThumbnailPoller poller)
     {
         var count = 0;
@@ -349,7 +404,7 @@ public class ThumbnailPollerTests
                                     _schedulesReceived.Add(schedule.SavedAt);
                                 }
                             }
-                            channel.Send(reply);
+                            channel.Send(message.Type == MessageType.GetAppBlock && StatusReply is { } status ? status : reply);
                         }
                         catch (Exception)
                         {
@@ -363,6 +418,9 @@ public class ThumbnailPollerTests
         public int Port { get; }
 
         public string Thumbprint => _certificate.Thumbprint;
+
+        // What GetAppBlock is answered with, when it isn't the same as everything else.
+        public Message? StatusReply { get; set; }
 
         public int Questions => Volatile.Read(ref _questions);
 
