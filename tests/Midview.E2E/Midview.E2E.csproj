@@ -18,5 +18,7 @@
     <Compile Include="..\..\src\Midview.Master\InstallPackage.cs" Link="Master\InstallPackage.cs" />
     <Compile Include="..\..\src\Midview.Master\UpdatePackage.cs" Link="Master\UpdatePackage.cs" />
     <Compile Include="..\..\src\Midview.Master\UpdateClient.cs" Link="Master\UpdateClient.cs" />
+    <Compile Include="..\..\src\Midview.Master\CommandClient.cs" Link="Master\CommandClient.cs" />
+    <Compile Include="..\..\src\Midview.Master\AppBlockClient.cs" Link="Master\AppBlockClient.cs" />
   </ItemGroup>
 </Project>
