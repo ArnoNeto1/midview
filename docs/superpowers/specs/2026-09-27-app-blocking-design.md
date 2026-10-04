@@ -1,7 +1,8 @@
 # Midview — Block Programs (Design)
 
 Date: 2026-09-27
-Status: Design (synthesized from three independent proposals); not yet implemented
+Status: Implemented 2026-10-04; checked on a real Windows machine in CI
+(`bloqueio.yml`), not yet live in a lab
 
 ## Context
 
