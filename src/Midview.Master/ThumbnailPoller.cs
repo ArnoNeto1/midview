@@ -31,6 +31,9 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly Thread _thread;
     private readonly Func<PowerSchedule?>? _powerSchedule;
+    private readonly Func<AppBlockPolicy?>? _appBlockPolicy;
+    private long? _sentAppBlockSavedAt;
+    private DateTime _nextAppBlockAttempt = DateTime.MinValue;
     private bool _macAddressAnswered;
     private DateTime _nextMacAddressAttempt = DateTime.MinValue;
     private long? _sentScheduleSavedAt;
@@ -41,13 +44,14 @@ public sealed class ThumbnailPoller : IDisposable
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
-        Func<PowerSchedule?>? powerSchedule = null)
+        Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
         _port = port;
         _agentPort = agentPort;
         _powerSchedule = powerSchedule;
+        _appBlockPolicy = appBlockPolicy;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
 
@@ -99,6 +103,7 @@ public sealed class ThumbnailPoller : IDisposable
 
                 AskForMacAddressOnce();
                 SendPowerScheduleIfChanged();
+                SendAppBlockIfChanged();
             }
             catch (Exception ex)
             {
@@ -173,6 +178,31 @@ public sealed class ThumbnailPoller : IDisposable
         catch (Exception)
         {
             _nextScheduleAttempt = DateTime.UtcNow + AgentRetryInterval;
+        }
+    }
+
+    // Once per poller and again after each change, so a machine that was
+    // off when the teacher set the block gets it the next time it's on. The
+    // Agent keeps an older policy out by SavedAt.
+    private void SendAppBlockIfChanged()
+    {
+        if (_appBlockPolicy?.Invoke() is not { } policy || policy.SavedAt == _sentAppBlockSavedAt
+            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
+            || DateTime.UtcNow < _nextAppBlockAttempt || _stop.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            CommandClient.SendCommandForResult(
+                _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
+                MessageType.SetAppBlock, policy.Encode());
+            _sentAppBlockSavedAt = policy.SavedAt;
+        }
+        catch (Exception)
+        {
+            _nextAppBlockAttempt = DateTime.UtcNow + AgentRetryInterval;
         }
     }
 

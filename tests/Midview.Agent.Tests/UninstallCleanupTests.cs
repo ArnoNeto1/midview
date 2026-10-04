@@ -40,6 +40,22 @@ public class UninstallCleanupTests : IDisposable
     }
 
     [Fact]
+    public void TheProgramBlock_IsLifted_SoAReinstallDoesNotBringItBack()
+    {
+        var appBlockPath = Path.Combine(Path.GetTempPath(), $"midview-appblock-uninstall-{Guid.NewGuid():N}.json");
+        File.WriteAllText(appBlockPath, "{}");
+        File.WriteAllText(appBlockPath + ".tmp", "{}");
+        File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");
+
+        var failures = UninstallCleanup.Run(
+            _statePath, _hostsPath, new FakeFirewallController(), new FakeInputDeviceController(), _netshCalls.Add, appBlockPath);
+
+        Assert.Empty(failures);
+        Assert.False(File.Exists(appBlockPath));
+        Assert.False(File.Exists(appBlockPath + ".tmp"));
+    }
+
+    [Fact]
     public void AFailingStep_DoesNotStopTheOthers_AndIsReported()
     {
         File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");

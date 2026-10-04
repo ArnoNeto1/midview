@@ -73,6 +73,21 @@ public enum MessageType : byte
     UpdateAccepted = 26,
     GetUpdateStatus = 27,
     UpdateStatus = 28,
+
+    // Program blocking (see AppBlockPolicy). SetAppBlock is an Agent command
+    // (answered with one CommandAck carrying a CommandResult); GetAppBlock,
+    // no payload, is answered with one AppBlockStatus carrying the policy
+    // the machine follows. An Agent from before this answers CommandAck.
+    SetAppBlock = 29,
+    GetAppBlock = 30,
+    AppBlockStatus = 31,
+
+    // "What does the student have open?" A Session question, no payload,
+    // answered with one OpenPrograms (see OpenProgramsReport). A Session
+    // from before this would take it for a control connection, so the
+    // Master only asks machines whose Agent answered GetAppBlock.
+    ListOpenPrograms = 32,
+    OpenPrograms = 33,
 }
 
 public enum CloseAppsMode : byte

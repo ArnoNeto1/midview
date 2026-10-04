@@ -50,10 +50,17 @@ var host = Host.CreateDefaultBuilder(args)
                 () => schedule.IsDueWithin(DateTime.Now, TimeSpan.FromMinutes(20)) || power.IsShutdownPending(),
                 UpdateReceiver.FreeBytesOn, new ProcessApplierLauncher(runningExe), SystemUpdateClock.Instance);
         });
+        services.AddSingleton(_ => new AppBlockEnforcer(new WindowsProcessInspector()));
+        services.AddSingleton(provider =>
+        {
+            var enforcer = provider.GetRequiredService<AppBlockEnforcer>();
+            return new AppBlockCommandHandler(AppBlockCommandHandler.DefaultStatePath, enforcer.Apply);
+        });
         services.AddHostedService<MidviewAgentWorker>();
         services.AddHostedService<AgentServerWorker>();
         services.AddHostedService<InputLockWorker>();
         services.AddHostedService<ScheduledShutdownWorker>();
+        services.AddHostedService<AppBlockWorker>();
     })
     .Build();
 

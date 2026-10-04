@@ -28,9 +28,13 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly ScheduledShutdown _scheduledShutdown;
     private readonly PowerCommandHandler _powerHandler;
     private readonly UpdateReceiver _updateReceiver;
+    private readonly AppBlockCommandHandler _appBlock;
 
-    public AgentServerWorker(ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver)
+    public AgentServerWorker(
+        ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
+        AppBlockCommandHandler appBlock)
     {
+        _appBlock = appBlock;
         _scheduledShutdown = scheduledShutdown;
         _powerHandler = powerHandler;
         _updateReceiver = updateReceiver;
@@ -82,7 +86,8 @@ public sealed class AgentServerWorker : BackgroundService
                     {
                         var server = new AgentServer(
                             new TcpListener(IPAddress.Any, AgentPort), certificate, trustStore, commandHandler,
-                            _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver);
+                            _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
+                            appBlock: _appBlock);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");

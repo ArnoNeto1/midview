@@ -169,6 +169,43 @@ public class ThumbnailPollerTests
         Assert.Equal(new[] { 1000L, 2000L }, agent.SchedulesReceived);
     }
 
+    [Fact]
+    public async Task AppBlock_IsHandedToTheAgentOnce_AndAgainWhenItChanges_IncludingALift()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "ok")));
+        var policy = new AppBlockPolicy(1000, AppBlockMode.BlockList, new[] { "chrome.exe" });
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            appBlockPolicy: () => policy);
+        var count = 0;
+        var third = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sixth = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.ThumbnailReceived += _ =>
+        {
+            var seen = Interlocked.Increment(ref count);
+            if (seen == 3)
+            {
+                third.TrySetResult();
+            }
+            else if (seen == 6)
+            {
+                sixth.TrySetResult();
+            }
+        };
+        poller.Start();
+        var timeout = 3 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
+
+        await third.Task.WaitAsync(timeout);
+        Assert.Equal(new[] { 1000L }, agent.BlocksReceived);
+
+        // Lifting is a newer policy like any other: a machine that was off
+        // when it was lifted is freed the same way.
+        policy = AppBlockPolicy.Lifted(2000);
+        await sixth.Task.WaitAsync(timeout);
+        Assert.Equal(new[] { 1000L, 2000L }, agent.BlocksReceived);
+    }
+
     private static async Task ThreeThumbnails(ThumbnailPoller poller)
     {
         var count = 0;
@@ -264,6 +301,7 @@ public class ThumbnailPollerTests
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate =
             SelfSignedCertificate.Create("agent-under-test");
         private readonly List<long> _schedulesReceived = new();
+        private readonly List<long> _blocksReceived = new();
         private int _questions;
 
         public FakeAgent(System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, Message reply)
@@ -295,6 +333,14 @@ public class ThumbnailPollerTests
                             {
                                 Interlocked.Increment(ref _questions);
                             }
+                            else if (message.Type == MessageType.SetAppBlock
+                                     && AppBlockPolicy.TryDecode(message.Payload, out var block))
+                            {
+                                lock (_blocksReceived)
+                                {
+                                    _blocksReceived.Add(block.SavedAt);
+                                }
+                            }
                             else if (message.Type == MessageType.SetPowerSchedule
                                      && PowerSchedule.TryDecode(message.Payload, out var schedule))
                             {
@@ -319,6 +365,18 @@ public class ThumbnailPollerTests
         public string Thumbprint => _certificate.Thumbprint;
 
         public int Questions => Volatile.Read(ref _questions);
+
+        // The SavedAt of each SetAppBlock received, in order.
+        public long[] BlocksReceived
+        {
+            get
+            {
+                lock (_blocksReceived)
+                {
+                    return _blocksReceived.ToArray();
+                }
+            }
+        }
 
         // The SavedAt of each SetPowerSchedule received, in order.
         public long[] SchedulesReceived

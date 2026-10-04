@@ -80,6 +80,7 @@ public sealed class SessionServer
     private readonly IChatWindows? _chatWindows;
     private readonly FileInbox? _fileInbox;
     private readonly IAppCloser? _appCloser;
+    private readonly IOpenProgramsLister? _openPrograms;
     private readonly DeliveryFolder? _deliveryFolder;
 
     // One controlling Master served at a time: the input lock and the
@@ -91,7 +92,7 @@ public sealed class SessionServer
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
         IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null,
-        IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null)
+        IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -104,6 +105,7 @@ public sealed class SessionServer
         _fileInbox = fileInbox;
         _appCloser = appCloser;
         _deliveryFolder = deliveryFolder;
+        _openPrograms = openPrograms;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -192,6 +194,15 @@ public sealed class SessionServer
         {
             var (closed, detail) = CloseApps(firstMessage.Payload);
             channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(closed, detail)));
+            return;
+        }
+
+        // Only suggests names to the teacher's block window; one-shot, never
+        // the control slot.
+        if (firstMessage.Type == MessageType.ListOpenPrograms)
+        {
+            var programs = _openPrograms?.List() ?? Array.Empty<OpenProgram>();
+            channel.Send(new Midview.Protocol.Message(MessageType.OpenPrograms, OpenProgramsReport.Encode(programs)));
             return;
         }
 

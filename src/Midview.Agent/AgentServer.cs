@@ -19,6 +19,7 @@ public sealed class AgentServer
     private readonly Func<IPAddress, byte[]?> _findWakeAddress;
     private readonly ScheduledShutdown? _scheduledShutdown;
     private readonly UpdateReceiver? _updateReceiver;
+    private readonly AppBlockCommandHandler? _appBlock;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -26,7 +27,7 @@ public sealed class AgentServer
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
-        UpdateReceiver? updateReceiver = null)
+        UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -36,6 +37,7 @@ public sealed class AgentServer
         _findWakeAddress = findWakeAddress ?? WakeAddressLookup.Find;
         _scheduledShutdown = scheduledShutdown;
         _updateReceiver = updateReceiver;
+        _appBlock = appBlock;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -122,6 +124,20 @@ public sealed class AgentServer
         if (message.Type == MessageType.GetUpdateStatus && _updateReceiver is not null)
         {
             channel.Send(new Message(MessageType.UpdateStatus, _updateReceiver.Status(message.Payload).Encode()));
+            return;
+        }
+
+        if (message.Type == MessageType.SetAppBlock)
+        {
+            var (succeeded, detail) = _appBlock?.Handle(message.Payload)
+                ?? (false, "esta máquina não aceita bloqueio de programas");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.GetAppBlock && _appBlock is not null)
+        {
+            channel.Send(new Message(MessageType.AppBlockStatus, _appBlock.Current.Encode()));
             return;
         }
 
