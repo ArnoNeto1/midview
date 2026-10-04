@@ -87,20 +87,28 @@ static int Facts()
 
 static int Launch(string exe, string[] arguments)
 {
-    var pid = NativeMethods.StartLimited(exe, arguments, out var exitedWith);
-    if (pid is null)
+    // Several ways to get a same-user, non-elevated process; the first whose
+    // program keeps running is used (a program that exits by itself within
+    // moments of starting proves nothing about blocking).
+    foreach (var attempt in NativeMethods.LimitedStarts)
     {
-        Say("launch failed");
-        return 1;
+        var (pid, exitedWith, error) = NativeMethods.StartLimited(attempt, exe, arguments);
+        if (pid is null)
+        {
+            Say($"launch {attempt.Name}: could not start (error {error})");
+            continue;
+        }
+        if (exitedWith is { } code)
+        {
+            Say($"launch {attempt.Name}: pid={pid} exited by itself with code {code} (0x{code:X})");
+            continue;
+        }
+        Say($"launch {attempt.Name}: ok");
+        Say($"pid={pid}");
+        return 0;
     }
-    if (exitedWith is { } code)
-    {
-        // Gone by itself within moments of starting: nothing a block did.
-        Say($"pid={pid} exited by itself with code {code} (0x{code:X})");
-        return 3;
-    }
-    Say($"pid={pid}");
-    return 0;
+    Say("launch failed with every method");
+    return 3;
 }
 
 static int Authorize(string package, string pfx)
@@ -270,6 +278,22 @@ internal static class NativeMethods
     private const uint LuaToken = 0x4;
     private const uint CreateNoWindow = 0x08000000;
 
+    // SAFER ("Basic User"): what `runas /trustlevel:0x20000` uses.
+    private const uint SaferScopeUser = 2;
+    private const uint SaferLevelNormalUser = 0x20000;
+    private const uint SaferLevelOpen = 1;
+
+    public sealed record LimitedStart(string Name, bool Safer, bool ViaSecondaryLogon);
+
+    // In the order tried.
+    public static readonly LimitedStart[] LimitedStarts =
+    {
+        new("restricted token, explicit desktop", Safer: false, ViaSecondaryLogon: false),
+        new("basic user (SAFER), CreateProcessAsUser", Safer: true, ViaSecondaryLogon: false),
+        new("basic user (SAFER), CreateProcessWithToken", Safer: true, ViaSecondaryLogon: true),
+        new("restricted token, CreateProcessWithToken", Safer: false, ViaSecondaryLogon: true),
+    };
+
     public static bool IsElevated()
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out var token))
@@ -295,34 +319,63 @@ internal static class NativeMethods
         }
     }
 
-    // exitedWith: set when the program ended on its own within 3 seconds.
-    public static int? StartLimited(string exe, string[] arguments, out int? exitedWith)
+    // Pid is null when the process couldn't be created (Error says why);
+    // ExitedWith is set when it ended on its own within 3 seconds.
+    public static (int? Pid, int? ExitedWith, int Error) StartLimited(LimitedStart how, string exe, string[] arguments)
     {
-        exitedWith = null;
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate | TokenAssignPrimary, out var token))
         {
-            return null;
+            return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
         }
         try
         {
-            if (!CreateRestrictedToken(token, LuaToken, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out var limited))
+            IntPtr limited;
+            if (how.Safer)
             {
-                return null;
+                if (!SaferCreateLevel(SaferScopeUser, SaferLevelNormalUser, SaferLevelOpen, out var level, IntPtr.Zero))
+                {
+                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                }
+                try
+                {
+                    if (!SaferComputeTokenFromLevel(level, token, out limited, 0, IntPtr.Zero))
+                    {
+                        return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    }
+                }
+                finally
+                {
+                    SaferCloseLevel(level);
+                }
             }
+            else if (!CreateRestrictedToken(token, LuaToken, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out limited))
+            {
+                return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+            }
+
             try
             {
-                var startup = new StartupInfo { cb = System.Runtime.InteropServices.Marshal.SizeOf<StartupInfo>() };
+                var startup = new StartupInfo
+                {
+                    cb = System.Runtime.InteropServices.Marshal.SizeOf<StartupInfo>(),
+                    lpDesktop = "WinSta0\\Default",
+                };
                 var commandLine = new System.Text.StringBuilder($"\"{exe}\"");
                 foreach (var argument in arguments)
                 {
                     commandLine.Append(' ').Append(argument);
                 }
-                if (!CreateProcessAsUser(limited, null, commandLine, IntPtr.Zero, IntPtr.Zero, false, CreateNoWindow,
-                        IntPtr.Zero, null, ref startup, out var info))
+
+                var started = how.ViaSecondaryLogon
+                    ? CreateProcessWithToken(limited, 0, null, commandLine, CreateNoWindow, IntPtr.Zero, null, ref startup, out var info)
+                    : CreateProcessAsUser(limited, null, commandLine, IntPtr.Zero, IntPtr.Zero, false, CreateNoWindow,
+                        IntPtr.Zero, null, ref startup, out info);
+                if (!started)
                 {
-                    Console.WriteLine($"CreateProcessAsUser failed: {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}");
-                    return null;
+                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
                 }
+
+                int? exitedWith = null;
                 try
                 {
                     if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
@@ -335,7 +388,7 @@ internal static class NativeMethods
                     CloseHandle(info.hProcess);
                     CloseHandle(info.hThread);
                 }
-                return info.dwProcessId;
+                return (info.dwProcessId, exitedWith, 0);
             }
             finally
             {
@@ -391,9 +444,23 @@ internal static class NativeMethods
         IntPtr existing, uint flags, uint disableSidCount, IntPtr sidsToDisable, uint deletePrivilegeCount,
         IntPtr privilegesToDelete, uint restrictedSidCount, IntPtr sidsToRestrict, out IntPtr newToken);
 
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool SaferCreateLevel(uint scope, uint level, uint openFlags, out IntPtr levelHandle, IntPtr reserved);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool SaferComputeTokenFromLevel(IntPtr levelHandle, IntPtr inAccessToken, out IntPtr outAccessToken, uint flags, IntPtr reserved);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll")]
+    private static extern bool SaferCloseLevel(IntPtr levelHandle);
+
     [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "CreateProcessAsUserW")]
     private static extern bool CreateProcessAsUser(
         IntPtr token, string? applicationName, System.Text.StringBuilder commandLine, IntPtr processAttributes,
         IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment, string? currentDirectory,
         ref StartupInfo startupInfo, out ProcessInformation processInformation);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "CreateProcessWithTokenW")]
+    private static extern bool CreateProcessWithToken(
+        IntPtr token, uint logonFlags, string? applicationName, System.Text.StringBuilder commandLine, uint creationFlags,
+        IntPtr environment, string? currentDirectory, ref StartupInfo startupInfo, out ProcessInformation processInformation);
 }
