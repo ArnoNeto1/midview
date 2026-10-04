@@ -105,7 +105,7 @@ static int Launch(string exe, string[] arguments)
         }
         if (exitedWith is { } code)
         {
-            Say($"launch {attempt.Name}: process {pid} exited by itself with code {code} (0x{code:X})");
+            Say($"launch {attempt.Name}: process {pid} ended with code {code} (0x{code:X}) (its token: {token}; one that is elevated is ended on purpose)");
             continue;
         }
         Say($"launch {attempt.Name}: ok; the program's token: {token}");
@@ -288,14 +288,19 @@ internal static class NativeMethods
     private const uint SaferLevelNormalUser = 0x20000;
     private const uint SaferLevelOpen = 1;
 
-    public sealed record LimitedStart(string Name, bool Safer, bool ViaSecondaryLogon);
+    public sealed record LimitedStart(string Name, bool Safer, bool ViaSecondaryLogon, bool MediumIntegrity = false);
 
     // In the order tried.
     public static readonly LimitedStart[] LimitedStarts =
     {
-        // The one that works on the runner (a restricted LUA token made the
-        // program fail to initialize: STATUS_DLL_INIT_FAILED).
+        // The SAFER token keeps the administrator's high integrity level, and
+        // a high-integrity token counts as elevated: lowering it to medium is
+        // what makes the program look like a student's. (A restricted LUA
+        // token, which does that itself, made the program fail to initialize
+        // on the runner: STATUS_DLL_INIT_FAILED.)
+        new("basic user (SAFER) at medium integrity, CreateProcessAsUser", Safer: true, ViaSecondaryLogon: false, MediumIntegrity: true),
         new("basic user (SAFER), CreateProcessAsUser", Safer: true, ViaSecondaryLogon: false),
+        new("basic user (SAFER) at medium integrity, CreateProcessWithToken", Safer: true, ViaSecondaryLogon: true, MediumIntegrity: true),
         new("basic user (SAFER), CreateProcessWithToken", Safer: true, ViaSecondaryLogon: true),
         new("restricted token, explicit desktop", Safer: false, ViaSecondaryLogon: false),
         new("restricted token, CreateProcessWithToken", Safer: false, ViaSecondaryLogon: true),
@@ -307,9 +312,17 @@ internal static class NativeMethods
     // looks at in a process's token.
     public static string TokenSummary(IntPtr process)
     {
+        var (user, elevated, readable) = TokenFacts(process);
+        return readable
+            ? $"user={user}, elevated={elevated}"
+            : $"could not be read (error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()})";
+    }
+
+    private static (string User, bool Elevated, bool Readable) TokenFacts(IntPtr process)
+    {
         if (!OpenProcessToken(process, TokenQuery, out var token))
         {
-            return $"could not be read (error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()})";
+            return (string.Empty, false, false);
         }
         try
         {
@@ -336,7 +349,7 @@ internal static class NativeMethods
                         System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
                     }
                 }
-                return $"user={user}, elevated={elevated}";
+                return (user, elevated, true);
             }
             finally
             {
@@ -346,6 +359,24 @@ internal static class NativeMethods
         finally
         {
             CloseHandle(token);
+        }
+    }
+
+    // TokenIntegrityLevel (25) of a primary token: S-1-16-8192, "medium".
+    private static bool SetMediumIntegrity(IntPtr token)
+    {
+        if (!ConvertStringSidToSid("S-1-16-8192", out var sid))
+        {
+            return false;
+        }
+        try
+        {
+            var label = new TokenMandatoryLabel { Sid = sid, Attributes = 0x20 };
+            return SetTokenInformation(token, 25, ref label, System.Runtime.InteropServices.Marshal.SizeOf<TokenMandatoryLabel>());
+        }
+        finally
+        {
+            LocalFree(sid);
         }
     }
 
@@ -408,6 +439,12 @@ internal static class NativeMethods
                 return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
             }
 
+            if (how.MediumIntegrity && !SetMediumIntegrity(limited))
+            {
+                CloseHandle(limited);
+                return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), "could not lower the integrity level");
+            }
+
             try
             {
                 var startup = new StartupInfo
@@ -431,9 +468,15 @@ internal static class NativeMethods
                 }
 
                 int? exitedWith = null;
-                var described = TokenSummary(info.hProcess);
+                var (childUser, childElevated, childReadable) = TokenFacts(info.hProcess);
+                var described = childReadable ? $"user={childUser}, elevated={childElevated}" : "could not be read";
                 try
                 {
+                    if (childElevated)
+                    {
+                        // Not a student's kind of program: end it, try another way.
+                        TerminateProcess(info.hProcess, 1);
+                    }
                     if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
                     {
                         exitedWith = unchecked((int)code);
@@ -474,8 +517,27 @@ internal static class NativeMethods
         public int dwProcessId, dwThreadId;
     }
 
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct TokenMandatoryLabel
+    {
+        public IntPtr Sid;
+        public uint Attributes;
+    }
+
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     public static extern uint WTSGetActiveConsoleSessionId();
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool ConvertStringSidToSid(string stringSid, out IntPtr sid);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool SetTokenInformation(IntPtr token, int informationClass, ref TokenMandatoryLabel information, int length);
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
