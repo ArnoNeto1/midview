@@ -175,8 +175,9 @@ looked at again after 2 seconds, never decided for good.
 ## What the student sees
 
 When something is ended, the Agent shows a system message in the
-student's session (`WTSSendMessage`, no waiting, closes by itself after
-10 s): "O professor bloqueou este programa: Google Chrome." At most once
+student's session (`WTSSendMessage` on a thread of its own, waiting 10 s: the
+timeout only takes effect when the call waits, and it then closes the box; a
+notice is skipped while another is still showing): "O professor bloqueou este programa: Google Chrome." At most once
 per program every 30 s, so a program that is started again and again
 doesn't flood the screen. The name shown is the version resource's
 `FileDescription`, capped at 64 characters, or the exe name.
