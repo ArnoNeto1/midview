@@ -58,6 +58,7 @@ public sealed class WindowsProcessInspector : IProcessInspector
     };
 
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _noticeShowing = new(1, 1);
     private readonly Dictionary<int, (SecurityIdentifier User, DateTime ReadAt)> _sessionUsers = new();
     private readonly Dictionary<(string Path, long Length, DateTime Written), (string? Original, string? Description, SecurityIdentifier? Owner)> _files = new();
 
@@ -137,11 +138,34 @@ public sealed class WindowsProcessInspector : IProcessInspector
         return handle is not null && CreationTime(handle) == process.CreationTime && TerminateProcess(handle, 1);
     }
 
+    // The message box stays up only as long as the call waits for it (the
+    // timeout is ignored when it doesn't), so the call waits -- on a thread of
+    // its own, so the enforcer isn't held up -- and a notice is skipped while
+    // another is still on the screen: boxes can't pile up.
     public void Notify(int sessionId, string message)
     {
-        const string title = "Midview";
-        WTSSendMessage(IntPtr.Zero, sessionId, title, title.Length * 2, message, message.Length * 2,
-            MbIconInformation | MbSetForeground, NoticeSeconds, out _, false);
+        if (!_noticeShowing.Wait(0))
+        {
+            return;
+        }
+
+        Task.Run(() =>
+        {
+            try
+            {
+                const string title = "Midview";
+                WTSSendMessage(IntPtr.Zero, sessionId, title, title.Length * 2, message, message.Length * 2,
+                    MbIconInformation | MbSetForeground, NoticeSeconds, out _, true);
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Couldn't tell the student a program was blocked: {ex.Message}");
+            }
+            finally
+            {
+                _noticeShowing.Release();
+            }
+        });
     }
 
     private static string FolderPrefix(string folder) =>
