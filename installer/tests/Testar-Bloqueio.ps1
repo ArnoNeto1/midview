@@ -116,14 +116,14 @@ function Start-Elevated([string]$Path) {
 # A limited token of the same user, like a student's program.
 function Start-Limited([string]$Path) {
     $result = Invoke-Tool @('launch', $Path, '-t', '127.0.0.1')
-    $line = $result.Output | Where-Object { "$_" -match 'pid=(\d+)' } | Select-Object -First 1
-    if ($line) {
-        $script:launched.Add([int]([regex]::Match("$line", 'pid=(\d+)').Groups[1].Value))
-    }
+    # Only the line that is just "pid=N": the attempts that failed print other text.
+    $line = $result.Output | Where-Object { "$_" -match '\]\s+pid=(\d+)\s*$' } | Select-Object -First 1
     if ($result.Code -ne 0 -or -not $line) {
         return $null
     }
-    return $script:launched[$script:launched.Count - 1]
+    $processId = [int]([regex]::Match("$line", 'pid=(\d+)').Groups[1].Value)
+    $script:launched.Add($processId)
+    return $processId
 }
 
 # The Agent writes a line each time it ends a program: what tells "the Agent
