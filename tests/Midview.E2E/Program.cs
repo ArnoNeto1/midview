@@ -100,7 +100,7 @@ static int Launch(string exe, string[] arguments)
         }
         if (exitedWith is { } code)
         {
-            Say($"launch {attempt.Name}: pid={pid} exited by itself with code {code} (0x{code:X})");
+            Say($"launch {attempt.Name}: process {pid} exited by itself with code {code} (0x{code:X})");
             continue;
         }
         Say($"launch {attempt.Name}: ok");
@@ -288,9 +288,11 @@ internal static class NativeMethods
     // In the order tried.
     public static readonly LimitedStart[] LimitedStarts =
     {
-        new("restricted token, explicit desktop", Safer: false, ViaSecondaryLogon: false),
+        // The one that works on the runner (a restricted LUA token made the
+        // program fail to initialize: STATUS_DLL_INIT_FAILED).
         new("basic user (SAFER), CreateProcessAsUser", Safer: true, ViaSecondaryLogon: false),
         new("basic user (SAFER), CreateProcessWithToken", Safer: true, ViaSecondaryLogon: true),
+        new("restricted token, explicit desktop", Safer: false, ViaSecondaryLogon: false),
         new("restricted token, CreateProcessWithToken", Safer: false, ViaSecondaryLogon: true),
     };
 
