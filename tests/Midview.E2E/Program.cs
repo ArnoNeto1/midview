@@ -14,6 +14,16 @@ using Midview.Protocol;
 //       waits for the Agent to report its build (the expected package's)
 //   push <package> <new package> <teacher.pfx> <committed|rolledBack>
 //       updates over the network and follows the attempt to the end
+//   block <package> <teacher.pfx> <blocklist|allowonly|lift> [programs...]
+//       applies a program block to the machine and reads it back
+//   block-status <package> <teacher.pfx>
+//       prints the block the machine follows
+//   facts
+//       prints this process's session, the console session and whether it
+//       is elevated (what program blocking looks at)
+//   launch <exe> [arguments...]
+//       starts a program with a limited (non-elevated) token of this user,
+//       the way a student's program runs; prints pid=<id>
 //
 // <package> is the one the machine was installed from: its maquinas\ folder
 // has the machine's file. Exit code 0 means the expected happened.
@@ -23,8 +33,69 @@ return args switch
     ["status", var package, var pfx] => Status(package, pfx, null),
     ["status", var package, var pfx, var expected] => Status(package, pfx, expected),
     ["push", var package, var update, var pfx, var expected] => Push(package, update, pfx, expected),
+    ["block", var package, var pfx, var mode, .. var programs] => Block(package, pfx, mode, programs),
+    ["block-status", var package, var pfx] => BlockStatus(package, pfx),
+    ["facts"] => Facts(),
+    ["launch", var exe, .. var rest] => Launch(exe, rest),
     _ => Usage(),
 };
+
+static int Block(string package, string pfx, string mode, string[] programs)
+{
+    using var teacher = LoadTeacher(pfx);
+    var machine = InstalledMachine(package);
+    var blockMode = mode switch
+    {
+        "blocklist" => AppBlockMode.BlockList,
+        "allowonly" => AppBlockMode.AllowOnly,
+        "lift" => AppBlockMode.None,
+        _ => throw new ArgumentException($"unknown mode {mode}"),
+    };
+
+    // Newer than whatever the machine has (a second can pass between two
+    // calls of this tool, or not).
+    var current = AppBlockClient.GetStatus(machine, teacher).Policy;
+    var savedAt = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), (current?.SavedAt ?? 0) + 1);
+    var policy = new AppBlockPolicy(savedAt, blockMode, blockMode == AppBlockMode.None ? Array.Empty<string>() : programs);
+
+    var (succeeded, detail) = AppBlockClient.Apply(machine, teacher, policy);
+    Say($"block {mode} [{string.Join(", ", programs)}]: {(succeeded ? "ok" : "refused")} - {detail}");
+    return succeeded ? 0 : 1;
+}
+
+static int BlockStatus(string package, string pfx)
+{
+    using var teacher = LoadTeacher(pfx);
+    var status = AppBlockClient.GetStatus(InstalledMachine(package), teacher);
+    if (status.OldAgent || status.Policy is null)
+    {
+        Say("the Agent doesn't know program blocking");
+        return 1;
+    }
+    Say($"status: mode={status.Policy.Mode} savedAt={status.Policy.SavedAt} programs=[{string.Join(", ", status.Policy.Programs)}]");
+    return 0;
+}
+
+static int Facts()
+{
+    var session = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+    Say($"session={session}");
+    Say($"console={NativeMethods.WTSGetActiveConsoleSessionId()}");
+    Say($"elevated={NativeMethods.IsElevated()}");
+    return 0;
+}
+
+static int Launch(string exe, string[] arguments)
+{
+    var pid = NativeMethods.StartLimited(exe, arguments);
+    if (pid is null)
+    {
+        Say("launch failed");
+        return 1;
+    }
+    Say($"pid={pid}");
+    return 0;
+}
 
 static int Authorize(string package, string pfx)
 {
@@ -178,4 +249,127 @@ static int Usage()
 {
     Console.WriteLine("usage: authorize <package> <pfx> | status <package> <pfx> [<expected package>] | push <package> <new package> <pfx> <committed|rolledBack>");
     return 2;
+}
+
+// Win32 for the two things the test needs that .NET doesn't give: whether a
+// token is elevated, and a process started with a limited token of the same
+// user (an administrator's filtered token), which is how a student's
+// programs run: the Agent never touches elevated ones.
+internal static class NativeMethods
+{
+    private const uint TokenQuery = 0x0008;
+    private const uint TokenDuplicate = 0x0002;
+    private const uint TokenAssignPrimary = 0x0001;
+    private const int TokenElevationClass = 20;
+    private const uint LuaToken = 0x4;
+    private const uint CreateNoWindow = 0x08000000;
+
+    public static bool IsElevated()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out var token))
+        {
+            return false;
+        }
+        try
+        {
+            var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(sizeof(int));
+            try
+            {
+                return GetTokenInformation(token, TokenElevationClass, buffer, sizeof(int), out _)
+                       && System.Runtime.InteropServices.Marshal.ReadInt32(buffer) != 0;
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            CloseHandle(token);
+        }
+    }
+
+    public static int? StartLimited(string exe, string[] arguments)
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate | TokenAssignPrimary, out var token))
+        {
+            return null;
+        }
+        try
+        {
+            if (!CreateRestrictedToken(token, LuaToken, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out var limited))
+            {
+                return null;
+            }
+            try
+            {
+                var startup = new StartupInfo { cb = System.Runtime.InteropServices.Marshal.SizeOf<StartupInfo>() };
+                var commandLine = new System.Text.StringBuilder($"\"{exe}\"");
+                foreach (var argument in arguments)
+                {
+                    commandLine.Append(' ').Append(argument);
+                }
+                if (!CreateProcessAsUser(limited, null, commandLine, IntPtr.Zero, IntPtr.Zero, false, CreateNoWindow,
+                        IntPtr.Zero, null, ref startup, out var info))
+                {
+                    Console.WriteLine($"CreateProcessAsUser failed: {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}");
+                    return null;
+                }
+                CloseHandle(info.hProcess);
+                CloseHandle(info.hThread);
+                return info.dwProcessId;
+            }
+            finally
+            {
+                CloseHandle(limited);
+            }
+        }
+        finally
+        {
+            CloseHandle(token);
+        }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private struct StartupInfo
+    {
+        public int cb;
+        public string? lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ProcessInformation
+    {
+        public IntPtr hProcess, hThread;
+        public int dwProcessId, dwThreadId;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    public static extern uint WTSGetActiveConsoleSessionId();
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(IntPtr token, int informationClass, IntPtr information, int length, out int returnLength);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool CreateRestrictedToken(
+        IntPtr existing, uint flags, uint disableSidCount, IntPtr sidsToDisable, uint deletePrivilegeCount,
+        IntPtr privilegesToDelete, uint restrictedSidCount, IntPtr sidsToRestrict, out IntPtr newToken);
+
+    [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "CreateProcessAsUserW")]
+    private static extern bool CreateProcessAsUser(
+        IntPtr token, string? applicationName, System.Text.StringBuilder commandLine, IntPtr processAttributes,
+        IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment, string? currentDirectory,
+        ref StartupInfo startupInfo, out ProcessInformation processInformation);
 }
