@@ -193,10 +193,11 @@ try {
     $factsResult = Invoke-Tool @('facts')
     Check ($factsResult.Code -eq 0) 'the tool can tell where it runs'
     $facts = $factsResult.Output -join ' '
-    Check ($facts -match 'session=(\d+)' -and $facts -match 'console=(\d+)') 'the tool printed its session and the console session'
-    $session = [int]([regex]::Match($facts, 'session=(\d+)').Groups[1].Value)
-    $console = [int]([regex]::Match($facts, 'console=(\d+)').Groups[1].Value)
-    $elevated = $facts -match 'elevated=True'
+    Check ($facts -match '\]\s+session=(\d+)' -and $facts -match '\]\s+console=(\d+)') 'the tool printed its session and the console session'
+    $session = [int]([regex]::Match($facts, '\]\s+session=(\d+)').Groups[1].Value)
+    $console = [int]([regex]::Match($facts, '\]\s+console=(\d+)').Groups[1].Value)
+    # Only the tool's own line: the lines about other tokens say elevated= too.
+    $elevated = @($factsResult.Output | Where-Object { "$_" -match '\]\s+elevated=True\s*$' }).Count -gt 0
     $luaOff = ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue).EnableLUA -eq 0)
     Write-Host "session=$session console=$console elevated=$elevated UAC-off=$luaOff"
     # The Agent only acts in interactive sessions; and "allow only" ends every

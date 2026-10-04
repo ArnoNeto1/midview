@@ -82,6 +82,11 @@ static int Facts()
     Say($"session={session}");
     Say($"console={NativeMethods.WTSGetActiveConsoleSessionId()}");
     Say($"elevated={NativeMethods.IsElevated()}");
+    Say($"user={NativeMethods.TokenSummary(NativeMethods.CurrentProcess)}");
+    foreach (var explorer in System.Diagnostics.Process.GetProcessesByName("explorer").Take(2))
+    {
+        Say($"explorer {explorer.Id} (session {explorer.SessionId}) token: {NativeMethods.TokenSummary(explorer.Handle)}");
+    }
     return 0;
 }
 
@@ -92,7 +97,7 @@ static int Launch(string exe, string[] arguments)
     // moments of starting proves nothing about blocking).
     foreach (var attempt in NativeMethods.LimitedStarts)
     {
-        var (pid, exitedWith, error) = NativeMethods.StartLimited(attempt, exe, arguments);
+        var (pid, exitedWith, error, token) = NativeMethods.StartLimited(attempt, exe, arguments);
         if (pid is null)
         {
             Say($"launch {attempt.Name}: could not start (error {error})");
@@ -103,7 +108,7 @@ static int Launch(string exe, string[] arguments)
             Say($"launch {attempt.Name}: process {pid} exited by itself with code {code} (0x{code:X})");
             continue;
         }
-        Say($"launch {attempt.Name}: ok");
+        Say($"launch {attempt.Name}: ok; the program's token: {token}");
         Say($"pid={pid}");
         return 0;
     }
@@ -296,6 +301,54 @@ internal static class NativeMethods
         new("restricted token, CreateProcessWithToken", Safer: false, ViaSecondaryLogon: true),
     };
 
+    public static IntPtr CurrentProcess => GetCurrentProcess();
+
+    // "user=S-1-5-..., elevated=False": the two things program blocking
+    // looks at in a process's token.
+    public static string TokenSummary(IntPtr process)
+    {
+        if (!OpenProcessToken(process, TokenQuery, out var token))
+        {
+            return $"could not be read (error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()})";
+        }
+        try
+        {
+            var elevation = System.Runtime.InteropServices.Marshal.AllocHGlobal(sizeof(int));
+            try
+            {
+                var elevated = GetTokenInformation(token, TokenElevationClass, elevation, sizeof(int), out _)
+                               && System.Runtime.InteropServices.Marshal.ReadInt32(elevation) != 0;
+                GetTokenInformation(token, 1, IntPtr.Zero, 0, out var needed);
+                var user = "?";
+                if (needed > 0)
+                {
+                    var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(needed);
+                    try
+                    {
+                        if (GetTokenInformation(token, 1, buffer, needed, out _))
+                        {
+                            user = new System.Security.Principal.SecurityIdentifier(
+                                System.Runtime.InteropServices.Marshal.ReadIntPtr(buffer)).Value;
+                        }
+                    }
+                    finally
+                    {
+                        System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer);
+                    }
+                }
+                return $"user={user}, elevated={elevated}";
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(elevation);
+            }
+        }
+        finally
+        {
+            CloseHandle(token);
+        }
+    }
+
     public static bool IsElevated()
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery, out var token))
@@ -323,11 +376,11 @@ internal static class NativeMethods
 
     // Pid is null when the process couldn't be created (Error says why);
     // ExitedWith is set when it ended on its own within 3 seconds.
-    public static (int? Pid, int? ExitedWith, int Error) StartLimited(LimitedStart how, string exe, string[] arguments)
+    public static (int? Pid, int? ExitedWith, int Error, string Token) StartLimited(LimitedStart how, string exe, string[] arguments)
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate | TokenAssignPrimary, out var token))
         {
-            return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+            return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
         }
         try
         {
@@ -336,13 +389,13 @@ internal static class NativeMethods
             {
                 if (!SaferCreateLevel(SaferScopeUser, SaferLevelNormalUser, SaferLevelOpen, out var level, IntPtr.Zero))
                 {
-                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
                 }
                 try
                 {
                     if (!SaferComputeTokenFromLevel(level, token, out limited, 0, IntPtr.Zero))
                     {
-                        return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                        return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
                     }
                 }
                 finally
@@ -352,7 +405,7 @@ internal static class NativeMethods
             }
             else if (!CreateRestrictedToken(token, LuaToken, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out limited))
             {
-                return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
             }
 
             try
@@ -374,10 +427,11 @@ internal static class NativeMethods
                         IntPtr.Zero, null, ref startup, out info);
                 if (!started)
                 {
-                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    return (null, null, System.Runtime.InteropServices.Marshal.GetLastWin32Error(), string.Empty);
                 }
 
                 int? exitedWith = null;
+                var described = TokenSummary(info.hProcess);
                 try
                 {
                     if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
@@ -390,7 +444,7 @@ internal static class NativeMethods
                     CloseHandle(info.hProcess);
                     CloseHandle(info.hThread);
                 }
-                return (info.dwProcessId, exitedWith, 0);
+                return (info.dwProcessId, exitedWith, 0, described);
             }
             finally
             {

@@ -65,13 +65,29 @@ public static class AppBlockRules
         var listed = policy.Programs.ToHashSet(StringComparer.Ordinal);
         return policy.Mode switch
         {
-            AppBlockMode.BlockList =>
-                listed.Contains(process.ImageName)
-                || (process.OriginalFilename is { } original && listed.Contains(original)),
+            AppBlockMode.BlockList => IsListed(listed, process),
             AppBlockMode.AllowOnly => !IsWindowsItself(process) && !IsAllowed(listed, process),
             _ => false,
         };
     }
+
+    // In block-list mode: the program the teacher named (by file name, or by
+    // the original name in its version information), fence or not.
+    public static bool MatchesBlockList(AppBlockPolicy policy, ProcessFacts process) =>
+        policy.Mode == AppBlockMode.BlockList && IsListed(policy.Programs.ToHashSet(StringComparer.Ordinal), process);
+
+    // Why a process is outside the fence, in words for the log; null when it
+    // is inside.
+    public static string? LeftAloneBecause(ProcessFacts process) =>
+        process.SessionId == 0 ? "it is not in an interactive session"
+        : !process.OwnedBySessionUser ? "it does not belong to the user logged on to its session"
+        : process.IsElevated ? "it runs elevated"
+        : IsProtected(process) ? "it is a protected program"
+        : null;
+
+    private static bool IsListed(HashSet<string> listed, ProcessFacts process) =>
+        listed.Contains(process.ImageName)
+        || (process.OriginalFilename is { } original && listed.Contains(original));
 
     // The fence: only the logged-on user's own, non-elevated processes in an
     // interactive session, and never the protected programs or Midview.
