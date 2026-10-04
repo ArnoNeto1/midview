@@ -87,11 +87,17 @@ static int Facts()
 
 static int Launch(string exe, string[] arguments)
 {
-    var pid = NativeMethods.StartLimited(exe, arguments);
+    var pid = NativeMethods.StartLimited(exe, arguments, out var exitedWith);
     if (pid is null)
     {
         Say("launch failed");
         return 1;
+    }
+    if (exitedWith is { } code)
+    {
+        // Gone by itself within moments of starting: nothing a block did.
+        Say($"pid={pid} exited by itself with code {code} (0x{code:X})");
+        return 3;
     }
     Say($"pid={pid}");
     return 0;
@@ -289,8 +295,10 @@ internal static class NativeMethods
         }
     }
 
-    public static int? StartLimited(string exe, string[] arguments)
+    // exitedWith: set when the program ended on its own within 3 seconds.
+    public static int? StartLimited(string exe, string[] arguments, out int? exitedWith)
     {
+        exitedWith = null;
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate | TokenAssignPrimary, out var token))
         {
             return null;
@@ -315,8 +323,18 @@ internal static class NativeMethods
                     Console.WriteLine($"CreateProcessAsUser failed: {System.Runtime.InteropServices.Marshal.GetLastWin32Error()}");
                     return null;
                 }
-                CloseHandle(info.hProcess);
-                CloseHandle(info.hThread);
+                try
+                {
+                    if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
+                    {
+                        exitedWith = unchecked((int)code);
+                    }
+                }
+                finally
+                {
+                    CloseHandle(info.hProcess);
+                    CloseHandle(info.hThread);
+                }
                 return info.dwProcessId;
             }
             finally
@@ -355,6 +373,12 @@ internal static class NativeMethods
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
 
     [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);

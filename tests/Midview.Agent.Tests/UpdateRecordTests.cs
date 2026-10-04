@@ -14,11 +14,20 @@ public class UpdateRecordTests : IDisposable
         _paths = new UpdatePaths(Path.Combine(_root, "Midview.update"), Path.Combine(_root, "data"));
     }
 
+    // Retried: on Windows, a file another thread was still reading can't be
+    // deleted for a moment.
     public void Dispose()
     {
-        if (Directory.Exists(_root))
+        for (var attempt = 1; Directory.Exists(_root); attempt++)
         {
-            Directory.Delete(_root, recursive: true);
+            try
+            {
+                Directory.Delete(_root, recursive: true);
+            }
+            catch (IOException) when (attempt < 25)
+            {
+                Thread.Sleep(200);
+            }
         }
     }
 
@@ -36,21 +45,24 @@ public class UpdateRecordTests : IDisposable
     }
 
     [Fact]
-    public async Task Save_WhileTheRecordIsBeingRead_WaitsForTheReader_AndReplacesIt()
+    public void Save_WhileTheRecordIsBeingRead_WaitsForTheReader_AndReplacesIt()
     {
         UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Provisional));
 
         // A status question reading it (how Load opens it), for longer than
-        // one retry.
+        // one retry. Let go from a thread of its own: the test thread blocks
+        // in Save's retries, and with the other tests running in parallel a
+        // thread-pool continuation could be starved for longer than they last.
         var reader = new FileStream(_paths.StatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var readDone = Task.Run(async () =>
+        var release = new Thread(() =>
         {
-            await Task.Delay(300);
+            Thread.Sleep(300);
             reader.Dispose();
         });
+        release.Start();
 
         UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Committed));
-        await readDone;
+        release.Join();
 
         Assert.Equal(UpdateStates.Committed, UpdateRecordFile.Load(_paths.StatePath)!.State);
     }
