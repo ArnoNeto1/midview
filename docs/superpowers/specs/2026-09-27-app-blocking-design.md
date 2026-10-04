@@ -323,5 +323,5 @@ exists); per-machine policies remembered by the Master; icons in the list.
   identity is listed too; restart the service and check the block holds; lift
   and check a program stays open; uninstall and check the state is gone. The
   script fails, rather than skips, when the machine can't show these things
-  (no interactive session, not elevated, UAC on) and lifts the block and
+  (no interactive session, an account or shell that isn't elevated) and lifts the block and
   stops the service whatever happens.

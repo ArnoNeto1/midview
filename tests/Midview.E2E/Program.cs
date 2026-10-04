@@ -82,7 +82,7 @@ static int Facts()
     Say($"session={session}");
     Say($"console={NativeMethods.WTSGetActiveConsoleSessionId()}");
     Say($"elevated={NativeMethods.IsElevated()}");
-    Say($"user={NativeMethods.TokenSummary(NativeMethods.CurrentProcess)}");
+    Say($"this process's token: {NativeMethods.TokenSummary(NativeMethods.CurrentProcess)}");
     foreach (var explorer in System.Diagnostics.Process.GetProcessesByName("explorer").Take(2))
     {
         Say($"explorer {explorer.Id} (session {explorer.SessionId}) token: {NativeMethods.TokenSummary(explorer.Handle)}");
