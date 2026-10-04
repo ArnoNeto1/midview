@@ -17,7 +17,7 @@
 # ended when the policy says so).
 #
 # Nothing here is skipped quietly: if this machine can't show what the test
-# is about (no interactive session, an account that isn't elevated, UAC on),
+# is about (no interactive session, an account or shell that isn't elevated),
 # the test fails with the reason instead of passing without having tried.
 #
 # ASCII-only, like the other scripts run straight from the repository: 5.1
@@ -198,15 +198,19 @@ try {
     $console = [int]([regex]::Match($facts, '\]\s+console=(\d+)').Groups[1].Value)
     # Only the tool's own line: the lines about other tokens say elevated= too.
     $elevated = @($factsResult.Output | Where-Object { "$_" -match '\]\s+elevated=True\s*$' }).Count -gt 0
-    $luaOff = ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue).EnableLUA -eq 0)
-    Write-Host "session=$session console=$console elevated=$elevated UAC-off=$luaOff"
+    # The shell's token: when explorer runs elevated, so does everything the
+    # user starts from it (the runner's account is the built-in Administrator,
+    # which is never filtered by UAC).
+    $shellLines = @($factsResult.Output | Where-Object { "$_" -match 'explorer \d+ \(session \d+\) token: ' })
+    $shellElevated = ($shellLines.Count -gt 0) -and (@($shellLines | Where-Object { "$_" -notmatch 'elevated=True' }).Count -eq 0)
+    Write-Host "session=$session console=$console elevated=$elevated shell-elevated=$shellElevated"
     # The Agent only acts in interactive sessions; and "allow only" ends every
     # program of the user that is not elevated, so it is only safe to try where
-    # everything of the user is elevated (UAC off), in the console session.
+    # everything of the user is elevated, in the console session.
     Check ($session -ne 0) 'this machine runs the test in an interactive session (without one the Agent has nothing to act on)'
     Check ($session -eq $console) 'it is the console session, the one the Agent watches for the user'
     Check $elevated 'the runner''s own account is elevated (its programs stand for an administrator''s)'
-    Check $luaOff 'UAC is off here, so every program of this account is elevated and allow only cannot reach the runner itself'
+    Check $shellElevated 'the shell of this account is elevated too, so allow only cannot reach the runner''s own programs'
 
     $blockme = New-Program 'blockme.exe' $false
     $student = New-Program 'studentcopy.exe' $true
