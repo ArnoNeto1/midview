@@ -117,12 +117,33 @@ function Start-Elevated([string]$Path) {
 function Start-Limited([string]$Path) {
     $result = Invoke-Tool @('launch', $Path, '-t', '127.0.0.1')
     $line = $result.Output | Where-Object { "$_" -match 'pid=(\d+)' } | Select-Object -First 1
+    if ($line) {
+        $script:launched.Add([int]([regex]::Match("$line", 'pid=(\d+)').Groups[1].Value))
+    }
     if ($result.Code -ne 0 -or -not $line) {
         return $null
     }
-    $processId = [int]([regex]::Match("$line", 'pid=(\d+)').Groups[1].Value)
-    $script:launched.Add($processId)
-    return $processId
+    return $script:launched[$script:launched.Count - 1]
+}
+
+# The Agent writes a line each time it ends a program: what tells "the Agent
+# ended it" from "it exited by itself", which looks the same from outside.
+function Agent-Ended([string]$ImageName) {
+    $log = Join-Path $data 'agent.log'
+    if (-not (Test-Path -LiteralPath $log)) {
+        return $false
+    }
+    $lines = @(Get-Content -LiteralPath $log -ErrorAction SilentlyContinue)
+    return $null -ne ($lines | Where-Object { $_ -like "*Program blocking ended $ImageName *" } | Select-Object -First 1)
+}
+
+# True when the Agent ended the program: it's gone and the Agent said so.
+function Wait-EndedByAgent([int]$ProcessId, [string]$ImageName, [int]$Seconds) {
+    if (-not (Wait-Gone $ProcessId $Seconds)) {
+        return $false
+    }
+    Start-Sleep -Milliseconds 500
+    return (Agent-Ended $ImageName)
 }
 
 function Stop-Launched {
@@ -199,21 +220,22 @@ try {
         Write-Host 'SKIP: this runner has no interactive session for the Agent to act in; the kills below can only be checked on a machine that has one.' -ForegroundColor Yellow
     }
     else {
+        # With no block in place, a limited program must stay open: otherwise
+        # "it was ended" below would prove nothing.
         $probe = Start-Limited $blockme
-        if ($null -eq $probe) {
-            Write-Host ''
-            Write-Host 'SKIP: a limited-token program could not be started here.' -ForegroundColor Yellow
-        }
-        else {
-            Stop-Process -Id $probe -Force -ErrorAction SilentlyContinue
+        Check ($null -ne $probe) 'a limited-token program starts and keeps running on its own (see the tool output above for why not)'
+        Check (Stays-Alive $probe 5) 'it stays open when nothing blocks it'
+        Stop-Process -Id $probe -Force -ErrorAction SilentlyContinue
+        $script:launched.Clear()
+        if ($true) {
 
             Step 'Lista de bloqueio: o programa aberto e o que abrir depois sao encerrados'
             $open = Start-Limited $blockme
             Check ($null -ne $open) 'a limited program starts'
             Check (Set-Block 'blocklist' @('blockme.exe')) 'the block list is applied'
-            Check (Wait-Gone $open 20) 'what was already open is ended'
+            Check (Wait-EndedByAgent $open 'blockme.exe' 20) 'what was already open is ended by the Agent'
             $again = Start-Limited $blockme
-            Check (Wait-Gone $again 20) 'and what is started afterwards, too'
+            Check (Wait-EndedByAgent $again 'blockme.exe' 20) 'and what is started afterwards, too'
             $other = Start-Limited $student
             Check (Stays-Alive $other 6) 'a program that is not listed is left alone'
             Stop-Launched
@@ -225,7 +247,7 @@ try {
             $status = (Invoke-Tool @('block-status', $Pacote, $teacher))
             Check (($status.Output -join ' ') -match 'mode=BlockList' -and ($status.Output -join ' ') -match 'blockme.exe') 'the machine still follows the block'
             $afterRestart = Start-Limited $blockme
-            Check (Wait-Gone $afterRestart 20) 'and it still ends the program'
+            Check (Wait-EndedByAgent $afterRestart 'blockme.exe' 20) 'and it still ends the program'
 
             Step 'Liberar tudo'
             Check (Set-Block 'lift' @()) 'the block is lifted'
@@ -241,12 +263,12 @@ try {
             $listed = Start-Limited $blockme
             Check (Stays-Alive $listed 8) 'an installed program that is listed stays'
             $unlisted = Start-Limited $student
-            Check (Wait-Gone $unlisted 20) 'a program that is not listed is ended'
+            Check (Wait-EndedByAgent $unlisted 'studentcopy.exe' 20) 'a program that is not listed is ended'
             Stop-Launched
 
             Check (Set-Block 'allowonly' @('studentcopy.exe')) 'allow only studentcopy.exe is applied'
             $copyByName = Start-Limited $student
-            Check (Wait-Gone $copyByName 20) 'a student''s own copy is ended when only its file name is listed (it must be that program)'
+            Check (Wait-EndedByAgent $copyByName 'studentcopy.exe' 20) 'a student''s own copy is ended when only its file name is listed (it must be that program)'
             Check (Set-Block 'allowonly' @('studentcopy.exe', 'ping.exe')) 'allow only both names is applied'
             $copyAndOriginal = Start-Limited $student
             Check (Stays-Alive $copyAndOriginal 8) 'it stays once its real identity is listed too'
