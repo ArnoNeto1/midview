@@ -98,7 +98,7 @@ public sealed class WindowsAppCloser : IAppCloser
         }
     }
 
-    private static List<TopLevelWindow> EnumerateTopLevelWindows()
+    internal static List<TopLevelWindow> EnumerateTopLevelWindows()
     {
         var windows = new List<TopLevelWindow>();
         var processNames = new Dictionary<int, string>();

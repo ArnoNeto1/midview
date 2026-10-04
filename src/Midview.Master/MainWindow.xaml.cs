@@ -25,12 +25,14 @@ public partial class MainWindow : Window
     // The teacher's power timetable; the pollers read it on their own
     // threads to hand it to each machine's Agent.
     private PowerSchedule? _powerSchedule;
+    private AppBlockPolicy? _appBlockPolicy;
 
     public MainWindow()
     {
         InitializeComponent();
         MachinesItemsControl.ItemsSource = _tiles;
         _powerSchedule = LoadPowerSchedule();
+        _appBlockPolicy = LoadAppBlockPolicy();
 
         foreach (var machine in LoadRoster())
         {
@@ -144,6 +146,58 @@ public partial class MainWindow : Window
 
     private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
         new CloseAppsWindow(targets, _masterCertificate) { Owner = this }.Show();
+
+    private void OnBlockAppsClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
+            return;
+        }
+        new AppBlockWindow(
+            _tiles.Select(tile => tile.Machine).ToList(), _masterCertificate,
+            policy =>
+            {
+                Volatile.Write(ref _appBlockPolicy, policy);
+                SaveAppBlockPolicy(policy);
+            })
+        {
+            Owner = this,
+        }.Show();
+    }
+
+    private void OnBlockAppsMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            new AppBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this }.Show();
+        }
+    }
+
+    private AppBlockPolicy? LoadAppBlockPolicy()
+    {
+        try
+        {
+            return AppBlockFile.Load(AppBlockFile.DefaultPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O bloqueio de programas não pôde ser lido: {ex.Message}";
+            return null;
+        }
+    }
+
+    private void SaveAppBlockPolicy(AppBlockPolicy policy)
+    {
+        try
+        {
+            AppBlockFile.Save(AppBlockFile.DefaultPath, policy);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ex.Message}";
+        }
+    }
 
     private void OnPowerClassClicked(object sender, RoutedEventArgs e)
     {
@@ -389,7 +443,10 @@ public partial class MainWindow : Window
         var tile = new MachineTile(machine);
         _tiles.Insert(index, tile);
 
-        var poller = new ThumbnailPoller(machine, _masterCertificate, powerSchedule: () => Volatile.Read(ref _powerSchedule));
+        var poller = new ThumbnailPoller(
+            machine, _masterCertificate,
+            powerSchedule: () => Volatile.Read(ref _powerSchedule),
+            appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy));
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>

@@ -66,6 +66,7 @@ var server = new SessionServer(
     new WinFormsChatWindows(),
     new FileInbox(FileInbox.DefaultDirectory),
     new WindowsAppCloser(),
-    deliveryFolder);
+    deliveryFolder,
+    new WindowsOpenPrograms());
 
 server.Run(CancellationToken.None);

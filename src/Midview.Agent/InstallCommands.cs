@@ -46,7 +46,8 @@ public static class InstallCommands
         var failures = UninstallCleanup.Run(
             AgentServerWorker.SiteBlockStatePath, AgentServerWorker.HostsFilePath,
             new NetshFirewallController(AgentServerWorker.AgentPort, AgentServerWorker.SessionPort),
-            new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args));
+            new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args),
+            AppBlockCommandHandler.DefaultStatePath);
         foreach (var failure in failures)
         {
             Console.Error.WriteLine(failure);

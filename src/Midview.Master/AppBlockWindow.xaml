@@ -1,0 +1,57 @@
+<Window x:Class="Midview.Master.AppBlockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bloquear programas" Height="640" Width="600"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock x:Name="StateTextBlock" TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8" Text="Lendo o estado atual..." />
+
+            <TextBlock Text="Modo" FontWeight="Bold" Margin="0,0,0,4" />
+            <RadioButton x:Name="BlockListRadioButton" GroupName="Mode" IsChecked="True" Margin="0,0,0,4">
+                <TextBlock TextWrapping="Wrap" Text="Bloquear só os programas escolhidos — o resto continua funcionando." />
+            </RadioButton>
+            <RadioButton x:Name="AllowOnlyRadioButton" GroupName="Mode" Margin="0,0,0,8">
+                <TextBlock TextWrapping="Wrap" Text="Permitir só os programas escolhidos — todo o resto é fechado ao abrir (o Windows e o Midview continuam funcionando)." />
+            </RadioButton>
+
+            <DockPanel Margin="0,0,0,4">
+                <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Atualizar lista" Click="OnRefreshClicked" Padding="10,4" Margin="8,0,0,0" />
+                <TextBlock Text="Programas abertos na turma" FontWeight="Bold" VerticalAlignment="Center" />
+            </DockPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <DockPanel Margin="0,0,0,4">
+                <Button x:Name="AddButton" DockPanel.Dock="Right" Content="Adicionar" Click="OnAddClicked" Padding="10,4" Margin="8,0,0,0" />
+                <TextBox x:Name="AddTextBox" VerticalContentAlignment="Center" KeyDown="OnAddKeyDown" />
+            </DockPanel>
+            <TextBlock x:Name="AddHintTextBlock" Foreground="Gray" FontSize="11" TextWrapping="Wrap"
+                       Text="Adicionar pelo nome (por exemplo chrome.exe)." Margin="0,0,0,8" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <Button x:Name="ApplyButton" Content="Aplicar bloqueio" Click="OnApplyClicked" Padding="10,4" Margin="0,0,8,0" />
+                <Button x:Name="LiftButton" Content="Liberar tudo" Click="OnLiftClicked" Padding="10,4" />
+            </StackPanel>
+            <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" />
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="120" Margin="0,4,0,0">
+                <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+            </ScrollViewer>
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+            <ItemsControl x:Name="ProgramsList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <CheckBox IsChecked="{Binding Checked, Mode=TwoWay}" Margin="0,2">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run Text="{Binding DisplayName, Mode=OneWay}" FontWeight="Bold" />
+                                <Run Text="{Binding Detail, Mode=OneWay}" Foreground="Gray" />
+                            </TextBlock>
+                        </CheckBox>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

@@ -9,7 +9,7 @@ public static class UninstallCleanup
 {
     public static IReadOnlyList<string> Run(
         string statePath, string hostsFilePath, IFirewallController firewall, IInputDeviceController devices,
-        Action<string[]> runNetsh)
+        Action<string[]> runNetsh, string? appBlockStatePath = null)
     {
         var failures = new List<string>();
 
@@ -32,6 +32,14 @@ public static class UninstallCleanup
 
         // A later reinstall must not bring back a block from before.
         Step(failures, "limpar o estado de bloqueio salvo", () => new SiteBlockState().Save(statePath));
+        if (appBlockStatePath is not null)
+        {
+            Step(failures, "desfazer o bloqueio de programas", () =>
+            {
+                File.Delete(appBlockStatePath);
+                File.Delete(appBlockStatePath + ".tmp");
+            });
+        }
 
         return failures;
     }
