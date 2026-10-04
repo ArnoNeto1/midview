@@ -48,9 +48,14 @@ A process is a candidate only if **all** of these hold:
 1. It runs in an interactive session (session id ≠ 0).
 2. Its owner is the user logged on to that session (never SYSTEM,
    LocalService, NetworkService, the DWM/UMFD accounts, or another user).
-3. It is not elevated (a program an administrator opened "as
-   administrator" is never touched; an administrator at the machine keeps
-   control).
+3. It does not hold administrator rights: its token is not elevated, or
+   its Administrators group is not enabled (a program an administrator
+   opened "as administrator" is never touched; an administrator at the
+   machine keeps control). A token restricted from an elevated one — a SAFER
+   "Basic User" token, which keeps the elevation flag with the Administrators
+   group turned to deny-only — holds no administrator rights and is not
+   spared; that is what lets the real-Windows test show the Agent ending a
+   program on a runner whose account is an unfiltered administrator.
 4. Its name is not in the protected set, and it isn't Midview.
 
 The protected set (`ProtectedPrograms`, in Protocol, shared with
