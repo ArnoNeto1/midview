@@ -94,7 +94,7 @@ public sealed class AppBlockCommandHandler
         AppBlockPolicy? policy;
         try
         {
-            var stored = JsonSerializer.Deserialize<StoredPolicy>(File.ReadAllText(path));
+            var stored = JsonSerializer.Deserialize<StoredPolicy>(ReadWithRetry(path));
             policy = stored is null ? null : new AppBlockPolicy(stored.SavedAt, stored.Mode, stored.Programs ?? new List<string>());
             if (policy is null || !policy.IsValid())
             {
@@ -122,6 +122,24 @@ public sealed class AppBlockCommandHandler
             // stays where it is and is read again at the next start.
             AgentLog.Warn($"Couldn't read the program block file, blocking nothing: {ex.Message}");
             return null;
+        }
+    }
+
+    // At start-up an antivirus scan or a backup can hold the file for a moment;
+    // a block that isn't read because of it would leave the student free
+    // until the next start.
+    private static string ReadWithRetry(string path)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < 5)
+            {
+                Thread.Sleep(300);
+            }
         }
     }
 

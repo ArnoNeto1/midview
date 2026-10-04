@@ -62,7 +62,8 @@ if a teacher types one of its names (the window refuses them):
   TextInputHost, LockApp, ctfmon, sihost, taskhostw, RuntimeBroker,
   dllhost, conhost, fontdrvhost, dwm, csrss, winlogon, wininit, services,
   lsass, smss, svchost, userinit, LogonUI.
-- Accessibility: Narrator, osk, Magnify, AtBroker, Utilman.
+- Accessibility: Narrator, osk, Magnify, AtBroker, Utilman, and the screen
+  readers schools use (NVDA, JAWS, Dosvox).
 - Consent and security UI: consent, CredentialUIBroker,
   SecurityHealthSystray, SecurityHealthHost.
 - Error reporting: WerFault, WerFaultSecure.
@@ -71,13 +72,27 @@ if a teacher types one of its names (the window refuses them):
 Most of these already fail rule 2 (they aren't the student's); the set is
 defense in depth and keeps the desktop alive if another rule is wrong.
 
+A protected name is honored only where it is known to be the real thing: the
+image is under the Windows folder, Program Files (either) or the Agent's own
+folder, **and** its file is owned by SYSTEM, Administrators or
+TrustedInstaller ("trusted owner"). A file that merely carries the name — on
+a pendrive (FAT/exFAT files have no owner), in Downloads, on a share, or
+whose owner can't be read — gets no protection: it is judged like any other
+program. (Positive proof of trust, never the absence of proof.)
+
 ## Identifying a program
 
 A program is named by its **normalized exe name**: trimmed, the file name
 only (a pasted path is accepted), lower-case invariant, ".exe" added when
-missing, and exactly `[a-z0-9 ._()+-]{1,60}\.exe` (no wildcards, no path,
-no control characters). "Chrome", "CHROME.EXE" and
-`C:\...\chrome.exe` are all `chrome.exe`.
+missing, up to 100 characters before ".exe" and 255 bytes in UTF-8, any
+character Windows allows in a file name (accents and other scripts
+included) except wildcards, path separators and control characters.
+"Chrome", "CHROME.EXE" and `C:\...\chrome.exe` are all `chrome.exe`.
+
+A running image that isn't named .exe — LibreOffice's `soffice.bin`, a
+`.com` or `.scr`, or a version resource that says `MyApp.dll` (apphosts) — is
+known by its name with `.exe` (`soffice.exe`, `myapp.exe`): the name the
+teacher sees in the list and chooses (`AppBlockPolicy.ProgramName`).
 
 For a running process the Agent reads, once per image file (cached by
 path, size and write time): the file name, the version resource's
@@ -88,23 +103,41 @@ path, size and write time): the file name, the version resource's
   another file name is still recognized when it carries its version
   information.
 - **Allow only:** the process is allowed if it is "Windows itself" (below)
-  or it matches the list — by file name, and, when the file was created by
-  the student (owned by them rather than installed by an administrator),
-  also by `OriginalFilename`. So an installed program is allowed by its
-  name, and a file the student brought in is allowed only if it really is
-  that program.
+  or it matches the list — by file name when the file has a trusted owner
+  (installed by Windows or an administrator); otherwise (the student's own
+  file, one on a pendrive, one whose owner can't be read) also by
+  `OriginalFilename`. So an installed program is allowed by its name, and a
+  file the student brought in, or installed only for themselves, is allowed
+  only if its version information says it really is that program.
 
 **"Windows itself"** (allow only): the image is under `%SystemRoot%` and
-the file is owned by TrustedInstaller, SYSTEM or Administrators. Some
-folders under `%SystemRoot%` are writable by standard users; files a
-student puts there are owned by the student, so they don't count. Plus a
-short list of Windows runtime helpers outside that folder, admin-installed:
-`msedgewebview2.exe` (used by Windows and Office panes).
+the file has a trusted owner. Some folders under `%SystemRoot%` are writable
+by standard users; files put there are owned by the user (or by nobody the
+Agent can read), so they don't count. Plus a short list of Windows runtime
+helpers outside that folder, installed by an administrator in a trusted
+folder: `msedgewebview2.exe` (used by Windows and Office panes).
+
+**Script hosts are not "Windows itself"** in allow-only mode: `cmd`,
+`powershell`, `pwsh`, `powershell_ise`, `wscript`, `cscript`, `mshta`, `wsl`,
+`bash`. They run whatever the student types or drops on them, so allow-only
+(meant to keep a student inside the chosen programs) ends them unless they
+are on the list.
 
 Store apps installed under `Program Files\WindowsApps` are not "Windows
 itself": in allow-only mode they are allowed only if listed (the new
-Notepad is `notepad.exe`, Calculator `CalculatorApp.exe`). A process whose
-image path can't be read is left alone.
+Notepad is `notepad.exe`, Calculator `CalculatorApp.exe`).
+
+**Known limits of allow-only** (said to the teacher in the confirmation and
+in the package README): each process is judged on its own, so a listed
+program's windowless helper processes (Windows Terminal's `OpenConsole.exe`,
+Acrobat's `AcroCEF.exe`) must be listed too — they can be typed, though the
+picker only offers programs with windows — and Store apps whose window
+belongs to `ApplicationFrameHost` aren't offered by the picker. The teacher
+is told to try allow-only on one machine first.
+
+A process that can't be told about right now — it is gone, its image path
+can't be read, nobody is logged on to its session yet — is not ended and is
+looked at again after 2 seconds, never decided for good.
 
 ## Enforcement loop (`AppBlockEnforcer`)
 
@@ -115,6 +148,23 @@ image path can't be read is left alone.
 - With no policy (mode None), the loop does nothing.
 - Ending: re-check the start time (a reused id is never ended by mistake),
   then end the process. A failure is logged and not retried for 30 s.
+- The session's user is read from `WTSQueryUserToken` and kept for about
+  3 seconds (1 second if a process of someone else turns up); a failure is
+  never kept. Processes are judged oldest first.
+- Slow work (listing and inspecting) runs outside the enforcer's lock; the
+  lock is held to read the policy, to end a process and to record the
+  decision, and a decision made under an older policy is dropped (a policy
+  counter). So once a lift has been acknowledged, nothing is ended under the
+  block it replaced.
+- Every end is logged ("Program blocking ended x.exe (process N)");
+  `agent.log` is rotated at 5 MB (to `agent.log.1`), so a program that is
+  started again and again can't fill the disk. The notice to the student is
+  limited to once per program and session every 30 s, and its table is
+  pruned.
+- With User Account Control off, every administrator's program is elevated
+  and so never touched: the Agent logs that when it starts with a block, and
+  adds "(atenção: o controle de contas (UAC) está desligado...)" to the
+  answer of a block.
 - A blocked program therefore runs for up to about a second before it is
   ended. Out of scope: preventing it from starting at all (AppLocker/SRP
   depend on the Windows edition and are system-wide).
@@ -174,8 +224,12 @@ machine's Session for its programs after that machine's Agent answered
 ## Agent state
 
 - `AppBlockState`: `ProgramData\Midview\app-block.json`, written as temp
-  file, flush, move; an unreadable file is renamed `.corrupt` and nothing
-  is blocked (the direction the teacher can always fix remotely).
+  file, flush, move; a file whose content is bad (not JSON, a
+  protected or malformed name, a null entry) is renamed `.corrupt` and nothing
+  is blocked (the direction the teacher can always fix remotely); a file that
+  can't be read (locked by a scan or backup) is tried again a few times at
+  start and, if that fails, left where it is and logged — it is read again at
+  the next start.
 - `AppBlockCommandHandler`: validates, applies newest wins, saves, hands the
   policy to the enforcer; a save failure answers `(false, ...)` and keeps
   the previous policy. Descriptions: "bloqueando 3 programa(s)",
@@ -191,17 +245,23 @@ machine's Session for its programs after that machine's Agent answered
 `AppBlockWindow`, from the toolbar ("Bloquear programas da turma...") and
 the tile menu ("Bloquear programas..."):
 
-1. **Estado atual:** `GetAppBlock` to every target when the window opens,
-   grouped ("Nenhum programa bloqueado em 17 máquinas", "Bloqueando
-   chrome.exe em 2 máquinas (salvo em 26/09 14:05)", "Sem resposta:
-   Aluno-12").
+1. **Estado atual:** `GetAppBlock` to every target when the window opens
+   (all asked at once) and again after each apply, grouped ("Nenhum programa
+   bloqueado em 17 máquinas", "Bloqueando chrome.exe, steam.exe em 2
+   máquinas (salvo em 26/09 14:05)", "Sem resposta: Aluno-12"). When every
+   machine that answered follows the same block, the window opens with that
+   mode and those programs already chosen, and the confirmation says the new
+   block replaces the current one. Apply and lift are never held back while
+   the lists load (offline machines make them slow).
 2. **Modo:** "Bloquear só os programas escolhidos — o resto continua
    funcionando." / "Permitir só os programas escolhidos — todo o resto é
    fechado ao abrir (o Windows e o Midview continuam funcionando)."
 3. **Programas abertos na turma:** from `ListOpenPrograms`, one row per exe
    with checkbox, "Google Chrome (chrome.exe)" and "aberto em 12 de 18
    máquinas" (only machines that answered count), plus "Atualizar lista".
-   Display name: the most common one reported for that exe.
+   Display name: the most common one reported for that exe. A refresh updates
+   the rows that are there (a ticked program that isn't open any more stays,
+   marked; an unticked one goes).
 4. **Adicionar pelo nome**, with inline refusals ("nome inválido (use o
    nome do arquivo, por exemplo chrome.exe)", "esse programa faz parte do
    Windows ou do Midview e não pode ser bloqueado").
@@ -209,12 +269,22 @@ the tile menu ("Bloquear programas..."):
    everything else is closed, unsaved work included) and **Liberar tudo**.
 6. One result line per machine, as in `CloseAppsWindow`.
 
+The `SavedAt` of a new block is the larger of the teacher's clock and the
+highest `SavedAt` any machine reported plus one, so it wins even when this PC's
+clock is behind another Master's. An Agent that answers "mantido o bloqueio
+mais novo" did not apply it: that line is shown as a failure, and such a block
+isn't remembered as the class's.
+
 The class policy is saved in `%LOCALAPPDATA%\Midview\app-block.json` and
 `ThumbnailPoller` resends it on first sight of each machine and after each
-change, like the power schedule, so a machine that was off gets it. A
+change, like the power schedule, so a machine that was off gets it. It counts
+as delivered only when the Agent took it (`Succeeded`); an older Agent (bare
+ack) or one that couldn't save it is tried again after 5 minutes. A
 one-machine policy is sent once and kept by that Agent, but isn't resent.
-The tile shows a small badge ("🔒 3 bloqueados", "🔒 só 2 permitidos")
-from the poller's `GetAppBlock`.
+The poller also asks each machine's Agent `GetAppBlock` every 30 s while it
+is on, for the tile's badge ("🔒 3 bloqueados", "🔒 só 2 permitidos", "🔒 só o
+Windows", and "⚠ Midview antigo: sem bloqueio de programas" when the Master
+holds a class block that an older Midview can't follow).
 
 ## Recovery
 
@@ -243,11 +313,14 @@ exists); per-machine policies remembered by the Master; icons in the list.
   answers while another Master controls.
 - Master: aggregation, texts, the policy file, the poller's resend and
   badge against a fake Agent.
-- Real Windows (the e2e job): install; create a standard local user; start
-  a program as that user; block it and check it is ended within a few
-  seconds and again when restarted; allow only: a listed program survives
-  and another one is ended, while Windows programs keep running; restart
-  the service and check the block holds; lift and check a program stays
-  open; uninstall and check the state is gone. The first run also records
-  whether the runner's session qualifies (session id, elevation), which
-  decides how the program is started for the test.
+- Real Windows (the e2e job): install; start a program with a limited
+  token of the runner's own account (the runner is an administrator, so its
+  own programs are elevated and prove the fence by surviving); block it and
+  check the Agent says it ended it (by process id, in `agent.log`) within a
+  few seconds and again when restarted; allow only: a listed program and a
+  Windows program survive, a student-owned copy is ended unless its real
+  identity is listed too; restart the service and check the block holds; lift
+  and check a program stays open; uninstall and check the state is gone. The
+  script fails, rather than skips, when the machine can't show these things
+  (no interactive session, not elevated, UAC on) and lifts the block and
+  stops the service whatever happens.

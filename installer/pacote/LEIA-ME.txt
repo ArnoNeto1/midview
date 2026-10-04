@@ -111,12 +111,28 @@ reiniciar ou se o PC do professor for desligado; uma máquina que estava
 desligada recebe o bloqueio quando o MidviewMaster a vir ligada.
 Como funciona: o programa bloqueado abre e é fechado em cerca de 1 segundo, e
 o aluno vê um aviso. Só são fechados programas do aluno logado: nunca o
-Windows, a área de trabalho, o Midview nem programas abertos como
-administrador. Quem renomeia um programa para escapar da lista de bloqueio
-ainda é pego quando o arquivo guarda o nome original; no modo "Permitir só",
-um arquivo que o aluno trouxe (pendrive, Downloads) só passa se for mesmo o
-programa permitido. Se a máquina tiver um Midview anterior a esta função,
-atualize-a (pela rede ou com o pendrive) antes.
+Windows, a área de trabalho, o Midview, os leitores de tela nem programas
+abertos como administrador. Quem renomeia um programa para escapar da lista de
+bloqueio ainda é pego quando o arquivo guarda o nome original.
+No modo "Permitir só":
+  - O Windows continua funcionando, mas o Prompt de Comando, o PowerShell e
+    outros programas que executam o que o aluno digitar são fechados, a menos
+    que estejam na lista.
+  - Um programa instalado por um administrador (em Arquivos de Programas, por
+    exemplo) passa pelo nome. Um arquivo que o aluno trouxe (pendrive,
+    Downloads) ou que foi instalado só para ele passa apenas se o próprio
+    arquivo disser que é aquele programa.
+  - Alguns programas usam processos auxiliares sem janela (o Terminal do
+    Windows usa o OpenConsole.exe, por exemplo), e os aplicativos da Microsoft
+    Store (Calculadora, Fotos) não aparecem na lista de abertos. Se algo fechar
+    sozinho, digite também o nome do arquivo auxiliar. Teste antes em uma
+    máquina.
+  - Com o controle de contas (UAC) desligado, os programas de quem é
+    administrador não podem ser fechados; o Midview avisa ao aplicar.
+Se a máquina tiver um Midview anterior a esta função, atualize-a (pela rede ou
+com o pendrive) antes: o quadro da máquina mostra "Midview antigo". Em cada
+máquina com bloqueio aparece um cadeado e quantos programas (por exemplo
+"3 bloqueados").
 
 
 Desinstalar
