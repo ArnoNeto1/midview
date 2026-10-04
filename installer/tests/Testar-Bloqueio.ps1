@@ -16,6 +16,10 @@
 # one with a limited token of the same user (like a student's: it must be
 # ended when the policy says so).
 #
+# Nothing here is skipped quietly: if this machine can't show what the test
+# is about (no interactive session, an account that isn't elevated, UAC on),
+# the test fails with the reason instead of passing without having tried.
+#
 # ASCII-only, like the other scripts run straight from the repository: 5.1
 # reads a .ps1 without a BOM as ANSI.
 [CmdletBinding()]
@@ -71,8 +75,14 @@ function Get-ServiceState {
     (Get-CimInstance -ClassName Win32_Service -Filter "Name='MidviewAgent'").State
 }
 
+# Process id 0 is the Idle process: it must never stand for "a program that
+# didn't start".
 function Test-Alive([int]$ProcessId) {
-    $null -ne (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
+    if ($ProcessId -le 0) {
+        return $false
+    }
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    return ($null -ne $process) -and (-not $process.HasExited)
 }
 
 # Waits up to $Seconds for a process to be gone; true when it is.
@@ -110,6 +120,8 @@ function New-Program([string]$Name, [bool]$OwnedByStudent) {
 function Start-Elevated([string]$Path) {
     $process = Start-Process -FilePath $Path -ArgumentList '-t', '127.0.0.1' -PassThru -WindowStyle Hidden
     $script:launched.Add($process.Id)
+    Start-Sleep -Seconds 1
+    Check (Test-Alive $process.Id) "the runner's own program starts and keeps running"
     return $process.Id
 }
 
@@ -119,7 +131,7 @@ function Start-Limited([string]$Path) {
     # Only the line that is just "pid=N": the attempts that failed print other text.
     $line = $result.Output | Where-Object { "$_" -match '\]\s+pid=(\d+)\s*$' } | Select-Object -First 1
     if ($result.Code -ne 0 -or -not $line) {
-        return $null
+        throw "FALHA: could not start a limited-token program from $Path (see the tool output above for why)"
     }
     $processId = [int]([regex]::Match("$line", 'pid=(\d+)').Groups[1].Value)
     $script:launched.Add($processId)
@@ -128,22 +140,24 @@ function Start-Limited([string]$Path) {
 
 # The Agent writes a line each time it ends a program: what tells "the Agent
 # ended it" from "it exited by itself", which looks the same from outside.
-function Agent-Ended([string]$ImageName) {
+# The line names the process, so an earlier program of the same name doesn't
+# count.
+function Agent-Ended([int]$ProcessId, [string]$ImageName) {
     $log = Join-Path $data 'agent.log'
     if (-not (Test-Path -LiteralPath $log)) {
         return $false
     }
     $lines = @(Get-Content -LiteralPath $log -ErrorAction SilentlyContinue)
-    return $null -ne ($lines | Where-Object { $_ -like "*Program blocking ended $ImageName *" } | Select-Object -First 1)
+    return $null -ne ($lines | Where-Object { $_ -like "*Program blocking ended $ImageName (process $ProcessId).*" } | Select-Object -First 1)
 }
 
 # True when the Agent ended the program: it's gone and the Agent said so.
 function Wait-EndedByAgent([int]$ProcessId, [string]$ImageName, [int]$Seconds) {
-    if (-not (Wait-Gone $ProcessId $Seconds)) {
+    if ($ProcessId -le 0 -or -not (Wait-Gone $ProcessId $Seconds)) {
         return $false
     }
     Start-Sleep -Milliseconds 500
-    return (Agent-Ended $ImageName)
+    return (Agent-Ended $ProcessId $ImageName)
 }
 
 function Stop-Launched {
@@ -176,11 +190,22 @@ try {
     Check ((Invoke-Tool @('block-status', $Pacote, $teacher)).Code -eq 0) 'the Agent knows program blocking'
 
     Step 'Onde este teste roda'
-    $facts = (Invoke-Tool @('facts')).Output -join ' '
+    $factsResult = Invoke-Tool @('facts')
+    Check ($factsResult.Code -eq 0) 'the tool can tell where it runs'
+    $facts = $factsResult.Output -join ' '
+    Check ($facts -match 'session=(\d+)' -and $facts -match 'console=(\d+)') 'the tool printed its session and the console session'
     $session = [int]([regex]::Match($facts, 'session=(\d+)').Groups[1].Value)
+    $console = [int]([regex]::Match($facts, 'console=(\d+)').Groups[1].Value)
     $elevated = $facts -match 'elevated=True'
-    $canEnd = $session -ne 0
-    Write-Host "session=$session elevated=$elevated (the Agent only acts in interactive sessions: $canEnd)"
+    $luaOff = ((Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction SilentlyContinue).EnableLUA -eq 0)
+    Write-Host "session=$session console=$console elevated=$elevated UAC-off=$luaOff"
+    # The Agent only acts in interactive sessions; and "allow only" ends every
+    # program of the user that is not elevated, so it is only safe to try where
+    # everything of the user is elevated (UAC off), in the console session.
+    Check ($session -ne 0) 'this machine runs the test in an interactive session (without one the Agent has nothing to act on)'
+    Check ($session -eq $console) 'it is the console session, the one the Agent watches for the user'
+    Check $elevated 'the runner''s own account is elevated (its programs stand for an administrator''s)'
+    Check $luaOff 'UAC is off here, so every program of this account is elevated and allow only cannot reach the runner itself'
 
     $blockme = New-Program 'blockme.exe' $false
     $student = New-Program 'studentcopy.exe' $true
@@ -188,94 +213,73 @@ try {
     Step 'A cerca: um programa elevado nunca e encerrado, em nenhum modo'
     $own = Start-Elevated $blockme
     Check (Set-Block 'blocklist' @('blockme.exe')) 'a block list naming it is accepted'
-    if ($elevated) {
-        Check (Stays-Alive $own 8) 'an elevated program survives a block list that names it'
-    }
-    elseif ($canEnd) {
-        Check (Wait-Gone $own 15) 'this runner is not elevated: its program is ended like a student''s'
-    }
+    Check (Stays-Alive $own 8) 'an elevated program survives a block list that names it'
     Check (Set-Block 'lift' @()) 'the block is lifted'
     Stop-Launched
 
-    # Allow only ends everything the student runs that isn't allowed: on a
-    # runner whose own account is not elevated, that would be the runner's
-    # own processes. Only here, where the fence covers them, is it safe.
-    if ($elevated) {
-        $own = Start-Elevated $blockme
-        $shellBefore = @(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue).Count
-        Check (Set-Block 'allowonly' @()) 'allow only, nothing allowed, is accepted'
-        Check (Stays-Alive $own 8) 'an elevated program survives allow only with nothing allowed'
-        Check ((Get-ServiceState) -eq 'Running') 'the service and this machine still work under allow only'
-        $shellAfter = @(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue).Count
-        Check ($shellAfter -eq $shellBefore) "the shell is untouched ($shellBefore explorer process(es) before and after)"
-        Check (Set-Block 'lift' @()) 'the block is lifted'
-        Stop-Launched
-    }
-    else {
-        Write-Host 'SKIP: this runner is not elevated, so allow only is not tried on it.' -ForegroundColor Yellow
-    }
+    $own = Start-Elevated $blockme
+    $shellBefore = @(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue).Count
+    Check (Set-Block 'allowonly' @()) 'allow only, nothing allowed, is accepted'
+    Check (Stays-Alive $own 8) 'an elevated program survives allow only with nothing allowed'
+    Check ((Get-ServiceState) -eq 'Running') 'the service and this machine still work under allow only'
+    $shellAfter = @(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue).Count
+    Check ($shellAfter -eq $shellBefore) "the shell is untouched ($shellBefore explorer process(es) before and after)"
+    Check (Set-Block 'lift' @()) 'the block is lifted'
+    Stop-Launched
 
-    if (-not $canEnd) {
-        Write-Host ''
-        Write-Host 'SKIP: this runner has no interactive session for the Agent to act in; the kills below can only be checked on a machine that has one.' -ForegroundColor Yellow
-    }
-    else {
-        # With no block in place, a limited program must stay open: otherwise
-        # "it was ended" below would prove nothing.
-        $probe = Start-Limited $blockme
-        Check ($null -ne $probe) 'a limited-token program starts and keeps running on its own (see the tool output above for why not)'
-        Check (Stays-Alive $probe 5) 'it stays open when nothing blocks it'
-        Stop-Process -Id $probe -Force -ErrorAction SilentlyContinue
-        $script:launched.Clear()
-        if ($true) {
+    # With no block in place, a limited program must stay open: otherwise
+    # "it was ended" below would prove nothing.
+    $probe = Start-Limited $blockme
+    Check (Stays-Alive $probe 5) 'a limited-token program keeps running when nothing blocks it'
+    Stop-Launched
 
-            Step 'Lista de bloqueio: o programa aberto e o que abrir depois sao encerrados'
-            $open = Start-Limited $blockme
-            Check ($null -ne $open) 'a limited program starts'
-            Check (Set-Block 'blocklist' @('blockme.exe')) 'the block list is applied'
-            Check (Wait-EndedByAgent $open 'blockme.exe' 20) 'what was already open is ended by the Agent'
-            $again = Start-Limited $blockme
-            Check (Wait-EndedByAgent $again 'blockme.exe' 20) 'and what is started afterwards, too'
-            $other = Start-Limited $student
-            Check (Stays-Alive $other 6) 'a program that is not listed is left alone'
-            Stop-Launched
+    Step 'Lista de bloqueio: o programa aberto e o que abrir depois sao encerrados'
+    $open = Start-Limited $blockme
+    Check (Stays-Alive $open 2) 'a limited program is running'
+    Check (Set-Block 'blocklist' @('blockme.exe')) 'the block list is applied'
+    Check (Wait-EndedByAgent $open 'blockme.exe' 20) 'what was already open is ended by the Agent'
+    $again = Start-Limited $blockme
+    Check (Wait-EndedByAgent $again 'blockme.exe' 20) 'and what is started afterwards, too'
+    $other = Start-Limited $student
+    Check (Stays-Alive $other 6) 'a program that is not listed is left alone'
+    Stop-Launched
 
-            Step 'O bloqueio sobrevive a reiniciar o servico'
-            Restart-Service -Name 'MidviewAgent'
-            Start-Sleep -Seconds 8
-            Check ((Get-ServiceState) -eq 'Running') 'the service is back'
-            $status = (Invoke-Tool @('block-status', $Pacote, $teacher))
-            Check (($status.Output -join ' ') -match 'mode=BlockList' -and ($status.Output -join ' ') -match 'blockme.exe') 'the machine still follows the block'
-            $afterRestart = Start-Limited $blockme
-            Check (Wait-EndedByAgent $afterRestart 'blockme.exe' 20) 'and it still ends the program'
+    Step 'O bloqueio sobrevive a reiniciar o servico'
+    Restart-Service -Name 'MidviewAgent'
+    Start-Sleep -Seconds 8
+    Check ((Get-ServiceState) -eq 'Running') 'the service is back'
+    $status = (Invoke-Tool @('block-status', $Pacote, $teacher))
+    Check (($status.Output -join ' ') -match 'mode=BlockList' -and ($status.Output -join ' ') -match 'blockme.exe') 'the machine still follows the block'
+    $afterRestart = Start-Limited $blockme
+    Check (Wait-EndedByAgent $afterRestart 'blockme.exe' 20) 'and it still ends the program'
 
-            Step 'Liberar tudo'
-            Check (Set-Block 'lift' @()) 'the block is lifted'
-            $free = Start-Limited $blockme
-            Check (Stays-Alive $free 8) 'the program now stays open'
-            Stop-Launched
+    Step 'Liberar tudo'
+    Check (Set-Block 'lift' @()) 'the block is lifted'
+    $free = Start-Limited $blockme
+    Check (Stays-Alive $free 8) 'the program now stays open'
+    Stop-Launched
 
-            Step 'Permitir so os escolhidos'
-            if (-not $elevated) {
-                throw 'FALHA: allow only needs an elevated runner to be tried safely'
-            }
-            Check (Set-Block 'allowonly' @('blockme.exe')) 'allow only blockme.exe is applied'
-            $listed = Start-Limited $blockme
-            Check (Stays-Alive $listed 8) 'an installed program that is listed stays'
-            $unlisted = Start-Limited $student
-            Check (Wait-EndedByAgent $unlisted 'studentcopy.exe' 20) 'a program that is not listed is ended'
-            Stop-Launched
+    Step 'Permitir so os escolhidos'
+    Check (Set-Block 'allowonly' @('blockme.exe')) 'allow only blockme.exe is applied'
+    $listed = Start-Limited $blockme
+    Check (Stays-Alive $listed 8) 'an installed program that is listed stays'
+    # A Windows program (owned by TrustedInstaller, in the Windows folder) is
+    # "Windows itself": allowed without being listed. If the Agent could not
+    # read the owner, this would be ended.
+    $windows = Start-Limited $ping
+    Check (Stays-Alive $windows 8) 'a program of Windows itself stays although it is not listed'
+    $unlisted = Start-Limited $student
+    Check (Wait-EndedByAgent $unlisted 'studentcopy.exe' 20) 'a program that is not listed is ended'
+    Stop-Launched
 
-            Check (Set-Block 'allowonly' @('studentcopy.exe')) 'allow only studentcopy.exe is applied'
-            $copyByName = Start-Limited $student
-            Check (Wait-EndedByAgent $copyByName 'studentcopy.exe' 20) 'a student''s own copy is ended when only its file name is listed (it must be that program)'
-            Check (Set-Block 'allowonly' @('studentcopy.exe', 'ping.exe')) 'allow only both names is applied'
-            $copyAndOriginal = Start-Limited $student
-            Check (Stays-Alive $copyAndOriginal 8) 'it stays once its real identity is listed too'
-            Stop-Launched
-            Check (Set-Block 'lift' @()) 'the block is lifted'
-        }
-    }
+    Check (Set-Block 'allowonly' @('studentcopy.exe')) 'allow only studentcopy.exe is applied'
+    $copyByName = Start-Limited $student
+    Check (Wait-EndedByAgent $copyByName 'studentcopy.exe' 20) 'a student''s own copy is ended when only its file name is listed (it must be that program)'
+    Check (Set-Block 'allowonly' @('studentcopy.exe', 'ping.exe')) 'allow only both names is applied'
+    $copyAndOriginal = Start-Limited $student
+    Check (Stays-Alive $copyAndOriginal 8) 'it stays once its real identity is listed too'
+    Stop-Launched
+    Check (Set-Block 'lift' @()) 'the block is lifted'
 
     Step 'Desinstalar desfaz o bloqueio'
     Check (Set-Block 'blocklist' @('blockme.exe')) 'a block is in place'
@@ -298,6 +302,17 @@ catch {
     }
 }
 finally {
+    # Whatever happened, do not leave a block running on the machine (allow
+    # only would end everything that is not elevated, for the rest of the job).
+    try {
+        if (Test-Path -LiteralPath $blockFile) {
+            Set-Block 'lift' @() | Out-Null
+            Stop-Service -Name 'MidviewAgent' -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-Host "could not lift the block while cleaning up: $($_.Exception.Message)"
+    }
     Stop-Launched
 }
 
