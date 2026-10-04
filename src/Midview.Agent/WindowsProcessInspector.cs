@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -10,25 +9,62 @@ namespace Midview.Agent;
 
 // The Win32 half of program blocking, run by the Agent (SYSTEM). Everything
 // that can fail -- a process that ended meanwhile, one that can't be opened
-// -- makes that process be left alone, never an exception out of here.
+// -- makes that process be left alone (or undecided, to be looked at again),
+// never an exception out of here.
 public sealed class WindowsProcessInspector : IProcessInspector
 {
     private const uint ProcessTerminate = 0x0001;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint TokenQuery = 0x0008;
+    private const uint TokenAdjustPrivileges = 0x0020;
     private const int TokenUserClass = 1;
     private const int TokenElevationClass = 20;
+    private const uint SePrivilegeEnabled = 0x2;
+    private const uint ReadControl = 0x00020000;
+    private const uint ShareAll = 0x7;
+    private const uint OpenExisting = 3;
+    private const uint FileFlagBackupSemantics = 0x02000000;
+    private const int SeFileObject = 1;
+    private const uint OwnerSecurityInformation = 1;
+    private const uint DriveRemote = 4;
     private const uint MbIconInformation = 0x40;
     private const uint MbSetForeground = 0x10000;
     private const int NoticeSeconds = 10;
 
-    private static readonly TimeSpan SessionUserLifetime = TimeSpan.FromMinutes(1);
+    // A session's user is looked at again soon: a logoff and a logon by
+    // someone else must not leave the old user's name in charge.
+    private static readonly TimeSpan SessionUserLifetime = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan SessionUserRecheck = TimeSpan.FromSeconds(1);
 
-    private readonly string _windowsFolder =
-        Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.Windows)) + Path.DirectorySeparatorChar;
+    // Who may own a file that Windows or an administrator installed: SYSTEM,
+    // Administrators and TrustedInstaller.
+    private static readonly SecurityIdentifier[] TrustedOwners =
+    {
+        new("S-1-5-18"),
+        new("S-1-5-32-544"),
+        new("S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"),
+    };
 
-    private readonly Dictionary<int, (SecurityIdentifier? User, DateTime Until)> _sessionUsers = new();
+    private readonly string _windowsFolder = FolderPrefix(Environment.GetFolderPath(Environment.SpecialFolder.Windows));
+
+    // Places a standard user can't write (the Windows folder has a few
+    // exceptions, which the owner check covers).
+    private readonly string[] _trustedFolders =
+    {
+        FolderPrefix(Environment.GetFolderPath(Environment.SpecialFolder.Windows)),
+        FolderPrefix(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles)),
+        FolderPrefix(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)),
+        FolderPrefix(AppContext.BaseDirectory),
+    };
+
+    private readonly object _gate = new();
+    private readonly Dictionary<int, (SecurityIdentifier User, DateTime ReadAt)> _sessionUsers = new();
     private readonly Dictionary<(string Path, long Length, DateTime Written), (string? Original, string? Description, SecurityIdentifier? Owner)> _files = new();
+
+    public WindowsProcessInspector()
+    {
+        EnableBackupPrivilege();
+    }
 
     public IReadOnlyList<RunningProcess> ListInteractive()
     {
@@ -48,6 +84,8 @@ public sealed class WindowsProcessInspector : IProcessInspector
                 }
             }
         }
+        // Oldest first: a program is judged before what it starts.
+        running.Sort((a, b) => a.CreationTime.CompareTo(b.CreationTime));
         return running;
     }
 
@@ -60,23 +98,36 @@ public sealed class WindowsProcessInspector : IProcessInspector
         }
 
         var (owner, elevated) = TokenFacts(handle);
-        var sessionUser = SessionUser(process.SessionId);
+        var sessionUser = SessionUser(process.SessionId, owner);
+        if (sessionUser is null)
+        {
+            // Nobody is logged on there (yet): can't tell whose it is.
+            return null;
+        }
+
         var fileName = Path.GetFileName(path);
-        var imageName = AppBlockPolicy.NormalizeExeName(fileName) ?? fileName.ToLowerInvariant();
-        var (original, description, fileOwner) = FileFacts(path);
+        var imageName = AppBlockPolicy.ProgramName(fileName) ?? fileName.ToLowerInvariant();
+        var inWindows = path.StartsWith(_windowsFolder, StringComparison.OrdinalIgnoreCase);
+        var inTrusted = _trustedFolders.Any(folder => folder.Length > 1 && path.StartsWith(folder, StringComparison.OrdinalIgnoreCase));
+        var ownedBySessionUser = owner is not null && owner == sessionUser;
+
+        // Only the logged-on user's own, non-elevated processes can be ended:
+        // for the rest nothing about the file matters.
+        var (original, description, fileOwner) = ownedBySessionUser && !elevated
+            ? FileFacts(path)
+            : (null, null, null);
 
         return new ProcessFacts(
             process.ProcessId,
             DateTime.FromFileTimeUtc(process.CreationTime),
             process.SessionId,
-            OwnedBySessionUser: owner is not null && sessionUser is not null && owner == sessionUser,
+            OwnedBySessionUser: ownedBySessionUser,
             IsElevated: elevated,
             ImageName: imageName,
-            OriginalFilename: AppBlockPolicy.NormalizeExeName(original),
-            InWindowsFolder: path.StartsWith(_windowsFolder, StringComparison.OrdinalIgnoreCase),
-            FileOwner: fileOwner is null ? FileOwnerKind.Unknown
-                : sessionUser is not null && fileOwner == sessionUser ? FileOwnerKind.Student
-                : FileOwnerKind.Installed,
+            OriginalFilename: AppBlockPolicy.ProgramName(original),
+            InWindowsFolder: inWindows,
+            InTrustedFolder: inTrusted,
+            FileOwner: KindOf(fileOwner, sessionUser),
             DisplayName: OpenProgramsReport.CleanDisplayName(description, imageName));
     }
 
@@ -91,6 +142,22 @@ public sealed class WindowsProcessInspector : IProcessInspector
         const string title = "Midview";
         WTSSendMessage(IntPtr.Zero, sessionId, title, title.Length * 2, message, message.Length * 2,
             MbIconInformation | MbSetForeground, NoticeSeconds, out _, false);
+    }
+
+    private static string FolderPrefix(string folder) =>
+        string.IsNullOrEmpty(folder) ? string.Empty : Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
+
+    private static FileOwnerKind KindOf(SecurityIdentifier? fileOwner, SecurityIdentifier sessionUser)
+    {
+        if (fileOwner is null)
+        {
+            return FileOwnerKind.Other;
+        }
+        if (TrustedOwners.Contains(fileOwner))
+        {
+            return FileOwnerKind.Trusted;
+        }
+        return fileOwner == sessionUser ? FileOwnerKind.Student : FileOwnerKind.Other;
     }
 
     private static SafeProcessHandle? Open(int processId, uint access)
@@ -126,39 +193,65 @@ public sealed class WindowsProcessInspector : IProcessInspector
         }
     }
 
-    private SecurityIdentifier? SessionUser(int sessionId)
+    // The user logged on to a session. A failure is never kept (nobody may
+    // be logged on yet); a success only for a moment, and it is read again
+    // sooner when a process turns out to belong to someone else.
+    private SecurityIdentifier? SessionUser(int sessionId, SecurityIdentifier? processOwner)
     {
-        var now = DateTime.UtcNow;
-        if (_sessionUsers.TryGetValue(sessionId, out var cached) && cached.Until > now)
+        lock (_gate)
         {
-            return cached.User;
-        }
-
-        SecurityIdentifier? user = null;
-        if (WTSQueryUserToken(sessionId, out var token))
-        {
-            using (token)
+            var now = DateTime.UtcNow;
+            if (_sessionUsers.TryGetValue(sessionId, out var cached))
             {
-                user = TokenUser(token);
+                var age = now - cached.ReadAt;
+                if (age < SessionUserLifetime && (age < SessionUserRecheck || processOwner is null || processOwner == cached.User))
+                {
+                    return cached.User;
+                }
             }
+
+            SecurityIdentifier? user = null;
+            if (WTSQueryUserToken(sessionId, out var token))
+            {
+                using (token)
+                {
+                    user = TokenUser(token);
+                }
+            }
+
+            if (user is null)
+            {
+                _sessionUsers.Remove(sessionId);
+                return null;
+            }
+            _sessionUsers[sessionId] = (user, now);
+            return user;
         }
-        _sessionUsers[sessionId] = (user, now + SessionUserLifetime);
-        return user;
     }
 
+    // Version information and owner of an image file, kept per path, size
+    // and write time. Nothing is read from a network path: a share that
+    // doesn't answer must not hold up the Agent.
     private (string? Original, string? Description, SecurityIdentifier? Owner) FileFacts(string path)
     {
+        if (IsNetworkPath(path))
+        {
+            return (null, null, null);
+        }
+
         try
         {
             var file = new FileInfo(path);
             var key = (path, file.Length, file.LastWriteTimeUtc);
-            if (_files.TryGetValue(key, out var cached))
+            lock (_gate)
             {
-                return cached;
+                if (_files.TryGetValue(key, out var cached))
+                {
+                    return cached;
+                }
             }
 
             string? original = null, description = null;
-            SecurityIdentifier? owner = null;
             try
             {
                 var version = FileVersionInfo.GetVersionInfo(path);
@@ -169,25 +262,86 @@ public sealed class WindowsProcessInspector : IProcessInspector
             {
                 // No version information: matched by its file name only.
             }
-            try
-            {
-                owner = file.GetAccessControl(AccessControlSections.Owner).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
-            }
-            catch (SystemException)
-            {
-                // Unknown owner: treated as not the student's.
-            }
+            var owner = ReadOwner(path);
 
-            if (_files.Count > 4096)
+            lock (_gate)
             {
-                _files.Clear();
+                if (_files.Count > 4096)
+                {
+                    _files.Clear();
+                }
+                _files[key] = (original, description, owner);
             }
-            _files[key] = (original, description, owner);
             return (original, description, owner);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return (null, null, null);
+        }
+    }
+
+    private static bool IsNetworkPath(string path)
+    {
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return true;
+        }
+        var root = Path.GetPathRoot(path);
+        return !string.IsNullOrEmpty(root) && GetDriveType(root) == DriveRemote;
+    }
+
+    // The file's owner, read with the backup privilege so that a file whose
+    // permissions don't let SYSTEM read them still tells who owns it. Null
+    // when it can't be read (a FAT/exFAT volume has no owner): such a file
+    // is treated as not installed by anyone trusted.
+    private static SecurityIdentifier? ReadOwner(string path)
+    {
+        using var file = CreateFile(path, ReadControl, ShareAll, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics, IntPtr.Zero);
+        if (file.IsInvalid)
+        {
+            return null;
+        }
+
+        var descriptor = IntPtr.Zero;
+        try
+        {
+            var result = GetSecurityInfo(file, SeFileObject, OwnerSecurityInformation, out var owner, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, out descriptor);
+            return result == 0 && owner != IntPtr.Zero ? new SecurityIdentifier(owner) : null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (descriptor != IntPtr.Zero)
+            {
+                LocalFree(descriptor);
+            }
+        }
+    }
+
+    private static void EnableBackupPrivilege()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            if (!OpenProcessToken(self.SafeHandle, TokenAdjustPrivileges | TokenQuery, out var token))
+            {
+                return;
+            }
+            using (token)
+            {
+                if (LookupPrivilegeValue(null, "SeBackupPrivilege", out var luid))
+                {
+                    var privileges = new TokenPrivileges { Count = 1, Luid = luid, Attributes = SePrivilegeEnabled };
+                    AdjustTokenPrivileges(token, false, ref privileges, 0, IntPtr.Zero, IntPtr.Zero);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            // Without it, owners are read the ordinary way.
         }
     }
 
@@ -228,6 +382,15 @@ public sealed class WindowsProcessInspector : IProcessInspector
         }
     }
 
+    // One privilege (the LUID is two uint fields, read here as one long).
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    private struct TokenPrivileges
+    {
+        public uint Count;
+        public long Luid;
+        public uint Attributes;
+    }
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern SafeProcessHandle OpenProcess(uint access, bool inheritHandle, int processId);
 
@@ -241,12 +404,33 @@ public sealed class WindowsProcessInspector : IProcessInspector
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool TerminateProcess(SafeProcessHandle process, uint exitCode);
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetDriveTypeW")]
+    private static extern uint GetDriveType(string rootPath);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "CreateFileW")]
+    private static extern SafeFileHandle CreateFile(
+        string fileName, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
+    [DllImport("advapi32.dll")]
+    private static extern uint GetSecurityInfo(
+        SafeFileHandle handle, int objectType, uint information, out IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl, out IntPtr descriptor);
+
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool OpenProcessToken(SafeProcessHandle process, uint access, out SafeAccessTokenHandle token);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool GetTokenInformation(
         SafeAccessTokenHandle token, int informationClass, IntPtr information, int length, out int returnLength);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "LookupPrivilegeValueW")]
+    private static extern bool LookupPrivilegeValue(string? systemName, string name, out long luid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool AdjustTokenPrivileges(
+        SafeAccessTokenHandle token, bool disableAll, ref TokenPrivileges newState, int bufferLength, IntPtr previous, IntPtr returnLength);
 
     [DllImport("wtsapi32.dll", SetLastError = true)]
     private static extern bool WTSQueryUserToken(int sessionId, out SafeAccessTokenHandle token);

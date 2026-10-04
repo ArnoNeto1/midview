@@ -22,7 +22,10 @@ public sealed class ThumbnailPoller : IDisposable
 
     // After a failed attempt at one of the Agent chores below (an Agent not
     // running); an answer, even "don't know", isn't asked for again.
-    private static readonly TimeSpan AgentRetryInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan DefaultAgentRetryInterval = TimeSpan.FromMinutes(5);
+
+    // How often a machine is asked what program block it follows, for its tile.
+    private static readonly TimeSpan AppBlockObserveInterval = TimeSpan.FromSeconds(30);
 
     private readonly KnownMachine _machine;
     private readonly X509Certificate2 _masterCertificate;
@@ -32,8 +35,10 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly Thread _thread;
     private readonly Func<PowerSchedule?>? _powerSchedule;
     private readonly Func<AppBlockPolicy?>? _appBlockPolicy;
+    private readonly TimeSpan _agentRetryInterval;
     private long? _sentAppBlockSavedAt;
     private DateTime _nextAppBlockAttempt = DateTime.MinValue;
+    private DateTime _nextAppBlockObservation = DateTime.MinValue;
     private bool _macAddressAnswered;
     private DateTime _nextMacAddressAttempt = DateTime.MinValue;
     private long? _sentScheduleSavedAt;
@@ -44,7 +49,8 @@ public sealed class ThumbnailPoller : IDisposable
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
-        Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null)
+        Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
+        TimeSpan? agentRetryInterval = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
@@ -52,6 +58,7 @@ public sealed class ThumbnailPoller : IDisposable
         _agentPort = agentPort;
         _powerSchedule = powerSchedule;
         _appBlockPolicy = appBlockPolicy;
+        _agentRetryInterval = agentRetryInterval ?? DefaultAgentRetryInterval;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
 
@@ -66,6 +73,11 @@ public sealed class ThumbnailPoller : IDisposable
     // time the machine answers -- i.e. once each time Master starts, which
     // also catches a card that was replaced.
     public event Action<string>? MacAddressLearned;
+
+    // What program block the machine's Agent says it follows, for the tile's
+    // badge: every so often while the machine is on. Null when the Agent
+    // didn't answer (not running).
+    public event Action<AppBlockClient.StatusResult?>? AppBlockObserved;
 
     public void Start() => _thread.Start();
 
@@ -104,6 +116,7 @@ public sealed class ThumbnailPoller : IDisposable
                 AskForMacAddressOnce();
                 SendPowerScheduleIfChanged();
                 SendAppBlockIfChanged();
+                ObserveAppBlock();
             }
             catch (Exception ex)
             {
@@ -152,7 +165,7 @@ public sealed class ThumbnailPoller : IDisposable
         }
         catch (Exception)
         {
-            _nextMacAddressAttempt = DateTime.UtcNow + AgentRetryInterval;
+            _nextMacAddressAttempt = DateTime.UtcNow + _agentRetryInterval;
         }
     }
 
@@ -177,13 +190,15 @@ public sealed class ThumbnailPoller : IDisposable
         }
         catch (Exception)
         {
-            _nextScheduleAttempt = DateTime.UtcNow + AgentRetryInterval;
+            _nextScheduleAttempt = DateTime.UtcNow + _agentRetryInterval;
         }
     }
 
     // Once per poller and again after each change, so a machine that was
     // off when the teacher set the block gets it the next time it's on. The
-    // Agent keeps an older policy out by SavedAt.
+    // Agent keeps an older policy out by SavedAt. Only an Agent that took it
+    // counts as delivered: an older Agent (empty answer) or one that couldn't
+    // save it is tried again after a while.
     private void SendAppBlockIfChanged()
     {
         if (_appBlockPolicy?.Invoke() is not { } policy || policy.SavedAt == _sentAppBlockSavedAt
@@ -195,14 +210,47 @@ public sealed class ThumbnailPoller : IDisposable
 
         try
         {
-            CommandClient.SendCommandForResult(
+            var (succeeded, _) = CommandClient.SendCommandForResult(
                 _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
                 MessageType.SetAppBlock, policy.Encode());
-            _sentAppBlockSavedAt = policy.SavedAt;
+            if (succeeded)
+            {
+                _sentAppBlockSavedAt = policy.SavedAt;
+                _nextAppBlockObservation = DateTime.MinValue;
+            }
+            else
+            {
+                _nextAppBlockAttempt = DateTime.UtcNow + _agentRetryInterval;
+            }
         }
         catch (Exception)
         {
-            _nextAppBlockAttempt = DateTime.UtcNow + AgentRetryInterval;
+            _nextAppBlockAttempt = DateTime.UtcNow + _agentRetryInterval;
+        }
+    }
+
+    private void ObserveAppBlock()
+    {
+        if (_machine.AgentThumbprint is not { Length: > 0 } || DateTime.UtcNow < _nextAppBlockObservation
+            || _stop.IsCancellationRequested)
+        {
+            return;
+        }
+
+        AppBlockClient.StatusResult? status = null;
+        try
+        {
+            status = AppBlockClient.GetStatus(_machine, _masterCertificate, _agentPort);
+        }
+        catch (Exception)
+        {
+            // No Agent answering: no badge.
+        }
+
+        _nextAppBlockObservation = DateTime.UtcNow + AppBlockObserveInterval;
+        if (!_stop.IsCancellationRequested)
+        {
+            AppBlockObserved?.Invoke(status);
         }
     }
 

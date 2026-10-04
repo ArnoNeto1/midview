@@ -81,17 +81,21 @@ public static class OpenProgramsReport
     }
 
     // One line of plain text: control characters turned into spaces,
-    // trimmed, at most MaxDisplayNameLength characters; the exe name when
-    // nothing is left.
+    // trimmed, at most MaxDisplayNameLength characters; the exe name (cut
+    // the same way) when nothing is left.
     public static string CleanDisplayName(string? displayName, string exeName)
     {
         var text = new string((displayName ?? string.Empty).Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        if (text.Length == 0)
+        {
+            text = exeName;
+        }
         if (text.Length > MaxDisplayNameLength)
         {
             var cut = char.IsHighSurrogate(text[MaxDisplayNameLength - 1]) ? MaxDisplayNameLength - 1 : MaxDisplayNameLength;
             text = text[..cut].TrimEnd();
         }
-        return text.Length == 0 ? exeName : text;
+        return text;
     }
 
     private static void WriteText(Stream buffer, string text)

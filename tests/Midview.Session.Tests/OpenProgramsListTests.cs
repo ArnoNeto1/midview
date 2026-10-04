@@ -19,6 +19,7 @@ public class OpenProgramsListTests
         4 => ("explorer.exe", "Windows Explorer"),
         5 => ("MidviewChat.exe", "Chat"),
         6 => ("bad*name", "x"),
+        7 => ("soffice.bin", "LibreOffice"),
         _ => null,
     };
 
@@ -35,6 +36,14 @@ public class OpenProgramsListTests
         // Two processes of chrome each with a window: counted per process.
         Assert.Equal(2, list.Single(program => program.ExeName == "chrome.exe").WindowCount);
         Assert.Equal("Microsoft Word", list.Single(program => program.ExeName == "winword.exe").DisplayName);
+    }
+
+    [Fact]
+    public void AProgramWhoseImageIsNotAnExe_IsOfferedByItsNameWithExe()
+    {
+        var list = OpenProgramsList.Build(new[] { Window(7, "soffice") }, Own, Describe);
+
+        Assert.Equal("soffice.exe", Assert.Single(list).ExeName);
     }
 
     [Fact]

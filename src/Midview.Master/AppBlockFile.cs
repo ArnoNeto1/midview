@@ -29,9 +29,16 @@ public static class AppBlockFile
             var policy = stored is null ? null : new AppBlockPolicy(stored.SavedAt, stored.Mode, stored.Programs ?? new List<string>());
             return policy is not null && policy.IsValid() ? policy : null;
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
         {
-            File.Move(path, path + ".corrupt", overwrite: true);
+            try
+            {
+                File.Move(path, path + ".corrupt", overwrite: true);
+            }
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
+            {
+                // Left where it is: read (and refused) again at the next start.
+            }
             return null;
         }
     }

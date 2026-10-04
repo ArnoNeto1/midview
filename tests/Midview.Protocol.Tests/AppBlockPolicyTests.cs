@@ -28,6 +28,61 @@ public class AppBlockPolicyTests
     public void NormalizeExeName_RejectsAnythingElse(string input) =>
         Assert.Null(AppBlockPolicy.NormalizeExeName(input));
 
+    [Theory]
+    [InlineData("Matemática.exe", "matemática.exe")]
+    [InlineData("Rock & Roll [2].exe", "rock & roll [2].exe")]
+    [InlineData("日本語ゲーム.exe", "日本語ゲーム.exe")]
+    public void NormalizeExeName_AcceptsAnyFileNameWindowsAllows(string input, string expected) =>
+        Assert.Equal(expected, AppBlockPolicy.NormalizeExeName(input));
+
+    [Fact]
+    public void NormalizeExeName_RejectsATooLongName()
+    {
+        Assert.NotNull(AppBlockPolicy.NormalizeExeName(new string('a', 100) + ".exe"));
+        Assert.Null(AppBlockPolicy.NormalizeExeName(new string('a', 101) + ".exe"));
+        // 100 characters, but more than 255 bytes in UTF-8: it wouldn't fit on the wire.
+        Assert.Null(AppBlockPolicy.NormalizeExeName(new string('日', 100) + ".exe"));
+    }
+
+    [Theory]
+    [InlineData("soffice.bin", "soffice.exe")]
+    [InlineData("Game.SCR", "game.exe")]
+    [InlineData("calc.com", "calc.exe")]
+    [InlineData("MyApp.dll", "myapp.exe")]
+    [InlineData("chrome.exe", "chrome.exe")]
+    [InlineData("chrome", "chrome.exe")]
+    [InlineData("C:\\x\\Matemática.bin", "matemática.exe")]
+    public void ProgramName_KnowsANonExeImageByItsNameWithExe(string input, string expected) =>
+        Assert.Equal(expected, AppBlockPolicy.ProgramName(input));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(".bin")]
+    [InlineData("a*b.bin")]
+    public void ProgramName_IsNullWhenThereIsNoName(string? input) =>
+        Assert.Null(AppBlockPolicy.ProgramName(input));
+
+    [Fact]
+    public void ANullEntry_IsInvalid() =>
+        Assert.False(new AppBlockPolicy(1, AppBlockMode.BlockList, new string?[] { null }!).IsValid());
+
+    [Theory]
+    [InlineData("nvda.exe")]
+    [InlineData("jfw.exe")]
+    [InlineData("dosvox.exe")]
+    public void AScreenReader_IsProtected(string name) =>
+        Assert.False(new AppBlockPolicy(1, AppBlockMode.BlockList, new[] { name }).IsValid());
+
+    [Fact]
+    public void AccentedNames_RoundTrip()
+    {
+        var policy = new AppBlockPolicy(5, AppBlockMode.BlockList, new[] { "matemática.exe", "日本語ゲーム.exe" });
+        Assert.True(AppBlockPolicy.TryDecode(policy.Encode(), out var decoded));
+        Assert.True(policy.SameRulesAs(decoded));
+    }
+
     [Fact]
     public void RoundTrips_EachMode()
     {
