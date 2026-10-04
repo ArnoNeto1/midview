@@ -18,7 +18,10 @@ public sealed class WindowsProcessInspector : IProcessInspector
     private const uint TokenQuery = 0x0008;
     private const uint TokenAdjustPrivileges = 0x0020;
     private const int TokenUserClass = 1;
+    private const int TokenGroupsClass = 2;
     private const int TokenElevationClass = 20;
+    private const uint SeGroupEnabled = 0x4;
+    private const uint SeGroupUseForDenyOnly = 0x10;
     private const uint SePrivilegeEnabled = 0x2;
     private const uint ReadControl = 0x00020000;
     private const uint ShareAll = 0x7;
@@ -38,6 +41,8 @@ public sealed class WindowsProcessInspector : IProcessInspector
 
     // Who may own a file that Windows or an administrator installed: SYSTEM,
     // Administrators and TrustedInstaller.
+    private static readonly SecurityIdentifier AdministratorsSid = new("S-1-5-32-544");
+
     private static readonly SecurityIdentifier[] TrustedOwners =
     {
         new("S-1-5-18"),
@@ -213,7 +218,12 @@ public sealed class WindowsProcessInspector : IProcessInspector
         }
         using (token)
         {
-            return (TokenUser(token), TokenElevated(token));
+            // Elevated means holding administrator rights: the token says it is
+            // elevated AND the Administrators group is enabled in it. (A token
+            // restricted from an elevated one, like a SAFER "Basic User" token,
+            // can carry the elevated flag with that group turned to deny-only:
+            // it holds no administrator rights.)
+            return (TokenUser(token), TokenElevated(token) && AdministratorsEnabled(token));
         }
     }
 
@@ -399,6 +409,44 @@ public sealed class WindowsProcessInspector : IProcessInspector
         try
         {
             return GetTokenInformation(token, TokenElevationClass, buffer, sizeof(int), out _) && Marshal.ReadInt32(buffer) != 0;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static bool AdministratorsEnabled(SafeAccessTokenHandle token)
+    {
+        GetTokenInformation(token, TokenGroupsClass, IntPtr.Zero, 0, out var needed);
+        if (needed == 0)
+        {
+            return false;
+        }
+        var buffer = Marshal.AllocHGlobal(needed);
+        try
+        {
+            if (!GetTokenInformation(token, TokenGroupsClass, buffer, needed, out _))
+            {
+                // Can't tell: treated as holding the rights, the side that ends nothing.
+                return true;
+            }
+
+            // TOKEN_GROUPS: a count, then SID_AND_ATTRIBUTES entries (a SID
+            // pointer, then a uint of attributes), laid out for the pointer size.
+            var count = Marshal.ReadInt32(buffer);
+            var entrySize = IntPtr.Size * 2;
+            for (var i = 0; i < count; i++)
+            {
+                var entry = buffer + IntPtr.Size + i * entrySize;
+                var attributes = unchecked((uint)Marshal.ReadInt32(entry + IntPtr.Size));
+                if ((attributes & SeGroupEnabled) != 0 && (attributes & SeGroupUseForDenyOnly) == 0
+                    && new SecurityIdentifier(Marshal.ReadIntPtr(entry)) == AdministratorsSid)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         finally
         {
