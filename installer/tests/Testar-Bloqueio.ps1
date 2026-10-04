@@ -125,9 +125,12 @@ function Start-Elevated([string]$Path) {
     return $process.Id
 }
 
-# A limited token of the same user, like a student's program.
-function Start-Limited([string]$Path) {
-    $result = Invoke-Tool @('launch', $Path, '-t', '127.0.0.1')
+# A limited token of the same user, like a student's program. -Raw for one
+# that a block is about to end: the tool then doesn't watch it for the first
+# seconds (the block would end it meanwhile, which would look like a failure).
+function Start-Limited([string]$Path, [switch]$Raw) {
+    $verb = if ($Raw) { 'launch-raw' } else { 'launch' }
+    $result = Invoke-Tool @($verb, $Path, '-t', '127.0.0.1')
     # Only the line that is just "pid=N": the attempts that failed print other text.
     $line = $result.Output | Where-Object { "$_" -match '\]\s+pid=(\d+)\s*$' } | Select-Object -First 1
     if ($result.Code -ne 0 -or -not $line) {
@@ -243,7 +246,7 @@ try {
     Check (Stays-Alive $open 2) 'a limited program is running'
     Check (Set-Block 'blocklist' @('blockme.exe')) 'the block list is applied'
     Check (Wait-EndedByAgent $open 'blockme.exe' 20) 'what was already open is ended by the Agent'
-    $again = Start-Limited $blockme
+    $again = Start-Limited $blockme -Raw
     Check (Wait-EndedByAgent $again 'blockme.exe' 20) 'and what is started afterwards, too'
     $other = Start-Limited $student
     Check (Stays-Alive $other 6) 'a program that is not listed is left alone'
@@ -255,7 +258,7 @@ try {
     Check ((Get-ServiceState) -eq 'Running') 'the service is back'
     $status = (Invoke-Tool @('block-status', $Pacote, $teacher))
     Check (($status.Output -join ' ') -match 'mode=BlockList' -and ($status.Output -join ' ') -match 'blockme.exe') 'the machine still follows the block'
-    $afterRestart = Start-Limited $blockme
+    $afterRestart = Start-Limited $blockme -Raw
     Check (Wait-EndedByAgent $afterRestart 'blockme.exe' 20) 'and it still ends the program'
 
     Step 'Liberar tudo'
@@ -273,12 +276,12 @@ try {
     # read the owner, this would be ended.
     $windows = Start-Limited $ping
     Check (Stays-Alive $windows 8) 'a program of Windows itself stays although it is not listed'
-    $unlisted = Start-Limited $student
+    $unlisted = Start-Limited $student -Raw
     Check (Wait-EndedByAgent $unlisted 'studentcopy.exe' 20) 'a program that is not listed is ended'
     Stop-Launched
 
     Check (Set-Block 'allowonly' @('studentcopy.exe')) 'allow only studentcopy.exe is applied'
-    $copyByName = Start-Limited $student
+    $copyByName = Start-Limited $student -Raw
     Check (Wait-EndedByAgent $copyByName 'studentcopy.exe' 20) 'a student''s own copy is ended when only its file name is listed (it must be that program)'
     Check (Set-Block 'allowonly' @('studentcopy.exe', 'ping.exe')) 'allow only both names is applied'
     $copyAndOriginal = Start-Limited $student

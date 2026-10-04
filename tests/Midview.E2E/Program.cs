@@ -24,6 +24,9 @@ using Midview.Protocol;
 //   launch <exe> [arguments...]
 //       starts a program with a limited (non-elevated) token of this user,
 //       the way a student's program runs; prints pid=<id>
+//   launch-raw <exe> [arguments...]
+//       the same, but doesn't watch the program for the first seconds: for
+//       one that a block is expected to end, which would look like a failure
 //
 // <package> is the one the machine was installed from: its maquinas\ folder
 // has the machine's file. Exit code 0 means the expected happened.
@@ -36,7 +39,8 @@ return args switch
     ["block", var package, var pfx, var mode, .. var programs] => Block(package, pfx, mode, programs),
     ["block-status", var package, var pfx] => BlockStatus(package, pfx),
     ["facts"] => Facts(),
-    ["launch", var exe, .. var rest] => Launch(exe, rest),
+    ["launch", var exe, .. var rest] => Launch(exe, rest, verify: true),
+    ["launch-raw", var exe, .. var rest] => Launch(exe, rest, verify: false),
     _ => Usage(),
 };
 
@@ -90,14 +94,14 @@ static int Facts()
     return 0;
 }
 
-static int Launch(string exe, string[] arguments)
+static int Launch(string exe, string[] arguments, bool verify)
 {
     // Several ways to get a same-user, non-elevated process; the first whose
     // program keeps running is used (a program that exits by itself within
     // moments of starting proves nothing about blocking).
-    foreach (var attempt in NativeMethods.LimitedStarts)
+    foreach (var attempt in verify ? NativeMethods.LimitedStarts : NativeMethods.LimitedStarts.Take(1))
     {
-        var (pid, exitedWith, error, token) = NativeMethods.StartLimited(attempt, exe, arguments);
+        var (pid, exitedWith, error, token) = NativeMethods.StartLimited(attempt, exe, arguments, verify);
         if (pid is null)
         {
             Say($"launch {attempt.Name}: could not start (error {error})");
@@ -422,7 +426,7 @@ internal static class NativeMethods
 
     // Pid is null when the process couldn't be created (Error says why);
     // ExitedWith is set when it ended on its own within 3 seconds.
-    public static (int? Pid, int? ExitedWith, int Error, string Token) StartLimited(LimitedStart how, string exe, string[] arguments)
+    public static (int? Pid, int? ExitedWith, int Error, string Token) StartLimited(LimitedStart how, string exe, string[] arguments, bool verify = true)
     {
         if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate | TokenAssignPrimary, out var token))
         {
@@ -481,14 +485,17 @@ internal static class NativeMethods
                 var described = childReadable ? $"user={childUser}, elevated={childElevated}" : "could not be read";
                 try
                 {
-                    if (childElevated)
+                    if (verify)
                     {
-                        // Not a student's kind of program: end it, try another way.
-                        TerminateProcess(info.hProcess, 1);
-                    }
-                    if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
-                    {
-                        exitedWith = unchecked((int)code);
+                        if (childElevated)
+                        {
+                            // Not a student's kind of program: end it, try another way.
+                            TerminateProcess(info.hProcess, 1);
+                        }
+                        if (WaitForSingleObject(info.hProcess, 3000) == 0 && GetExitCodeProcess(info.hProcess, out var code))
+                        {
+                            exitedWith = unchecked((int)code);
+                        }
                     }
                 }
                 finally
