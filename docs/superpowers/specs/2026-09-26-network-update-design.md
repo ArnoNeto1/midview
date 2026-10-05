@@ -1,7 +1,9 @@
 # Midview — Update Over the Network (Design)
 
 Date: 2026-09-26
-Status: Design reviewed (five independent critics and a judge); implementing
+Status: Design reviewed (five independent critics and a judge); implemented
+2026-09-26; checked on a real Windows machine in CI (`atualizacao.yml`), not
+yet live in a lab
 
 ## Context
 

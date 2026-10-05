@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Progress note (2026-10-05):** This plan has been carried out: site blocking is implemented and validated live (see the spec's status line). The steps below were never ticked off along the way, so their empty checkboxes don't mean the work is still pending.
+
 **Goal:** Give `MidviewAgent` a full-internet block/unblock toggle and a specific-domain block list, both controllable from `MidviewMaster`, both surviving an Agent restart or reboot.
 
 **Architecture:** `MidviewAgent` gains its own TCP+TLS listener (`AgentServer`, separate port from `MidviewSession`'s), reusing `Midview.Protocol`'s existing `SecureChannel`/`TrustStore`/`MessageFramer`. A `SiteBlockCommandHandler` orchestrates a `HostsFileManager` (per-domain blocking via the hosts file), a `NetshFirewallController` (full-internet block via Windows Firewall rules), and a persisted `SiteBlockState`, reapplying both at Agent startup. `MidviewMaster` gains a short-lived-connection `AgentCommandClient` and four buttons in `MainWindow`.

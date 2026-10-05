@@ -1,7 +1,10 @@
 # Midview — Core Architecture & Remote Screen Engine (Design)
 
 Date: 2026-09-21
-Status: Approved for planning
+Status: Implemented 2026-09-21 (partly validated live: viewing confirmed, plan
+Task 16 Steps 1–3; remote control, the input lock and its heartbeat unlock,
+Steps 4–7, not yet recorded as checked — and the lock has since moved into the
+Agent, 2026-09-23)
 
 ## Context
 
