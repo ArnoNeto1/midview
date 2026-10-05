@@ -86,16 +86,9 @@ public class UpdateRecordTests : IDisposable
         }
     }
 
-    [Fact]
+    [AdministratorFact]
     public void EnsureStateDirectory_ShutsOutEveryoneButSystemAndAdministrators()
     {
-        // On Windows, only an administrator can still open the folder (and
-        // delete it) afterwards.
-        if (OperatingSystem.IsWindows() && !new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
-        {
-            return;
-        }
-
         _paths.EnsureStateDirectory();
         _paths.EnsureStateDirectory(); // again on every start
 

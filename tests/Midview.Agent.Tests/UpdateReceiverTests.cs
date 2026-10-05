@@ -56,7 +56,7 @@ public class UpdateReceiverTests : IDisposable
 
     private UpdateRecord? Record() => UpdateRecordFile.Load(_paths.StatePath);
 
-    [Fact]
+    [AdministratorFact]
     public void AGoodPackage_IsReceivedVerifiedAndHandedToTheApplier()
     {
         var package = Package.Build(_root, Package.GoodFiles);
@@ -135,7 +135,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.StartsWith("a atualização anterior não terminou", CommandResult.Decode(Assert.Single(replies).Payload).Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void ACorruptTransfer_IsRefused_AndLeavesNothing()
     {
         var package = Package.Build(_root, Package.GoodFiles);
@@ -151,7 +151,9 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal(0, _launcher.Launches);
     }
 
-    [Fact]
+    // Without administrator rights the package can't be written at all, so
+    // this would pass without ever checking that the partial one is removed.
+    [AdministratorFact]
     public void AConnectionThatDrops_FailsTheAttempt()
     {
         var package = Package.Build(_root, Package.GoodFiles);
@@ -165,7 +167,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.False(File.Exists(_paths.IncomingZip(AttemptId)));
     }
 
-    [Theory]
+    [AdministratorTheory]
     [InlineData("../evil.exe")]
     [InlineData("sub/../../evil.exe")]
     [InlineData("C:/Windows/evil.exe")]
@@ -185,7 +187,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal(0, _launcher.Launches);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AFileNotInTheManifest_FailsVerification()
     {
         var package = Package.Build(_root, Package.GoodFiles, extraEntries: new[] { ("extra.dll", "not listed") });
@@ -195,7 +197,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal("os arquivos do pacote não batem com a lista dele", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AMissingProgram_FailsVerification()
     {
         var package = Package.Build(_root, new Dictionary<string, string> { ["Midview.Agent.exe"] = "agent v2" });
@@ -205,7 +207,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal("o pacote não tem Midview.Session.exe", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void APackageWithoutAManifest_IsTooOld()
     {
         var package = Package.Build(_root, Package.GoodFiles, withManifest: false);
@@ -215,7 +217,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.StartsWith("o pacote é antigo demais", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AnOfferForADifferentBuild_FailsVerification()
     {
         var package = Package.Build(_root, Package.GoodFiles);
@@ -226,7 +228,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal("a versão recebida não é a que foi anunciada", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void MoreBytesThanAnnounced_FailsVerification()
     {
         var package = Package.Build(_root, Package.GoodFiles);
@@ -237,7 +239,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal("o pacote é maior do que o anunciado", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AnApplierThatDoesntTakeOver_IsEnded_AndTheAttemptFails()
     {
         _launcher.TakesOver = false;
@@ -251,7 +253,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.False(Directory.Exists(_paths.BuildFolder(AttemptId)));
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AnApplierThatTookOverAsItWasEnded_IsLeftToTheRecovery_AndItsBuildKept()
     {
         _launcher.TakesOver = false;
@@ -266,7 +268,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_paths.BuildFolder(AttemptId), UpdatePaths.AgentExeName)));
     }
 
-    [Fact]
+    [AdministratorFact]
     public void AnAttemptIdThatNamesAKeptBuild_IsRefused_AndTheBuildLeftAlone()
     {
         // The machine runs the build an earlier attempt with this same id
@@ -296,7 +298,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal(0, _launcher.Launches);
     }
 
-    [Fact]
+    [AdministratorFact]
     public void OldBuilds_AreCleanedUp_ButNotTheRunningOrPreviousOne()
     {
         Directory.CreateDirectory(_paths.VersionsRoot);
@@ -316,7 +318,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.True(File.Exists(_runningExe)); // the USB folder is the running build here
     }
 
-    [Fact]
+    [AdministratorFact]
     public void TheUsbFolder_IsCleanedUp_OnceItsNeitherCurrentNorPrevious()
     {
         var runningFromUpdate = Path.Combine(_paths.VersionsRoot, "CURRENT", UpdatePaths.AgentExeName);
@@ -380,7 +382,7 @@ public class UpdateReceiverTests : IDisposable
         Assert.Equal("interrompida (o Midview reiniciou)", Record()!.Detail);
     }
 
-    [Fact]
+    [AdministratorFact]
     public async Task ThroughTheAgentServer_AnOfferIsReceived_AndTheStatusAnswered()
     {
         using var agentCert = SelfSignedCertificate.Create("agent-under-test");
