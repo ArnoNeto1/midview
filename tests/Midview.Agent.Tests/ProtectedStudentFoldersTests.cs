@@ -162,8 +162,13 @@ public class ProtectedStudentFoldersTests : IDisposable
         }
 
         Assert.True(ProtectedStudentFolders.NeedsProtecting(_desktop, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null)));
-        Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me));
+        Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, OwnerOf(Path.Combine(_desktop, StudentFolderNames.Inbox))));
     }
+
+    // Whoever made a folder owns it: the user, or the Administrators group
+    // when the tests run elevated (as in CI).
+    private static SecurityIdentifier OwnerOf(string path) =>
+        (SecurityIdentifier)new DirectoryInfo(path).GetAccessControl().GetOwner(typeof(SecurityIdentifier))!;
 
     // Protect leaves a link alone, so there's nothing for it to do there.
     [Fact]
@@ -182,7 +187,7 @@ public class ProtectedStudentFoldersTests : IDisposable
             })!.WaitForExit();
             Assert.True(Directory.Exists(link));
 
-            Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me));
+            Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, OwnerOf(Path.Combine(_desktop, StudentFolderNames.Inbox))));
         }
         finally
         {

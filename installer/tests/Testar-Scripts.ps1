@@ -173,6 +173,26 @@ try {
     catch {
         Check $true 'a folder not named Midview is refused'
     }
+
+    # Each script run the way the setup runs it: powershell -File with only
+    # -Erro. Windows PowerShell 5.1 leaves $PSScriptRoot empty in param()
+    # defaults, which once stopped both before their first line with no
+    # message for the setup to show. From a stand-in folder not named
+    # Midview, so they stop at that check (or, not elevated, at the
+    # administrator one) and touch nothing.
+    $standIn = Join-Path $work 'outra-pasta\instalador'
+    New-Item -ItemType Directory -Path $standIn -Force | Out-Null
+    foreach ($name in 'Comum.ps1', 'Configurar-Aluno.ps1', 'Desinstalar-Aluno.ps1') {
+        Copy-Item -LiteralPath (Join-Path $scripts $name) -Destination $standIn
+    }
+    $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    foreach ($name in 'Configurar-Aluno.ps1', 'Desinstalar-Aluno.ps1') {
+        $erroScript = Join-Path $work "erro-$name.txt"
+        $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $standIn $name)`"", '-Erro', "`"$erroScript`"")
+        $process = Start-Process -FilePath $powershell -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden
+        $message = if (Test-Path -LiteralPath $erroScript) { [IO.File]::ReadAllText($erroScript, [Text.Encoding]::UTF8) } else { '' }
+        Check ($process.ExitCode -eq 1 -and ($message -like '*Midview*' -or $message -like '*administrador*')) "$name run as the setup runs it gets to its checks and says why it stopped (exit $($process.ExitCode): $message)"
+    }
 }
 finally {
     Remove-Item -LiteralPath $work -Recurse -Force

@@ -10,11 +10,17 @@
 # estão: quem acrescenta um professor é o pareamento, no Midview Professor.
 [CmdletBinding()]
 param(
-    [string]$Destino = (Split-Path -Path $PSScriptRoot -Parent),
+    [string]$Destino,
     [string]$Erro
 )
 
 $ErrorActionPreference = 'Stop'
+# O Windows PowerShell 5.1 deixa $PSScriptRoot vazio nos valores padrão do
+# param() quando o script roda com -File, como o instalador o roda: a pasta
+# é calculada aqui.
+if (-not $Destino) {
+    $Destino = Split-Path -Path $PSScriptRoot -Parent
+}
 . (Join-Path $PSScriptRoot 'Comum.ps1')
 
 $trava = $null
