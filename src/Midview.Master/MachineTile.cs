@@ -10,6 +10,9 @@ public sealed class MachineTile : INotifyPropertyChanged
     private ImageSource? _thumbnail;
     private string _status = "Conectando...";
     private string _blockBadge = string.Empty;
+    private bool _isSelected;
+    private string _screenLockBadge = string.Empty;
+    private bool _screenLockAlert;
 
     public MachineTile(KnownMachine machine)
     {
@@ -59,6 +62,55 @@ public sealed class MachineTile : INotifyPropertyChanged
                 OnPropertyChanged();
             }
         }
+    }
+
+    // The machine "Ver a tela" and "Controlar" act on: a click on a tile
+    // selects it, it never opens anything by itself.
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // A line under the name while the machine is meant to be locked
+    // (ScreenLockText); empty otherwise. Alert marks one that isn't.
+    public string ScreenLockBadge
+    {
+        get => _screenLockBadge;
+        private set
+        {
+            if (_screenLockBadge != value)
+            {
+                _screenLockBadge = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public bool ScreenLockAlert
+    {
+        get => _screenLockAlert;
+        private set
+        {
+            if (_screenLockAlert != value)
+            {
+                _screenLockAlert = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public void ShowScreenLock(string text, bool alert)
+    {
+        ScreenLockBadge = text;
+        ScreenLockAlert = alert;
     }
 
     public void ShowThumbnail(ImageSource thumbnail)

@@ -1,3 +1,4 @@
+using Midview.Protocol;
 using System.IO;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -45,5 +46,7 @@ public static class FailureText
     // The inner exception usually carries the actual reason (e.g. which
     // certificate check failed), so it's shown alongside the outer message.
     private static string Technical(Exception ex) =>
-        ex.InnerException is not null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message;
+        ex.InnerException is not null
+            ? $"{ErrorText.Describe(ex)} -> {ErrorText.Describe(ex.InnerException)}"
+            : ErrorText.Describe(ex);
 }

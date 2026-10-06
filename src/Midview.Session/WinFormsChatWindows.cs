@@ -47,6 +47,7 @@ public sealed class WinFormsChatWindows : IChatWindows
         {
             _sendToTeacher = sendToTeacher;
             Text = "Conversa com o professor";
+            SessionIcon.ApplyTo(this);
             TopMost = true;
             StartPosition = FormStartPosition.CenterScreen;
             AutoScaleMode = AutoScaleMode.Dpi;

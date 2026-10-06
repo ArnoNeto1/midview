@@ -12,9 +12,11 @@
             <RadioButton x:Name="BlockListRadioButton" GroupName="Mode" IsChecked="True" Margin="0,0,0,4">
                 <TextBlock TextWrapping="Wrap" Text="Bloquear só os programas escolhidos — o resto continua funcionando." />
             </RadioButton>
-            <RadioButton x:Name="AllowOnlyRadioButton" GroupName="Mode" Margin="0,0,0,8">
+            <RadioButton x:Name="AllowOnlyRadioButton" GroupName="Mode" Margin="0,0,0,2">
                 <TextBlock TextWrapping="Wrap" Text="Permitir só os programas escolhidos — todo o resto é fechado ao abrir (o Windows e o Midview continuam funcionando)." />
             </RadioButton>
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="20,0,0,8"
+                       Text="O Prompt de Comando e o PowerShell também são fechados, a menos que estejam na lista. Alguns programas usam auxiliares sem janela (o Terminal do Windows usa o OpenConsole.exe): se algo fechar sozinho, adicione também o auxiliar. Os aplicativos da Microsoft Store (Calculadora, Fotos) não aparecem na lista. Teste antes em uma máquina." />
 
             <DockPanel Margin="0,0,0,4">
                 <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Atualizar lista" Click="OnRefreshClicked" Padding="10,4" Margin="8,0,0,0" />

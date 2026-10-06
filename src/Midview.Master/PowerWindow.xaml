@@ -1,13 +1,13 @@
 <Window x:Class="Midview.Master.PowerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Desligar ou reiniciar" Height="480" Width="500"
+        Title="Desligar" Height="480" Width="500"
         WindowStartupLocation="CenterOwner">
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top">
             <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
             <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
-                       Text="O Windows mostra ao aluno um aviso com a contagem. Quando o tempo acaba, os programas abertos são fechados sem salvar. Máquinas sem ninguém logado também desligam." />
+                       Text="O Windows mostra ao aluno um aviso com a contagem. Quando o tempo acaba, os programas abertos são fechados sem salvar. Vale também para máquinas sem ninguém logado." />
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                 <RadioButton x:Name="ShutdownRadioButton" GroupName="Action" IsChecked="True" Content="Desligar" Margin="0,0,16,0" Checked="OnActionChanged" />
                 <RadioButton x:Name="RestartRadioButton" GroupName="Action" Content="Reiniciar" Checked="OnActionChanged" />

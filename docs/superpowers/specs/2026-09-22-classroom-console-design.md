@@ -195,6 +195,33 @@ Where the implementation differs from, or fills in, the design above:
   `FramePipeline`, no `InputLockManager`); anything else is a control
   connection, served exactly as before. `ViewControlWindow` already sends
   `StartControl` first, so the control protocol is unchanged.
+- **A click only selects; watching and controlling are separate**
+  (changed 2026-10-05, after the first live run: clicking a tile locked
+  the student's keyboard and mouse at once, with no way to just look).
+  Clicking a tile, left or right, selects it (a highlighted border); the
+  toolbar's "Ver a tela" and "Controlar" act on the selected machine, and
+  the tile's menu has the same two. Watching opens `ViewControlWindow`
+  sending a `Heartbeat` first instead of `StartControl`, which starts the
+  screen stream without locking anything, and it sends no input.
+  Controlling opens it as before. The window's "Controlar" / "Parar de
+  controlar (só ver)" button switches on the same connection with
+  `StartControl` / `StopControl`.
+- **The student sees when they're controlled** (added 2026-10-05): while
+  their keyboard and mouse are locked, a red strip across the top of their
+  screen says "Este computador está sendo controlado pelo professor"
+  (`WinFormsControlNotice`). It follows control's hold on the lock
+  (`InputLockManager` shows and hides it), so it goes however control
+  ends: "Parar de controlar", the window closing, the heartbeat timeout,
+  the connection dropping; a screen lock, which also locks input, shows no
+  strip (`2026-10-05-screen-lock-design.md`). It never takes focus or
+  clicks (layered, transparent, no-activate, a tool window kept out of
+  Alt+Tab), so the teacher's clicks reach what's under it and "Fechar
+  programas" leaves it alone; a notice that fails never affects the lock
+  (`ControlNoticeTests`). Watching only shows nothing. The Session needed no change: its control
+  connection always streamed from the first message and only locked and
+  injected after `StartControl` (`SessionServerTests`: watching only
+  neither locks nor injects; watching, then controlling, then watching
+  again locks and releases).
 - **Capture failure replies with an empty `ThumbnailFrame`** instead of no
   reply. With no reply, the Master's poll can only time out, and a reply
   that arrives late would then pair with the next request — so the Master

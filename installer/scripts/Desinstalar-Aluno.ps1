@@ -1,17 +1,18 @@
-# Remove o Midview desta máquina de aluno. Rodado por Desinstalar-Aluno.cmd,
-# como administrador. Antes de apagar qualquer coisa, desfaz o que uma aula
-# pode ter deixado: internet ou sites bloqueados, teclado e mouse desativados
-# (Midview.Agent.exe --uninstall-cleanup, da versão que o serviço roda, que
-# depois de uma atualização pela rede fica em Midview.update). Apaga também
-# o que as atualizações pela rede deixaram.
+# Remove o serviço do Midview Aluno. Rodado pelo desinstalador (Aplicativos
+# instalados), como administrador, antes de ele apagar os arquivos. Antes de
+# tudo, desfaz o que uma aula pode ter deixado: internet, sites ou programas
+# bloqueados (Midview.Agent.exe --uninstall-cleanup, da versão que o serviço
+# roda, que depois de uma atualização pela rede fica em Midview.update).
+# Apaga também o que as atualizações pela rede deixaram.
 #
 # Os dados em C:\ProgramData\Midview (a identidade da máquina e os
-# professores autorizados) ficam, para uma reinstalação manter a mesma ficha
-# no MidviewMaster. -RemoverDados apaga também.
+# professores pareados) ficam, para uma reinstalação continuar pareada.
+# -RemoverDados apaga também.
 [CmdletBinding()]
 param(
     [switch]$RemoverDados,
-    [string]$Destino = (Join-Path $env:ProgramFiles 'Midview')
+    [string]$Destino = (Split-Path -Path $PSScriptRoot -Parent),
+    [string]$Erro
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,7 +27,7 @@ try {
     $trava = Enter-TravaDeAtualizacao
     Stop-Midview
 
-    Write-Etapa 'Desfazendo bloqueios de internet e de sites e reativando teclado e mouse'
+    Write-Etapa 'Desfazendo bloqueios de internet, de sites e de programas'
     $agente = Get-ExecutavelDoServico
     if (-not $agente -or -not (Test-Path -LiteralPath $agente)) {
         $agente = Join-Path $Destino 'Midview.Agent.exe'
@@ -43,12 +44,7 @@ try {
     if (Get-Service -Name $NomeServico -ErrorAction SilentlyContinue) {
         & sc.exe delete $NomeServico | Out-Null
     }
-
-    Write-Etapa "Apagando $Destino"
     Remove-RestosDeAtualizacao -Obrigatorio
-    if (Test-Path -LiteralPath $Destino) {
-        Remove-Item -LiteralPath $Destino -Recurse -Force
-    }
 
     if ($trava) {
         $trava.Dispose()
@@ -61,12 +57,13 @@ try {
         }
     }
     else {
-        Write-Host "Os dados em $PastaDados foram mantidos (reinstalar mantém a mesma ficha). Para apagar também: Desinstalar-Aluno.cmd -RemoverDados"
+        Write-Host "Os dados em $PastaDados foram mantidos: instalando de novo, a máquina continua pareada com os mesmos professores."
     }
 
-    Write-Host ''
     if (-not $limpezaCompleta) {
-        Write-Host 'Midview removido, mas a limpeza não foi completa (veja acima): confira se a internet, os sites e o teclado/mouse estão normais.' -ForegroundColor Yellow
+        $mensagem = 'nem tudo o que uma aula deixou pôde ser desfeito.'
+        Write-Host "Midview removido, mas $mensagem" -ForegroundColor Yellow
+        Write-Erro $Erro $mensagem
         exit 1
     }
     Write-Host "Midview removido de $env:COMPUTERNAME." -ForegroundColor Green
@@ -75,6 +72,7 @@ try {
 catch {
     Write-Host ''
     Write-Host "A remoção NÃO terminou: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Erro $Erro $_.Exception.Message
     exit 1
 }
 finally {

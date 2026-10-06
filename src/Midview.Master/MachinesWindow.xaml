@@ -1,0 +1,112 @@
+<Window x:Class="Midview.Master.MachinesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Máquinas da sala" Height="680" Width="780"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
+        Closed="OnClosed">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+        <Style x:Key="SectionHint" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+            <Setter Property="Margin" Value="0,2,0,8" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Procurar e parear" Style="{StaticResource SectionTitle}" />
+            <TextBlock Style="{StaticResource SectionHint}"
+                       Text="Procura as máquinas com o Midview Aluno nesta rede. Ao parear, cada máquina mostra um código na tela: confira se é o mesmo que aparece aqui." />
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="SearchButton" Content="Procurar na rede" Click="OnSearchClicked" />
+                <Button x:Name="PairButton" Content="Parear as selecionadas" Click="OnPairClicked" IsEnabled="False" Margin="8,0,0,0" />
+                <TextBlock x:Name="SearchStatusTextBlock" VerticalAlignment="Center" Margin="12,0,0,0"
+                           TextWrapping="Wrap" MaxWidth="440" Foreground="{StaticResource InkMutedBrush}" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="Atualizar as máquinas" Style="{StaticResource SectionTitle}" />
+                    <TextBlock x:Name="StudentVersionTextBlock" Style="{StaticResource SectionHint}" />
+                    <Button x:Name="UpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnUpdateClicked" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Outro professor" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource SectionHint}"
+                               Text="Para um colega parear o computador dele com as máquinas desta sala: por 10 minutos, elas aceitam parear com outro professor." />
+                    <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Avançado" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource SectionHint}"
+                               Text="A identidade deste computador e uma máquina adicionada à mão (em outra rede, ou com o endereço para corrigir)." />
+                    <Button Content="Ajustes avançados..." Click="OnAdvancedClicked" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+            <ItemsControl x:Name="FoundItemsControl">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
+                                BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,6">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock>
+                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                        <Run Text="  " />
+                                        <Run Text="{Binding Address, Mode=OneWay}" Foreground="{StaticResource InkMutedBrush}" />
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Status}" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
+                                    <TextBlock Text="{Binding Outcome}" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding OutcomeIsError}" Value="True">
+                                                        <Setter Property="Foreground" Value="#B3261E" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Outcome}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CodeText}" FontFamily="Consolas" FontSize="26" FontWeight="Bold"
+                                               Foreground="{StaticResource InkBrush}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <Button Content="Confere" Click="OnConfirmClicked" Margin="0,0,6,0"
+                                            Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}" />
+                                    <Button Content="Não confere" Click="OnMismatchClicked"
+                                            Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

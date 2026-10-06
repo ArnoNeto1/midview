@@ -51,10 +51,14 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Instalar o Inno Setup (se faltar)
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
       # powershell.exe is Windows PowerShell 5.1, what lab machines run.
-      - name: Gerar o pacote (Windows PowerShell 5.1)
+      - name: Gerar o instalador (Windows PowerShell 5.1)
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Pacote.ps1 -Output "%RUNNER_TEMP%\Midview-Instalacao"
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Instalador.ps1 -Output "%RUNNER_TEMP%\Midview-Instalador"
 
       - name: Compilar o professor de teste
         run: dotnet build tests/Midview.E2E --configuration Release --output "${{ runner.temp }}/professor-de-teste"
@@ -63,7 +67,7 @@ jobs:
         shell: cmd
         run: >
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Bloqueio.ps1
-          -Pacote "%RUNNER_TEMP%\Midview-Instalacao"
+          -Pacote "%RUNNER_TEMP%\Midview-Instalador"
           -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
           -Registros "%RUNNER_TEMP%\registros-bloqueio"
 

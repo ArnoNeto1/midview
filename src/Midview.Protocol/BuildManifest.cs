@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace Midview.Protocol;
 
-// midview-build.json, written by installer/Gerar-Pacote.ps1 next to the
+// midview-build.json, written by installer/Gerar-Instalador.ps1 next to the
 // student program: a readable label for the build (date and git commit),
 // the update protocol it speaks, and the list of its files. What identifies
 // a build (PackageFingerprint) is exactly that list, so files that appear
@@ -27,7 +27,7 @@ public sealed record BuildManifest(
         }
         catch (Exception ex) when (ex is JsonException or DecoderFallbackException or NotSupportedException)
         {
-            throw new InvalidDataException($"{NetworkUpdate.ManifestFileName} não pôde ser lido: {ex.Message}", ex);
+            throw new InvalidDataException($"{NetworkUpdate.ManifestFileName} não pôde ser lido: {ErrorText.Describe(ex)}", ex);
         }
 
         if (manifest is null || string.IsNullOrWhiteSpace(manifest.Build) || manifest.Files is null || manifest.Files.Count == 0)

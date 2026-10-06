@@ -1,3 +1,6 @@
+using System.Security.Principal;
+using Midview.Protocol;
+
 namespace Midview.Agent;
 
 // What the uninstaller runs (Midview.Agent.exe --uninstall-cleanup, with the
@@ -9,9 +12,20 @@ public static class UninstallCleanup
 {
     public static IReadOnlyList<string> Run(
         string statePath, string hostsFilePath, IFirewallController firewall, IInputDeviceController devices,
-        Action<string[]> runNetsh, string? appBlockStatePath = null)
+        Action<string[]> runNetsh, string? appBlockStatePath = null,
+        IEnumerable<(string Desktop, SecurityIdentifier Student)>? studentDesktops = null)
     {
         var failures = new List<string>();
+
+        // The students' "Arquivos do professor" and "Entregar ao professor"
+        // can be deleted and renamed again (ProtectedStudentFolders).
+        foreach (var (desktop, student) in studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>())
+        {
+            foreach (var problem in ProtectedStudentFolders.Release(desktop, student))
+            {
+                failures.Add($"Não foi possível devolver a pasta ao aluno em {desktop}: {problem}");
+            }
+        }
 
         Step(failures, "reativar teclado e mouse", () =>
         {
@@ -52,7 +66,7 @@ public static class UninstallCleanup
         }
         catch (Exception ex)
         {
-            failures.Add($"Não foi possível {description}: {ex.Message}");
+            failures.Add($"Não foi possível {description}: {ErrorText.Describe(ex)}");
         }
     }
 }

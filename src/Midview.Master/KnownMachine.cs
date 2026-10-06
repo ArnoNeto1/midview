@@ -4,7 +4,7 @@ namespace Midview.Master;
 // a machine can be saved for screen viewing before its Agent's thumbprint
 // is known (site-blocking just won't work for it until it's filled in).
 // MacAddress ("AA-BB-CC-DD-EE-FF") is what turns it on over the network
-// (WakeWindow); it comes from the installer's machine file or from the
+// (MainWindow's "Ligar"); it comes from the installer's machine file or from the
 // Agent itself, the first time Master sees the machine on.
 public sealed record KnownMachine(
     string Name, string HostAddress, string SessionThumbprint, string? AgentThumbprint, string? MacAddress = null)

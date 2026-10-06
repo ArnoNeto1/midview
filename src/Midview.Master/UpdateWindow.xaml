@@ -8,7 +8,7 @@
             <TextBlock x:Name="PackageTextBlock" FontWeight="Bold" TextWrapping="Wrap" />
             <TextBlock x:Name="BuildTextBlock" TextWrapping="Wrap" Margin="0,4,0,8" Text="Lendo o pacote..." />
             <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
-                       Text="Atualiza o programa dos alunos nas máquinas que já têm o Midview, sem passar com o pendrive. Cada máquina troca de versão sozinha e, se a nova não funcionar, volta para a anterior. Só o programa muda: os professores que cada máquina aceita continuam os mesmos (para autorizar ou tirar um professor, reinstale com o pendrive). Uma máquina com um Midview anterior a esta função precisa ser atualizada uma vez com o pendrive." />
+                       Text="Atualiza o programa dos alunos pela rede: uma máquina primeiro, e as outras só depois que ela confirmar que a versão nova funciona; se não funcionar, ela volta sozinha para a anterior. Por 1 a 3 minutos você perde a visão e o controle de cada máquina; os alunos podem continuar usando o computador, mas mensagens e conversas abertas fecham e o teclado e o mouse são destravados. Não desligue as máquinas até terminar. Os professores que cada máquina aceita não mudam. Uma máquina com um Midview anterior a esta função precisa ser atualizada uma vez com o Midview-Instalador." />
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="CheckButton" Content="Verificar versões" Click="OnCheckClicked" Padding="10,4" Margin="0,0,8,0" IsEnabled="False" />
                 <Button x:Name="UpdateButton" Content="Atualizar" Click="OnUpdateClicked" Padding="10,4" Margin="0,0,8,0" IsEnabled="False" />
@@ -16,6 +16,7 @@
                         ToolTip="Não começa mais nenhuma máquina; as que já estão trocando de versão terminam." />
             </StackPanel>
             <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="WarningTextBlock" Margin="0,4,0,0" TextWrapping="Wrap" Foreground="#B3261E" />
         </StackPanel>
         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
             <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />

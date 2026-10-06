@@ -62,6 +62,30 @@ public class FixedSizeScreenCapture : IScreenCapture
     public Bitmap CaptureFrame() => new(_width, _height);
 }
 
+public class RecordingCountdownNotice : ICountdownNotice
+{
+    private readonly List<(string Message, string Done, TimeSpan Duration)> _shown = new();
+
+    public IReadOnlyList<(string Message, string Done, TimeSpan Duration)> Shown
+    {
+        get
+        {
+            lock (_shown)
+            {
+                return _shown.ToList();
+            }
+        }
+    }
+
+    public void Show(string message, string doneMessage, TimeSpan duration)
+    {
+        lock (_shown)
+        {
+            _shown.Add((message, doneMessage, duration));
+        }
+    }
+}
+
 public class RecordingMessageDisplay : IMessageDisplay
 {
     private readonly List<string> _shown = new();
@@ -193,6 +217,145 @@ public class FakeAppCloser : IAppCloser
     }
 }
 
+public class RecordingScreenLock : IScreenLockDisplay
+{
+    private int _shows;
+    private bool _showing;
+
+    public int Shows => Volatile.Read(ref _shows);
+    public bool Showing => Volatile.Read(ref _showing);
+
+    public void Show()
+    {
+        Interlocked.Increment(ref _shows);
+        Volatile.Write(ref _showing, true);
+    }
+
+    public void Hide() => Volatile.Write(ref _showing, false);
+}
+
+public class RecordingFileOpener : IFileOpener
+{
+    private readonly List<string> _opened = new();
+
+    public IReadOnlyList<string> Opened
+    {
+        get
+        {
+            lock (_opened)
+            {
+                return _opened.ToList();
+            }
+        }
+    }
+
+    public void Open(string path)
+    {
+        lock (_opened)
+        {
+            _opened.Add(path);
+        }
+    }
+}
+
+public class RecordingProgramStarter : IProgramStarter
+{
+    private readonly List<(string Program, string Arguments)> _started = new();
+
+    // When set, Start throws it instead, as Windows does for a program it can't find.
+    public Exception? Failure { get; init; }
+
+    // What Start answers: false is "still waiting after a while".
+    public bool Finishes { get; init; } = true;
+
+    public IReadOnlyList<(string Program, string Arguments)> Started
+    {
+        get
+        {
+            lock (_started)
+            {
+                return _started.ToList();
+            }
+        }
+    }
+
+    public bool Start(string program, string arguments)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+        lock (_started)
+        {
+            _started.Add((program, arguments));
+        }
+        return Finishes;
+    }
+}
+
+public class RecordingWebsiteOpener : IWebsiteOpener
+{
+    private readonly List<string> _opened = new();
+
+    // When set, Open throws it instead, as Windows does with no browser set up.
+    public Exception? Failure { get; init; }
+
+    public IReadOnlyList<string> Opened
+    {
+        get
+        {
+            lock (_opened)
+            {
+                return _opened.ToList();
+            }
+        }
+    }
+
+    public void Open(Uri address)
+    {
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+        lock (_opened)
+        {
+            _opened.Add(address.AbsoluteUri);
+        }
+    }
+}
+
+// Moves what it's given into a folder of its own, or refuses the names it's told to.
+public class FakeRecycleBin : IRecycleBin
+{
+    private readonly HashSet<string> _refused;
+
+    public FakeRecycleBin(string binDirectory, params string[] refusedNames)
+    {
+        BinDirectory = binDirectory;
+        _refused = new HashSet<string>(refusedNames, StringComparer.OrdinalIgnoreCase);
+        Directory.CreateDirectory(binDirectory);
+    }
+
+    public string BinDirectory { get; }
+
+    public void Recycle(string path)
+    {
+        if (_refused.Contains(Path.GetFileName(path)))
+        {
+            throw new IOException("in use", unchecked((int)0x80070020));
+        }
+        var target = Path.Combine(BinDirectory, Path.GetFileName(path));
+        if (Directory.Exists(path))
+        {
+            Directory.Move(path, target);
+        }
+        else
+        {
+            File.Move(path, target);
+        }
+    }
+}
+
 public class SessionServerTests
 {
     [Fact]
@@ -265,6 +428,124 @@ public class SessionServerTests
         Assert.Equal(MessageType.FrameTile, firstMessage.Type);
     }
 
+    // What ViewControlWindow sends when it opens just to watch: a heartbeat,
+    // not StartControl. The screen must arrive, and the student keeps their
+    // own keyboard and mouse.
+    [Fact]
+    public async Task WatchingOnly_SendsTheScreen_WithoutLockingOrInjecting()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.InputEvent, MouseMoveTo(10, 10)));
+
+        var firstMessage = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Delay(300); // long enough for the Session to have read both
+
+        Assert.Equal(MessageType.FrameTile, firstMessage.Type);
+        Assert.Equal(0, harness.Devices.DisableCalls);
+        Assert.Equal(0, harness.Injector.InjectCount);
+    }
+
+    [Fact]
+    public async Task FromWatchingToControlAndBack_LocksThenReleasesTheStudent()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10)); // watching
+
+        master.StartControl();
+        master.Channel.Send(new Message(MessageType.InputEvent, MouseMoveTo(10, 10)));
+        await WaitUntil(() => harness.Devices.DisableCalls == 1 && harness.Injector.InjectCount == 1);
+
+        master.Channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.InputEvent, MouseMoveTo(20, 20)));
+        await WaitUntil(() => harness.Devices.EnableCalls == 1);
+        await Task.Delay(300);
+
+        Assert.Equal(1, harness.Injector.InjectCount); // watching again: input is dropped
+    }
+
+    [Fact]
+    public async Task LockScreen_CoversTheScreenAndLocksInput_UntilTheConnectionCloses()
+    {
+        var screenLock = new RecordingScreenLock();
+        using var harness = new ServerHarness(new CountingScreenCapture(), screenLock: screenLock);
+        var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "tela bloqueada"), result);
+        Assert.True(screenLock.Showing);
+        Assert.Equal(1, harness.Devices.DisableCalls);
+
+        teacher.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Delay(300);
+        Assert.True(screenLock.Showing);
+
+        teacher.Dispose(); // "Desbloquear", or the teacher's program closing
+        await WaitUntil(() => !screenLock.Showing && harness.Devices.EnableCalls == 1);
+    }
+
+    [Fact]
+    public async Task LockScreen_StaysOn_WhileControlStartsAndStops()
+    {
+        var screenLock = new RecordingScreenLock();
+        using var harness = new ServerHarness(new CountingScreenCapture(), screenLock: screenLock);
+        using var locking = harness.ConnectMaster();
+        await Task.Run(() => locking.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        using var controlling = harness.ConnectMaster();
+        controlling.StartControl();
+        await Task.Run(() => controlling.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10)); // it holds the control slot now
+        controlling.Channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));
+        await Task.Delay(300);
+
+        Assert.True(screenLock.Showing);
+        Assert.Equal(0, harness.Devices.EnableCalls);
+    }
+
+    [Fact]
+    public async Task TwoLocks_KeepTheScreenLocked_UntilBothEnd()
+    {
+        var screenLock = new RecordingScreenLock();
+        using var harness = new ServerHarness(new CountingScreenCapture(), screenLock: screenLock);
+        var first = harness.ConnectMaster();
+        using var second = harness.ConnectMaster();
+        await Task.Run(() => first.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Run(() => second.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        first.Dispose();
+        await Task.Delay(500);
+
+        Assert.True(screenLock.Showing);
+        Assert.Equal(1, screenLock.Shows);
+        Assert.Equal(0, harness.Devices.EnableCalls);
+    }
+
+    [Fact]
+    public async Task LockScreen_WithoutALockScreen_IsRefusedWithoutLockingInput()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, harness.Devices.DisableCalls);
+    }
+
+    // The 11-byte InputEvent ViewControlWindow sends: kind, x, y, key.
+    private static byte[] MouseMoveTo(int x, int y)
+    {
+        var payload = new byte[11];
+        BitConverter.GetBytes(x).CopyTo(payload, 1);
+        BitConverter.GetBytes(y).CopyTo(payload, 5);
+        return payload;
+    }
+
     [Fact]
     public async Task ConnectionThatNeverHandshakes_DoesNotBlockAMaster()
     {
@@ -295,6 +576,33 @@ public class SessionServerTests
         using var thumbnail = TileCodec.DecodeTile(reply.Payload);
         Assert.Equal(ThumbnailRenderer.MaxWidth, thumbnail.Width);
         Assert.Equal(ThumbnailRenderer.MaxHeight, thumbnail.Height);
+    }
+
+    [Fact]
+    public async Task NoTeacherYet_RefusesConnections_ThenAcceptsTheTeacherOncePaired()
+    {
+        var trustedMastersFile = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid():N}.json");
+        try
+        {
+            using var harness = new ServerHarness(new FixedSizeScreenCapture(1920, 1080), trustedMastersFile: trustedMastersFile);
+
+            await Assert.ThrowsAnyAsync<Exception>(() => Task.Run(() =>
+            {
+                using var stranger = harness.ConnectMaster();
+                stranger.RequestThumbnail();
+            }).WaitAsync(TimeSpan.FromSeconds(30)));
+
+            // What the Agent does when this teacher pairs.
+            TrustedMastersFile.Add(trustedMastersFile, harness.MasterThumbprint);
+
+            using var preview = harness.ConnectMaster();
+            var reply = await Task.Run(() => preview.RequestThumbnail()).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(MessageType.ThumbnailFrame, reply.Type);
+        }
+        finally
+        {
+            File.Delete(trustedMastersFile);
+        }
     }
 
     [Fact]
@@ -466,6 +774,90 @@ public class SessionServerTests
     }
 
     [Fact]
+    public async Task SendFile_WithOverwrite_ReplacesTheOldFile()
+    {
+        using var inbox = new TempInbox();
+        WriteFile(inbox.Directory, "notas.pdf", new byte[] { 1 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), fileInbox: inbox.Inbox);
+        using var teacher = harness.ConnectMaster();
+
+        var (_, result) = await Task.Run(() => teacher.SendFile("notas.pdf", new byte[] { 2 }, new SendFileOptions(true, AfterSend.Nothing)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "notas.pdf (substituiu o anterior)"), result);
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(Path.Combine(inbox.Directory, "notas.pdf")));
+        Assert.Single(Directory.GetFiles(inbox.Directory));
+    }
+
+    // An old copy open in a program can't be replaced: the new one is still
+    // saved, under another name, and the teacher is told why.
+    [Fact]
+    public async Task SendFile_WithOverwrite_ButTheOldFileOpen_SavesItBesideIt()
+    {
+        using var inbox = new TempInbox();
+        WriteFile(inbox.Directory, "notas.pdf", new byte[] { 1 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), fileInbox: inbox.Inbox);
+        using var teacher = harness.ConnectMaster();
+        using (new FileStream(Path.Combine(inbox.Directory, "notas.pdf"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var (_, result) = await Task.Run(() => teacher.SendFile("notas.pdf", new byte[] { 2 }, new SendFileOptions(true, AfterSend.Nothing)))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal((true, "notas (2).pdf (o anterior estava aberto e não pôde ser substituído)"), result);
+        }
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(Path.Combine(inbox.Directory, "notas (2).pdf")));
+    }
+
+    [Fact]
+    public async Task SendFile_ThenOpenTheFile_OpensItInsteadOfANotice()
+    {
+        using var inbox = new TempInbox();
+        var display = new RecordingMessageDisplay();
+        var opener = new RecordingFileOpener();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display, fileInbox: inbox.Inbox, fileOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var (_, result) = await Task.Run(() => teacher.SendFile("aula.pdf", new byte[] { 1 }, new SendFileOptions(false, AfterSend.OpenFile)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "aula.pdf; aberto no aluno"), result);
+        Assert.Equal(new[] { Path.Combine(inbox.Directory, "aula.pdf") }, opener.Opened);
+        Assert.Empty(display.Shown);
+    }
+
+    [Fact]
+    public async Task SendFile_ThenOpenAProgram_OnlySavesIt()
+    {
+        using var inbox = new TempInbox();
+        var display = new RecordingMessageDisplay();
+        var opener = new RecordingFileOpener();
+        using var harness = new ServerHarness(new CountingScreenCapture(), display, fileInbox: inbox.Inbox, fileOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var (_, result) = await Task.Run(() => teacher.SendFile("instalador.exe", new byte[] { 1 }, new SendFileOptions(false, AfterSend.OpenFile)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "instalador.exe; programas não são abertos automaticamente"), result);
+        Assert.Empty(opener.Opened);
+        Assert.Single(display.Shown);
+    }
+
+    [Fact]
+    public async Task SendFile_ThenOpenTheFolder_OpensTheInbox()
+    {
+        using var inbox = new TempInbox();
+        var opener = new RecordingFileOpener();
+        using var harness = new ServerHarness(new CountingScreenCapture(), fileInbox: inbox.Inbox, fileOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var (_, result) = await Task.Run(() => teacher.SendFile("aula.pdf", new byte[] { 1 }, new SendFileOptions(false, AfterSend.OpenFolder)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "aula.pdf; pasta aberta no aluno"), result);
+        Assert.Equal(new[] { inbox.Directory }, opener.Opened);
+    }
+
+    [Fact]
     public async Task SendFile_MoreBytesThanDeclared_IsDiscarded()
     {
         using var inbox = new TempInbox();
@@ -514,6 +906,24 @@ public class SessionServerTests
         Assert.Equal(new[] { false }, closer.ForceFlags);
     }
 
+    // What a MidviewMaster from before the warning sends: just the mode.
+    [Fact]
+    public async Task CloseApps_FromAnOlderMaster_ClosesRightAway()
+    {
+        var closer = new FakeAppCloser(asked: 2, forced: 0);
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() =>
+        {
+            teacher.Channel.Send(new Message(MessageType.CloseApps, new[] { (byte)CloseAppsMode.Ask }));
+            return CommandResult.Decode(teacher.Channel.Receive().Payload);
+        }).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "pedido de fechamento enviado a 2 janela(s)"), result);
+        Assert.Equal(new[] { false }, closer.ForceFlags);
+    }
+
     [Fact]
     public async Task CloseApps_Force_SaysHowManyWereEndedByForce()
     {
@@ -537,6 +947,85 @@ public class SessionServerTests
         var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal((true, "nenhum programa para fechar"), result);
+    }
+
+    [Fact]
+    public async Task CloseApps_WithAWarning_TellsTheStudentFirst_AndClosesWhenItsUp()
+    {
+        var closer = new FakeAppCloser(asked: 3, forced: 0);
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), messageDisplay: display, appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask, delaySeconds: 1)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "aluno avisado; os programas fecham em 1 segundo"), result);
+        Assert.Empty(closer.ForceFlags); // not yet: the warning's time is the student's
+        Assert.Equal(new[] { "O professor vai fechar seus programas em 1 segundo. Salve seu trabalho agora." }, display.Shown);
+
+        await WaitUntil(() => closer.ForceFlags.Count == 1);
+        Assert.Equal(new[] { false }, closer.ForceFlags);
+    }
+
+    [Fact]
+    public async Task CloseApps_ForceWithAWarning_SaysUnsavedWorkIsLost_ThenForces()
+    {
+        var closer = new FakeAppCloser(asked: 0, forced: 2);
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), messageDisplay: display, appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(CloseAppsMode.Force, delaySeconds: 1)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "aluno avisado; os programas fecham em 1 segundo"), result);
+        Assert.Equal(
+            new[] { "O professor vai fechar seus programas em 1 segundo. Salve seu trabalho agora: o que não estiver salvo será perdido." },
+            display.Shown);
+
+        await WaitUntil(() => closer.ForceFlags.Count == 1);
+        Assert.Equal(new[] { true }, closer.ForceFlags);
+    }
+
+    // With the countdown banner, the warning counts down on the student's
+    // screen instead of a message saying "em 1 minuto" once.
+    [Theory]
+    [InlineData(CloseAppsMode.Ask, false)]
+    [InlineData(CloseAppsMode.Force, true)]
+    public async Task CloseApps_WithAWarning_CountsDownOnTheStudentsScreen(CloseAppsMode mode, bool force)
+    {
+        var closer = new FakeAppCloser(asked: 3, forced: 0);
+        var display = new RecordingMessageDisplay();
+        var countdown = new RecordingCountdownNotice();
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), messageDisplay: display, appCloser: closer, countdownNotice: countdown);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(mode, delaySeconds: 1)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal((true, "aluno avisado; os programas fecham em 1 segundo"), result);
+        Assert.Empty(display.Shown);
+        var (message, done) = CountdownText.CloseApps(force);
+        Assert.Equal(new[] { (message, done, TimeSpan.FromSeconds(1)) }, countdown.Shown);
+
+        await WaitUntil(() => closer.ForceFlags.Count == 1);
+        Assert.Equal(new[] { force }, closer.ForceFlags);
+    }
+
+    [Theory]
+    [InlineData(CloseAppsMode.Ask, "O professor está fechando seus programas.")]
+    [InlineData(CloseAppsMode.Force, "O professor encerrou seus programas.")]
+    public async Task CloseApps_Now_StillTellsTheStudent(CloseAppsMode mode, string notice)
+    {
+        var closer = new FakeAppCloser(asked: 1, forced: 0);
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), messageDisplay: display, appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(mode)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(new[] { notice }, display.Shown);
+        Assert.Equal(new[] { mode == CloseAppsMode.Force }, closer.ForceFlags);
     }
 
     [Fact]
@@ -684,6 +1173,60 @@ public class SessionServerTests
     }
 
     [Fact]
+    public async Task ClearDeliveryFolder_SendsEverythingToTheRecycleBin_AndTellsTheStudent()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "trabalho.docx", new byte[] { 1 });
+        WriteFile(folder.Directory, "site/index.html", new byte[] { 2 });
+        var bin = new FakeRecycleBin(folder.Directory + "-lixeira");
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), display, deliveryFolder: new DeliveryFolder(folder.Directory), recycleBin: bin);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(teacher.ClearDeliveryFolder).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "2 item(ns) foram para a Lixeira do aluno"), result);
+        Assert.Empty(Directory.GetFileSystemEntries(folder.Directory));
+        Assert.True(File.Exists(Path.Combine(bin.BinDirectory, "trabalho.docx")));
+        await WaitUntil(() => display.Shown.Count == 1);
+        Assert.Contains("Lixeira", display.Shown[0]);
+        Directory.Delete(bin.BinDirectory, recursive: true);
+    }
+
+    [Fact]
+    public async Task ClearDeliveryFolder_WhatCantGo_StaysAndIsNamed()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "trabalho.docx", new byte[] { 1 });
+        WriteFile(folder.Directory, "aberto.docx", new byte[] { 2 });
+        var bin = new FakeRecycleBin(folder.Directory + "-lixeira", "aberto.docx");
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), deliveryFolder: new DeliveryFolder(folder.Directory), recycleBin: bin);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(teacher.ClearDeliveryFolder).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "1 item(ns) foram para a Lixeira do aluno; não saiu: aberto.docx (o arquivo está em uso por outro programa)"), result);
+        Assert.True(File.Exists(Path.Combine(folder.Directory, "aberto.docx")));
+        Directory.Delete(bin.BinDirectory, recursive: true);
+    }
+
+    [Fact]
+    public async Task ClearDeliveryFolder_WithoutARecycleBin_IsRefused()
+    {
+        using var folder = new TempInbox();
+        WriteFile(folder.Directory, "trabalho.docx", new byte[] { 1 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), deliveryFolder: new DeliveryFolder(folder.Directory));
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(teacher.ClearDeliveryFolder).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(result.Succeeded);
+        Assert.True(File.Exists(Path.Combine(folder.Directory, "trabalho.docx")));
+    }
+
+    [Fact]
     public async Task CollectFiles_EmptyFolder_StillAnswers_AndTellsTheStudentWhereItIs()
     {
         using var folder = new TempInbox();
@@ -727,6 +1270,137 @@ public class SessionServerTests
 
         var (files, _) = await Task.Run(teacher.CollectFiles).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(new byte[] { 7 }, files["a.txt"]);
+    }
+
+    [Fact]
+    public async Task OpenWebsite_OpensItInTheStudentsBrowser()
+    {
+        var opener = new RecordingWebsiteOpener();
+        using var harness = new ServerHarness(new CountingScreenCapture(), websiteOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenWebsite("www.google.com")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "aberto"), result);
+        Assert.Equal(new[] { "https://www.google.com/" }, opener.Opened);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Windows\System32\calc.exe")]
+    [InlineData("file:///C:/Windows/System32/calc.exe")]
+    [InlineData("ms-settings:display")]
+    [InlineData("notepad")]
+    public async Task OpenWebsite_AnythingButAWebsite_IsRefused_AndNothingOpens(string address)
+    {
+        var opener = new RecordingWebsiteOpener();
+        using var harness = new ServerHarness(new CountingScreenCapture(), websiteOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenWebsite(address)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "não é o endereço de um site"), result);
+        Assert.Empty(opener.Opened);
+    }
+
+    [Fact]
+    public async Task OpenWebsite_WhenTheBrowserDoesntOpen_SaysSo()
+    {
+        var opener = new RecordingWebsiteOpener { Failure = new InvalidOperationException("nenhum navegador") };
+        using var harness = new ServerHarness(new CountingScreenCapture(), websiteOpener: opener);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenWebsite("www.google.com")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(result.Succeeded);
+        Assert.StartsWith("o navegador não abriu", result.Detail);
+    }
+
+    [Fact]
+    public async Task OpenWebsite_WithoutAnOpener_IsRefused()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenWebsite("www.google.com")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "esta máquina não abre sites"), result);
+    }
+
+    [Fact]
+    public async Task OpenProgram_StartsItAsTheStudent()
+    {
+        var starter = new RecordingProgramStarter();
+        using var harness = new ServerHarness(new CountingScreenCapture(), programStarter: starter);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenProgram(@"""C:\Program Files\Programa\app.exe"" -a ""b c"""))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, "aberto"), result);
+        Assert.Equal(new[] { (@"C:\Program Files\Programa\app.exe", @"-a ""b c""") }, starter.Started);
+    }
+
+    // The student's own %USERPROFILE%, not the teacher's: expanded where it runs.
+    [Fact]
+    public async Task OpenProgram_ExpandsVariablesOnTheStudentsMachine()
+    {
+        Environment.SetEnvironmentVariable("MIDVIEW_TESTE_PASTA", @"C:\Users\aluno");
+        var starter = new RecordingProgramStarter();
+        using var harness = new ServerHarness(new CountingScreenCapture(), programStarter: starter);
+        using var teacher = harness.ConnectMaster();
+
+        await Task.Run(() => teacher.OpenProgram(@"notepad %MIDVIEW_TESTE_PASTA%\aula.txt")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(new[] { ("notepad", @"C:\Users\aluno\aula.txt") }, starter.Started);
+    }
+
+    [Fact]
+    public async Task OpenProgram_NotFound_SaysWhich()
+    {
+        var starter = new RecordingProgramStarter { Failure = new System.ComponentModel.Win32Exception(2) };
+        using var harness = new ServerHarness(new CountingScreenCapture(), programStarter: starter);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenProgram("progamaerrado -x")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "programa não encontrado: progamaerrado"), result);
+    }
+
+    [Fact]
+    public async Task OpenProgram_StillWaiting_SaysSo()
+    {
+        var starter = new RecordingProgramStarter { Finishes = false };
+        using var harness = new ServerHarness(new CountingScreenCapture(), programStarter: starter);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenProgram("instalador.exe")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("administrador", result.Detail);
+    }
+
+    [Fact]
+    public async Task OpenProgram_NotACommand_IsRefused_AndNothingStarts()
+    {
+        var starter = new RecordingProgramStarter();
+        using var harness = new ServerHarness(new CountingScreenCapture(), programStarter: starter);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenProgram("\"sem fim")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "comando inválido"), result);
+        Assert.Empty(starter.Started);
+    }
+
+    [Fact]
+    public async Task OpenProgram_WithoutAStarter_IsRefused()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.OpenProgram("powershell")).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "esta máquina não abre programas"), result);
     }
 
     private static void WriteFile(string root, string relativePath, byte[] content)
@@ -780,21 +1454,33 @@ public class SessionServerTests
         public ServerHarness(
             IScreenCapture capture, IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null,
             FileInbox? fileInbox = null, IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null,
-            IOpenProgramsLister? openPrograms = null)
+            IOpenProgramsLister? openPrograms = null, IScreenLockDisplay? screenLock = null,
+            IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null, string? trustedMastersFile = null,
+            ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
+            IProgramStarter? programStarter = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
 
             var server = new SessionServer(
-                _listener, _serverCert, new TrustStore(new[] { _masterCert.Thumbprint }),
-                capture, new FakeInputInjector(),
-                new InputLockManager(new FakeInputDeviceController(), new FakeClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms);
+                _listener, _serverCert,
+                trustedMastersFile is null ? new TrustStore(new[] { _masterCert.Thumbprint }) : TrustStore.FromFile(trustedMastersFile),
+                capture, Injector,
+                new InputLockManager(Devices, new FakeClock(), TimeSpan.FromSeconds(5)),
+                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms, screenLock,
+                fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
         public int Port { get; }
+
+        public string MasterThumbprint => _masterCert.Thumbprint;
+
+        // The student's keyboard and mouse, as the input lock sees them.
+        public FakeInputDeviceController Devices { get; } = new();
+
+        public FakeInputInjector Injector { get; } = new();
 
         public ConnectedMaster ConnectMaster()
         {
@@ -842,9 +1528,30 @@ public class SessionServerTests
             return Channel.Receive();
         }
 
-        public ((bool Saved, string Detail) Accepted, (bool Saved, string Detail) Result) SendFile(string name, byte[] content)
+        public (bool Succeeded, string Detail) OpenProgram(string command)
         {
-            Channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader(name, content.Length)));
+            Channel.Send(new Message(MessageType.OpenProgram, TextMessage.Encode(command)));
+            return CommandResult.Decode(Channel.Receive().Payload);
+        }
+
+        public (bool Succeeded, string Detail) OpenWebsite(string address)
+        {
+            Channel.Send(new Message(MessageType.OpenWebsite, TextMessage.Encode(address)));
+            return CommandResult.Decode(Channel.Receive().Payload);
+        }
+
+        public (bool Succeeded, string Detail) ClearDeliveryFolder()
+        {
+            Channel.Send(new Message(MessageType.ClearDeliveryFolder, Array.Empty<byte>()));
+            return CommandResult.Decode(Channel.Receive().Payload);
+        }
+
+        public ((bool Saved, string Detail) Accepted, (bool Saved, string Detail) Result) SendFile(
+            string name, byte[] content, SendFileOptions? options = null)
+        {
+            Channel.Send(options is null
+                ? new Message(MessageType.SendFile, FileTransfer.EncodeHeader(name, content.Length))
+                : new Message(MessageType.SendFileWithOptions, FileTransfer.EncodeOptionsHeader(options, name, content.Length)));
             var accepted = CommandResult.Decode(Channel.Receive().Payload);
             for (var offset = 0; offset < content.Length; offset += FileTransfer.ChunkSize)
             {
@@ -880,9 +1587,16 @@ public class SessionServerTests
             }
         }
 
-        public (bool Succeeded, string Detail) CloseApps(CloseAppsMode mode)
+        public (bool Succeeded, string Detail) CloseApps(CloseAppsMode mode, int delaySeconds = 0)
         {
-            Channel.Send(new Message(MessageType.CloseApps, new[] { (byte)mode }));
+            Channel.Send(new Message(MessageType.CloseApps, CloseAppsCommand.Encode(mode, delaySeconds)));
+            return CommandResult.Decode(Channel.Receive().Payload);
+        }
+
+        // Opens a screen-lock connection; it stays locked until disposed.
+        public (bool Succeeded, string Detail) LockScreen()
+        {
+            Channel.Send(new Message(MessageType.LockScreen, Array.Empty<byte>()));
             return CommandResult.Decode(Channel.Receive().Payload);
         }
 

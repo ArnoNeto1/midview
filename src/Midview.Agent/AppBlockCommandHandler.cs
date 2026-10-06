@@ -61,7 +61,7 @@ public sealed class AppBlockCommandHandler
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 AgentLog.Warn($"Couldn't save the program block: {ex.Message}");
-                return (false, $"não foi possível gravar o bloqueio: {ex.Message}");
+                return (false, $"não foi possível gravar o bloqueio: {ErrorText.Describe(ex)}");
             }
 
             Volatile.Write(ref _policy, policy);

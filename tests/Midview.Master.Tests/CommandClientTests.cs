@@ -35,7 +35,7 @@ public class CommandClientTests
 
         var (succeeded, detail) = await Task.Run(() => CommandClient.SendCommandForResult(
             "127.0.0.1", session.Port, sessionCertificate.Thumbprint, masterCertificate,
-            MessageType.CloseApps, new[] { (byte)CloseAppsMode.Force }))
+            MessageType.CloseApps, CloseAppsCommand.Encode(CloseAppsMode.Force, delaySeconds: 0)))
             .WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.True(succeeded);

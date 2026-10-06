@@ -41,7 +41,7 @@ public enum MessageType : byte
     SendFile = 17,
     FileChunk = 18,
 
-    // Close the student's programs. One byte of payload (CloseAppsMode),
+    // Close the student's programs, after warning them (CloseAppsCommand),
     // answered with one CommandAck carrying a CommandResult.
     CloseApps = 19,
 
@@ -88,6 +88,49 @@ public enum MessageType : byte
     // Master only asks machines whose Agent answered GetAppBlock.
     ListOpenPrograms = 32,
     OpenPrograms = 33,
+
+    // Lock the student's screen (grey, with a padlock) and keyboard and
+    // mouse, for as long as this connection stays open. The Session answers
+    // one CommandAck (CommandResult); the Master's Heartbeats then keep the
+    // connection up. Closing it unlocks at once, and so does the Session's
+    // 15 s receive timeout if the Master stops answering. Never the control
+    // slot.
+    LockScreen = 34,
+
+    // A file from the teacher with the "Enviar arquivo" options (see
+    // FileTransfer.EncodeOptionsHeader); otherwise exactly like SendFile.
+    SendFileWithOptions = 35,
+
+    // Send everything in the student's "Entregar ao professor" folder to
+    // their Recycle Bin. The only message of a short-lived connection,
+    // answered with one CommandAck (CommandResult).
+    ClearDeliveryFolder = 36,
+
+    // Pairing a teacher with this machine (see Pairing for the exchange):
+    // the only Agent exchange a teacher it doesn't trust yet may start.
+    PairRequest = 37,
+    PairCommit = 38,
+    PairNonce = 39,
+    PairReveal = 40,
+    PairConfirm = 41,
+    PairCancel = 42,
+    PairDone = 43,
+    PairRefused = 44,
+
+    // An Agent command, from a trusted teacher only: for
+    // Pairing.NewTeacherWindow, let one more teacher pair ("Permitir novo
+    // professor"). Answered with one CommandAck carrying a CommandResult.
+    AllowNewTeacher = 45,
+
+    // Master -> Session: open a website (a WebsiteAddress, as TextMessage)
+    // in the student's browser ("Abrir site"). The only message of a
+    // short-lived connection, answered with one CommandAck (CommandResult).
+    OpenWebsite = 46,
+
+    // Master -> Session: start a program as the student ("Abrir programa"),
+    // a ProgramCommand as TextMessage. The only message of a short-lived
+    // connection, answered with one CommandAck (CommandResult).
+    OpenProgram = 47,
 }
 
 public enum CloseAppsMode : byte
@@ -95,7 +138,7 @@ public enum CloseAppsMode : byte
     // Like clicking each window's X: programs with unsaved work ask first.
     Ask = 0,
 
-    // Ask first, then end whatever is still open after a short grace period
-    // -- unsaved work in those programs is lost.
+    // End the programs without asking (the warning before it was the
+    // student's time to save) -- unsaved work is lost.
     Force = 1,
 }

@@ -86,6 +86,38 @@ public class PowerCommandHandlerTests
         Assert.False(handler.IsShutdownPending());
     }
 
+    // The student sees the time counting down (CountdownBanner), and it
+    // goes away when the teacher cancels.
+    [Theory]
+    [InlineData(PowerAction.Shutdown, PowerCountdown.Shutdown)]
+    [InlineData(PowerAction.Restart, PowerCountdown.Restart)]
+    public void ADelayedShutdown_CountsDownOnTheStudentsScreen_UntilCancelled(PowerAction action, PowerCountdown kind)
+    {
+        var countdown = new RecordingCountdownDisplay();
+        var handler = new PowerCommandHandler(_ => 0, countdown: countdown);
+
+        handler.Handle(PowerCommand.Encode(action, 60));
+        Assert.Equal(new[] { (kind, 60) }, countdown.Shown);
+        Assert.Equal(0, countdown.Closed);
+
+        handler.Handle(PowerCommand.Encode(PowerAction.Cancel, 0));
+        Assert.Equal(1, countdown.Closed);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]     // right away: nothing to count down
+    [InlineData(60, 1190)] // refused: nothing is coming
+    [InlineData(60, 5)]
+    public void NoCountdown_WhenNothingIsComing(int delaySeconds, int exitCode)
+    {
+        var countdown = new RecordingCountdownDisplay();
+        var handler = new PowerCommandHandler(_ => exitCode, countdown: countdown);
+
+        handler.Handle(PowerCommand.Encode(PowerAction.Shutdown, delaySeconds));
+
+        Assert.Empty(countdown.Shown);
+    }
+
     [Fact]
     public void ARefusedShutdown_IsNotPending()
     {

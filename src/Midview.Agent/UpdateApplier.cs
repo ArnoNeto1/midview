@@ -104,9 +104,9 @@ public sealed class UpdateApplier
             AgentLog.Warn($"Update applier failed: {ex.Message}");
             if (switched)
             {
-                RollBack(record, oldBinary, $"erro ao aplicar: {ex.Message}");
+                RollBack(record, oldBinary, $"erro ao aplicar: {ErrorText.Describe(ex)}");
             }
-            else if (TrySave(ref record, UpdateStates.Failed, $"erro ao aplicar: {ex.Message}"))
+            else if (TrySave(ref record, UpdateStates.Failed, $"erro ao aplicar: {ErrorText.Describe(ex)}"))
             {
                 TryDeleteRecoveryTask();
             }
@@ -214,7 +214,7 @@ public sealed class UpdateApplier
         {
             AgentLog.Warn($"Update rollback failed: {ex.Message}");
             TrySave(ref record, UpdateStates.RollbackPending,
-                $"{reason}; e não foi possível voltar para a versão anterior agora ({ex.Message}) — ela volta ao reiniciar a máquina");
+                $"{reason}; e não foi possível voltar para a versão anterior agora ({ErrorText.Describe(ex)}) — ela volta ao reiniciar a máquina");
         }
     }
 

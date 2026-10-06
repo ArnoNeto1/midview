@@ -15,11 +15,30 @@ public static class FileSender
     private const int TimeoutMs = 30_000;
 
     // Saved = the file is on the machine, and Detail is the name it was saved
-    // under (it can differ, e.g. "notas (2).pdf"); otherwise Detail says why not.
+    // under (it can differ, e.g. "notas (2).pdf"), with what happened next
+    // when options were chosen; otherwise Detail says why not.
     public static (bool Saved, string Detail) Send(
         KnownMachine machine, X509Certificate2 masterCertificate, string filePath,
-        int port = ConnectionClient.SessionPort)
+        SendFileOptions? options = null, int port = ConnectionClient.SessionPort)
     {
+        options ??= SendFileOptions.Default;
+        var result = SendOnce(machine, masterCertificate, filePath, options, port, out var olderSession);
+        if (!olderSession)
+        {
+            return result;
+        }
+
+        // A Session from before the options took them for a control
+        // connection: the file goes again, as it always did.
+        var (saved, detail) = SendOnce(machine, masterCertificate, filePath, SendFileOptions.Default, port, out _);
+        return (saved, saved ? $"{detail}; Midview antigo nesta máquina: sem as opções" : detail);
+    }
+
+    private static (bool Saved, string Detail) SendOnce(
+        KnownMachine machine, X509Certificate2 masterCertificate, string filePath, SendFileOptions options, int port,
+        out bool olderSession)
+    {
+        olderSession = false;
         using var file = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (file.Length > FileTransfer.MaxFileSize)
         {
@@ -32,8 +51,19 @@ public static class FileSender
         using var channel = SecureChannel.AuthenticateAsClient(
             tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
 
-        channel.Send(new Message(MessageType.SendFile, FileTransfer.EncodeHeader(Path.GetFileName(filePath), file.Length)));
-        var accepted = ReceiveResult(channel);
+        var name = Path.GetFileName(filePath);
+        channel.Send(options == SendFileOptions.Default
+            ? new Message(MessageType.SendFile, FileTransfer.EncodeHeader(name, file.Length))
+            : new Message(MessageType.SendFileWithOptions, FileTransfer.EncodeOptionsHeader(options, name, file.Length)));
+        var reply = channel.Receive();
+        if (reply.Type == MessageType.FrameTile)
+        {
+            olderSession = true;
+            return (false, CommandClient.OlderSession);
+        }
+        (bool Saved, string Detail) accepted = reply.Type == MessageType.CommandAck
+            ? CommandResult.Decode(reply.Payload)
+            : (false, $"resposta inesperada ({reply.Type})");
         if (!accepted.Saved)
         {
             return accepted;

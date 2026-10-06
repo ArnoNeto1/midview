@@ -1,6 +1,5 @@
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,9 +7,10 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// Where a machine is tested and then saved to the classroom list, and where
-// site-blocking commands are sent from (to whichever machine is filled in
-// here). Still usable for one-off connections to machines never saved.
+// "Configurações avançadas": this teacher PC's identity, and a machine
+// added or edited by hand -- tested, then saved to the classroom list --
+// for the exceptions "Máquinas da sala" doesn't cover. Site blocking,
+// which used to live here, has its own window (SiteBlockWindow).
 public partial class AddMachineWindow : Window
 {
     private readonly X509Certificate2 _masterCertificate;
@@ -63,7 +63,8 @@ public partial class AddMachineWindow : Window
             ConnectStatusTextBlock.Text = "Conectado.";
             _verified = (hostAddress, thumbprint);
             UpdateSaveButton();
-            new ViewControlWindow(client).Show();
+            var name = NameTextBox.Text.Trim();
+            new ViewControlWindow(client, name.Length > 0 ? name : hostAddress, control: false).Show();
         }
         catch (Exception ex)
         {
@@ -99,36 +100,7 @@ public partial class AddMachineWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            SaveStatusTextBlock.Text = $"Está na grade, mas a lista não pôde ser gravada em disco: {ex.Message}";
-        }
-    }
-
-    private async void OnBlockInternetClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.BlockInternet, Array.Empty<byte>());
-
-    private async void OnUnblockInternetClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.UnblockInternet, Array.Empty<byte>());
-
-    private async void OnBlockDomainClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.BlockDomain, Encoding.UTF8.GetBytes(DomainTextBox.Text));
-
-    private async void OnUnblockDomainClicked(object sender, RoutedEventArgs e) =>
-        await SendAgentCommandAsync(MessageType.UnblockDomain, Encoding.UTF8.GetBytes(DomainTextBox.Text));
-
-    private async Task SendAgentCommandAsync(MessageType commandType, byte[] payload)
-    {
-        SiteBlockStatusTextBlock.Text = "Enviando...";
-        var hostAddress = HostAddressTextBox.Text.Trim();
-        var thumbprint = AgentThumbprintTextBox.Text.Trim();
-        try
-        {
-            var success = await Task.Run(() => CommandClient.SendCommand(
-                hostAddress, ConnectionClient.AgentPort, thumbprint, _masterCertificate, commandType, payload));
-            SiteBlockStatusTextBlock.Text = success ? "OK" : "Falhou";
-        }
-        catch (Exception ex)
-        {
-            SiteBlockStatusTextBlock.Text = $"Falhou: {FailureText.DescribeAgent(ex)}";
+            SaveStatusTextBlock.Text = $"Está na grade, mas a lista não pôde ser gravada em disco: {ErrorText.Describe(ex)}";
         }
     }
 }

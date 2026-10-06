@@ -5,7 +5,7 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// This file is a shared, portable credential by design (like Veyon's
+// This file is a shared, portable credential by design (a classroom-wide
 // authentication key), not a per-install identity: copying
 // master-identity.pfx to another teacher's PC gives that PC the exact
 // same certificate (same thumbprint), so it's already trusted on every

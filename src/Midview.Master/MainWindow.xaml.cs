@@ -9,9 +9,9 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // The classroom console: one live thumbnail per machine in the teacher's
-// classroom list; clicking one opens full control on it. Testing and
-// saving machines, one-off connections and site-blocking commands live in
-// AddMachineWindow.
+// classroom list; clicking one selects it, and "Ver a tela" or "Controlar"
+// opens its screen. Testing and saving machines, one-off connections and
+// site-blocking commands live in AddMachineWindow.
 public partial class MainWindow : Window
 {
     private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
@@ -22,14 +22,31 @@ public partial class MainWindow : Window
     // one to the front instead of popping a second window up on the student.
     private readonly Dictionary<string, ChatWindow> _chatWindows = new(StringComparer.OrdinalIgnoreCase);
 
+    // The same for every other window: one per action and machines (OpenOnce).
+    private readonly OpenOnce<Window> _openWindows = new();
+
     // The teacher's power timetable; the pollers read it on their own
     // threads to hand it to each machine's Agent.
     private PowerSchedule? _powerSchedule;
     private AppBlockPolicy? _appBlockPolicy;
 
+    private MachineTile? _selectedTile;
+
+    // The machines whose screen is locked, each kept so by its own
+    // connection; how each one last answered, for the status line.
+    private readonly Dictionary<MachineTile, ScreenLockKeeper> _screenLocks = new();
+    private readonly Dictionary<MachineTile, (bool Locked, string Detail)> _screenLockStatus = new();
+
+    // Machines locked at least once since the teacher locked them: one that
+    // isn't locked anymore got out (signed out, restarted, switched user).
+    private readonly HashSet<MachineTile> _wereLocked = new();
+
     public MainWindow()
     {
         InitializeComponent();
+        // Wide enough for the toolbar on one row, but never past a smaller screen.
+        Width = Math.Min(Width, SystemParameters.WorkArea.Width);
+        Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
@@ -41,14 +58,85 @@ public partial class MainWindow : Window
         UpdateEmptyHint();
     }
 
-    private async void OnMachineClicked(object sender, RoutedEventArgs e)
+    // A click, left or right, only selects the machine. Watching its screen
+    // or controlling it -- which locks the student's keyboard and mouse -- is
+    // chosen on purpose with the toolbar's buttons or the tile's menu.
+    private void OnMachineClicked(object sender, RoutedEventArgs e) => SelectTileOf(sender);
+
+    private void OnMachineRightClicked(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectTileOf(sender);
+
+    private void SelectTileOf(object sender)
     {
-        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            Select(tile);
+        }
+    }
+
+    private void Select(MachineTile? tile)
+    {
+        if (_selectedTile is not null)
+        {
+            _selectedTile.IsSelected = false;
+        }
+        _selectedTile = tile;
+        if (tile is not null)
+        {
+            tile.IsSelected = true;
+        }
+        ViewButton.IsEnabled = tile is not null;
+        ControlButton.IsEnabled = tile is not null;
+        StatusTextBlock.Text = tile is null ? string.Empty : $"Selecionada: {tile.Name}";
+    }
+
+    private void OnViewSelectedClicked(object sender, RoutedEventArgs e)
+    {
+        if (_selectedTile is not null)
+        {
+            OpenScreen(_selectedTile, control: false);
+        }
+    }
+
+    private void OnControlSelectedClicked(object sender, RoutedEventArgs e)
+    {
+        if (_selectedTile is not null)
+        {
+            OpenScreen(_selectedTile, control: true);
+        }
+    }
+
+    private void OnViewMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenScreen(tile, control: false);
+        }
+    }
+
+    private void OnControlMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenScreen(tile, control: true);
+        }
+    }
+
+    // One window per machine: asking again brings it back, and a click while
+    // it is still connecting makes no second connection.
+    private async void OpenScreen(MachineTile tile, bool control)
+    {
+        var machine = tile.Machine;
+        var key = OpenOnce<Window>.Key("tela", new[] { machine.Name });
+        if (_openWindows.TryGet(key, out var open))
+        {
+            BringBack(open);
+            return;
+        }
+        if (!_openWindows.TryStartOpening(key))
         {
             return;
         }
 
-        var machine = tile.Machine;
         StatusTextBlock.Text = $"Conectando a {machine.Name}...";
         try
         {
@@ -56,15 +144,167 @@ public partial class MainWindow : Window
                 machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate));
 
             StatusTextBlock.Text = string.Empty;
-            new ViewControlWindow(client) { Title = $"MidviewMaster - {machine.Name}" }.Show();
+            var window = new ViewControlWindow(client, machine.Name, control);
+            _openWindows.Add(key, window);
+            window.Closed += (_, _) => _openWindows.Remove(key, window);
+            window.Show();
         }
         catch (Exception ex)
         {
+            _openWindows.StopOpening(key);
             StatusTextBlock.Text = $"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}";
         }
     }
 
-    private void OnAddMachineClicked(object sender, RoutedEventArgs e) => OpenAddMachineWindow(existing: null);
+    // The window for this action and these machines: the one already open,
+    // brought back, or a new one from create.
+    private void ShowOnce(string action, IEnumerable<KnownMachine> targets, Func<Window> create)
+    {
+        var key = OpenOnce<Window>.Key(action, targets.Select(machine => machine.Name));
+        if (_openWindows.TryGet(key, out var open))
+        {
+            BringBack(open);
+            return;
+        }
+
+        var window = create();
+        _openWindows.Add(key, window);
+        window.Closed += (_, _) => _openWindows.Remove(key, window);
+        window.Show();
+    }
+
+    private static void BringBack(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+        {
+            window.WindowState = WindowState.Normal;
+        }
+        window.Activate();
+    }
+
+    // One button for both: it locks the class, or, while any screen is
+    // locked, gives them all back.
+    private void OnScreenLockClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_screenLocks.Count > 0)
+        {
+            UnlockAll();
+        }
+        else
+        {
+            LockClass();
+        }
+    }
+
+    private void LockClass()
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear.";
+            return;
+        }
+        foreach (var tile in _tiles)
+        {
+            LockScreen(tile);
+        }
+        ShowScreenLockStatus();
+    }
+
+    private void UnlockAll()
+    {
+        foreach (var tile in _screenLocks.Keys.ToList())
+        {
+            UnlockScreen(tile);
+        }
+        StatusTextBlock.Text = "Telas desbloqueadas.";
+    }
+
+    private void UpdateScreenLockButton()
+    {
+        var (label, badge, toolTip) = ScreenLockText.ClassButton(anyLocked: _screenLocks.Count > 0);
+        ScreenLockButton.Content = label;
+        ScreenLockButton.Badge = badge;
+        ScreenLockButton.ToolTip = toolTip;
+    }
+
+    private void OnLockMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            LockScreen(tile);
+            ShowScreenLockStatus();
+        }
+    }
+
+    private void OnUnlockMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            UnlockScreen(tile);
+            StatusTextBlock.Text = $"Tela de {tile.Name} desbloqueada.";
+        }
+    }
+
+    private void LockScreen(MachineTile tile)
+    {
+        if (_screenLocks.ContainsKey(tile))
+        {
+            return;
+        }
+        var keeper = new ScreenLockKeeper(tile.Machine, _masterCertificate);
+        keeper.StatusChanged += (locked, detail) => Dispatcher.InvokeAsync(() =>
+        {
+            if (_screenLocks.TryGetValue(tile, out var current) && current == keeper)
+            {
+                var wasLocked = _wereLocked.Contains(tile);
+                if (locked)
+                {
+                    _wereLocked.Add(tile);
+                }
+                _screenLockStatus[tile] = (locked, detail);
+                var (text, alert) = ScreenLockText.Badge(locked, wasLocked, detail);
+                tile.ShowScreenLock(text, alert);
+                ShowScreenLockStatus();
+            }
+        });
+        _screenLocks[tile] = keeper;
+        tile.ShowScreenLock(ScreenLockText.Locking, alert: false);
+        keeper.Start();
+        UpdateScreenLockButton();
+    }
+
+    private void UnlockScreen(MachineTile tile)
+    {
+        if (_screenLocks.Remove(tile, out var keeper))
+        {
+            keeper.Dispose();
+        }
+        _screenLockStatus.Remove(tile);
+        _wereLocked.Remove(tile);
+        tile.ShowScreenLock(string.Empty, alert: false);
+        UpdateScreenLockButton();
+    }
+
+    // "Telas bloqueadas: 12 de 14. Saíram do bloqueio: Aluno-03 (Sem
+    // usuário logado). Não bloqueou: Aluno-07 (Offline)."
+    private void ShowScreenLockStatus()
+    {
+        if (_screenLocks.Count == 0)
+        {
+            return;
+        }
+        var locked = _screenLockStatus.Values.Count(status => status.Locked);
+        var notLocked = _screenLockStatus.Where(pair => !pair.Value.Locked).ToList();
+        string Names(IEnumerable<KeyValuePair<MachineTile, (bool Locked, string Detail)>> machines) =>
+            string.Join(", ", machines.Select(pair => $"{pair.Key.Name} ({pair.Value.Detail})"));
+        var gotOut = notLocked.Where(pair => _wereLocked.Contains(pair.Key)).ToList();
+        var failed = notLocked.Where(pair => !_wereLocked.Contains(pair.Key)).ToList();
+        var waiting = _screenLocks.Count - _screenLockStatus.Count;
+        StatusTextBlock.Text = $"Telas bloqueadas: {locked} de {_screenLocks.Count}."
+            + (waiting > 0 ? $" Aguardando {waiting}." : string.Empty)
+            + (gotOut.Count > 0 ? $" Saíram do bloqueio: {Names(gotOut)}." : string.Empty)
+            + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty);
+    }
 
     private void OnMessageClassClicked(object sender, RoutedEventArgs e)
     {
@@ -103,7 +343,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
-        new SendFileWindow(targets, _masterCertificate) { Owner = this }.Show();
+        ShowOnce("arquivo", targets, () => new SendFileWindow(targets, _masterCertificate) { Owner = this });
 
     private void OnCollectClassClicked(object sender, RoutedEventArgs e)
     {
@@ -124,7 +364,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenCollectFilesWindow(IReadOnlyList<KnownMachine> targets) =>
-        new CollectFilesWindow(targets, _masterCertificate) { Owner = this }.Show();
+        ShowOnce("recolher", targets, () => new CollectFilesWindow(targets, _masterCertificate) { Owner = this });
 
     private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -145,7 +385,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
-        new CloseAppsWindow(targets, _masterCertificate) { Owner = this }.Show();
+        ShowOnce("fechar", targets, () => new CloseAppsWindow(targets, _masterCertificate) { Owner = this });
 
     private void OnBlockAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -154,8 +394,9 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
             return;
         }
-        new AppBlockWindow(
-            _tiles.Select(tile => tile.Machine).ToList(), _masterCertificate,
+        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        ShowOnce("programas", targets, () => new AppBlockWindow(
+            targets, _masterCertificate,
             policy =>
             {
                 Volatile.Write(ref _appBlockPolicy, policy);
@@ -163,14 +404,33 @@ public partial class MainWindow : Window
             })
         {
             Owner = this,
-        }.Show();
+        });
+    }
+
+    private void OnSiteBlockClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear sites.";
+            return;
+        }
+        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        ShowOnce("sites", targets, () => new SiteBlockWindow(targets, _masterCertificate) { Owner = this });
+    }
+
+    private void OnSiteBlockMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            ShowOnce("sites", new[] { tile.Machine }, () => new SiteBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
+        }
     }
 
     private void OnBlockAppsMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            new AppBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this }.Show();
+            ShowOnce("programas", new[] { tile.Machine }, () => new AppBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
         }
     }
 
@@ -182,7 +442,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio de programas não pôde ser lido: {ex.Message}";
+            StatusTextBlock.Text = $"O bloqueio de programas não pôde ser lido: {ErrorText.Describe(ex)}";
             return null;
         }
     }
@@ -195,7 +455,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ex.Message}";
+            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}";
         }
     }
 
@@ -217,17 +477,40 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets) =>
-        new PowerWindow(targets, _masterCertificate) { Owner = this }.Show();
+    private void OnRestartClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para reiniciar.";
+            return;
+        }
+        OpenPowerWindow(_tiles.Select(tile => tile.Machine).ToList(), PowerAction.Restart);
+    }
 
+    private void OnRestartMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenPowerWindow(new[] { tile.Machine }, PowerAction.Restart);
+        }
+    }
+
+    // "Desligar" and "Reiniciar" each have their own, set to their action.
+    private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets, PowerAction action = PowerAction.Shutdown) =>
+        ShowOnce(action == PowerAction.Restart ? "reiniciar" : "desligar", targets,
+            () => new PowerWindow(targets, _masterCertificate, action) { Owner = this });
+
+    // For the whole room, whichever machines are in it.
     private void OnScheduleClicked(object sender, RoutedEventArgs e) =>
-        new ScheduleWindow(
+        ShowOnce("agendar", Array.Empty<KnownMachine>(), () => new ScheduleWindow(
             () => _tiles.Select(tile => tile.Machine).ToList(), Volatile.Read(ref _powerSchedule), _masterCertificate,
             schedule => Volatile.Write(ref _powerSchedule, schedule))
         {
             Owner = this,
-        }.Show();
+        });
 
+    // One click, no window: turning machines on can't hurt (one already on
+    // ignores the request), so it goes out at once.
     private void OnWakeClassClicked(object sender, RoutedEventArgs e)
     {
         if (_tiles.Count == 0)
@@ -235,18 +518,34 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para ligar.";
             return;
         }
-        new WakeWindow(() => _tiles.Select(tile => tile.Machine).ToList(), $"Na turma toda ({_tiles.Count} máquinas)")
-        {
-            Owner = this,
-        }.Show();
+        Wake(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnWakeMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            new WakeWindow(() => new[] { tile.Machine }, $"Em: {tile.Name}") { Owner = this }.Show();
+            Wake(new[] { tile.Machine });
         }
+    }
+
+    // Over the network (Wake-on-LAN), to every machine whose network card
+    // the Master has learned (RememberMacAddress); the status bar says who.
+    private async void Wake(IReadOnlyList<KnownMachine> machines)
+    {
+        var known = machines
+            .Select(machine => (machine.Name, MacAddress: WakeOnLan.TryParseMacAddress(machine.MacAddress, out var mac) ? mac : null))
+            .ToList();
+        var toWake = known.Where(machine => machine.MacAddress is not null).ToList();
+        var unknown = known.Where(machine => machine.MacAddress is null).Select(machine => machine.Name).ToList();
+
+        StatusTextBlock.Text = "Enviando o pedido para ligar...";
+        var (sent, lastError) = toWake.Count == 0
+            ? (0, null)
+            : await Task.Run(() => WakeOnLanSender.Send(
+                toWake.Select(machine => machine.MacAddress!).ToList(),
+                WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks())));
+        StatusTextBlock.Text = WakeText.Summary(toWake.Select(machine => machine.Name).ToList(), unknown, sent > 0, lastError);
     }
 
     // From a tile's poller, once per Master start. Only written to disk when
@@ -265,7 +564,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"A placa de rede de {tile.Name} não pôde ser gravada na lista da sala: {ex.Message}";
+            StatusTextBlock.Text = $"A placa de rede de {tile.Name} não pôde ser gravada na lista da sala: {ErrorText.Describe(ex)}";
         }
     }
 
@@ -289,7 +588,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets) =>
-        new SendMessageWindow(targets, _masterCertificate) { Owner = this }.Show();
+        ShowOnce("mensagem", targets, () => new SendMessageWindow(targets, _masterCertificate) { Owner = this });
 
     private void OnEditMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -300,10 +599,38 @@ public partial class MainWindow : Window
     }
 
     private void OpenAddMachineWindow(KnownMachine? existing) =>
-        new AddMachineWindow(_masterCertificate, SaveMachine, existing) { Owner = this }.Show();
+        ShowOnce("avancado", existing is null ? Array.Empty<KnownMachine>() : new[] { existing },
+            () => new AddMachineWindow(_masterCertificate, SaveMachine, existing) { Owner = this });
 
-    private void OnLabInstallClicked(object sender, RoutedEventArgs e) =>
-        new LabInstallWindow(_masterCertificate, ImportMachines, () => _tiles.Select(tile => tile.Machine).ToList()) { Owner = this }.Show();
+    private MachinesWindow? _machinesWindow;
+
+    private void OnMachinesClicked(object sender, RoutedEventArgs e) => OpenMachinesWindow(search: false);
+
+    private void OnSearchNetworkClicked(object sender, RoutedEventArgs e) => OpenMachinesWindow(search: true);
+
+    // One at a time: asking again brings it to the front.
+    private async void OpenMachinesWindow(bool search)
+    {
+        var window = _machinesWindow;
+        if (window is null)
+        {
+            window = new MachinesWindow(
+                _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddresses,
+                () => OpenAddMachineWindow(existing: null)) { Owner = this };
+            window.Closed += (_, _) => _machinesWindow = null;
+            _machinesWindow = window;
+            window.Show();
+        }
+        else
+        {
+            window.Activate();
+        }
+
+        if (search)
+        {
+            await window.SearchAsync();
+        }
+    }
 
     private void OnRemoveMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -312,15 +639,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var answer = MessageBox.Show(this, $"Remover \"{tile.Name}\" da lista da sala?", "Midview",
-            MessageBoxButton.YesNo, MessageBoxImage.Question);
-        if (answer != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
-        // Gone already if a save from an AddMachineWindow replaced it while
-        // the confirmation was open.
+        // Gone already if a save from an AddMachineWindow replaced it.
         var index = _tiles.IndexOf(tile);
         if (index < 0)
         {
@@ -335,7 +654,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"Removida da grade, mas a lista não pôde ser gravada em disco: {ex.Message}";
+            StatusTextBlock.Text = $"Removida da grade, mas a lista não pôde ser gravada em disco: {ErrorText.Describe(ex)}";
         }
     }
 
@@ -364,41 +683,36 @@ public partial class MainWindow : Window
         SaveRoster();
     }
 
-    // Called by LabInstallWindow. As in SaveMachine, the same name means the
-    // same machine: it's replaced in place, and new ones go at the end. The
-    // file is written once for the whole import; a failure to write it
-    // propagates for LabInstallWindow to report.
-    private (int Added, int Updated, int Unchanged) ImportMachines(IReadOnlyList<KnownMachine> machines)
+    // Called by MachinesWindow when a pairing is confirmed (see Roster.Place).
+    // The grid changes first; a failure to write the list then propagates
+    // for MachinesWindow to report.
+    private void AddPairedMachine(KnownMachine machine)
     {
-        int added = 0, updated = 0, unchanged = 0;
-        foreach (var imported in machines)
+        var (index, replaces, placed) = Roster.Place(_tiles.Select(tile => tile.Machine).ToList(), machine);
+        if (replaces)
         {
-            var index = _tiles.ToList().FindIndex(tile =>
-                string.Equals(tile.Machine.Name, imported.Name, StringComparison.OrdinalIgnoreCase));
-            if (index < 0)
-            {
-                InsertTile(_tiles.Count, imported);
-                added++;
-                continue;
-            }
-
-            // A machine file from an older installer has no network card.
-            var machine = imported.KeepingMacAddressOf(_tiles[index].Machine);
-            if (_tiles[index].Machine == machine)
-            {
-                unchanged++;
-            }
-            else
-            {
-                RemoveTileAt(index);
-                InsertTile(index, machine);
-                updated++;
-            }
+            RemoveTileAt(index);
         }
-
+        InsertTile(index, placed);
         UpdateEmptyHint();
         SaveRoster();
-        return (added, updated, unchanged);
+    }
+
+    // Called by MachinesWindow after a search: machines found at another
+    // address (see Roster.NewAddresses). Returns how many moved.
+    private int RefreshAddresses(IReadOnlyList<FoundMachine> found)
+    {
+        var changes = Roster.NewAddresses(_tiles.Select(tile => tile.Machine).ToList(), found);
+        foreach (var (index, updated) in changes)
+        {
+            RemoveTileAt(index);
+            InsertTile(index, updated);
+        }
+        if (changes.Count > 0)
+        {
+            SaveRoster();
+        }
+        return changes.Count;
     }
 
     // Never keeps Master from starting: at worst the grid starts empty and
@@ -417,7 +731,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"A lista da sala não pôde ser lida: {ex.Message}";
+            StatusTextBlock.Text = $"A lista da sala não pôde ser lida: {ErrorText.Describe(ex)}";
             return new List<KnownMachine>();
         }
     }
@@ -430,7 +744,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O agendamento de ligar e desligar não pôde ser lido: {ex.Message}";
+            StatusTextBlock.Text = $"O agendamento de ligar e desligar não pôde ser lido: {ErrorText.Describe(ex)}";
             return null;
         }
     }
@@ -475,6 +789,11 @@ public partial class MainWindow : Window
     private void RemoveTileAt(int index)
     {
         var tile = _tiles[index];
+        if (tile == _selectedTile)
+        {
+            Select(null);
+        }
+        UnlockScreen(tile);
         _tiles.RemoveAt(index);
         if (_pollers.Remove(tile, out var poller))
         {
@@ -512,10 +831,17 @@ public partial class MainWindow : Window
     }
 
     private void UpdateEmptyHint() =>
-        EmptyRosterTextBlock.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyRosterPanel.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
+        // Closing the teacher's program unlocks every screen it locked.
+        foreach (var keeper in _screenLocks.Values)
+        {
+            keeper.Dispose();
+        }
+        _screenLocks.Clear();
+
         foreach (var poller in _pollers.Values)
         {
             poller.Dispose();

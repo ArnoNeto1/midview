@@ -19,11 +19,25 @@ public sealed class AdministratorTheoryAttribute : TheoryAttribute
     public AdministratorTheoryAttribute() => Skip = AdministratorRights.SkipReason;
 }
 
+// The other way round: for a test of what a student, who isn't an
+// administrator, runs into. An administrator can always get past it, so run
+// as one (as on GitHub Actions) it's skipped, saying why.
+public sealed class NotAdministratorFactAttribute : FactAttribute
+{
+    public NotAdministratorFactAttribute() =>
+        Skip = AdministratorRights.IsAdministrator
+            ? "verifica o que um aluno sem administrador vê: rode os testes num terminal comum"
+            : null;
+}
+
 internal static class AdministratorRights
 {
+    public static bool IsAdministrator =>
+        OperatingSystem.IsWindows() && new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+
     public static string? SkipReason =>
         !OperatingSystem.IsWindows()
-        || new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator)
+        || IsAdministrator
         || Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true"
             ? null
             : "precisa de direitos de administrador: rode os testes num terminal aberto como administrador";

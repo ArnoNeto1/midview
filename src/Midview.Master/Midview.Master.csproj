@@ -4,8 +4,14 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The Midview logo; made by assets\gerar-icone.py. -->
+    <ApplicationIcon>..\..\assets\midview.ico</ApplicationIcon>
     <UseWPF>true</UseWPF>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The logo's pieces for the opening (SplashWindow); made by assets\gerar-animacao.py. -->
+    <Resource Include="..\..\assets\animacao\*.png" Link="Animacao\%(Filename)%(Extension)" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>

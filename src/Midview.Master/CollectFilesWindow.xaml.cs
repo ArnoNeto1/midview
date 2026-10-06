@@ -74,6 +74,53 @@ public partial class CollectFilesWindow : Window
         CollectButton.IsEnabled = true;
     }
 
+    // Empties every chosen student's folder at once, into their Recycle Bin,
+    // where the files can still be recovered.
+    private async void OnClearStudentsClicked(object sender, RoutedEventArgs e)
+    {
+        ClearStudentsButton.IsEnabled = false;
+        ResultTextBlock.Text = string.Empty;
+        ProgressTextBlock.Text = "Esvaziando as pastas dos alunos...";
+
+        // All machines at once: it's one short command each.
+        var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => ClearOn(machine))));
+
+        var failures = results.Count(result => !result.Succeeded);
+        ProgressTextBlock.Text = failures == 0
+            ? "Pastas dos alunos esvaziadas."
+            : $"Esvaziadas em {results.Length - failures} de {results.Length}.";
+        ResultTextBlock.Text = string.Join("\n", results.Select(result =>
+            $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
+        ClearStudentsButton.IsEnabled = true;
+    }
+
+    private (string Name, bool Succeeded, string Detail) ClearOn(KnownMachine machine)
+    {
+        try
+        {
+            var (succeeded, detail) = CommandClient.SendCommandForResult(
+                machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate,
+                MessageType.ClearDeliveryFolder, Array.Empty<byte>());
+            return (machine.Name, succeeded, detail);
+        }
+        catch (Exception ex)
+        {
+            return (machine.Name, false, FailureText.Describe(ex));
+        }
+    }
+
+    // Into this PC's Recycle Bin, where it can still be recovered.
+    private void OnClearCollectedClicked(object sender, RoutedEventArgs e)
+    {
+        var (recycled, problems) = CollectedFiles.RecycleAll(CollectionsDirectory, new WindowsRecycleBin());
+        ProgressTextBlock.Text = recycled == 0 && problems.Count == 0
+            ? "Não havia nada recolhido neste PC."
+            : $"{recycled} recolhimento(s) foram para a Lixeira deste PC.";
+        ResultTextBlock.Text = problems.Count == 0 ? string.Empty : $"Não saíram: {string.Join(", ", problems)}";
+        _lastCollectionDirectory = null;
+        OpenFolderButton.IsEnabled = false;
+    }
+
     private void OnOpenFolderClicked(object sender, RoutedEventArgs e)
     {
         if (_lastCollectionDirectory is { } directory && Directory.Exists(directory))

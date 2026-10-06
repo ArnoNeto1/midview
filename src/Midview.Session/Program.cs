@@ -11,6 +11,24 @@ using Midview.Session;
 System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
 System.Windows.Forms.Application.EnableVisualStyles(); // for the teacher-message and chat windows
 
+// Started by the Agent to show a pairing code (see PairingCodeWindow): only
+// the window, never a second server.
+if (PairingCodeArguments.Parse(args) is { } pairing)
+{
+    PairingCodeWindow.Run(pairing.Code, pairing.TeacherName);
+    return;
+}
+
+// Started by the Agent while a shutdown or restart is on its way: the
+// countdown banner only. Its last words stay up until Windows shuts down
+// (or the Agent ends it, when the teacher cancels).
+if (CountdownArguments.Parse(args) is { } countdown)
+{
+    var (running, done) = CountdownText.Power(countdown.Kind);
+    CountdownBanner.Run(running, done, TimeSpan.FromSeconds(countdown.Seconds), linger: TimeSpan.FromMinutes(10));
+    return;
+}
+
 // Created by the Agent on its first start (Session, as a standard user,
 // can't write there itself), so the thumbprint the teacher registered stays
 // the same across restarts and reboots. The Agent also logs it to
@@ -28,27 +46,20 @@ else
 }
 Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
-// Reuses the same trusted-masters.json the Agent already reads for
-// site-blocking commands -- one registration per machine covers both, so
-// the teacher never has to pass a thumbprint by hand again after the first
-// setup. A command-line argument is still accepted for one-off manual
-// testing without touching that shared file.
+// trusted-masters.json: the teachers this machine trusts, written by the
+// Agent when a teacher pairs and read again whenever it changes, so a
+// teacher who pairs is accepted on their next connection. With no teacher
+// yet, Session still runs and refuses everyone: pairing goes through the
+// Agent. A thumbprint on the command line is still accepted for one-off
+// manual testing.
 var trustedMastersPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
     "Midview", "trusted-masters.json");
-var trustedMasters = args.Length > 0 ? new[] { args[0] } : TrustedMastersFile.Load(trustedMastersPath);
-if (trustedMasters.Count == 0)
+var masterTrustStore = args.Length > 0 ? new TrustStore(new[] { args[0] }) : TrustStore.FromFile(trustedMastersPath);
+if (masterTrustStore.Count == 0)
 {
-    throw new InvalidOperationException(
-        $"No trusted MidviewMaster found. Add its certificate thumbprint to {trustedMastersPath} " +
-        "(the same file the Agent uses), e.g. [\"<thumbprint>\"], or pass it as a command-line argument.");
+    Console.WriteLine($"No teacher has paired with this machine yet ({trustedMastersPath}): refusing every connection until one does.");
 }
-
-// The input lock itself is applied by the Agent, which re-enables the
-// devices whenever this process's connection to it closes and whenever it
-// starts at boot -- a crash, kill or power cut mid-lock can't leave them
-// disabled, and Session has nothing to clean up at startup.
-using var inputDeviceController = new AgentInputDeviceController();
 
 // The student's "Entregar ao professor" folder, created at login so it's
 // there to put work into before the teacher collects it.
@@ -58,15 +69,26 @@ deliveryFolder.TryCreate();
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
-    new TrustStore(trustedMasters),
+    masterTrustStore,
     new GdiScreenCapture(),
     new SendInputInjector(),
-    new InputLockManager(inputDeviceController, new SystemClock(), TimeSpan.FromSeconds(5)),
+    // The keyboard and mouse are locked by swallowing physical input in this
+    // process, never by disabling the devices: on the lab's PS/2 machines
+    // Windows applies some of those changes only after a restart, which
+    // left a mouse disabled until the machine was restarted. Whatever ends
+    // this process -- a crash, a kill, logging off -- ends the lock with it.
+    new InputLockManager(new LowLevelInputBlocker(), new SystemClock(), TimeSpan.FromSeconds(5), new WinFormsControlNotice()),
     new WinFormsMessageDisplay(),
     new WinFormsChatWindows(),
     new FileInbox(FileInbox.DefaultDirectory),
     new WindowsAppCloser(),
     deliveryFolder,
-    new WindowsOpenPrograms());
+    new WindowsOpenPrograms(),
+    new WinFormsScreenLock(),
+    new WindowsFileOpener(),
+    new WindowsRecycleBin(),
+    new WinFormsCountdownNotice(),
+    new WindowsWebsiteOpener(),
+    new WindowsProgramStarter());
 
 server.Run(CancellationToken.None);

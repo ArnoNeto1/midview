@@ -5,8 +5,9 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// The student program to push over the network (NetworkUpdate): the
-// package's programa\aluno, exactly the files its midview-build.json lists
+// The student program to push over the network (NetworkUpdate): a folder
+// with it (the one the setup installs next to the Master, see
+// BundledStudentFolder), exactly the files its midview-build.json lists
 // plus the manifest itself, zipped into a temporary file that goes away
 // with this object.
 public sealed class UpdatePackage : IDisposable
@@ -27,15 +28,17 @@ public sealed class UpdatePackage : IDisposable
     public long UncompressedSize { get; }
     public long ZipSize => new FileInfo(ZipPath).Length;
 
-    public static string StudentProgramFolder(string packageDirectory) =>
-        Path.Combine(packageDirectory, "programa", "aluno");
+    // The student program the setup installs next to the Master
+    // ("C:\Program Files\Midview Professor\aluno"): what "Atualizar as
+    // máquinas" sends. Missing in a development build.
+    public static string BundledStudentFolder => Path.Combine(AppContext.BaseDirectory, "aluno");
 
     // Just what identifies it, without zipping: for showing and comparing.
-    // InvalidDataException, with the teacher's wording, for a package that
+    // InvalidDataException, with the teacher's wording, for a program that
     // can't be pushed.
-    public static (BuildManifest Manifest, byte[] Fingerprint) Identify(string packageDirectory)
+    public static (BuildManifest Manifest, byte[] Fingerprint) Identify(string studentFolder)
     {
-        var folder = StudentProgramFolder(packageDirectory);
+        var folder = studentFolder;
         BuildManifest manifest;
         try
         {
@@ -44,18 +47,18 @@ public sealed class UpdatePackage : IDisposable
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             throw new InvalidDataException(
-                "Este pacote é antigo demais para atualizar pela rede (não tem midview-build.json): gere de novo com o Gerar-Pacote atual.", ex);
+                "Este programa do aluno é antigo demais para atualizar pela rede (não tem midview-build.json): instale de novo com o Midview-Instalador atual.", ex);
         }
 
         if (manifest.UpdateProtocol < NetworkUpdate.ProtocolVersion)
         {
-            throw new InvalidDataException("Este pacote é antigo demais para atualizar pela rede: gere de novo com o Gerar-Pacote atual.");
+            throw new InvalidDataException("Este programa do aluno é antigo demais para atualizar pela rede: instale de novo com o Midview-Instalador atual.");
         }
         var missing = NetworkUpdate.RequiredFiles
             .FirstOrDefault(required => !manifest.Files.Contains(required, StringComparer.OrdinalIgnoreCase));
         if (missing is not null)
         {
-            throw new InvalidDataException($"O pacote não tem {missing}.");
+            throw new InvalidDataException($"O programa do aluno não tem {missing}.");
         }
 
         try
@@ -64,14 +67,14 @@ public sealed class UpdatePackage : IDisposable
         }
         catch (FileNotFoundException ex)
         {
-            throw new InvalidDataException($"O pacote está incompleto: {ex.Message}.", ex);
+            throw new InvalidDataException($"O programa do aluno está incompleto: {ErrorText.Describe(ex)}.", ex);
         }
     }
 
-    public static UpdatePackage Create(string packageDirectory, string tempDirectory)
+    public static UpdatePackage Create(string studentFolder, string tempDirectory)
     {
-        var (manifest, fingerprint) = Identify(packageDirectory);
-        var folder = StudentProgramFolder(packageDirectory);
+        var (manifest, fingerprint) = Identify(studentFolder);
+        var folder = studentFolder;
         Directory.CreateDirectory(tempDirectory);
         var zipPath = Path.Combine(tempDirectory, $"midview-update-{Guid.NewGuid():N}.zip");
         long uncompressed = 0;

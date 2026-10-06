@@ -6,6 +6,42 @@ using Xunit;
 public class FileSenderTests
 {
     [Fact]
+    public async Task Send_WithOverwrite_ReplacesTheCopyAlreadyThere()
+    {
+        using var masterCertificate = SelfSignedCertificate.Create("master-under-test");
+        using var sessionCertificate = SelfSignedCertificate.Create("session-under-test");
+        var inboxDirectory = Path.Combine(Path.GetTempPath(), $"midview-inbox-{Guid.NewGuid():N}");
+        var sourcePath = Path.Combine(Path.GetTempPath(), $"midview-source-{Guid.NewGuid():N}", "notas.pdf");
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+        File.WriteAllBytes(sourcePath, new byte[] { 1 });
+        try
+        {
+            using var session = new ThumbnailPollerTests.LoopbackSession(
+                0, sessionCertificate, masterCertificate, fileInbox: new FileInbox(inboxDirectory));
+            var machine = new KnownMachine("Aluno-1", "127.0.0.1", sessionCertificate.Thumbprint, null);
+            var replace = new SendFileOptions(true, AfterSend.Nothing);
+
+            await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, replace, session.Port))
+                .WaitAsync(TimeSpan.FromSeconds(20));
+            File.WriteAllBytes(sourcePath, new byte[] { 2 });
+            var second = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, replace, session.Port))
+                .WaitAsync(TimeSpan.FromSeconds(20));
+
+            Assert.Equal((true, "notas.pdf (substituiu o anterior)"), second);
+            Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(Path.Combine(inboxDirectory, "notas.pdf")));
+            Assert.Single(Directory.GetFiles(inboxDirectory));
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(sourcePath)!, recursive: true);
+            if (Directory.Exists(inboxDirectory))
+            {
+                Directory.Delete(inboxDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Send_ArrivesIdentical_AndASecondCopyGetsItsOwnName()
     {
         using var masterCertificate = SelfSignedCertificate.Create("master-under-test");
@@ -22,9 +58,9 @@ public class FileSenderTests
                 0, sessionCertificate, masterCertificate, fileInbox: new FileInbox(inboxDirectory));
             var machine = new KnownMachine("Aluno-1", "127.0.0.1", sessionCertificate.Thumbprint, null);
 
-            var first = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, session.Port))
+            var first = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, port: session.Port))
                 .WaitAsync(TimeSpan.FromSeconds(20));
-            var second = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, session.Port))
+            var second = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, port: session.Port))
                 .WaitAsync(TimeSpan.FromSeconds(20));
 
             Assert.Equal((true, "Lista de exercícios.pdf"), first);
@@ -53,7 +89,7 @@ public class FileSenderTests
             using var session = new ThumbnailPollerTests.LoopbackSession(0, sessionCertificate, masterCertificate);
             var machine = new KnownMachine("Aluno-1", "127.0.0.1", sessionCertificate.Thumbprint, null);
 
-            var (saved, detail) = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, session.Port))
+            var (saved, detail) = await Task.Run(() => FileSender.Send(machine, masterCertificate, sourcePath, port: session.Port))
                 .WaitAsync(TimeSpan.FromSeconds(20));
 
             Assert.False(saved);

@@ -29,6 +29,34 @@ public static class FileTransfer
         return header;
     }
 
+    // SendFileWithOptions payload: overwrite (one byte, 0 or 1), the
+    // AfterSend action (one byte), then a SendFile header. Its own message
+    // type, so a Session from before the options never mistakes it for a
+    // file with a mangled name.
+    public static byte[] EncodeOptionsHeader(SendFileOptions options, string fileName, long size)
+    {
+        var header = EncodeHeader(fileName, size);
+        var payload = new byte[2 + header.Length];
+        payload[0] = (byte)(options.Overwrite ? 1 : 0);
+        payload[1] = (byte)options.AfterSend;
+        header.CopyTo(payload, 2);
+        return payload;
+    }
+
+    public static bool TryDecodeOptionsHeader(byte[] payload, out SendFileOptions options, out string fileName, out long size)
+    {
+        options = SendFileOptions.Default;
+        fileName = string.Empty;
+        size = 0;
+        if (payload.Length < 2 || payload[0] > 1 || !Enum.IsDefined((AfterSend)payload[1]))
+        {
+            return false;
+        }
+
+        options = new SendFileOptions(payload[0] == 1, (AfterSend)payload[1]);
+        return TryDecodeHeader(payload[2..], out fileName, out size);
+    }
+
     public static bool TryDecodeHeader(byte[] payload, out string fileName, out long size)
     {
         fileName = string.Empty;

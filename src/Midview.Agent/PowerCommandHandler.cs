@@ -3,7 +3,8 @@ using Midview.Protocol;
 namespace Midview.Agent;
 
 // The shutdown.exe arguments for each power command. With a delay, Windows
-// shows the logged-in student a countdown with the comment below; when it
+// shows the logged-in student the comment below (the countdown the student
+// actually watches is Midview's banner, see ICountdownDisplay); when it
 // ends, open programs are closed without saving (/f) -- otherwise one
 // unsaved document would keep an unattended lab machine on all night.
 public static class ShutdownCommands
@@ -51,13 +52,15 @@ public sealed class PowerCommandHandler
 
     private readonly Func<string[], int> _runShutdown;
     private readonly Func<DateTime> _utcNow;
+    private readonly ICountdownDisplay? _countdown;
     private readonly object _gate = new();
     private DateTime? _pendingUntil;
 
-    public PowerCommandHandler(Func<string[], int> runShutdown, Func<DateTime>? utcNow = null)
+    public PowerCommandHandler(Func<string[], int> runShutdown, Func<DateTime>? utcNow = null, ICountdownDisplay? countdown = null)
     {
         _runShutdown = runShutdown;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        _countdown = countdown;
     }
 
     // A shutdown or restart this Agent started is still counting down.
@@ -84,7 +87,7 @@ public sealed class PowerCommandHandler
         catch (Exception ex)
         {
             AgentLog.Warn($"Running shutdown.exe failed: {ex.Message}");
-            return (false, $"não foi possível executar o shutdown.exe: {ex.Message}");
+            return (false, $"não foi possível executar o shutdown.exe: {ErrorText.Describe(ex)}");
         }
 
         lock (_gate)
@@ -92,10 +95,15 @@ public sealed class PowerCommandHandler
             if (action == PowerAction.Cancel && exitCode is 0 or NoShutdownInProgress)
             {
                 _pendingUntil = null;
+                _countdown?.Close();
             }
             else if (action != PowerAction.Cancel && exitCode == 0)
             {
                 _pendingUntil = _utcNow() + TimeSpan.FromSeconds(delaySeconds) + PendingMargin;
+                if (delaySeconds > 0)
+                {
+                    _countdown?.Show(action == PowerAction.Restart ? PowerCountdown.Restart : PowerCountdown.Shutdown, delaySeconds);
+                }
             }
         }
 

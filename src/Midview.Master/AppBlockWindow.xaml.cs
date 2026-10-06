@@ -276,38 +276,11 @@ public partial class AppBlockWindow : Window
             return;
         }
 
-        var where = _targets.Count == 1 ? _targets[0].Name : $"as {_targets.Count} máquinas da turma";
-        var replaces = _states.Any(state => state.Status is { Policy.IsActive: true })
-            ? "\n\nIsso substitui o bloqueio que já está valendo."
-            : string.Empty;
-        var question = mode == AppBlockMode.AllowOnly
-            ? $"Permitir só {programs.Count} programa(s) em {where}?\n\n"
-              + "Todo o resto que o aluno abrir é fechado na hora, e o que já estiver aberto também (trabalho não salvo é perdido). "
-              + "O Windows e o Midview continuam funcionando; o Prompt de Comando e o PowerShell também são fechados, a menos que estejam na lista.\n\n"
-              + "Atenção: alguns programas usam processos auxiliares sem janela (o Terminal do Windows usa o OpenConsole.exe, por exemplo), "
-              + "e os aplicativos da Microsoft Store (Calculadora, Fotos) não aparecem na lista. Se algo fechar sozinho, "
-              + "digite também o nome do arquivo auxiliar. Teste antes em uma máquina."
-              + replaces
-            : $"Bloquear {programs.Count} programa(s) em {where}?\n\nSe estiverem abertos, são fechados (trabalho não salvo é perdido)."
-              + replaces;
-        if (MessageBox.Show(this, question, "Midview", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
         await ApplyAsync(new AppBlockPolicy(NextSavedAt(), mode, programs));
     }
 
-    private async void OnLiftClicked(object sender, RoutedEventArgs e)
-    {
-        var where = _targets.Count == 1 ? _targets[0].Name : $"as {_targets.Count} máquinas da turma";
-        if (MessageBox.Show(this, $"Liberar todos os programas em {where}?", "Midview",
-                MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes)
-        {
-            return;
-        }
+    private async void OnLiftClicked(object sender, RoutedEventArgs e) =>
         await ApplyAsync(AppBlockPolicy.Lifted(NextSavedAt()));
-    }
 
     // Newer than any block a machine reported, so it wins even when this PC's
     // clock is behind another teacher's.

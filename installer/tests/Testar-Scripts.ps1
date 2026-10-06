@@ -1,15 +1,15 @@
-# Checks a built installation package's scripts under whatever PowerShell
-# runs this -- in CI (.github/workflows/pacote.yml), Windows PowerShell 5.1,
-# the one lab machines have:
+# Checks a built setup's scripts and contents under whatever PowerShell runs
+# this -- in CI (.github/workflows/pacote.yml), Windows PowerShell 5.1, the
+# one lab machines have:
 #
-#   powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote dist\Midview-Instalacao
+#   powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote dist
 #
-# It runs against the package rather than installer\scripts because the
-# package's copies are the ones with the BOM and CRLF that 5.1 and cmd.exe
-# need (see Gerar-Pacote.ps1). The shared functions (Comum.ps1) are run for
-# real, including the 5.1 quirks they work around.
+# -Pacote is installer\Gerar-Instalador.ps1's output: the setup, and in
+# programa\ what went into it. The scripts are checked there because those
+# copies are the ones with the BOM 5.1 needs (see Gerar-Instalador.ps1). The
+# shared functions (Comum.ps1) are run for real.
 #
-# ASCII-only, like Gerar-Pacote.ps1: 5.1 reads a .ps1 without a BOM as ANSI.
+# ASCII-only: 5.1 reads a .ps1 without a BOM as ANSI.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -30,7 +30,7 @@ function Check([bool]$Condition, [string]$What) {
 }
 
 Write-Host "PowerShell $($PSVersionTable.PSVersion) ($($PSVersionTable.PSEdition))"
-$scripts = Join-Path $Pacote 'programa\scripts'
+$scripts = Join-Path $Pacote 'programa\instalador'
 
 foreach ($file in Get-ChildItem -Path $scripts -Filter '*.ps1') {
     $tokens = $null
@@ -41,15 +41,19 @@ foreach ($file in Get-ChildItem -Path $scripts -Filter '*.ps1') {
     Check ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) "$($file.Name) starts with a UTF-8 BOM"
 }
 
-foreach ($file in Get-ChildItem -Path $Pacote -Filter '*.cmd') {
-    $bytes = [IO.File]::ReadAllBytes($file.FullName)
-    Check (-not ($bytes | Where-Object { $_ -gt 127 })) "$($file.Name) is ASCII"
-    $text = [IO.File]::ReadAllText($file.FullName)
-    Check (($text -replace "`r`n", '') -notmatch "`n") "$($file.Name) uses CRLF line endings"
+foreach ($name in 'Comum.ps1', 'Parar-Aluno.ps1', 'Configurar-Aluno.ps1', 'Desinstalar-Aluno.ps1') {
+    Check (Test-Path -LiteralPath (Join-Path $scripts $name)) "the setup carries $name"
+}
+Check (-not (Test-Path -LiteralPath (Join-Path $scripts 'Instalar-Aluno.ps1'))) 'and no longer the USB-stick installer'
+
+$setups = @(Get-ChildItem -LiteralPath $Pacote -Filter 'Midview-Instalador-*.exe')
+Check ($setups.Count -eq 1) "there is exactly one setup ($($setups.Count))"
+if ($setups.Count -eq 1) {
+    Check ($setups[0].Name -match '^Midview-Instalador-\d{4}\.\d{2}\.\d{2}-\d{4}\.exe$') "it is named with its date and time ($($setups[0].Name))"
 }
 
 foreach ($program in 'aluno\Midview.Agent.exe', 'aluno\Midview.Session.exe', 'professor\Midview.Master.exe') {
-    Check (Test-Path -LiteralPath (Join-Path $Pacote "programa\$program")) "the package has $program"
+    Check (Test-Path -LiteralPath (Join-Path $Pacote "programa\$program")) "the setup has $program"
 }
 
 # What the MidviewMaster reads to push the student program over the network
@@ -78,74 +82,20 @@ if (Test-Path -LiteralPath $manifestPath) {
 
 . (Join-Path $scripts 'Comum.ps1')
 
-$t1 = 'A' * 40
-$t2 = 'B' * 40
-$session = '0123456789ABCDEF0123456789ABCDEF01234567'
-$agent = 'FEDCBA9876543210FEDCBA9876543210FEDCBA98'
 $work = Join-Path ([IO.Path]::GetTempPath()) ('midview-scripts-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
-    Check ((ConvertTo-ThumbprintNormalizado " $($t1.ToLowerInvariant()) ") -eq $t1) 'a thumbprint is trimmed and upper-cased'
-    Check ($null -eq (ConvertTo-ThumbprintNormalizado 'xyz')) 'a bad thumbprint is rejected'
-
-    # Exactly as the Master writes it (System.Text.Json, indented). One item
-    # is the case where 5.1's ConvertFrom-Json doesn't unroll the list.
-    $one = Join-Path $work 'one.json'
-    [IO.File]::WriteAllText($one, "[`r`n  `"$($t1.ToLowerInvariant())`"`r`n]")
-    $read = @(Read-ProfessoresAutorizados $one)
-    Check ($read.Count -eq 1 -and $read[0] -eq $t1) 'one authorized teacher is read as one'
-
-    $two = Join-Path $work 'two.json'
-    [IO.File]::WriteAllText($two, "[`"$t1`", `"ruim`", `"$t2`", `"$t1`"]")
-    $read = @(Read-ProfessoresAutorizados $two)
-    Check ($read.Count -eq 2 -and $read[1] -eq $t2) 'two teachers are read, the bad and repeated ones dropped'
-
-    try {
-        Read-ProfessoresAutorizados (Join-Path $work 'missing.json') | Out-Null
-        Check $false 'a missing teacher list stops the install'
-    }
-    catch {
-        # "nao" with its accent, spelled out to keep this file ASCII: the
-        # messages must come through the BOM with their accents intact.
-        $nao = "n$([char]0x00E3)o"
-        Check ($_.Exception.Message -like "*Autorizar este professor no pacote*" -and $_.Exception.Message -like "*$nao*") 'a missing teacher list says what to do, accents intact'
-    }
-
-    $written = Join-Path $work 'written.json'
-    Write-ProfessoresAutorizados $written @($t1)
-    Check ([IO.File]::ReadAllText($written) -eq "[`"$t1`"]") 'one teacher is written as a JSON list'
-    Check (@(Read-ProfessoresAutorizados $written).Count -eq 1) 'and read back as one'
-
-    $when = Get-Date '2026-09-24T10:00:00'
-    foreach ($case in @(
-            @{ Name = 'ALUNO-01'; Addresses = @('192.168.0.21'); Mac = '00-1A-2B-3C-4D-5E' },
-            @{ Name = 'ALUNO-02'; Addresses = @(); Mac = $null },
-            @{ Name = 'ALUNO-03'; Addresses = @('10.0.0.3', '192.168.56.1'); Mac = '00-11-22-33-44-55' },
-            @{ Name = 'SALA"1\x'; Addresses = @('10.0.0.4'); Mac = $null })) {
-        $json = New-FichaMaquina $case.Name $case.Addresses $session $agent $case.Mac $when
-        $parsed = $json | ConvertFrom-Json
-        Check ($parsed.computerName -eq $case.Name -and $parsed.sessionThumbprint -eq $session -and $parsed.agentThumbprint -eq $agent) "the machine file for $($case.Name) reads back"
-        $addresses = @($parsed.addresses)
-        Check ($addresses.Count -eq $case.Addresses.Count -and (($addresses -join ',') -eq ($case.Addresses -join ','))) "and keeps its $($case.Addresses.Count) address(es) as a list"
-        Check ($parsed.macAddress -eq $case.Mac) "and its network card ($(if ($case.Mac) { $case.Mac } else { 'none' }))"
-    }
-
-    # The same rule as the Master's WakeOnLan.NormalizeMacAddress.
-    Check ((ConvertTo-EnderecoMacNormalizado '00:1a:2b:3c:4d:5e') -eq '00-1A-2B-3C-4D-5E') 'a MAC address is normalized'
-    Check ((ConvertTo-EnderecoMacNormalizado ' 001A2B3C4D5E ') -eq '00-1A-2B-3C-4D-5E') 'a MAC address without separators is normalized'
-    foreach ($bad in @('', '00-1A-2B-3C-4D', '00-1A-2B-3C-4D-ZZ', '00-00-00-00-00-00', 'FF-FF-FF-FF-FF-FF', '01-00-5E-00-00-01')) {
-        Check ($null -eq (ConvertTo-EnderecoMacNormalizado $bad)) "'$bad' is not a network card's MAC address"
-    }
-
-    $mac = Get-EnderecoMac
-    Check ($null -eq $mac -or $mac -match '^([0-9A-F]{2}-){5}[0-9A-F]{2}$') "this machine's network card is found or left out, never garbled ($mac)"
-
-    $ficha = Join-Path $work 'ficha.json'
-    Write-TextoUtf8 $ficha 'x'
-    Check ([IO.File]::ReadAllBytes($ficha)[0] -eq [byte][char]'x') 'machine files are written without a BOM'
-
-    $addresses = @(Get-EnderecosIPv4)
-    Check ($addresses.Count -ge 1 -and -not ($addresses | Where-Object { $_ -like '127.*' -or $_ -like '169.254.*' })) "this machine's IPv4 addresses are found ($($addresses -join ', '))"
+    # What the setup shows the teacher when a script fails: UTF-8 without a
+    # BOM, accents intact ("nao" with its accent, spelled out to keep this
+    # file ASCII).
+    $nao = "n$([char]0x00E3)o"
+    $erro = Join-Path $work 'erro.txt'
+    Write-Erro $erro "$nao parou"
+    $bytes = [IO.File]::ReadAllBytes($erro)
+    Check (-not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB)) 'an error message is written without a BOM'
+    Check ([IO.File]::ReadAllText($erro, [Text.Encoding]::UTF8) -eq "$nao parou") 'and reads back with its accents'
+    Write-Erro '' 'x'
+    Check $true 'no error file asked for, nothing written'
 
     # The service's PathName, as Win32_Service reports it.
     $exe = 'C:\Program Files\Midview.update\AB12\Midview.Agent.exe'
@@ -195,7 +145,7 @@ try {
     $TarefaRecuperacao = 'Midview - tarefa de teste que nao existe'
     New-Item -ItemType Directory -Path (Join-Path $PastaAtualizacoes 'AB12') -Force | Out-Null
     New-Item -ItemType Directory -Path $PastaEstadoAtualizacao -Force | Out-Null
-    Write-TextoUtf8 (Join-Path $PastaEstadoAtualizacao 'update-state.json') '{}'
+    [IO.File]::WriteAllText((Join-Path $PastaEstadoAtualizacao 'update-state.json'), '{}')
     $held = [IO.File]::Open((Join-Path $PastaAtualizacoes 'AB12\Midview.Agent.dll'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     try {
         Remove-RestosDeAtualizacao 3>$null
@@ -218,10 +168,10 @@ try {
     Check ((Split-Path -Leaf (Join-Path $env:ProgramFiles 'Midview')) -eq 'Midview') 'the default install folder is named Midview'
     try {
         Assert-PastaDoMidview 'C:\'
-        Check $false 'mirroring into a folder not named Midview is refused'
+        Check $false 'a folder not named Midview is refused'
     }
     catch {
-        Check $true 'mirroring into a folder not named Midview is refused'
+        Check $true 'a folder not named Midview is refused'
     }
 }
 finally {

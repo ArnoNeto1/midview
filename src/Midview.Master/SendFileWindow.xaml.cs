@@ -50,7 +50,27 @@ public partial class SendFileWindow : Window
         }
         ResultTextBlock.Text = string.Empty;
         SendButton.IsEnabled = _filePath is not null;
+        ShowProgramHint();
     }
+
+    private void OnAfterSendChanged(object sender, RoutedEventArgs e) => ShowProgramHint();
+
+    private void ShowProgramHint()
+    {
+        // Checked events can fire while the window is still being built.
+        if (ProgramHintTextBlock is null || OpenFileRadioButton is null)
+        {
+            return;
+        }
+        var program = OpenFileRadioButton.IsChecked == true && _filePath is { } path && !FileOpenPolicy.MayOpen(path);
+        ProgramHintTextBlock.Visibility = program ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private SendFileOptions ChosenOptions() => new(
+        OverwriteCheckBox.IsChecked == true,
+        OpenFileRadioButton.IsChecked == true ? AfterSend.OpenFile
+        : OpenFolderRadioButton.IsChecked == true ? AfterSend.OpenFolder
+        : AfterSend.Nothing);
 
     private async void OnSendClicked(object sender, RoutedEventArgs e)
     {
@@ -61,6 +81,7 @@ public partial class SendFileWindow : Window
 
         SendButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
+        var options = ChosenOptions();
         var finished = 0;
         ProgressTextBlock.Text = $"Enviando... 0 de {_targets.Count} concluídas";
 
@@ -70,7 +91,7 @@ public partial class SendFileWindow : Window
             await slots.WaitAsync();
             try
             {
-                return await Task.Run(() => SendTo(machine, filePath));
+                return await Task.Run(() => SendTo(machine, filePath, options));
             }
             finally
             {
@@ -92,11 +113,11 @@ public partial class SendFileWindow : Window
         SendButton.IsEnabled = true;
     }
 
-    private (string Name, bool Saved, string Detail) SendTo(KnownMachine machine, string filePath)
+    private (string Name, bool Saved, string Detail) SendTo(KnownMachine machine, string filePath, SendFileOptions options)
     {
         try
         {
-            var (saved, detail) = FileSender.Send(machine, _masterCertificate, filePath);
+            var (saved, detail) = FileSender.Send(machine, _masterCertificate, filePath, options);
             return (machine.Name, saved, detail);
         }
         catch (Exception ex)

@@ -9,53 +9,31 @@ namespace Midview.Session;
 // nothing belonging to another user or to Windows itself.
 public sealed class WindowsAppCloser : IAppCloser
 {
-    // How long force mode waits after asking before ending what's still open.
-    private static readonly TimeSpan ForceGracePeriod = TimeSpan.FromSeconds(10);
-
     public (int Asked, int Forced) CloseAll(bool force)
     {
         using var self = Process.GetCurrentProcess();
         var targets = AppClosePolicy.WindowsToClose(EnumerateTopLevelWindows(), self.Id);
 
+        // Forcing ends a program outright, so its windows aren't asked; the
+        // ones whose program is never ended (explorer, the Store apps' frame
+        // host) still get the normal close.
+        var toEnd = force
+            ? targets.Where(window => AppClosePolicy.MayForceClose(window.ProcessName)).ToList()
+            : new List<TopLevelWindow>();
+        var toAsk = targets.Except(toEnd).ToList();
+
         // Counts only the windows the request reached: Windows refuses it for
         // an elevated program's window, and a window may close meanwhile.
-        var asked = targets.Count(window => PostMessage(window.Handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
-
-        if (!force)
-        {
-            return (asked, 0);
-        }
-
-        // Each program is remembered by its id and start time, so a new
-        // process that reuses the id of one that closed meanwhile is never
-        // mistaken for it. One whose start time can't be read (elevated)
-        // couldn't be ended anyway.
-        var candidates = new List<(int ProcessId, DateTime StartTime)>();
-        foreach (var processId in targets
-                     .Where(window => AppClosePolicy.MayForceClose(window.ProcessName))
-                     .Select(window => window.ProcessId)
-                     .Distinct())
-        {
-            if (StartTimeOf(processId) is { } startTime)
-            {
-                candidates.Add((processId, startTime));
-            }
-        }
-
-        var deadline = DateTime.UtcNow + ForceGracePeriod;
-        while (DateTime.UtcNow < deadline && candidates.Any(candidate => IsStillRunning(candidate.ProcessId, candidate.StartTime)))
-        {
-            Thread.Sleep(250);
-        }
+        var asked = toAsk.Count(window => PostMessage(window.Handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero));
 
         var forced = 0;
-        foreach (var (processId, startTime) in candidates)
+        foreach (var processId in toEnd.Select(window => window.ProcessId).Distinct())
         {
             try
             {
                 using var process = Process.GetProcessById(processId);
                 // Only ever in this same login session, as a last safety net.
-                if (!process.HasExited && process.StartTime == startTime && process.SessionId == self.SessionId)
+                if (!process.HasExited && process.SessionId == self.SessionId)
                 {
                     process.Kill();
                     forced++;
@@ -68,34 +46,6 @@ public sealed class WindowsAppCloser : IAppCloser
             }
         }
         return (asked, forced);
-    }
-
-    private static DateTime? StartTimeOf(int processId)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(processId);
-            return process.StartTime;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
-        {
-            return null;
-        }
-    }
-
-    private static bool IsStillRunning(int processId, DateTime startTime)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(processId);
-            return !process.HasExited && process.StartTime == startTime;
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
-        {
-            return false;
-        }
     }
 
     internal static List<TopLevelWindow> EnumerateTopLevelWindows()

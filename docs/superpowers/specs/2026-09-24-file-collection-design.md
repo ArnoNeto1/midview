@@ -65,11 +65,26 @@ or from one machine, into one folder on their own PC.
   (files and size, an empty folder, what was left out, or why it failed),
   and "Abrir pasta". At most 4 machines at a time, like sending.
 
+- **Emptying, added 2026-10-05 (asked for during the first live run):**
+  two buttons in `CollectFilesWindow`, each confirmed first, each sending
+  to a Recycle Bin rather than deleting, so a wrong click can be undone
+  (`WindowsRecycleBin`: the shell's delete with undo, no dialogs).
+  "Apagar as pastas dos alunos" sends `MessageType.ClearDeliveryFolder` to
+  every chosen machine: the Session moves everything in "Entregar ao
+  professor" (subfolders whole, linked folders left alone) to the
+  student's Recycle Bin, tells the student, and answers "N item(ns) foram
+  para a Lixeira do aluno", naming what couldn't go and why.
+  "Apagar os recolhidos neste PC" does the same with
+  Documents\Midview\Recolhidos on the teacher's PC (`CollectedFiles`). An
+  older Session answers a new command with its screen; the Master says
+  "Midview antigo nesta máquina: atualize-a para usar isto"
+  (`CommandClient.OlderSession`).
+
 ## Out of scope
 
-Clearing or archiving the students' folders after a collection, collecting
-from any other folder, per-student (rather than per-machine) organization,
-and scheduling a collection.
+Archiving the students' folders, collecting from any other folder,
+per-student (rather than per-machine) organization, and scheduling a
+collection.
 
 ## Testing
 

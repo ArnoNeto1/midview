@@ -14,7 +14,7 @@ public sealed class FileInbox
 
     // Session runs as the student, so this is their own Desktop.
     public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Arquivos do professor");
+        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), StudentFolderNames.Inbox);
 
     public string DirectoryPath { get; }
 
@@ -33,7 +33,9 @@ public sealed class FileInbox
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return $"a pasta de destino não pôde ser usada: {ex.Message}";
+            // The folder is named: where it pointed is what showed the
+            // first live run that Session had no profile to put it in.
+            return $"a pasta de destino ({DirectoryPath}) não pôde ser usada: {ErrorText.Describe(ex)}";
         }
     }
 
@@ -44,9 +46,28 @@ public sealed class FileInbox
         return new IncomingFile(this, FileNames.Safe(requestedName), tempPath);
     }
 
-    // Never overwrites: "notas.pdf" becomes "notas (2).pdf", "notas (3).pdf"...
-    internal string MoveToUniqueName(string tempPath, string safeName) =>
-        FileNames.MoveToUniqueName(tempPath, DirectoryPath, safeName);
+    // "notas.pdf" becomes "notas (2).pdf", "notas (3).pdf"... unless the
+    // teacher chose to replace it. An old copy open in a program can't be
+    // replaced, so the new one is saved beside it, and the note says so.
+    internal (string Name, string? Note) Save(string tempPath, string safeName, bool overwrite)
+    {
+        var target = Path.Combine(DirectoryPath, safeName);
+        if (!overwrite || !File.Exists(target))
+        {
+            return (FileNames.MoveToUniqueName(tempPath, DirectoryPath, safeName), null);
+        }
+
+        try
+        {
+            File.Move(tempPath, target, overwrite: true);
+            return (safeName, "substituiu o anterior");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (FileNames.MoveToUniqueName(tempPath, DirectoryPath, safeName),
+                "o anterior estava aberto e não pôde ser substituído");
+        }
+    }
 }
 
 public sealed class IncomingFile : IDisposable
@@ -68,13 +89,17 @@ public sealed class IncomingFile : IDisposable
     public void Write(ReadOnlySpan<byte> data) => _stream.Write(data);
 
     // Returns the name the file was saved under.
-    public string Complete()
+    public string Complete() => Complete(overwrite: false).Name;
+
+    // The name it was saved under, and a note for the teacher when it isn't
+    // simply that (a file replaced, or one that couldn't be).
+    public (string Name, string? Note) Complete(bool overwrite)
     {
         _stream.Flush(flushToDisk: true);
         _stream.Dispose();
-        var savedName = _inbox.MoveToUniqueName(_tempPath, _safeName);
+        var saved = _inbox.Save(_tempPath, _safeName, overwrite);
         _completed = true;
-        return savedName;
+        return saved;
     }
 
     // Anything not completed is thrown away.

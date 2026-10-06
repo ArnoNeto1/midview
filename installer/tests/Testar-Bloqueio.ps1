@@ -1,11 +1,11 @@
-# Installs Midview on this Windows machine with the lab installer, then
-# blocks programs for real -- the Agent service enforcing the block on real
+# Installs Midview on this Windows machine with the setup program and pairs
+# a test teacher with it, then blocks programs for real -- the Agent service enforcing the block on real
 # processes: what the unit tests can only fake. Run by
 # .github/workflows/bloqueio.yml on a throwaway runner, as administrator,
 # under Windows PowerShell 5.1:
 #
 #   powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Bloqueio.ps1 `
-#       -Pacote <built package> -Ferramenta <Midview.E2E.exe> [-Registros <folder>]
+#       -Pacote <Gerar-Instalador output> -Ferramenta <Midview.E2E.exe> [-Registros <folder>]
 #
 # It changes this machine (installs the MidviewAgent service, then removes
 # it): never run it on a machine that matters.
@@ -41,6 +41,10 @@ if (-not $Registros) {
 New-Item -ItemType Directory -Path $Registros -Force | Out-Null
 
 $teacher = Join-Path $work 'professor.pfx'
+$machine = Join-Path $work 'maquina.json'
+$setup = @(Get-ChildItem -LiteralPath $Pacote -Filter 'Midview-Instalador-*.exe' | Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
+$studentProgram = Join-Path $Pacote 'programa\aluno'
+$uninstaller = Join-Path $env:ProgramFiles 'Midview\unins000.exe'
 $data = Join-Path $env:ProgramData 'Midview'
 $blockFile = Join-Path $data 'app-block.json'
 $ping = Join-Path $env:SystemRoot 'System32\PING.EXE'
@@ -65,10 +69,16 @@ function Invoke-Tool([string[]]$Arguments) {
     return [pscustomobject]@{ Code = $code; Output = @($output) }
 }
 
-function Invoke-Script([string]$Name, [string[]]$Arguments) {
-    $path = Join-Path $Pacote "programa\scripts\$Name"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $path @Arguments | Out-Host
-    return $LASTEXITCODE
+function Invoke-Setup([string[]]$Arguments) {
+    $process = Start-Process -FilePath $setup -ArgumentList $Arguments -Wait -PassThru
+    return $process.ExitCode
+}
+
+# Silently, the way an unattended uninstall runs: it keeps the paired
+# teachers (C:\ProgramData\Midview), which the caller then removes.
+function Invoke-Uninstall([string]$Log) {
+    $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$Log") -Wait -PassThru
+    return $process.ExitCode
 }
 
 function Get-ServiceState {
@@ -171,7 +181,7 @@ function Stop-Launched {
 }
 
 function Set-Block([string]$Mode, [string[]]$Programs) {
-    $arguments = @('block', $Pacote, $teacher, $Mode) + $Programs
+    $arguments = @('block', $machine, $teacher, $Mode) + $Programs
     return (Invoke-Tool $arguments).Code -eq 0
 }
 
@@ -185,12 +195,13 @@ function Save-Logs([string]$Suffix) {
 
 $failed = $false
 try {
-    Step 'Autorizar um professor de teste e instalar pelo pendrive'
-    Check ((Invoke-Tool @('authorize', $Pacote, $teacher)).Code -eq 0) 'the test teacher is authorized in the package'
-    Check ((Invoke-Script 'Instalar-Aluno.ps1' @('-Pacote', $Pacote)) -eq 0) 'Instalar-Aluno finishes'
+    Step 'Instalar com o instalador e parear um professor de teste'
+    Check ($null -ne $setup) "the setup is in $Pacote"
+    Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/TIPO=aluno', "/LOG=$Registros\instalar.log")) -eq 0) 'the setup finishes'
     Check ((Get-ServiceState) -eq 'Running') 'the service runs'
-    Check ((Invoke-Tool @('status', $Pacote, $teacher, $Pacote)).Code -eq 0) 'the Agent answers'
-    Check ((Invoke-Tool @('block-status', $Pacote, $teacher)).Code -eq 0) 'the Agent knows program blocking'
+    Check ((Invoke-Tool @('pair', $teacher, $machine)).Code -eq 0) 'the test teacher pairs with the machine'
+    Check ((Invoke-Tool @('status', $machine, $teacher, $studentProgram)).Code -eq 0) 'the Agent answers'
+    Check ((Invoke-Tool @('block-status', $machine, $teacher)).Code -eq 0) 'the Agent knows program blocking'
 
     Step 'Onde este teste roda'
     $factsResult = Invoke-Tool @('facts')
@@ -256,7 +267,7 @@ try {
     Restart-Service -Name 'MidviewAgent'
     Start-Sleep -Seconds 8
     Check ((Get-ServiceState) -eq 'Running') 'the service is back'
-    $status = (Invoke-Tool @('block-status', $Pacote, $teacher))
+    $status = (Invoke-Tool @('block-status', $machine, $teacher))
     Check (($status.Output -join ' ') -match 'mode=BlockList' -and ($status.Output -join ' ') -match 'blockme.exe') 'the machine still follows the block'
     $afterRestart = Start-Limited $blockme -Raw
     Check (Wait-EndedByAgent $afterRestart 'blockme.exe' 20) 'and it still ends the program'
@@ -293,7 +304,7 @@ try {
     Check (Set-Block 'blocklist' @('blockme.exe')) 'a block is in place'
     Check (Test-Path -LiteralPath $blockFile) 'it is saved on the machine'
     Save-Logs 'antes-de-desinstalar'
-    Check ((Invoke-Script 'Desinstalar-Aluno.ps1' @()) -eq 0) 'Desinstalar-Aluno finishes'
+    Check ((Invoke-Uninstall "$Registros\desinstalar.log") -eq 0) 'the uninstaller finishes'
     Check (-not (Test-Path -LiteralPath $blockFile)) 'the saved block is gone'
     Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
 }

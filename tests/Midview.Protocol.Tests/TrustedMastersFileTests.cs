@@ -30,4 +30,56 @@ public class TrustedMastersFileTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Add_NoFile_CreatesTheList()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            var result = TrustedMastersFile.Add(path, "abcd1234");
+
+            Assert.Equal(new[] { "ABCD1234" }, result);
+            Assert.Equal(new[] { "ABCD1234" }, TrustedMastersFile.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Add_KeepsTheOthers_AndNeverDuplicates()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "[\"aaaa\", \"BBBB\"]");
+
+            Assert.Equal(new[] { "AAAA", "BBBB" }, TrustedMastersFile.Add(path, " bbbb "));
+            Assert.Equal(new[] { "AAAA", "BBBB", "CCCC" }, TrustedMastersFile.Add(path, "CCCC"));
+            Assert.Equal(new[] { "AAAA", "BBBB", "CCCC" }, TrustedMastersFile.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Add_AListThatCantBeRead_IsLeftAlone()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "isto não é json");
+
+            Assert.Throws<InvalidDataException>(() => TrustedMastersFile.Add(path, "CCCC"));
+            Assert.Equal("isto não é json", File.ReadAllText(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

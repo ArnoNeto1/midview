@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Text;
 using Midview.Protocol;
 using Xunit;
 
@@ -76,5 +77,40 @@ public class SecureChannelTests
 
         serverTask.Wait(TimeSpan.FromSeconds(5));
         listener.Stop();
+    }
+
+    [Fact]
+    public async Task AcceptingAnyCertificate_LetsStrangersThrough_AndNamesThem()
+    {
+        using var serverCert = SelfSignedCertificate.Create("agent");
+        using var clientCert = SelfSignedCertificate.Create("stranger");
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            var serverSide = Task.Run(() =>
+            {
+                using var accepted = listener.AcceptTcpClient();
+                using var channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(accepted, serverCert);
+                var message = channel.Receive();
+                channel.Send(new Message(MessageType.CommandAck, Encoding.ASCII.GetBytes(channel.RemoteThumbprint)));
+                return message.Type;
+            });
+
+            using var tcpClient = new TcpClient();
+            tcpClient.Connect(IPAddress.Loopback, port);
+            using var client = SecureChannel.AuthenticateAsClientAcceptingAnyServer(tcpClient, "agent", clientCert);
+            client.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+            var reply = client.Receive();
+
+            Assert.Equal(clientCert.Thumbprint, Encoding.ASCII.GetString(reply.Payload));
+            Assert.Equal(serverCert.Thumbprint, client.RemoteThumbprint);
+            Assert.Equal(MessageType.Heartbeat, await serverSide.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        finally
+        {
+            listener.Stop();
+        }
     }
 }

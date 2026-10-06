@@ -22,12 +22,12 @@ function Assert-Administrador {
     $identidade = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal $identidade
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw 'É preciso rodar como administrador (clique com o botão direito no .cmd e escolha "Executar como administrador").'
+        throw 'É preciso rodar como administrador.'
     }
 }
 
-# A cópia espelha a pasta (apaga o que não veio do pacote), então ela nunca
-# pode ser outra coisa que a pasta do próprio Midview.
+# A pasta que estes scripts tratam (e o desinstalador apaga) nunca pode ser
+# outra coisa que a pasta do próprio Midview.
 function Assert-PastaDoMidview([string]$Pasta) {
     $nome = Split-Path -Path $Pasta -Leaf
     if (-not $nome -or $nome -notlike 'Midview*') {
@@ -35,145 +35,18 @@ function Assert-PastaDoMidview([string]$Pasta) {
     }
 }
 
-# A mesma regra do MidviewMaster (InstallPackage.NormalizeThumbprint).
-function ConvertTo-ThumbprintNormalizado([string]$Valor) {
-    if (-not $Valor) {
-        return $null
-    }
-    $normalizado = $Valor.Trim().ToUpperInvariant()
-    if ($normalizado -match '^[0-9A-F]{40}$') {
-        return $normalizado
-    }
-    return $null
-}
-
-# Os professores que o pacote autoriza, gravados pelo MidviewMaster em
-# "Instalar nos alunos..." > "Autorizar este professor no pacote".
-function Read-ProfessoresAutorizados([string]$Caminho) {
-    $comoAutorizar = 'No PC do professor, abra o MidviewMaster, clique em "Instalar nos alunos...", escolha a pasta do pacote e use "Autorizar este professor no pacote".'
-    if (-not (Test-Path -LiteralPath $Caminho)) {
-        throw "O pacote ainda não autoriza nenhum professor (falta $Caminho). $comoAutorizar"
-    }
-
-    # Atribuído antes do foreach: o ConvertFrom-Json do PowerShell 5.1 não
-    # separa os itens de uma lista num pipeline.
-    $lista = Get-Content -LiteralPath $Caminho -Raw -Encoding UTF8 | ConvertFrom-Json
-    $validos = New-Object System.Collections.Generic.List[string]
-    foreach ($item in $lista) {
-        $thumbprint = ConvertTo-ThumbprintNormalizado $item
-        if ($thumbprint -and -not $validos.Contains($thumbprint)) {
-            $validos.Add($thumbprint)
-        }
-    }
-    if ($validos.Count -eq 0) {
-        throw "$Caminho não tem nenhum professor válido. $comoAutorizar"
-    }
-    return $validos.ToArray()
-}
-
-# O JSON dos arquivos abaixo é escrito à mão, e não com ConvertTo-Json: o do
-# PowerShell 5.1 muda o formato de listas com um item só.
-function ConvertTo-TextoJson([string]$Texto) {
-    '"' + ($Texto -replace '\\', '\\' -replace '"', '\"') + '"'
-}
-
-# A lista do pacote substitui a da máquina: é assim que se tira a autorização
-# de um professor (gere o pacote sem ele e reinstale).
-function Write-ProfessoresAutorizados([string]$Caminho, [string[]]$Thumbprints) {
-    $itens = foreach ($thumbprint in $Thumbprints) { ConvertTo-TextoJson $thumbprint }
-    Write-TextoUtf8 $Caminho ('[' + ($itens -join ', ') + ']')
-}
-
-# A ficha que o MidviewMaster importa (InstallPackage.LoadInstalledMachines).
-# Sem o endereço da placa de rede, "macAddress" fica null.
-function New-FichaMaquina([string]$Nome, [string[]]$Enderecos, [string]$SessionThumbprint, [string]$AgentThumbprint, [string]$EnderecoMac, [datetime]$Quando) {
-    $itens = foreach ($endereco in $Enderecos) { ConvertTo-TextoJson $endereco }
-    $mac = if ($EnderecoMac) { ConvertTo-TextoJson $EnderecoMac } else { 'null' }
-    @(
-        '{'
-        '  "computerName": ' + (ConvertTo-TextoJson $Nome) + ','
-        '  "addresses": [' + ($itens -join ', ') + '],'
-        '  "sessionThumbprint": ' + (ConvertTo-TextoJson $SessionThumbprint) + ','
-        '  "agentThumbprint": ' + (ConvertTo-TextoJson $AgentThumbprint) + ','
-        '  "macAddress": ' + $mac + ','
-        '  "installedAt": ' + (ConvertTo-TextoJson $Quando.ToString('o'))
-        '}'
-    ) -join "`r`n"
-}
-
-# A mesma regra do MidviewMaster (WakeOnLan.NormalizeMacAddress): 12 dígitos
-# hexadecimais, com ou sem "-" ou ":", que não sejam todos zero nem um
-# endereço de grupo (multicast/broadcast). Devolve "AA-BB-CC-DD-EE-FF".
-function ConvertTo-EnderecoMacNormalizado([string]$Valor) {
-    if (-not $Valor) {
-        return $null
-    }
-    $hex = ($Valor.Trim() -replace '[-:]', '').ToUpperInvariant()
-    if ($hex -notmatch '^[0-9A-F]{12}$' -or $hex -eq '000000000000') {
-        return $null
-    }
-    if ([Convert]::ToInt32($hex.Substring(0, 2), 16) -band 1) {
-        return $null
-    }
-    return (($hex -split '(..)' | Where-Object { $_ }) -join '-')
-}
-
-# O endereço da placa de rede do laboratório (a primeira placa ligada com
-# gateway, como em Get-EnderecosIPv4), para o professor poder ligar a
-# máquina pela rede (Wake-on-LAN). Nunca impede a instalação: sem ele, o
-# MidviewMaster aprende o endereço sozinho quando vê a máquina ligada.
-function Get-EnderecoMac {
-    try {
-        foreach ($configuracao in @(Get-NetIPConfiguration -ErrorAction Stop)) {
-            if ($configuracao.IPv4DefaultGateway -and $configuracao.NetAdapter.Status -eq 'Up') {
-                $mac = ConvertTo-EnderecoMacNormalizado $configuracao.NetAdapter.MacAddress
-                if ($mac) {
-                    return $mac
-                }
-            }
-        }
-    }
-    catch {
-        # Sem Get-NetIPConfiguration: a ficha vai sem o endereço.
-    }
-    return $null
-}
-
-function Write-TextoUtf8([string]$Caminho, [string]$Texto) {
-    [IO.File]::WriteAllText($Caminho, $Texto, (New-Object Text.UTF8Encoding $false))
-}
-
-# Primeiro os endereços das placas ligadas com gateway (normalmente a rede
-# do laboratório), depois os demais; nunca loopback nem 169.254.x.x.
-function Get-EnderecosIPv4 {
-    $enderecos = New-Object System.Collections.Generic.List[string]
-    try {
-        foreach ($configuracao in @(Get-NetIPConfiguration -ErrorAction Stop)) {
-            if ($configuracao.IPv4DefaultGateway -and $configuracao.NetAdapter.Status -eq 'Up') {
-                foreach ($ip in @($configuracao.IPv4Address)) {
-                    if ($ip.IPAddress -and -not $enderecos.Contains($ip.IPAddress)) {
-                        $enderecos.Add($ip.IPAddress)
-                    }
-                }
-            }
-        }
-    }
-    catch {
-        # Sem Get-NetIPConfiguration: fica só a lista abaixo.
+# O instalador (installer\Midview.iss) mostra ao professor a mensagem de
+# erro gravada aqui, em UTF-8, que ele lê com os acentos certos.
+function Write-Erro([string]$Caminho, [string]$Mensagem) {
+    if (-not $Caminho) {
+        return
     }
     try {
-        foreach ($ip in @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop)) {
-            $endereco = $ip.IPAddress
-            if ($endereco -and $endereco -notlike '127.*' -and $endereco -notlike '169.254.*' -and -not $enderecos.Contains($endereco)) {
-                $enderecos.Add($endereco)
-            }
-        }
+        [IO.File]::WriteAllText($Caminho, $Mensagem, (New-Object Text.UTF8Encoding $false))
     }
     catch {
-        # Nunca impede a instalação: sem endereço, a ficha ainda pode ser
-        # importada pelo nome do computador.
+        # Sem o arquivo, o instalador mostra só o código de saída.
     }
-    return $enderecos.ToArray()
 }
 
 # Para o serviço e a Session (que roda na sessão do aluno) para os arquivos
@@ -260,7 +133,7 @@ function Set-ExecutavelDoServico([string]$CaminhoServico) {
     }
 }
 
-# Depois de instalar pelo pendrive (ou para desinstalar), nada do que uma
+# Depois de instalar pelo Midview-Instalador (ou para desinstalar), nada do que uma
 # atualização pela rede deixou vale mais. Só com o serviço parado e
 # apontando para fora de Midview.update. -Obrigatorio (ao desinstalar, quando
 # não fica Agent nenhum para apagar depois) falha se Midview.update ficar.
@@ -302,16 +175,4 @@ function Invoke-Programa([string]$Caminho, [string[]]$Argumentos) {
         $ErrorActionPreference = $anterior
     }
     [pscustomobject]@{ Saida = (@($saida) -join "`n"); Codigo = $codigo }
-}
-
-function Copy-Pasta([string]$Origem, [string]$Destino) {
-    Assert-PastaDoMidview $Destino
-    & robocopy.exe $Origem $Destino /MIR /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-    # Códigos abaixo de 8 do robocopy são sucesso.
-    if ($LASTEXITCODE -ge 8) {
-        throw "A cópia de $Origem para $Destino falhou (robocopy, código $LASTEXITCODE)."
-    }
-    # Um pacote baixado como .zip e extraído vem marcado como "da internet",
-    # e o Windows avisaria (SmartScreen) ao abrir o MidviewMaster.
-    Get-ChildItem -LiteralPath $Destino -Recurse -File | Unblock-File
 }

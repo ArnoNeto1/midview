@@ -4,6 +4,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The Midview logo; made by assets\gerar-icone.py. -->
+    <ApplicationIcon>..\..\assets\midview.ico</ApplicationIcon>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>

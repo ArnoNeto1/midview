@@ -71,7 +71,7 @@ public partial class ScheduleWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ProgressTextBlock.Text = $"O agendamento não pôde ser gravado: {ex.Message}";
+            ProgressTextBlock.Text = $"O agendamento não pôde ser gravado: {ErrorText.Describe(ex)}";
             SaveButton.IsEnabled = true;
             return;
         }

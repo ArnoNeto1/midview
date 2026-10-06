@@ -52,7 +52,7 @@ public sealed class SessionServer
 
     // Capture cadence is fully decoupled from message traffic (mouse-move
     // events alone can arrive far faster than any capture pipeline should
-    // run). ~15 fps matches Veyon's own real-world capture rate.
+    // run). ~15 fps is plenty to follow what a student is doing.
     private const int CaptureIntervalMs = 66;
 
     private const int CaptureRetryDelayMs = 500;
@@ -82,18 +82,38 @@ public sealed class SessionServer
     private readonly IAppCloser? _appCloser;
     private readonly IOpenProgramsLister? _openPrograms;
     private readonly DeliveryFolder? _deliveryFolder;
+    private readonly IScreenLockDisplay? _screenLock;
+    private readonly IFileOpener? _fileOpener;
+    private readonly IRecycleBin? _recycleBin;
+    private readonly ICountdownNotice? _countdownNotice;
+    private readonly IWebsiteOpener? _websiteOpener;
+    private readonly IProgramStarter? _programStarter;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
     // connections (the classroom console's thumbnails) don't take this slot.
     private readonly SemaphoreSlim _servingSlot = new(1, 1);
 
+    // How many screen-lock connections are open: the lock screen stays up
+    // until the last one ends.
+    private readonly object _screenLockGate = new();
+    private int _screenLocks;
+
     public SessionServer(
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         IScreenCapture screenCapture, IInputInjector inputInjector, InputLockManager inputLockManager,
         IMessageDisplay? messageDisplay = null, IChatWindows? chatWindows = null, FileInbox? fileInbox = null,
-        IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null)
+        IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null,
+        IScreenLockDisplay? screenLock = null, IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null,
+        ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
+        IProgramStarter? programStarter = null)
     {
+        _countdownNotice = countdownNotice;
+        _websiteOpener = websiteOpener;
+        _programStarter = programStarter;
+        _screenLock = screenLock;
+        _fileOpener = fileOpener;
+        _recycleBin = recycleBin;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -155,8 +175,9 @@ public sealed class SessionServer
         // grid, so if previews were served like control connections, the
         // one-at-a-time slot below would always be taken and full control
         // could never get in. A control connection's first message is
-        // whatever it sends first (ViewControlWindow sends StartControl as
-        // soon as it opens), so the control protocol itself is unchanged.
+        // whatever it sends first (ViewControlWindow sends StartControl, or
+        // a Heartbeat when it opens only to watch), so the control protocol
+        // itself is unchanged.
         var firstMessage = channel.Receive();
 
         client.ReceiveTimeout = ConnectionTimeoutMs;
@@ -178,15 +199,38 @@ public sealed class SessionServer
         }
 
         // Like messages, files are one-shot and never need the control slot.
-        if (firstMessage.Type == MessageType.SendFile)
+        if (firstMessage.Type is MessageType.SendFile or MessageType.SendFileWithOptions)
         {
             ReceiveFile(channel, firstMessage);
+            return;
+        }
+
+        if (firstMessage.Type == MessageType.ClearDeliveryFolder)
+        {
+            var (cleared, detail) = ClearDeliveryFolder();
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(cleared, detail)));
             return;
         }
 
         if (firstMessage.Type == MessageType.CollectFiles)
         {
             SendCollectedFiles(channel);
+            return;
+        }
+
+        // "Abrir programa": one-shot too.
+        if (firstMessage.Type == MessageType.OpenProgram)
+        {
+            var (started, detail) = OpenProgram(firstMessage.Payload);
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(started, detail)));
+            return;
+        }
+
+        // "Abrir site": one-shot, like a message.
+        if (firstMessage.Type == MessageType.OpenWebsite)
+        {
+            var (opened, detail) = OpenWebsite(firstMessage.Payload);
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(opened, detail)));
             return;
         }
 
@@ -211,6 +255,13 @@ public sealed class SessionServer
         if (firstMessage.Type == MessageType.ChatOpen)
         {
             ServeChat(channel, cancellationToken);
+            return;
+        }
+
+        // Nor does a screen lock, which lasts as long as its connection.
+        if (firstMessage.Type == MessageType.LockScreen)
+        {
+            ServeScreenLock(channel, cancellationToken);
             return;
         }
 
@@ -309,6 +360,79 @@ public sealed class SessionServer
         }
     }
 
+    // Locked from the answer until the connection ends, however it ends:
+    // closed by the teacher ("Desbloquear", or the program closing), broken,
+    // or silent for ConnectionTimeoutMs because the teacher's PC stopped
+    // answering -- the class is never left locked. Only heartbeats are
+    // expected meanwhile.
+    private void ServeScreenLock(SecureChannel channel, CancellationToken cancellationToken)
+    {
+        if (_screenLock is null)
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não bloqueia a tela")));
+            return;
+        }
+
+        try
+        {
+            _inputLockManager.HoldForScreenLock();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Locking input for the screen lock failed: {ex.Message}");
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "o teclado e o mouse não puderam ser travados")));
+            return;
+        }
+
+        try
+        {
+            ShowScreenLock();
+            try
+            {
+                channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(true, "tela bloqueada")));
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    channel.Receive();
+                }
+            }
+            finally
+            {
+                HideScreenLock();
+            }
+        }
+        finally
+        {
+            _inputLockManager.ReleaseScreenLock();
+        }
+    }
+
+    private void ShowScreenLock()
+    {
+        lock (_screenLockGate)
+        {
+            // Counted only once it's shown, so a Show that fails leaves no
+            // lock behind for a later one to wait on.
+            if (_screenLocks == 0)
+            {
+                _screenLock!.Show();
+            }
+            _screenLocks++;
+        }
+    }
+
+    private void HideScreenLock()
+    {
+        lock (_screenLockGate)
+        {
+            if (--_screenLocks == 0)
+            {
+                _screenLock!.Hide();
+            }
+        }
+    }
+
     // Accepted or refused up front (a first CommandAck), before the Master
     // streams anything -- a refusal sent mid-stream would likely be lost to
     // a connection reset. A second CommandAck reports how it ended.
@@ -317,11 +441,14 @@ public sealed class SessionServer
         string? refusal;
         var fileName = string.Empty;
         long size = 0;
+        var options = SendFileOptions.Default;
         if (_fileInbox is null)
         {
             refusal = "esta máquina não recebe arquivos";
         }
-        else if (!FileTransfer.TryDecodeHeader(header.Payload, out fileName, out size))
+        else if (!(header.Type == MessageType.SendFileWithOptions
+                     ? FileTransfer.TryDecodeOptionsHeader(header.Payload, out options, out fileName, out size)
+                     : FileTransfer.TryDecodeHeader(header.Payload, out fileName, out size)))
         {
             refusal = "pedido de envio inválido";
         }
@@ -337,17 +464,144 @@ public sealed class SessionServer
             return;
         }
 
-        var (saved, detail) = SaveIncomingFile(channel, fileName, size);
-        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(saved, detail)));
-
-        if (saved)
+        var (saved, detail, note) = SaveIncomingFile(channel, fileName, size, options.Overwrite);
+        if (!saved)
         {
-            TryNotify($"O professor enviou o arquivo \"{detail}\".{Environment.NewLine}" +
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(false, detail)));
+            return;
+        }
+
+        var savedName = detail;
+        var (opened, afterNote) = AfterSaving(options.AfterSend, savedName);
+        channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(true,
+            savedName + (note is null ? string.Empty : $" ({note})") + (afterNote is null ? string.Empty : $"; {afterNote}"))));
+
+        // What opens on screen tells the student by itself.
+        if (!opened)
+        {
+            TryNotify($"O professor enviou o arquivo \"{savedName}\".{Environment.NewLine}" +
                       $"Ele foi salvo em: {_fileInbox!.DirectoryPath}");
         }
     }
 
-    private (bool Saved, string Detail) SaveIncomingFile(SecureChannel channel, string fileName, long size)
+    // Opens the file or the folder when the teacher asked to; never a program
+    // (FileOpenPolicy). Returns whether something opened, and a note for the
+    // teacher about it.
+    private (bool Opened, string? Note) AfterSaving(AfterSend afterSend, string savedName)
+    {
+        if (afterSend == AfterSend.Nothing)
+        {
+            return (false, null);
+        }
+        if (_fileOpener is null)
+        {
+            return (false, "esta máquina não abre arquivos");
+        }
+        if (afterSend == AfterSend.OpenFile && !FileOpenPolicy.MayOpen(savedName))
+        {
+            return (false, "programas não são abertos automaticamente");
+        }
+
+        var folder = _fileInbox!.DirectoryPath;
+        try
+        {
+            if (afterSend == AfterSend.OpenFolder)
+            {
+                _fileOpener.Open(folder);
+                return (true, "pasta aberta no aluno");
+            }
+            _fileOpener.Open(Path.Combine(folder, savedName));
+            return (true, "aberto no aluno");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Opening for the student failed: {ex.Message}");
+            return (false, $"não abriu: {ErrorText.Describe(ex)}");
+        }
+    }
+
+    // Checked again here, whatever the Master checked: only a website is
+    // ever handed to Windows to open, never a file or a program.
+    private (bool Opened, string Detail) OpenWebsite(byte[] payload)
+    {
+        if (_websiteOpener is null)
+        {
+            return (false, "esta máquina não abre sites");
+        }
+        if (!WebsiteAddress.TryParse(TextMessage.Decode(payload), out var address, out _))
+        {
+            return (false, "não é o endereço de um site");
+        }
+
+        try
+        {
+            _websiteOpener.Open(address);
+            return (true, "aberto");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Opening a website for the student failed: {ex.Message}");
+            return (false, $"o navegador não abriu: {ErrorText.Describe(ex)}");
+        }
+    }
+
+    // As the student, so nothing the student couldn't start themselves.
+    // Variables (%USERPROFILE%...) are the student's, expanded here.
+    private (bool Started, string Detail) OpenProgram(byte[] payload)
+    {
+        if (_programStarter is null)
+        {
+            return (false, "esta máquina não abre programas");
+        }
+        if (!ProgramCommand.TryParse(TextMessage.Decode(payload), out var program, out var arguments, out _))
+        {
+            return (false, "comando inválido");
+        }
+
+        try
+        {
+            return _programStarter.Start(Environment.ExpandEnvironmentVariables(program), Environment.ExpandEnvironmentVariables(arguments))
+                ? (true, "aberto")
+                : (true, "aberto, mas ainda esperando na máquina (talvez pedindo a senha de administrador)");
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode is 2 or 3)
+        {
+            return (false, $"programa não encontrado: {program}");
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            return (false, "o pedido de administrador foi recusado na máquina");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Starting a program for the student failed: {ex.Message}");
+            return (false, $"não abriu: {ErrorText.Describe(ex)}");
+        }
+    }
+
+    // Only the teacher's "Apagar as pastas dos alunos": empties the
+    // delivery folder into the student's Recycle Bin and tells them.
+    private (bool Cleared, string Detail) ClearDeliveryFolder()
+    {
+        if (_deliveryFolder is null || _recycleBin is null)
+        {
+            return (false, "esta máquina não esvazia a pasta de entrega");
+        }
+
+        var (recycled, problems) = _deliveryFolder.MoveAllToRecycleBin(_recycleBin);
+        if (recycled > 0)
+        {
+            TryNotify("O professor esvaziou a pasta \"Entregar ao professor\". O que estava nela foi para a Lixeira.");
+        }
+        var detail = recycled == 0 && problems.Count == 0
+            ? "a pasta já estava vazia"
+            : $"{recycled} item(ns) foram para a Lixeira do aluno"
+              + (problems.Count > 0 ? $"; não saiu: {string.Join(", ", problems)}" : string.Empty);
+        return (problems.Count == 0, detail);
+    }
+
+    private (bool Saved, string Detail, string? Note) SaveIncomingFile(
+        SecureChannel channel, string fileName, long size, bool overwrite)
     {
         try
         {
@@ -359,16 +613,17 @@ public sealed class SessionServer
                 if (chunk.Type != MessageType.FileChunk || chunk.Payload.Length == 0
                     || received + chunk.Payload.Length > size)
                 {
-                    return (false, "a transferência chegou incompleta ou corrompida");
+                    return (false, "a transferência chegou incompleta ou corrompida", null);
                 }
                 incoming.Write(chunk.Payload);
                 received += chunk.Payload.Length;
             }
-            return (true, incoming.Complete());
+            var (name, note) = incoming.Complete(overwrite);
+            return (true, name, note);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return (false, $"não foi possível salvar o arquivo: {ex.Message}");
+            return (false, $"não foi possível salvar o arquivo: {ErrorText.Describe(ex)}", null);
         }
     }
 
@@ -394,7 +649,7 @@ public sealed class SessionServer
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             channel.Send(new Midview.Protocol.Message(
-                MessageType.CommandAck, CommandResult.Encode(false, $"a pasta de entrega não pôde ser lida: {ex.Message}")));
+                MessageType.CommandAck, CommandResult.Encode(false, $"a pasta de entrega não pôde ser lida: {ErrorText.Describe(ex)}")));
             return;
         }
 
@@ -477,31 +732,79 @@ public sealed class SessionServer
         TryNotify(notice);
     }
 
+    // The student is always told first. With a warning time, the answer goes
+    // back right away and the programs close when it's up, on their own: the
+    // teacher's window may be long closed by then.
     private (bool Closed, string Detail) CloseApps(byte[] payload)
     {
         if (_appCloser is null)
         {
             return (false, "esta máquina não fecha programas");
         }
-        if (payload.Length != 1 || !Enum.IsDefined((CloseAppsMode)payload[0]))
+        if (!CloseAppsCommand.TryDecode(payload, out var mode, out var delaySeconds))
         {
             return (false, "pedido inválido");
         }
 
+        var force = mode == CloseAppsMode.Force;
+        if (delaySeconds == 0)
+        {
+            TryNotify(force ? "O professor encerrou seus programas." : "O professor está fechando seus programas.");
+            return CloseAll(force);
+        }
+
+        // The time left counts down on the student's screen; without the
+        // banner, a message says it once.
+        var when = CloseAppsCommand.DelayText(delaySeconds);
+        if (_countdownNotice is not null)
+        {
+            var (running, done) = CountdownText.CloseApps(force);
+            TryCountdown(running, done, TimeSpan.FromSeconds(delaySeconds));
+        }
+        else
+        {
+            TryNotify($"O professor vai fechar seus programas em {when}. Salve seu trabalho agora"
+                      + (force ? ": o que não estiver salvo será perdido." : "."));
+        }
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            var (closed, detail) = CloseAll(force);
+            Console.WriteLine($"Closing programs after the warning: {(closed ? "" : "failed, ")}{detail}");
+        });
+        return (true, $"aluno avisado; os programas fecham em {when}");
+    }
+
+    private (bool Closed, string Detail) CloseAll(bool force)
+    {
         try
         {
-            var (asked, forced) = _appCloser.CloseAll(force: (CloseAppsMode)payload[0] == CloseAppsMode.Force);
+            var (asked, forced) = _appCloser!.CloseAll(force);
             var detail = asked == 0 && forced == 0
                 ? "nenhum programa para fechar"
                 : forced == 0
                     ? $"pedido de fechamento enviado a {asked} janela(s)"
-                    : $"pedido enviado a {asked} janela(s); {forced} programa(s) encerrado(s) à força";
+                    : asked == 0
+                        ? $"{forced} programa(s) encerrado(s) à força"
+                        : $"pedido enviado a {asked} janela(s); {forced} programa(s) encerrado(s) à força";
             return (true, detail);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Closing programs failed: {ex.Message}");
-            return (false, $"falhou: {ex.Message}");
+            return (false, $"falhou: {ErrorText.Describe(ex)}");
+        }
+    }
+
+    private void TryCountdown(string message, string doneMessage, TimeSpan duration)
+    {
+        try
+        {
+            _countdownNotice!.Show(message, doneMessage, duration);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Showing a countdown failed: {ex.Message}");
         }
     }
 

@@ -120,7 +120,7 @@ public static class FileCollector
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            problem = $"{relativePath} não pôde ser salvo ({ex.Message})";
+            problem = $"{relativePath} não pôde ser salvo ({ErrorText.Describe(ex)})";
         }
 
         try
@@ -183,7 +183,7 @@ public static class FileCollector
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            throw new InvalidDataException($"não foi possível salvar {relativePath}: {ex.Message}", ex);
+            throw new InvalidDataException($"não foi possível salvar {relativePath}: {ErrorText.Describe(ex)}", ex);
         }
     }
 

@@ -7,13 +7,16 @@ namespace Midview.Master;
 
 // Shuts down or restarts one machine or the whole class, or calls that off
 // while it's still counting down. It's the Agent's command (it works with
-// nobody logged in), so it needs each machine's Agent thumbprint.
+// nobody logged in), so it needs each machine's Agent thumbprint. The
+// toolbar's "Desligar" and "Reiniciar" both open it, each already set to
+// its own action.
 public partial class PowerWindow : Window
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;
 
-    public PowerWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate)
+    public PowerWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate,
+        PowerAction initialAction = PowerAction.Shutdown)
     {
         InitializeComponent();
         _targets = targets;
@@ -21,6 +24,10 @@ public partial class PowerWindow : Window
         TargetsTextBlock.Text = targets.Count == 1
             ? $"Em: {targets[0].Name}"
             : $"Na turma toda ({targets.Count} máquinas)";
+        if (initialAction == PowerAction.Restart)
+        {
+            RestartRadioButton.IsChecked = true;
+        }
     }
 
     private PowerAction SelectedAction => RestartRadioButton.IsChecked == true ? PowerAction.Restart : PowerAction.Shutdown;
@@ -30,27 +37,21 @@ public partial class PowerWindow : Window
 
     private void OnActionChanged(object sender, RoutedEventArgs e)
     {
-        if (RunButton is not null)
+        // The XAML's first Checked comes before the buttons exist.
+        if (RunButton is null || CancelShutdownButton is null)
         {
-            RunButton.Content = SelectedAction == PowerAction.Restart ? "Reiniciar" : "Desligar";
+            return;
         }
+        var restart = SelectedAction == PowerAction.Restart;
+        Title = restart ? "Reiniciar" : "Desligar";
+        RunButton.Content = restart ? "Reiniciar" : "Desligar";
+        CancelShutdownButton.Content = restart ? "Cancelar reinício" : "Cancelar desligamento";
     }
 
-    private async void OnRunClicked(object sender, RoutedEventArgs e)
-    {
-        var action = SelectedAction;
-        var delaySeconds = SelectedDelaySeconds;
-        var verb = action == PowerAction.Restart ? "Reiniciar" : "Desligar";
-        var where = _targets.Count == 1 ? _targets[0].Name : $"as {_targets.Count} máquinas da turma";
-        var when = delaySeconds == 0 ? "agora" : delaySeconds == 60 ? "em 1 minuto" : $"em {delaySeconds / 60} minutos";
-        var answer = MessageBox.Show(this,
-            $"{verb} {where} {when}?\n\nO trabalho não salvo nos programas abertos é perdido.",
-            "Midview", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-        if (answer == MessageBoxResult.Yes)
-        {
-            await SendToAll(action, delaySeconds);
-        }
-    }
+    // No "are you sure": the window itself says what happens, and a
+    // countdown can still be called off with "Cancelar".
+    private async void OnRunClicked(object sender, RoutedEventArgs e) =>
+        await SendToAll(SelectedAction, SelectedDelaySeconds);
 
     private async void OnCancelShutdownClicked(object sender, RoutedEventArgs e) =>
         await SendToAll(PowerAction.Cancel, 0);

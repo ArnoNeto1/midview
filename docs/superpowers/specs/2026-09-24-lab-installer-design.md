@@ -1,7 +1,7 @@
 # Midview — Lab Installer (Design)
 
 Date: 2026-09-24
-Status: Implemented 2026-09-24 (not yet validated live)
+Status: Implemented 2026-09-24; replaced 2026-10-05 by 2026-10-05-installer-and-pairing-design.md (the setup program and pairing)
 
 ## Context
 

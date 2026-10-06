@@ -1,3 +1,4 @@
+using System.Security.Principal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Midview.Agent;
@@ -37,9 +38,18 @@ var host = Host.CreateDefaultBuilder(args)
             new UserSessionProcessLauncher(sessionExecutablePath));
         services.AddSingleton(provider => new SessionSupervisor(
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
+        // On the same poll: the student's two Desktop folders come back,
+        // protected, if someone deletes them.
+        services.AddSingleton(new StudentFolderGuard(
+            UserSessionProcessLauncher.LoggedOnStudent, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null)));
         services.AddSingleton(new InputLockCoordinator(new WindowsInputDeviceController()));
-        services.AddSingleton(_ => new ScheduledShutdown(ScheduledShutdown.DefaultStatePath, PowerCommandHandler.RunShutdownExe));
-        services.AddSingleton(_ => new PowerCommandHandler(PowerCommandHandler.RunShutdownExe));
+        // The countdown on the student's screen while a shutdown is on its
+        // way, shared by the teacher's and the schedule's.
+        services.AddSingleton<ICountdownDisplay>(new SessionCountdownDisplay(new UserSessionProcessLauncher(sessionExecutablePath)));
+        services.AddSingleton(provider => new ScheduledShutdown(
+            ScheduledShutdown.DefaultStatePath, PowerCommandHandler.RunShutdownExe, provider.GetRequiredService<ICountdownDisplay>()));
+        services.AddSingleton(provider => new PowerCommandHandler(
+            PowerCommandHandler.RunShutdownExe, countdown: provider.GetRequiredService<ICountdownDisplay>()));
         services.AddSingleton(provider =>
         {
             var runningExe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, UpdatePaths.AgentExeName);
@@ -56,8 +66,17 @@ var host = Host.CreateDefaultBuilder(args)
             var enforcer = provider.GetRequiredService<AppBlockEnforcer>();
             return new AppBlockCommandHandler(AppBlockCommandHandler.DefaultStatePath, enforcer.Apply, UacCheck.Warning);
         });
+        // trusted-masters.json, read again whenever pairing (or anything
+        // else) changes it.
+        services.AddSingleton(TrustStore.FromFile(AgentServerWorker.TrustedMastersPath));
+        services.AddSingleton(provider => new PairingService(
+            provider.GetRequiredService<TrustStore>(), AgentServerWorker.TrustedMastersPath,
+            new SessionPairingCodeDisplay(new UserSessionProcessLauncher(sessionExecutablePath)),
+            () => DateTime.Now, Environment.MachineName,
+            () => SessionIdentity.EnsureExists(SessionIdentity.DefaultCertificatePath)));
         services.AddHostedService<MidviewAgentWorker>();
         services.AddHostedService<AgentServerWorker>();
+        services.AddHostedService<DiscoveryWorker>();
         services.AddHostedService<InputLockWorker>();
         services.AddHostedService<ScheduledShutdownWorker>();
         services.AddHostedService<AppBlockWorker>();

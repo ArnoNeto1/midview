@@ -11,7 +11,7 @@ namespace Midview.Master;
 // itself, so this PC does it: a Windows scheduled task, for the teacher's
 // own account (no administrator needed), runs "Midview.Master.exe
 // --ligar-turma 07:00" at the wake time on the chosen days. That sends the
-// classroom list's magic packets (what WakeWindow does, without a window)
+// classroom list's magic packets (what the classroom window's "Ligar" sends)
 // and exits. Windows wakes this PC from sleep for it, and runs it late if
 // the PC was off at the time -- but RunFromCommandLine only wakes the lab up
 // to MaxLateness late, so turning the PC on in the afternoon doesn't.
@@ -110,7 +110,7 @@ public static class WakeTask
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
-            return (false, $"a tarefa do Windows para ligar a turma não pôde ser criada: {ex.Message}");
+            return (false, $"a tarefa do Windows para ligar a turma não pôde ser criada: {ErrorText.Describe(ex)}");
         }
     }
 

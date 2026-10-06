@@ -30,13 +30,39 @@ public class UninstallCleanupTests : IDisposable
         Assert.Equal(1, firewall.ApplyUnblockCalls);
         Assert.Equal(0, firewall.ApplyBlockCalls);
         Assert.Equal(
-            new[] { "name=MidviewAgentInbound", "name=MidviewSessionInbound" },
+            new[] { "name=MidviewAgentInbound", "name=MidviewSessionInbound", "name=MidviewAgentDiscovery" },
             _netshCalls.Select(call => call[^1]));
         Assert.All(_netshCalls, call => Assert.Equal(new[] { "advfirewall", "firewall", "delete", "rule" }, call[..4]));
 
         var state = SiteBlockState.Load(_statePath);
         Assert.False(state.InternetBlocked);
         Assert.Empty(state.BlockedDomains);
+    }
+
+    // The two Desktop folders become ordinary again, and the Desktop loses
+    // its Deny; what the student put in them stays.
+    [Fact]
+    public void TheStudentsFolders_AreGivenBack()
+    {
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var desktop = Path.Combine(Path.GetTempPath(), $"midview-desktop-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(desktop);
+        try
+        {
+            ProtectedStudentFolders.Protect(desktop, me, me);
+            File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");
+
+            var failures = UninstallCleanup.Run(_statePath, _hostsPath, new FakeFirewallController(),
+                new FakeInputDeviceController(), _netshCalls.Add, studentDesktops: new[] { (desktop, me) });
+
+            Assert.Empty(failures);
+            Assert.Empty(ProtectedStudentFolders.Release(desktop, me)); // nothing left to undo
+            Directory.Delete(Path.Combine(desktop, Midview.Protocol.StudentFolderNames.Delivery));
+        }
+        finally
+        {
+            Directory.Delete(desktop, recursive: true);
+        }
     }
 
     [Fact]

@@ -133,6 +133,18 @@ public class ScheduledShutdownTests : IDisposable
     }
 
     [Fact]
+    public void Check_WhenDue_CountsDownOnTheStudentsScreen()
+    {
+        var countdown = new RecordingCountdownDisplay();
+        var scheduled = new ScheduledShutdown(_statePath, _ => 0, countdown);
+        scheduled.Handle(Weekdays6pm.Encode());
+
+        scheduled.Check(Monday.AddHours(17.99), Monday.AddHours(18.01));
+
+        Assert.Equal(new[] { (PowerCountdown.Scheduled, PowerSchedule.ShutdownWarningSeconds) }, countdown.Shown);
+    }
+
+    [Fact]
     public void Check_WithoutASchedule_NeverRunsAnything()
     {
         Assert.False(Create().Check(Monday.AddHours(17.99), Monday.AddHours(18.01)));

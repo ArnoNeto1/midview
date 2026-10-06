@@ -12,9 +12,14 @@ public sealed class AgentServerWorker : BackgroundService
 
     private const string AgentInboundRuleName = "MidviewAgentInbound";
     private const string SessionInboundRuleName = "MidviewSessionInbound";
+    private const string DiscoveryInboundRuleName = "MidviewAgentDiscovery";
 
     // The inbound openings added on every start; the uninstaller removes them.
-    public static readonly IReadOnlyList<string> InboundRuleNames = new[] { AgentInboundRuleName, SessionInboundRuleName };
+    public static readonly IReadOnlyList<string> InboundRuleNames =
+        new[] { AgentInboundRuleName, SessionInboundRuleName, DiscoveryInboundRuleName };
+
+    // The teachers this machine trusts; pairing adds to it (see PairingService).
+    public static string TrustedMastersPath => Path.Combine(AgentDataDirectory.DirectoryPath, "trusted-masters.json");
 
     public static string SiteBlockStatePath => Path.Combine(AgentDataDirectory.DirectoryPath, "site-block-state.json");
 
@@ -29,11 +34,15 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly PowerCommandHandler _powerHandler;
     private readonly UpdateReceiver _updateReceiver;
     private readonly AppBlockCommandHandler _appBlock;
+    private readonly TrustStore _masterTrustStore;
+    private readonly PairingService _pairing;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
-        AppBlockCommandHandler appBlock)
+        AppBlockCommandHandler appBlock, TrustStore masterTrustStore, PairingService pairing)
     {
+        _masterTrustStore = masterTrustStore;
+        _pairing = pairing;
         _appBlock = appBlock;
         _scheduledShutdown = scheduledShutdown;
         _powerHandler = powerHandler;
@@ -44,16 +53,14 @@ public sealed class AgentServerWorker : BackgroundService
     {
         try
         {
-            var programDataDir = AgentDataDirectory.DirectoryPath;
-
             var certificate = AgentIdentity.LoadOrCreate(AgentIdentity.DefaultCertificatePath);
 
             EnsureInboundFirewallRuleExists(AgentInboundRuleName, AgentPort);
             // Session can't add its own rule: it runs as a standard user, and
             // Windows' "allow access?" prompt needs an administrator.
             EnsureInboundFirewallRuleExists(SessionInboundRuleName, SessionPort);
+            EnsureInboundFirewallRuleExists(DiscoveryInboundRuleName, Discovery.Port, "UDP");
 
-            var trustedMasters = TrustedMastersFile.Load(Path.Combine(programDataDir, "trusted-masters.json"));
             var statePath = SiteBlockStatePath;
             var state = LoadStateOrStartEmpty(statePath);
             var hostsFilePath = HostsFilePath;
@@ -76,7 +83,6 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile site-block state at startup: {ex.Message}");
             }
 
-            var trustStore = new TrustStore(trustedMasters);
             return Task.Run(async () =>
             {
                 var failing = false;
@@ -85,9 +91,9 @@ public sealed class AgentServerWorker : BackgroundService
                     try
                     {
                         var server = new AgentServer(
-                            new TcpListener(IPAddress.Any, AgentPort), certificate, trustStore, commandHandler,
+                            new TcpListener(IPAddress.Any, AgentPort), certificate, _masterTrustStore, commandHandler,
                             _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
-                            appBlock: _appBlock);
+                            appBlock: _appBlock, pairing: _pairing);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");
@@ -139,14 +145,14 @@ public sealed class AgentServerWorker : BackgroundService
         }
     }
 
-    private static void EnsureInboundFirewallRuleExists(string ruleName, int port)
+    private static void EnsureInboundFirewallRuleExists(string ruleName, int port, string protocol = "TCP")
     {
         // "add rule" never replaces a rule with the same name, so it's deleted
         // first -- otherwise every Agent start would add one more copy.
         RunNetsh("advfirewall", "firewall", "delete", "rule", $"name={ruleName}");
         RunNetsh("advfirewall", "firewall", "add", "rule",
             $"name={ruleName}", "dir=in", "action=allow",
-            "protocol=TCP", $"localport={port}");
+            $"protocol={protocol}", $"localport={port}");
     }
 
     internal static void RunNetsh(params string[] args)

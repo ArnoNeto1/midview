@@ -45,6 +45,59 @@ Built on the classroom console and the teacher-message work.
   as which name, or why it failed. At most 4 machines receive at the same
   time, so the teacher's PC isn't uploading 25 copies of a big file at once.
   `FileSender` does one machine (5 s connect timeout, 30 s per read/write).
+- **Fixed after the first live run (2026-10-05):** every file was refused
+  with "Access to the path 'C:\Windows\system32\Arquivos do professor' is
+  denied". The Agent started Session with the student's token but with its
+  own (SYSTEM's) environment and working folder, and with
+  USERPROFILE pointing at the system profile Windows answers the student's
+  Desktop -- and LocalAppData -- with an empty path (reproduced by running a
+  program with that USERPROFILE), so the folder resolved inside system32.
+  `UserSessionProcessLauncher` now passes the student's own environment
+  block (`CreateEnvironmentBlock` on their token) and Session's own folder
+  as the working folder. The same fix makes "Entregar ao professor"
+  (file collection) and `session-perf.log` land in the student's profile.
+
+- **Options, added 2026-10-05 (as in Veyon, asked for during the first live
+  run):** "Substituir arquivo com o mesmo nome" replaces a file of the
+  same name instead of saving "nome (2)"; an old copy open in a program
+  can't be replaced, so the new one is saved beside it and the teacher is
+  told. "Depois de enviar" can open the "Arquivos do professor" folder or
+  the file itself, with the program Windows opens it with, on the
+  student's screen (`IFileOpener`), in which case the notice is left out:
+  what opens tells the student by itself. Programs (.exe, .bat, .msi,
+  .lnk, scripts...; `FileOpenPolicy`) are never opened, only saved, so a
+  wrong click can't run something on the whole class; the window says so
+  when such a file is chosen. On the wire: `MessageType.SendFileWithOptions`
+  (two option bytes before the usual header), used only when an option is
+  chosen; an older Session takes it for a control connection, so the
+  Master sends the file again the old way and adds "Midview antigo nesta
+  máquina: sem as opções". The ack's detail names what happened:
+  "notas.pdf (substituiu o anterior); aberto no aluno".
+
+- **Both Desktop folders protected, added 2026-10-05:** the student can't
+  delete, rename or hide "Arquivos do professor" or "Entregar ao
+  professor" (`ProtectedStudentFolders`, in the Agent). Every time the
+  Agent starts Session it finds the student's Desktop through their token,
+  creates the folders if missing, makes SYSTEM their owner and gives them
+  their own permissions: SYSTEM and Administrators full; the student may
+  list, create, and change or delete what's inside, but not delete,
+  rename, hide the folder or change its permissions. The Desktop gets one
+  Deny for the student, "delete subfolders and files", the parent right
+  that would otherwise delete or rename any item regardless of its own
+  permissions; their other Desktop items still go through the delete right
+  each one has. As SYSTEM working in folders the student controls, it
+  never follows a link: each folder is opened as itself, a junction or
+  symbolic link is refused, and permissions are set through that open
+  handle, so what was checked is what changes; nothing inside the folders
+  is touched. Uninstalling gives them back (the Desktop's Deny goes, the
+  folders inherit the Desktop's permissions again, contents kept), for
+  every profile on the machine. Checked with a non-administrator account
+  standing in for the student: deleting and renaming the folders is
+  refused, while files inside and the rest of the Desktop work as before.
+  An administrator account can always undo it; student accounts shouldn't
+  be administrators. Making the teacher's files read-only is a later step:
+  Session saves them as the student, so it can't be done while Session
+  writes them.
 
 ## Out of scope
 

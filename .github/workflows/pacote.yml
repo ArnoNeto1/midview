@@ -1,13 +1,16 @@
-# Builds the lab installation package with installer\Gerar-Pacote.ps1 and
-# checks its scripts, both under Windows PowerShell 5.1 -- the PowerShell
-# lab machines run them with. Run by hand ("Run workflow"), it also keeps
-# the package for download for 7 days (artifact storage is small on the free
-# plan, so not on every run).
-name: Pacote de instalação
+# Builds the setup program (Midview-Instalador-<version>.exe) with
+# installer\Gerar-Instalador.ps1 and checks its scripts, both under Windows
+# PowerShell 5.1 -- the PowerShell lab machines run them with. Run by hand
+# ("Run workflow"), it also keeps the setup for download for 7 days
+# (artifact storage is small on the free plan, so not on every run); for a
+# pushed v* tag, it attaches the setup to that GitHub Release.
+name: Instalador
 
 on:
   push:
     branches: [master]
+    # GitHub ignores the path filters below for tag pushes.
+    tags: ['v*']
     paths:
       - 'src/**'
       - 'installer/**'
@@ -27,9 +30,12 @@ concurrency:
 
 jobs:
   pacote:
-    name: Gerar e conferir o pacote
+    name: Gerar e conferir o instalador
     runs-on: windows-latest
     timeout-minutes: 30
+    # Creating a release needs write access to the repository's contents.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -37,19 +43,29 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Instalar o Inno Setup (se faltar)
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
       # powershell.exe is Windows PowerShell 5.1 (pwsh would be 7).
-      - name: Gerar o pacote (Windows PowerShell 5.1)
+      - name: Gerar o instalador (Windows PowerShell 5.1)
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Pacote.ps1 -Output "%RUNNER_TEMP%\Midview-Instalacao"
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Instalador.ps1 -Output "%RUNNER_TEMP%\Midview-Instalador"
 
       - name: Conferir os scripts (Windows PowerShell 5.1)
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote "%RUNNER_TEMP%\Midview-Instalacao"
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote "%RUNNER_TEMP%\Midview-Instalador"
 
-      - name: Guardar o pacote para download
+      - name: Guardar o instalador para download
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: Midview-Instalacao
-          path: ${{ runner.temp }}/Midview-Instalacao
+          name: Midview-Instalador
+          path: ${{ runner.temp }}/Midview-Instalador/Midview-Instalador-*.exe
           retention-days: 7
+
+      - name: Publicar na versão (tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ runner.temp }}/Midview-Instalador/Midview-Instalador-*.exe

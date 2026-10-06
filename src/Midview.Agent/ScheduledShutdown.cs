@@ -18,14 +18,16 @@ public sealed class ScheduledShutdown
 
     private readonly string _statePath;
     private readonly Func<string[], int> _runShutdown;
+    private readonly ICountdownDisplay? _countdown;
     private readonly object _gate = new();
     private PowerSchedule? _schedule;
     private DateTime? _startedAt;
 
-    public ScheduledShutdown(string statePath, Func<string[], int> runShutdown)
+    public ScheduledShutdown(string statePath, Func<string[], int> runShutdown, ICountdownDisplay? countdown = null)
     {
         _statePath = statePath;
         _runShutdown = runShutdown;
+        _countdown = countdown;
         _schedule = Load(statePath);
     }
 
@@ -67,7 +69,7 @@ public sealed class ScheduledShutdown
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 AgentLog.Warn($"Couldn't save the power schedule: {ex.Message}");
-                return (false, $"não foi possível gravar o agendamento: {ex.Message}");
+                return (false, $"não foi possível gravar o agendamento: {ErrorText.Describe(ex)}");
             }
 
             _schedule = schedule;
@@ -100,6 +102,12 @@ public sealed class ScheduledShutdown
                 {
                     _startedAt = now;
                 }
+            }
+            if (exitCode == 0)
+            {
+                // 1190 means another shutdown (the teacher's) is already
+                // counting down on the student's screen.
+                _countdown?.Show(PowerCountdown.Scheduled, PowerSchedule.ShutdownWarningSeconds);
             }
         }
         catch (Exception ex)

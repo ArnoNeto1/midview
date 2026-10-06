@@ -18,7 +18,7 @@ public class UpdateClientTests : IDisposable
 
     public UpdateClientTests()
     {
-        var folder = UpdatePackage.StudentProgramFolder(_package);
+        var folder = _package;
         Directory.CreateDirectory(folder);
         var files = new[] { "Midview.Agent.exe", "Midview.Session.exe" };
         foreach (var file in files)

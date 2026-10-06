@@ -8,7 +8,8 @@ public sealed record CollectableFile(string FullPath, string RelativePath);
 
 // The student's "Entregar ao professor" folder: what they put in it is what
 // the teacher collects (see FileCollection). Nothing else on the machine is
-// read for it, and nothing is ever removed from it.
+// read for it, and collecting never removes anything from it; only the
+// teacher's "Apagar as pastas dos alunos" empties it, into the Recycle Bin.
 public sealed class DeliveryFolder
 {
     // Hidden and system entries are skipped, e.g. the "~$trabalho.docx"
@@ -30,7 +31,7 @@ public sealed class DeliveryFolder
 
     // Session runs as the student, so this is their own Desktop.
     public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Entregar ao professor");
+        Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), StudentFolderNames.Delivery);
 
     public string DirectoryPath { get; }
 
@@ -64,6 +65,40 @@ public sealed class DeliveryFolder
             Walk(new DirectoryInfo(DirectoryPath), prefix: string.Empty, depth: 1, files);
         }
         return files;
+    }
+
+    // "Apagar as pastas dos alunos": everything in the folder, subfolders
+    // whole, goes to the student's Recycle Bin, so a wrong click can be
+    // undone. What can't go (open in a program, say) stays, named with why.
+    // Nothing outside the folder is touched: a linked folder (junction,
+    // symbolic link) could point anywhere, so it's left where it is.
+    public (int Recycled, IReadOnlyList<string> Problems) MoveAllToRecycleBin(IRecycleBin recycleBin)
+    {
+        var problems = new List<string>();
+        if (!Directory.Exists(DirectoryPath))
+        {
+            return (0, problems);
+        }
+
+        var recycled = 0;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(DirectoryPath).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                {
+                    problems.Add($"{Path.GetFileName(entry)} (pasta vinculada, não removida)");
+                    continue;
+                }
+                recycleBin.Recycle(entry);
+                recycled++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                problems.Add($"{Path.GetFileName(entry)} ({ErrorText.Describe(ex)})");
+            }
+        }
+        return (recycled, problems);
     }
 
     private void Walk(DirectoryInfo directory, string prefix, int depth, List<CollectableFile> files)

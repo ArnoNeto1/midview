@@ -39,10 +39,17 @@ public static class CommandClient
         MessageType commandType, byte[] payload)
     {
         var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload);
-        return ack.Type == MessageType.CommandAck
-            ? CommandResult.Decode(ack.Payload)
-            : (false, $"resposta inesperada ({ack.Type})");
+        return ack.Type switch
+        {
+            MessageType.CommandAck => CommandResult.Decode(ack.Payload),
+            MessageType.FrameTile => (false, OlderSession),
+            _ => (false, $"resposta inesperada ({ack.Type})"),
+        };
     }
+
+    // A Session from before a command takes it for a control connection and
+    // starts sending its screen instead of answering.
+    public const string OlderSession = "Midview antigo nesta máquina: atualize-a para usar isto";
 
     private static Message Exchange(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,

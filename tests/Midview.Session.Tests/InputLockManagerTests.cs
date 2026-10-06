@@ -88,6 +88,74 @@ public class InputLockManagerTests
     }
 
     [Fact]
+    public void AScreenLock_KeepsTheDevicesDisabled_WhenControlStops()
+    {
+        var devices = new FakeInputDeviceController();
+        var manager = new InputLockManager(devices, new FakeClock(), TimeSpan.FromSeconds(5));
+        manager.HoldForScreenLock();
+        manager.StartLock();
+
+        manager.StopLock();
+        Assert.Equal(1, devices.DisableCalls);
+        Assert.Equal(0, devices.EnableCalls);
+
+        manager.ReleaseScreenLock();
+        Assert.Equal(1, devices.EnableCalls);
+    }
+
+    [Fact]
+    public void Control_KeepsTheDevicesDisabled_WhenAScreenLockEnds()
+    {
+        var devices = new FakeInputDeviceController();
+        var manager = new InputLockManager(devices, new FakeClock(), TimeSpan.FromSeconds(5));
+        manager.StartLock();
+        manager.HoldForScreenLock();
+
+        manager.ReleaseScreenLock();
+        Assert.Equal(0, devices.EnableCalls);
+        Assert.True(manager.IsLocked);
+
+        manager.StopLock();
+        Assert.Equal(1, devices.EnableCalls);
+    }
+
+    // Two teachers, or a reconnect overlapping the old connection.
+    [Fact]
+    public void EachScreenLock_IsReleasedOnItsOwn()
+    {
+        var devices = new FakeInputDeviceController();
+        var manager = new InputLockManager(devices, new FakeClock(), TimeSpan.FromSeconds(5));
+        manager.HoldForScreenLock();
+        manager.HoldForScreenLock();
+
+        manager.ReleaseScreenLock();
+        Assert.Equal(0, devices.EnableCalls);
+
+        manager.ReleaseScreenLock();
+        manager.ReleaseScreenLock(); // one too many: nothing to release
+        Assert.Equal(1, devices.DisableCalls);
+        Assert.Equal(1, devices.EnableCalls);
+    }
+
+    // A screen lock ends with its own connection, never with control's
+    // heartbeats.
+    [Fact]
+    public void AHeartbeatTimeout_EndsControl_ButNotAScreenLock()
+    {
+        var devices = new FakeInputDeviceController();
+        var clock = new FakeClock();
+        var manager = new InputLockManager(devices, clock, TimeSpan.FromSeconds(5));
+        manager.HoldForScreenLock();
+        manager.StartLock();
+
+        clock.UtcNow = clock.UtcNow.AddSeconds(6);
+        manager.CheckHeartbeatTimeout();
+
+        Assert.False(manager.IsLocked);
+        Assert.Equal(0, devices.EnableCalls);
+    }
+
+    [Fact]
     public void ConcurrentCallsFromReceiveLoopAndTimer_NeverLeaveDevicesDisabledAfterFinalStop()
     {
         var devices = new FakeInputDeviceController();

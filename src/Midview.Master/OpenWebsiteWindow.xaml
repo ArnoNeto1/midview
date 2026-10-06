@@ -1,0 +1,31 @@
+<Window x:Class="Midview.Master.OpenWebsiteWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Abrir site" Height="460" Width="500"
+        WindowStartupLocation="CenterOwner"
+        FocusManager.FocusedElement="{Binding ElementName=AddressTextBox}">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Abre o site no navegador do aluno. Um site bloqueado continua bloqueado, e com a tela bloqueada ele abre por baixo do cadeado." />
+            <TextBlock Text="Endereço do site:" Margin="0,0,0,4" />
+            <TextBox x:Name="AddressTextBox" Padding="4,3" MaxLength="2000" TextChanged="OnAddressChanged" />
+            <TextBlock x:Name="ProblemTextBlock" Foreground="#B3261E" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="Collapsed" />
+            <CheckBox x:Name="SaveCheckBox" Content="Salvar no menu" Margin="0,12,0,0"
+                      Checked="OnSaveChanged" Unchecked="OnSaveChanged"
+                      ToolTip="Fica no menu do botão &quot;Abrir site&quot;, para abrir com um clique da próxima vez." />
+            <StackPanel x:Name="NamePanel" Orientation="Horizontal" Margin="22,6,0,0" IsEnabled="False">
+                <TextBlock Text="Nome no menu:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBox x:Name="NameTextBox" Width="220" Padding="4,3" MaxLength="60"
+                         ToolTip="Em branco, o menu usa o nome do site (por exemplo, youtube.com)." />
+            </StackPanel>
+            <Button x:Name="OpenButton" Content="Abrir nas máquinas" Click="OnOpenClicked" IsDefault="True"
+                    Padding="10,4" Margin="0,12,0,0" HorizontalAlignment="Left" />
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

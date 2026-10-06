@@ -17,9 +17,11 @@ public static class WakeOnLanSender
     private const int Repeats = 3;
     private static readonly TimeSpan RepeatGap = TimeSpan.FromMilliseconds(100);
 
-    public static IReadOnlyList<IPEndPoint> BroadcastTargets(IEnumerable<(IPAddress Address, IPAddress Mask)> networks)
+    // Also where "Procurar na rede" sends its probe (with Discovery.Port).
+    public static IReadOnlyList<IPEndPoint> BroadcastTargets(
+        IEnumerable<(IPAddress Address, IPAddress Mask)> networks, int port = WakeOnLan.Port)
     {
-        var targets = new List<IPEndPoint> { new(IPAddress.Broadcast, WakeOnLan.Port) };
+        var targets = new List<IPEndPoint> { new(IPAddress.Broadcast, port) };
         foreach (var (address, mask) in networks)
         {
             if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
@@ -36,7 +38,7 @@ public static class WakeOnLanSender
             }
 
             // A /32 has no one else on it; its "broadcast" is the PC itself.
-            var target = new IPEndPoint(new IPAddress(broadcast), WakeOnLan.Port);
+            var target = new IPEndPoint(new IPAddress(broadcast), port);
             if (!broadcast.AsSpan().SequenceEqual(addressBytes) && !targets.Contains(target))
             {
                 targets.Add(target);

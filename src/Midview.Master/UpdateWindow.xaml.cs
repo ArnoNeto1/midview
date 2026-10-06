@@ -19,7 +19,7 @@ public partial class UpdateWindow : Window
     // One run at a time, whichever window started it (UI thread only).
     private static bool s_running;
 
-    private readonly string _packageDirectory;
+    private readonly string _studentFolder;
     private readonly Func<IReadOnlyList<KnownMachine>> _targets;
     private readonly X509Certificate2 _masterCertificate;
     private readonly CancellationTokenSource _closing = new();
@@ -41,13 +41,13 @@ public partial class UpdateWindow : Window
         NoAnswer,
     }
 
-    public UpdateWindow(string packageDirectory, Func<IReadOnlyList<KnownMachine>> targets, X509Certificate2 masterCertificate)
+    public UpdateWindow(string studentFolder, Func<IReadOnlyList<KnownMachine>> targets, X509Certificate2 masterCertificate)
     {
         InitializeComponent();
-        _packageDirectory = packageDirectory;
+        _studentFolder = studentFolder;
         _targets = targets;
         _masterCertificate = masterCertificate;
-        PackageTextBlock.Text = $"Pacote: {packageDirectory}";
+        PackageTextBlock.Text = $"Programa do aluno: {studentFolder}";
         Loaded += async (_, _) => await IdentifyPackageAsync();
 
         // Also when the window goes with its owner, which ignores a
@@ -61,14 +61,13 @@ public partial class UpdateWindow : Window
         };
     }
 
-    // On opening, and again before every check or update: the package may
-    // have been rebuilt in the same folder since (Gerar-Pacote -Output <the
-    // same folder>).
+    // On opening, and again before every check or update: the folder may
+    // have been replaced since (a newer setup installed in the meantime).
     private async Task IdentifyPackageAsync()
     {
         try
         {
-            var (manifest, fingerprint) = await Task.Run(() => UpdatePackage.Identify(_packageDirectory));
+            var (manifest, fingerprint) = await Task.Run(() => UpdatePackage.Identify(_studentFolder));
             _manifest = manifest;
             _fingerprintHex = Convert.ToHexString(fingerprint);
             BuildTextBlock.Text = $"Versão do pacote: {UpdateText.ShortBuild(manifest.Build)}";
@@ -117,19 +116,11 @@ public partial class UpdateWindow : Window
             return;
         }
 
-        var answer = MessageBox.Show(this,
-            "Uma atualização está em andamento. Fechar a janela para de acompanhar: as máquinas que ainda não " +
-            "confirmaram a versão nova voltam sozinhas para a anterior em alguns minutos.\n\nFechar mesmo assim?",
-            "Midview", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-        if (answer == MessageBoxResult.Yes)
-        {
-            _stopRequested = true;
-            _closing.Cancel();
-        }
-        else
-        {
-            e.Cancel = true;
-        }
+        // Closing stops following it: no machine starts anew, and the ones
+        // that hadn't confirmed the new version go back to the previous one
+        // by themselves within minutes.
+        _stopRequested = true;
+        _closing.Cancel();
     }
 
     private async void OnUpdateClicked(object sender, RoutedEventArgs e)
@@ -167,15 +158,17 @@ public partial class UpdateWindow : Window
                 return;
             }
 
-            var newer = candidates.Count(index => UpdateText.IsNewer(statuses[index]!.Report!.Build, manifest.Build));
-            if (!Confirm(candidates.Count, manifest.Build, newer) || _closed)
+            if (_closed)
             {
-                ProgressTextBlock.Text = string.Empty;
                 return;
             }
+            var newer = candidates.Count(index => UpdateText.IsNewer(statuses[index]!.Report!.Build, manifest.Build));
+            WarningTextBlock.Text = newer == 0
+                ? string.Empty
+                : $"⚠ {newer} máquina(s) têm uma versão mais nova que a do pacote e vão voltar para a do pacote.";
 
             // Again: another window may have started while this one checked
-            // and asked (all windows share this thread, and nothing is
+            // (all windows share this thread, and nothing is
             // awaited from here to the assignment).
             if (s_running)
             {
@@ -199,37 +192,18 @@ public partial class UpdateWindow : Window
         }
     }
 
-    private bool Confirm(int count, string packageBuild, int newer)
-    {
-        var text =
-            $"Atualizar {count} máquina(s) para a versão {UpdateText.ShortBuild(packageBuild)}?\n\n" +
-            "• Os alunos podem continuar usando o computador.\n" +
-            "• Você perde a visão e o controle dessas máquinas por 1 a 3 minutos.\n" +
-            "• Bloqueios de teclado e mouse são desfeitos; mensagens e conversas abertas fecham.\n" +
-            "• Não desligue as máquinas até terminar.\n" +
-            "• Os professores que cada máquina aceita não mudam.\n\n" +
-            "Uma máquina é atualizada primeiro; as outras só depois que ela confirmar que a versão nova funciona.";
-        if (newer > 0)
-        {
-            text += $"\n\n⚠ {newer} máquina(s) têm uma versão MAIS NOVA que a do pacote e vão voltar para a do pacote.";
-        }
-        return MessageBox.Show(this, text, "Midview", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
-               == MessageBoxResult.Yes;
-    }
-
-    // packageFingerprint: the build the machines were checked and the
-    // teacher confirmed against.
+    // packageFingerprint: the build the machines were checked against.
     private async Task RunAsync(IReadOnlyList<int> candidates, string packageFingerprint)
     {
         ProgressTextBlock.Text = "Preparando o pacote...";
         UpdatePackage package;
         try
         {
-            package = await Task.Run(() => UpdatePackage.Create(_packageDirectory, Path.GetTempPath()));
+            package = await Task.Run(() => UpdatePackage.Create(_studentFolder, Path.GetTempPath()));
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            ProgressTextBlock.Text = $"O pacote não pôde ser preparado: {ex.Message}";
+            ProgressTextBlock.Text = $"O pacote não pôde ser preparado: {ErrorText.Describe(ex)}";
             return;
         }
 

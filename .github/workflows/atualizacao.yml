@@ -1,7 +1,8 @@
 # Installs Midview on a real Windows machine (the runner, a throwaway VM)
-# with the lab installer, updates it over the network for real -- a good
-# build that must be committed, then a broken one that must roll itself
-# back -- and reinstalls and uninstalls it with the USB scripts. This is
+# with the setup program, pairs a test teacher with it for real, updates it
+# over the network for real -- a good build that must be committed, then a
+# broken one that must roll itself back -- and reinstalls it with the setup
+# and uninstalls it. This is
 # what the unit tests can only fake: the service control manager, the
 # switch between builds, the restarts (installer/tests/Testar-Atualizacao.ps1).
 # A Windows runner bills 2x the minutes of a Linux one, so this runs only
@@ -15,7 +16,7 @@ on:
       - 'src/Midview.Agent/**'
       - 'src/Midview.Protocol/**'
       - 'src/Midview.Master/Update*'
-      - 'src/Midview.Master/InstallPackage.cs'
+      - 'src/Midview.Master/PairingSession.cs'
       - 'installer/**'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/atualizacao.yml'
@@ -24,7 +25,7 @@ on:
       - 'src/Midview.Agent/**'
       - 'src/Midview.Protocol/**'
       - 'src/Midview.Master/Update*'
-      - 'src/Midview.Master/InstallPackage.cs'
+      - 'src/Midview.Master/PairingSession.cs'
       - 'installer/**'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/atualizacao.yml'
@@ -49,10 +50,14 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Instalar o Inno Setup (se faltar)
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
       # powershell.exe is Windows PowerShell 5.1, what lab machines run.
-      - name: Gerar o pacote (Windows PowerShell 5.1)
+      - name: Gerar o instalador (Windows PowerShell 5.1)
         shell: cmd
-        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Pacote.ps1 -Output "%RUNNER_TEMP%\Midview-Instalacao"
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Instalador.ps1 -Output "%RUNNER_TEMP%\Midview-Instalador"
 
       - name: Compilar o professor de teste
         run: dotnet build tests/Midview.E2E --configuration Release --output "${{ runner.temp }}/professor-de-teste"
@@ -61,7 +66,7 @@ jobs:
         shell: cmd
         run: >
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Atualizacao.ps1
-          -Pacote "%RUNNER_TEMP%\Midview-Instalacao"
+          -Pacote "%RUNNER_TEMP%\Midview-Instalador"
           -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
           -Registros "%RUNNER_TEMP%\registros"
 

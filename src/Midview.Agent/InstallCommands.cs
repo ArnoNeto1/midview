@@ -33,7 +33,7 @@ public static class InstallCommands
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Não foi possível preparar a máquina: {ex.Message}");
+            Console.Error.WriteLine($"Não foi possível preparar a máquina: {ErrorText.Describe(ex)}");
             return 1;
         }
     }
@@ -47,7 +47,7 @@ public static class InstallCommands
             AgentServerWorker.SiteBlockStatePath, AgentServerWorker.HostsFilePath,
             new NetshFirewallController(AgentServerWorker.AgentPort, AgentServerWorker.SessionPort),
             new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args),
-            AppBlockCommandHandler.DefaultStatePath);
+            AppBlockCommandHandler.DefaultStatePath, ProtectedStudentFolders.AllStudentDesktops());
         foreach (var failure in failures)
         {
             Console.Error.WriteLine(failure);

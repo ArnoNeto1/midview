@@ -7,25 +7,38 @@ public static class SessionDiagnostics
     // (replacing any previous one) and a new file starts.
     private const long MaxLogBytes = 5 * 1024 * 1024;
 
-    private static readonly string LogPath = Path.Combine(AppContext.BaseDirectory, "session-perf.log");
+    // In the student's own AppData, since Session runs as the student. Next
+    // to the exe it sat in the install folder, which a standard user can't
+    // write to, so on a lab machine nothing was ever logged.
+    public static string LogPath { get; } = PathFor(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppContext.BaseDirectory);
+
     private static readonly object Lock = new();
 
+    // Next to the exe only when there's no profile folder to use.
+    public static string PathFor(string localAppData, string exeDirectory) =>
+        string.IsNullOrEmpty(localAppData)
+            ? Path.Combine(exeDirectory, "session-perf.log")
+            : Path.Combine(localAppData, "Midview", "session-perf.log");
+
+    public static void Log(string message) => Append(LogPath, $"{DateTime.UtcNow:HH:mm:ss.fff} {message}");
+
     // Never throws: this is called from inside the capture loop, and a log
-    // that can't be written (a read-only install folder for a standard
-    // user, a locked file) must never stop the screen stream.
-    public static void Log(string message)
+    // that can't be written (a folder that can't be created, a locked
+    // file) must never stop the screen stream.
+    public static void Append(string logPath, string line)
     {
-        var line = $"{DateTime.UtcNow:HH:mm:ss.fff} {message}";
         lock (Lock)
         {
             try
             {
-                var logFile = new FileInfo(LogPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                var logFile = new FileInfo(logPath);
                 if (logFile.Exists && logFile.Length > MaxLogBytes)
                 {
-                    File.Move(LogPath, LogPath + ".old", overwrite: true);
+                    File.Move(logPath, logPath + ".old", overwrite: true);
                 }
-                File.AppendAllText(LogPath, line + Environment.NewLine);
+                File.AppendAllText(logPath, line + Environment.NewLine);
             }
             catch
             {

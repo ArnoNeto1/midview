@@ -11,6 +11,7 @@ public sealed class GdiScreenCapture : IScreenCapture
         var bitmap = new Bitmap(bounds.Width, bounds.Height);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+        CursorOverlay.Draw(graphics, bounds.Location);
         return bitmap;
     }
 }

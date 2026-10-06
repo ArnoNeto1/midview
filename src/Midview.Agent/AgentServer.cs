@@ -11,6 +11,11 @@ public sealed class AgentServer
     // never finishes its TLS handshake is dropped quickly.
     private const int TimeoutMs = 10_000;
 
+    // A pairing waits on the teacher, who has Pairing.ConfirmTimeout to
+    // compare the codes; a little more, so the Agent's own deadline is
+    // what ends it.
+    private static readonly int PairingTimeoutMs = (int)(Pairing.ConfirmTimeout + TimeSpan.FromSeconds(30)).TotalMilliseconds;
+
     private readonly TcpListener _listener;
     private readonly X509Certificate2 _serverCertificate;
     private readonly TrustStore _masterTrustStore;
@@ -20,6 +25,7 @@ public sealed class AgentServer
     private readonly ScheduledShutdown? _scheduledShutdown;
     private readonly UpdateReceiver? _updateReceiver;
     private readonly AppBlockCommandHandler? _appBlock;
+    private readonly PairingService? _pairing;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -27,7 +33,7 @@ public sealed class AgentServer
         TcpListener listener, X509Certificate2 serverCertificate, TrustStore masterTrustStore,
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
-        UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null)
+        UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null, PairingService? pairing = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -38,6 +44,7 @@ public sealed class AgentServer
         _scheduledShutdown = scheduledShutdown;
         _updateReceiver = updateReceiver;
         _appBlock = appBlock;
+        _pairing = pairing;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -87,8 +94,38 @@ public sealed class AgentServer
         using var client = tcpClient;
         client.ReceiveTimeout = TimeoutMs;
         client.SendTimeout = TimeoutMs;
-        using var channel = SecureChannel.AuthenticateAsServer(tcpClient, _serverCertificate, _masterTrustStore);
+        using var channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(tcpClient, _serverCertificate);
         var message = channel.Receive();
+
+        // Anyone may ask to pair (PairingService decides who may); any other
+        // message needs a teacher this machine trusts. Any certificate gets
+        // through the handshake now, so this is what keeps strangers out.
+        if (message.Type == MessageType.PairRequest)
+        {
+            if (_pairing is null)
+            {
+                channel.Send(Pairing.Refused("Esta máquina não aceita pareamento."));
+                return;
+            }
+            client.ReceiveTimeout = PairingTimeoutMs;
+            _pairing.Handle(
+                channel.RemoteThumbprint, _serverCertificate.Thumbprint, message.Payload,
+                channel.Receive, channel.Send, WakeAddressText(client));
+            return;
+        }
+
+        if (!_masterTrustStore.IsTrusted(channel.RemoteThumbprint))
+        {
+            AgentLog.Warn($"Refused {message.Type} from a teacher this machine doesn't trust ({channel.RemoteThumbprint}).");
+            return;
+        }
+
+        if (message.Type == MessageType.AllowNewTeacher)
+        {
+            var (allowed, allowDetail) = _pairing?.AllowNewTeacher() ?? (false, "esta máquina não aceita pareamento");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(allowed, allowDetail)));
+            return;
+        }
 
         // Power commands say what happened (a CommandResult, whose first
         // byte is the same 1/0 the site-blocking commands answer with).
@@ -151,5 +188,15 @@ public sealed class AgentServer
 
         var success = _commandHandler.Handle(message.Type, message.Payload);
         channel.Send(new Message(MessageType.CommandAck, new[] { (byte)(success ? 1 : 0) }));
+    }
+
+    // The MAC address of the card this connection came in on, as the
+    // classroom list keeps it ("AA-BB-CC-DD-EE-FF"), or null.
+    private string? WakeAddressText(TcpClient client)
+    {
+        var localAddress = ((IPEndPoint)client.Client.LocalEndPoint!).Address;
+        return _findWakeAddress(localAddress) is { } mac && WakeOnLan.IsUsableMacAddress(mac)
+            ? WakeOnLan.FormatMacAddress(mac)
+            : null;
     }
 }

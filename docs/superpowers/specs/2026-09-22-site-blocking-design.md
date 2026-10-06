@@ -150,6 +150,20 @@ sub-project.
   bug there could cut off *all* internet access on whatever machine runs
   it, same reasoning as the input lock's two-machine testing requirement.
 
+## Teacher's window (changed 2026-10-05)
+
+The four buttons first lived in the "Adicionar / testar máquina" window,
+one machine at a time and asking for the Agent's thumbprint by hand. They
+now have their own `SiteBlockWindow`, opened by "Bloquear sites..." in the
+toolbar (the whole class) or in a tile's menu (one machine), like every
+other feature: "Bloquear a internet" / "Liberar a internet", and a site
+with "Bloquear o site" / "Liberar o site", sent to every chosen machine at
+once, with one line per machine of what happened. The Agent's thumbprint
+comes from the classroom list ("Importar máquinas instaladas" fills it
+in); a machine without one is told to be imported again. The old window
+became "Configurações avançadas" (this PC's identity, and a machine added
+or edited by hand), at the end of the toolbar.
+
 ## Out of scope
 
 Domain categories/lists beyond a flat set of currently-blocked domains,

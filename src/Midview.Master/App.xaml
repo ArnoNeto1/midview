@@ -1,4 +1,169 @@
 <Application x:Class="Midview.Master.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Midview.Master">
+    <Application.Resources>
+        <!-- A classroom's slate for the toolbar, chalk yellow for what's selected
+             or in focus, and a light, quiet canvas so the students' screens stand out. -->
+        <SolidColorBrush x:Key="SlateBrush" Color="#1F2A2E" />
+        <SolidColorBrush x:Key="SlateHoverBrush" Color="#2C3A3F" />
+        <SolidColorBrush x:Key="SlatePressedBrush" Color="#364850" />
+        <SolidColorBrush x:Key="SlateLineBrush" Color="#33434A" />
+        <SolidColorBrush x:Key="ChalkTextBrush" Color="#E6ECEA" />
+        <SolidColorBrush x:Key="ChalkMutedBrush" Color="#93A3A6" />
+        <SolidColorBrush x:Key="ChalkDisabledBrush" Color="#5F6E72" />
+        <SolidColorBrush x:Key="ChalkYellowBrush" Color="#F2C14E" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="#EEF1F0" />
+        <SolidColorBrush x:Key="CardBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="CardLineBrush" Color="#D3DBDA" />
+        <SolidColorBrush x:Key="CardLineHoverBrush" Color="#9BAAAD" />
+        <SolidColorBrush x:Key="InkBrush" Color="#1F2A2E" />
+        <SolidColorBrush x:Key="InkMutedBrush" Color="#5B6B6F" />
+        <SolidColorBrush x:Key="SelectedLineBrush" Color="#D99A1E" />
+        <SolidColorBrush x:Key="SelectedFillBrush" Color="#FFF6DC" />
+        <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+        <Style TargetType="local:ToolbarButton">
+            <Setter Property="Foreground" Value="{StaticResource ChalkTextBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+            <Setter Property="Width" Value="74" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="local:ToolbarButton">
+                        <Border x:Name="Chrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                                CornerRadius="4" Padding="4,7,4,3">
+                            <StackPanel>
+                                <Grid Width="26" Height="22" HorizontalAlignment="Center">
+                                    <TextBlock x:Name="IconText" Text="{TemplateBinding Icon}" FontFamily="{StaticResource IconFont}"
+                                               FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <!-- The badge sits on a disc of the button's own color, so it reads over the icon. -->
+                                    <Border x:Name="BadgeDisc" Width="14" Height="14" CornerRadius="7" Margin="0,0,-3,-3"
+                                            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                            Background="{Binding Background, ElementName=Chrome}">
+                                        <TextBlock x:Name="BadgeText" Text="{TemplateBinding Badge}" FontFamily="{StaticResource IconFont}"
+                                                   FontSize="10" Foreground="{StaticResource ChalkYellowBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <!-- "Opens a window of choices": just right of the icon, outside its box,
+                                         so the icon stays centred over the label. -->
+                                    <TextBlock x:Name="OptionsArrow" Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                                               Margin="0,0,-17,0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Visibility="Collapsed" />
+                                </Grid>
+                                <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12"
+                                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,5,0,0"
+                                           LineHeight="14" LineStackingStrategy="BlockLineHeight" Height="28" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Badge" Value="">
+                                <Setter TargetName="BadgeDisc" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="OpensOptions" Value="True">
+                                <Setter TargetName="OptionsArrow" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SlateHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SlatePressedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource ChalkYellowBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource ChalkDisabledBrush}" />
+                                <Setter TargetName="BadgeText" Property="Foreground" Value="{StaticResource ChalkDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One group of the toolbar: its buttons, then its name underneath. -->
+        <Style x:Key="ToolbarGroupCaption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource ChalkMutedBrush}" />
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,2,0,6" />
+        </Style>
+        <Style x:Key="ToolbarSeparator" TargetType="Rectangle">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Fill" Value="{StaticResource SlateLineBrush}" />
+            <Setter Property="Margin" Value="6,10,6,10" />
+        </Style>
+
+        <!-- A student machine in the grid: a white card around its screen and name. -->
+        <Style x:Key="MachineTileButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="7">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardLineHoverBrush}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
+                                <Setter TargetName="Card" Property="BorderThickness" Value="2" />
+                                <Setter TargetName="Card" Property="Padding" Value="6" />
+                                <Setter TargetName="Card" Property="Background" Value="{StaticResource SelectedFillBrush}" />
+                            </DataTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Every other window's buttons, so they all look like one program. -->
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardLineBrush}" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource CanvasBrush}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource CardLineHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource CardLineBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource CardLineHoverBrush}" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource CanvasBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
 </Application>

@@ -1,28 +1,100 @@
 <Window x:Class="Midview.Master.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Midview - Sala de aula" Height="720" Width="1180"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Midview - Sala de aula" Height="760" Width="1360"
+        Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
         Closed="OnWindowClosed">
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Background="#FF2D2D30">
-            <Button Content="Adicionar / testar máquina" Click="OnAddMachineClicked" Padding="10,4" Margin="4" />
-            <Button Content="Instalar nos alunos..." Click="OnLabInstallClicked" Padding="10,4" Margin="4" />
-            <Button Content="Enviar mensagem para a turma" Click="OnMessageClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Enviar arquivo para a turma" Click="OnFileClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Recolher arquivos da turma" Click="OnCollectClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Fechar programas da turma" Click="OnCloseAppsClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Bloquear programas da turma..." Click="OnBlockAppsClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Desligar a turma..." Click="OnPowerClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Ligar a turma..." Click="OnWakeClassClicked" Padding="10,4" Margin="4" />
-            <Button Content="Agendar ligar/desligar..." Click="OnScheduleClicked" Padding="10,4" Margin="4" />
-        </StackPanel>
-        <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Bottom" Margin="8,4" TextWrapping="Wrap" />
-        <Grid Background="#FFF0F0F0">
-            <TextBlock x:Name="EmptyRosterTextBlock" Visibility="Collapsed"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Foreground="Gray"
-                       Text="Nenhuma máquina na lista da sala ainda.&#x0a;Use &quot;Adicionar / testar máquina&quot; para testar uma máquina e salvá-la aqui." />
+        <!-- Grouped like the actions they hold; one row from about 1340 px wide,
+             and whole groups move to a second row on a narrower window. -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource SlateBrush}" Padding="8,2">
+            <WrapPanel>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton x:Name="ViewButton" Content="Ver a tela" Icon="&#xE890;" Click="OnViewSelectedClicked"
+                                             IsEnabled="False" ToolTip="Abre a tela da máquina selecionada, só para ver." />
+                        <local:ToolbarButton x:Name="ControlButton" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
+                                             IsEnabled="False" ToolTip="Controla a máquina selecionada e trava o teclado e o mouse do aluno." />
+                        <!-- Becomes "Desbloquear telas" while any screen is locked (UpdateScreenLockButton). -->
+                        <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear telas" Icon="&#xE7F4;" Badge="&#xE72E;"
+                                             Click="OnScreenLockClassClicked"
+                                             ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
+                    </StackPanel>
+                    <TextBlock Text="Tela" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Mensagem" Icon="&#xE8BD;" Click="OnMessageClassClicked" OpensOptions="True"
+                                             ToolTip="Envia uma mensagem para a turma toda." />
+                        <local:ToolbarButton Content="Enviar arquivo" Icon="&#xE898;" Click="OnFileClassClicked" OpensOptions="True"
+                                             ToolTip="Envia um arquivo para a turma toda." />
+                        <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" Click="OnCollectClassClicked" OpensOptions="True"
+                                             ToolTip="Recolhe o que os alunos colocaram em &quot;Entregar ao professor&quot;." />
+                        <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
+                                             ToolTip="Abre um site no navegador da turma toda." />
+                        <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" Click="OnOpenProgramClassClicked" OpensOptions="True"
+                                             ToolTip="Abre um programa na turma toda, como o Executar do Windows (ex.: powershell)." />
+                    </StackPanel>
+                    <TextBlock Text="Turma" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" Click="OnCloseAppsClassClicked" OpensOptions="True"
+                                             ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
+                        <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" Click="OnBlockAppsClassClicked" OpensOptions="True"
+                                             ToolTip="Impede programas de abrir nas máquinas da turma." />
+                        <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" Click="OnSiteBlockClassClicked" OpensOptions="True"
+                                             ToolTip="Bloqueia a internet inteira ou alguns sites na turma." />
+                    </StackPanel>
+                    <TextBlock Text="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" Click="OnPowerClassClicked" OpensOptions="True"
+                                             ToolTip="Desliga a turma, com aviso aos alunos." />
+                        <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" Click="OnRestartClassClicked" OpensOptions="True"
+                                             ToolTip="Reinicia a turma, com aviso aos alunos." />
+                        <local:ToolbarButton Content="Ligar" Icon="&#xE945;" Click="OnWakeClassClicked"
+                                             ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
+                        <local:ToolbarButton Content="Agendar" Icon="&#xE787;" Click="OnScheduleClicked" OpensOptions="True"
+                                             ToolTip="Escolhe dias e horários para ligar e desligar o laboratório." />
+                    </StackPanel>
+                    <TextBlock Text="Energia" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
+                                             ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, permite outro professor e tem os ajustes avançados." />
+                    </StackPanel>
+                    <TextBlock Text="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+            </WrapPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
+                BorderThickness="0,1,0,0" Padding="14,7">
+            <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource InkMutedBrush}" FontSize="13" TextWrapping="Wrap" />
+        </Border>
+
+        <Grid Background="{StaticResource CanvasBrush}">
+            <StackPanel x:Name="EmptyRosterPanel" Visibility="Collapsed" Panel.ZIndex="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock FontSize="14" TextAlignment="Center" Foreground="{StaticResource InkMutedBrush}"
+                           Text="Nenhuma máquina na sala ainda.&#x0a;Instale o Midview Aluno nas máquinas e procure-as na rede." />
+                <Button Content="Procurar máquinas na rede" Click="OnSearchNetworkClicked"
+                        HorizontalAlignment="Center" Margin="0,12,0,0" Padding="16,7" />
+            </StackPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="MachinesItemsControl" Margin="6">
+                <ItemsControl x:Name="MachinesItemsControl" Margin="10">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -30,31 +102,68 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Margin="6" Padding="4" Click="OnMachineClicked"
-                                    ToolTip="Clique para abrir o controle total. Botão direito para mais opções.">
+                            <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
+                                    PreviewMouseRightButtonDown="OnMachineRightClicked"
+                                    ToolTip="Clique para selecionar. Botão direito para mais opções.">
                                 <Button.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Header="Ver a tela" Click="OnViewMachineClicked" />
+                                        <MenuItem Header="Controlar (trava o teclado e o mouse do aluno)" Click="OnControlMachineClicked" />
+                                        <MenuItem Header="Bloquear a tela" Click="OnLockMachineClicked" />
+                                        <MenuItem Header="Desbloquear a tela" Click="OnUnlockMachineClicked" />
+                                        <Separator />
                                         <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
                                         <MenuItem Header="Conversar (chat)..." Click="OnChatMachineClicked" />
                                         <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
                                         <MenuItem Header="Recolher arquivos..." Click="OnCollectMachineClicked" />
+                                        <!-- Filled with the saved items when opened (MainWindow.LaunchMenu.cs). -->
+                                        <MenuItem Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
+                                            <MenuItem Header="Outro site..." Click="OnOpenWebsiteMachineClicked" />
+                                        </MenuItem>
+                                        <MenuItem Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
+                                            <MenuItem Header="Outro programa..." Click="OnOpenProgramMachineClicked" />
+                                        </MenuItem>
+                                        <Separator />
                                         <MenuItem Header="Fechar programas..." Click="OnCloseAppsMachineClicked" />
                                         <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
-                                        <MenuItem Header="Desligar / reiniciar..." Click="OnPowerMachineClicked" />
-                                        <MenuItem Header="Ligar..." Click="OnWakeMachineClicked" />
-                                        <MenuItem Header="Testar / bloquear sites..." Click="OnEditMachineClicked" />
+                                        <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
+                                        <Separator />
+                                        <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
+                                        <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
+                                        <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
+                                        <Separator />
+                                        <MenuItem Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />
                                         <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                     </ContextMenu>
                                 </Button.ContextMenu>
                                 <StackPanel>
-                                    <Grid Width="256" Height="144" Background="Black">
-                                        <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
-                                        <TextBlock Text="{Binding Status}" Foreground="White" Margin="8"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   TextAlignment="Center" TextWrapping="Wrap" />
-                                    </Grid>
-                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" Margin="0,4,0,0" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding BlockBadge}" FontSize="11" Foreground="#B00020" HorizontalAlignment="Center">
+                                    <Border Width="256" Height="144" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
+                                        <Grid>
+                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                                            <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10" FontSize="13"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       TextAlignment="Center" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource InkBrush}"
+                                               Margin="0,7,0,1" HorizontalAlignment="Center" />
+                                    <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ScreenLockAlert}" Value="True">
+                                                        <Setter Property="Foreground" Value="#B3261E" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ScreenLockBadge}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Style.Triggers>

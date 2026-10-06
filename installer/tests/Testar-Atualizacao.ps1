@@ -1,12 +1,13 @@
-# Installs Midview on this Windows machine with the lab installer, then
-# updates it over the network for real -- the Agent service, the service
-# control manager, the switch between builds, the restarts: what the unit
-# tests fake -- and finally reinstalls and uninstalls it with the USB
-# scripts. Run by .github/workflows/atualizacao.yml on a throwaway runner,
-# as administrator, under Windows PowerShell 5.1:
+# Installs Midview on this Windows machine with the setup program (silently,
+# /TIPO=aluno), pairs a test teacher with it for real (the code on the
+# student's screen included), updates it over the network for real -- the
+# Agent service, the service control manager, the switch between builds,
+# the restarts: what the unit tests fake -- and finally reinstalls it with
+# the setup and uninstalls it. Run by .github/workflows/atualizacao.yml on a
+# throwaway runner, as administrator, under Windows PowerShell 5.1:
 #
 #   powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Atualizacao.ps1 `
-#       -Pacote <built package> -Ferramenta <Midview.E2E.exe> [-Registros <folder>]
+#       -Pacote <Gerar-Instalador output> -Ferramenta <Midview.E2E.exe> [-Registros <folder>]
 #
 # It changes this machine (installs the MidviewAgent service, then removes
 # it): never run it on a machine that matters.
@@ -32,7 +33,11 @@ if (-not $Registros) {
 New-Item -ItemType Directory -Path $Registros -Force | Out-Null
 
 $teacher = Join-Path $work 'professor.pfx'
-$usbExe = Join-Path $env:ProgramFiles 'Midview\Midview.Agent.exe'
+$machine = Join-Path $work 'maquina.json'
+$setup = @(Get-ChildItem -LiteralPath $Pacote -Filter 'Midview-Instalador-*.exe' | Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
+$studentProgram = Join-Path $Pacote 'programa\aluno'
+$installedExe = Join-Path $env:ProgramFiles 'Midview\Midview.Agent.exe'
+$uninstaller = Join-Path $env:ProgramFiles 'Midview\unins000.exe'
 $versions = Join-Path $env:ProgramFiles 'Midview.update'
 $data = Join-Path $env:ProgramData 'Midview'
 $stateFolder = Join-Path $data 'update'
@@ -55,10 +60,16 @@ function Invoke-Tool([string[]]$Arguments) {
     return $LASTEXITCODE
 }
 
-function Invoke-Script([string]$Name, [string[]]$Arguments) {
-    $path = Join-Path $Pacote "programa\scripts\$Name"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $path @Arguments | Out-Host
-    return $LASTEXITCODE
+function Invoke-Setup([string[]]$Arguments) {
+    $process = Start-Process -FilePath $setup -ArgumentList $Arguments -Wait -PassThru
+    return $process.ExitCode
+}
+
+# Silently, the way an unattended uninstall runs: it keeps the paired
+# teachers (C:\ProgramData\Midview), which the caller then removes.
+function Invoke-Uninstall([string]$Log) {
+    $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$Log") -Wait -PassThru
+    return $process.ExitCode
 }
 
 function Get-Service-Config {
@@ -69,17 +80,16 @@ function Test-RecoveryTask {
     $null -ne (Get-ScheduledTask -TaskName $recoveryTask -ErrorAction SilentlyContinue)
 }
 
-# A copy of the package's student program under another build label (so
+# A copy of the setup's student program under another build label (so
 # another fingerprint), optionally changed.
 function New-Build([string]$Name, [string]$Label, [scriptblock]$Change) {
     $target = Join-Path $work $Name
-    New-Item -ItemType Directory -Path (Join-Path $target 'programa') -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $Pacote 'programa\aluno') -Destination (Join-Path $target 'programa\aluno') -Recurse
-    $manifest = Join-Path $target 'programa\aluno\midview-build.json'
+    Copy-Item -LiteralPath $studentProgram -Destination $target -Recurse
+    $manifest = Join-Path $target 'midview-build.json'
     $text = [IO.File]::ReadAllText($manifest) -replace '"build": "[^"]*"', ('"build": "' + $Label + '"')
     [IO.File]::WriteAllText($manifest, $text, (New-Object Text.UTF8Encoding $false))
     if ($Change) {
-        & $Change (Join-Path $target 'programa\aluno') | Out-Null
+        & $Change $target | Out-Null
     }
     return $target
 }
@@ -94,15 +104,19 @@ function Save-Logs([string]$Suffix) {
 
 $failed = $false
 try {
-    Step 'Autorizar um professor de teste no pacote'
-    Check ((Invoke-Tool @('authorize', $Pacote, $teacher)) -eq 0) 'the test teacher is authorized in the package'
-
-    Step 'Instalar pelo pendrive (Instalar-Aluno)'
-    Check ((Invoke-Script 'Instalar-Aluno.ps1' @('-Pacote', $Pacote)) -eq 0) 'Instalar-Aluno finishes'
+    Step 'Instalar com o instalador (aluno, silencioso)'
+    Check ($null -ne $setup) "the setup is in $Pacote"
+    Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/TIPO=aluno', "/LOG=$Registros\instalar.log")) -eq 0) 'the setup finishes'
     $service = Get-Service-Config
     Check ($service.State -eq 'Running') "the service runs ($($service.State))"
-    Check ($service.PathName -eq "`"$usbExe`"") "from the installed folder ($($service.PathName))"
-    Check ((Invoke-Tool @('status', $Pacote, $teacher, $Pacote)) -eq 0) "the Agent reports the package's build"
+    Check ($service.PathName -eq "`"$installedExe`"") "from the installed folder ($($service.PathName))"
+    Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES')) -ne 0) 'a silent install without /TIPO is refused'
+    Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/TIPO=professor')) -ne 0) 'installing the other kind is refused'
+    Check (-not (Test-Path -LiteralPath (Join-Path $env:ProgramFiles 'Midview Professor'))) 'and nothing of it was installed'
+
+    Step 'Parear um professor de teste (o codigo aparece na tela do aluno)'
+    Check ((Invoke-Tool @('pair', $teacher, $machine)) -eq 0) 'the test teacher pairs with the machine'
+    Check ((Invoke-Tool @('status', $machine, $teacher, $studentProgram)) -eq 0) "the Agent reports the setup's build to the paired teacher"
     Check (Test-Path -LiteralPath $stateFolder) 'the Agent made its update folder'
     $open = @((Get-Acl -LiteralPath $stateFolder).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) |
             Where-Object { $_.IdentityReference.Value -notin @('S-1-5-18', 'S-1-5-32-544') })
@@ -110,7 +124,7 @@ try {
 
     Step 'Atualizar pela rede para uma versao nova (tem que confirmar)'
     $good = New-Build 'versao-boa' '2099-01-01 00:00 e2e-boa' $null
-    Check ((Invoke-Tool @('push', $Pacote, $good, $teacher, 'committed')) -eq 0) 'the new build is committed and running'
+    Check ((Invoke-Tool @('push', $machine, $good, $teacher, 'committed')) -eq 0) 'the new build is committed and running'
     $service = Get-Service-Config
     Check ($service.State -eq 'Running') "the service runs ($($service.State))"
     Check ($service.PathName -like "`"$versions\*\Midview.Agent.exe`"") "from Midview.update ($($service.PathName))"
@@ -118,38 +132,42 @@ try {
     $goodFolder = Split-Path -Parent $goodPath.Trim('"')
     Check (Test-Path -LiteralPath (Join-Path $goodFolder 'Midview.Session.exe')) 'the Session is next to the new Agent'
     Check (-not (Test-RecoveryTask)) 'the boot recovery task is gone'
-    Check (Test-Path -LiteralPath $usbExe) 'the previous build is kept'
+    Check (Test-Path -LiteralPath $installedExe) 'the previous build is kept'
 
     Step 'Atualizar para uma versao quebrada (tem que voltar sozinha)'
     $broken = New-Build 'versao-quebrada' '2099-01-02 00:00 e2e-quebrada' {
         param($folder)
         [IO.File]::WriteAllText((Join-Path $folder 'Midview.Agent.dll'), 'isto nao e uma dll')
     }
-    Check ((Invoke-Tool @('push', $Pacote, $broken, $teacher, 'rolledBack')) -eq 0) 'the broken build is rolled back'
+    Check ((Invoke-Tool @('push', $machine, $broken, $teacher, 'rolledBack')) -eq 0) 'the broken build is rolled back'
     $service = Get-Service-Config
     Check ($service.State -eq 'Running') "the service runs ($($service.State))"
     Check ($service.PathName -eq $goodPath) "on the build before it ($($service.PathName))"
-    Check ((Invoke-Tool @('status', $Pacote, $teacher, $good)) -eq 0) 'the Agent reports the good build again'
+    Check ((Invoke-Tool @('status', $machine, $teacher, $good)) -eq 0) 'the Agent reports the good build again'
     Check (-not (Test-RecoveryTask)) 'the boot recovery task is gone'
 
-    Step 'Reinstalar pelo pendrive por cima da versao da rede'
+    Step 'Reinstalar com o instalador por cima da versao da rede'
     Save-Logs 'antes-de-reinstalar'
-    Check ((Invoke-Script 'Instalar-Aluno.ps1' @('-Pacote', $Pacote)) -eq 0) 'Instalar-Aluno finishes'
+    Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/TIPO=aluno', "/LOG=$Registros\reinstalar.log")) -eq 0) 'the setup finishes'
     $service = Get-Service-Config
     Check ($service.State -eq 'Running') "the service runs ($($service.State))"
-    Check ($service.PathName -eq "`"$usbExe`"") "from the installed folder again ($($service.PathName))"
+    Check ($service.PathName -eq "`"$installedExe`"") "from the installed folder again ($($service.PathName))"
     Check (-not (Test-Path -LiteralPath $versions)) 'Midview.update is gone'
     Check (-not (Test-Path -LiteralPath (Join-Path $stateFolder 'update-state.json'))) 'the update record is gone'
-    Check ((Invoke-Tool @('status', $Pacote, $teacher, $Pacote)) -eq 0) "the Agent reports the package's build"
+    Check ((Invoke-Tool @('status', $machine, $teacher, $studentProgram)) -eq 0) 'the teacher is still paired after reinstalling'
 
-    Step 'Desinstalar (Desinstalar-Aluno -RemoverDados)'
+    Step 'Desinstalar (silencioso)'
     Save-Logs 'antes-de-desinstalar'
-    Check ((Invoke-Script 'Desinstalar-Aluno.ps1' @('-RemoverDados')) -eq 0) 'Desinstalar-Aluno finishes'
+    Check ((Invoke-Uninstall "$Registros\desinstalar.log") -eq 0) 'the uninstaller finishes'
+    $deadline = (Get-Date).AddSeconds(60)
+    while ((Get-Service-Config) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 2
+    }
     Check ($null -eq (Get-Service-Config)) 'the service is gone'
-    Check (-not (Test-Path -LiteralPath (Split-Path -Parent $usbExe))) 'the program is gone'
+    Check (-not (Test-Path -LiteralPath (Split-Path -Parent $installedExe))) 'the program is gone'
     Check (-not (Test-Path -LiteralPath $versions)) 'Midview.update is gone'
-    Check (-not (Test-Path -LiteralPath $data)) 'the data folder is gone'
-}
+    Check (Test-Path -LiteralPath (Join-Path $data 'trusted-masters.json')) 'a silent uninstall keeps the paired teachers'
+    Remove-Item -LiteralPath $data -Recurse -Force }
 catch {
     $failed = $true
     Write-Host ''

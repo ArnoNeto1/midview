@@ -1,22 +1,26 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using Midview.Master;
 using Midview.Protocol;
 
 // Plays the teacher's MidviewMaster against the Agent installed on this
-// machine, for the real-Windows check of the network update
-// (installer/tests/Testar-Atualizacao.ps1, run by
-// .github/workflows/atualizacao.yml):
+// machine, for the real-Windows checks of pairing, the network update and
+// program blocking (installer/tests/Testar-Atualizacao.ps1 and
+// Testar-Bloqueio.ps1, run by .github/workflows/atualizacao.yml and
+// bloqueio.yml):
 //
-//   authorize <package> <teacher.pfx>
-//       creates a teacher and authorizes it in the package, before installing
-//   status <package> <teacher.pfx> [<expected package>]
-//       waits for the Agent to report its build (the expected package's)
-//   push <package> <new package> <teacher.pfx> <committed|rolledBack>
+//   pair <teacher.pfx> <machine.json>
+//       creates a teacher and pairs it with the machine, as "Parear" does,
+//       checking that the code really shows on the student's screen;
+//       writes the machine, as the classroom list keeps it
+//   status <machine.json> <teacher.pfx> [<expected student folder>]
+//       waits for the Agent to report its build (the expected folder's)
+//   push <machine.json> <new student folder> <teacher.pfx> <committed|rolledBack>
 //       updates over the network and follows the attempt to the end
-//   block <package> <teacher.pfx> <blocklist|allowonly|lift> [programs...]
+//   block <machine.json> <teacher.pfx> <blocklist|allowonly|lift> [programs...]
 //       applies a program block to the machine and reads it back
-//   block-status <package> <teacher.pfx>
+//   block-status <machine.json> <teacher.pfx>
 //       prints the block the machine follows
 //   facts
 //       prints this process's session, the console session and whether it
@@ -28,26 +32,26 @@ using Midview.Protocol;
 //       the same, but doesn't watch the program for the first seconds: for
 //       one that a block is expected to end, which would look like a failure
 //
-// <package> is the one the machine was installed from: its maquinas\ folder
-// has the machine's file. Exit code 0 means the expected happened.
+// <machine.json> is what pair wrote; the machine is reached over loopback.
+// Exit code 0 means the expected happened.
 return args switch
 {
-    ["authorize", var package, var pfx] => Authorize(package, pfx),
-    ["status", var package, var pfx] => Status(package, pfx, null),
-    ["status", var package, var pfx, var expected] => Status(package, pfx, expected),
-    ["push", var package, var update, var pfx, var expected] => Push(package, update, pfx, expected),
-    ["block", var package, var pfx, var mode, .. var programs] => Block(package, pfx, mode, programs),
-    ["block-status", var package, var pfx] => BlockStatus(package, pfx),
+    ["pair", var pfx, var machineFile] => Pair(pfx, machineFile),
+    ["status", var machineFile, var pfx] => Status(machineFile, pfx, null),
+    ["status", var machineFile, var pfx, var expected] => Status(machineFile, pfx, expected),
+    ["push", var machineFile, var update, var pfx, var expected] => Push(machineFile, update, pfx, expected),
+    ["block", var machineFile, var pfx, var mode, .. var programs] => Block(machineFile, pfx, mode, programs),
+    ["block-status", var machineFile, var pfx] => BlockStatus(machineFile, pfx),
     ["facts"] => Facts(),
     ["launch", var exe, .. var rest] => Launch(exe, rest, verify: true),
     ["launch-raw", var exe, .. var rest] => Launch(exe, rest, verify: false),
     _ => Usage(),
 };
 
-static int Block(string package, string pfx, string mode, string[] programs)
+static int Block(string machineFile, string pfx, string mode, string[] programs)
 {
     using var teacher = LoadTeacher(pfx);
-    var machine = InstalledMachine(package);
+    var machine = InstalledMachine(machineFile);
     var blockMode = mode switch
     {
         "blocklist" => AppBlockMode.BlockList,
@@ -67,10 +71,10 @@ static int Block(string package, string pfx, string mode, string[] programs)
     return succeeded ? 0 : 1;
 }
 
-static int BlockStatus(string package, string pfx)
+static int BlockStatus(string machineFile, string pfx)
 {
     using var teacher = LoadTeacher(pfx);
-    var status = AppBlockClient.GetStatus(InstalledMachine(package), teacher);
+    var status = AppBlockClient.GetStatus(InstalledMachine(machineFile), teacher);
     if (status.OldAgent || status.Policy is null)
     {
         Say("the Agent doesn't know program blocking");
@@ -120,20 +124,75 @@ static int Launch(string exe, string[] arguments, bool verify)
     return 3;
 }
 
-static int Authorize(string package, string pfx)
+// Creates a test teacher and pairs it with the Agent installed here, as the
+// Master's "Parear" does, checking on the way that the code really is on
+// the student's screen (a Midview.Session.exe showing it) and goes away.
+static int Pair(string pfx, string machineFile)
 {
     using var teacher = SelfSignedCertificate.Create("midview-e2e-teacher");
     File.WriteAllBytes(pfx, teacher.Export(X509ContentType.Pfx));
-    InstallPackage.AuthorizeMaster(package, teacher.Thumbprint);
-    Say($"teacher {teacher.Thumbprint} authorized in {package}");
+    using var session = PairingSession.Start("127.0.0.1", teacher, "E2E");
+    Say($"code {session.CodeText} (agent {session.AgentThumbprint})");
+
+    var shown = $"{PairingCodeArguments.CodeFlag} {session.Code:000000}";
+    if (!WaitFor(() => SessionCommandLines().Any(line => line.Contains(shown)), TimeSpan.FromSeconds(20)))
+    {
+        Say($"no Midview.Session.exe is showing {shown}");
+        session.Cancel();
+        return 1;
+    }
+    Say("the code is on the student's screen");
+
+    var machine = session.Confirm();
+    File.WriteAllText(machineFile, JsonSerializer.Serialize(machine));
+    Say($"paired with {machine.Name}: session {machine.SessionThumbprint}, mac {machine.MacAddress ?? "none"}");
+
+    if (!WaitFor(() => !SessionCommandLines().Any(line => line.Contains(PairingCodeArguments.CodeFlag)), TimeSpan.FromSeconds(20)))
+    {
+        Say("the code window is still open after the pairing ended");
+        return 1;
+    }
     return 0;
 }
 
-static int Status(string package, string pfx, string? expectedPackage)
+static bool WaitFor(Func<bool> condition, TimeSpan timeout)
+{
+    var deadline = DateTime.UtcNow + timeout;
+    while (!condition())
+    {
+        if (DateTime.UtcNow >= deadline)
+        {
+            return false;
+        }
+        Thread.Sleep(500);
+    }
+    return true;
+}
+
+// The command lines of the Midview.Session.exe processes on this machine
+// (.NET can't read another process's command line itself).
+static IReadOnlyList<string> SessionCommandLines()
+{
+    var start = new System.Diagnostics.ProcessStartInfo("powershell.exe")
+    {
+        RedirectStandardOutput = true,
+        UseShellExecute = false,
+        CreateNoWindow = true,
+    };
+    start.ArgumentList.Add("-NoProfile");
+    start.ArgumentList.Add("-Command");
+    start.ArgumentList.Add("Get-CimInstance Win32_Process -Filter \"Name='Midview.Session.exe'\" | ForEach-Object { $_.CommandLine }");
+    using var process = System.Diagnostics.Process.Start(start)!;
+    var output = process.StandardOutput.ReadToEnd();
+    process.WaitForExit();
+    return output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+static int Status(string machineFile, string pfx, string? expectedFolder)
 {
     using var teacher = LoadTeacher(pfx);
-    var machine = InstalledMachine(package);
-    var expected = expectedPackage is null ? null : Convert.ToHexString(UpdatePackage.Identify(expectedPackage).Fingerprint);
+    var machine = InstalledMachine(machineFile);
+    var expected = expectedFolder is null ? null : Convert.ToHexString(UpdatePackage.Identify(expectedFolder).Fingerprint);
     var report = WaitForBuild(machine, teacher, TimeSpan.FromMinutes(3),
         report => expected is null || string.Equals(report.Fingerprint, expected, StringComparison.OrdinalIgnoreCase));
     if (report is null)
@@ -144,11 +203,11 @@ static int Status(string package, string pfx, string? expectedPackage)
     return 0;
 }
 
-static int Push(string package, string updatePackage, string pfx, string expectedState)
+static int Push(string machineFile, string updateFolder, string pfx, string expectedState)
 {
     using var teacher = LoadTeacher(pfx);
-    var machine = InstalledMachine(package);
-    using var update = UpdatePackage.Create(updatePackage, Path.GetTempPath());
+    var machine = InstalledMachine(machineFile);
+    using var update = UpdatePackage.Create(updateFolder, Path.GetTempPath());
     var fingerprint = Convert.ToHexString(update.Fingerprint);
     var attemptId = RandomNumberGenerator.GetBytes(NetworkUpdate.AttemptIdLength);
     var attemptHex = Convert.ToHexString(attemptId);
@@ -254,23 +313,15 @@ static UpdateStatusReport? WaitForBuild(KnownMachine machine, X509Certificate2 t
 static X509Certificate2 LoadTeacher(string pfx) =>
     new(File.ReadAllBytes(pfx), (string?)null, X509KeyStorageFlags.Exportable);
 
-// Over loopback: the machine file's address is this machine anyway.
-static KnownMachine InstalledMachine(string package)
-{
-    var (machines, problems) = InstallPackage.LoadInstalledMachines(package, useComputerName: false);
-    if (machines.Count != 1)
-    {
-        throw new InvalidOperationException(
-            $"expected one machine file in {package}, found {machines.Count} ({string.Join("; ", problems)})");
-    }
-    return machines[0] with { HostAddress = "127.0.0.1" };
-}
+// What pair wrote, over loopback: the machine is this one anyway.
+static KnownMachine InstalledMachine(string machineFile) =>
+    JsonSerializer.Deserialize<KnownMachine>(File.ReadAllText(machineFile))! with { HostAddress = "127.0.0.1" };
 
 static void Say(string line) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {line}");
 
 static int Usage()
 {
-    Console.WriteLine("usage: authorize <package> <pfx> | status <package> <pfx> [<expected package>] | push <package> <new package> <pfx> <committed|rolledBack>");
+    Console.WriteLine("usage: pair <pfx> <machine.json> | status <machine.json> <pfx> [<expected student folder>] | push <machine.json> <new student folder> <pfx> <committed|rolledBack> | block <machine.json> <pfx> <mode> [programs...] | block-status <machine.json> <pfx> | facts | launch <exe> [args...] | launch-raw <exe> [args...]");
     return 2;
 }
 

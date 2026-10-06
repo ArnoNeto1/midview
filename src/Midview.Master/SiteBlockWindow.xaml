@@ -1,0 +1,32 @@
+<Window x:Class="Midview.Master.SiteBlockWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bloquear sites" Height="480" Width="520"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,12"
+                       Text="O bloqueio continua valendo se a máquina reiniciar. O Midview continua funcionando mesmo com a internet bloqueada." />
+
+            <TextBlock Text="Internet inteira:" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <WrapPanel Margin="0,0,0,12">
+                <Button Content="Bloquear a internet" Click="OnBlockInternetClicked" Padding="10,4" Margin="0,0,8,0" />
+                <Button Content="Liberar a internet" Click="OnUnblockInternetClicked" Padding="10,4" />
+            </WrapPanel>
+
+            <TextBlock Text="Um site (por exemplo youtube.com):" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBox x:Name="SiteTextBox" Margin="0,0,0,4" />
+            <WrapPanel Margin="0,0,0,4">
+                <Button Content="Bloquear o site" Click="OnBlockSiteClicked" Padding="10,4" Margin="0,0,8,0" />
+                <Button Content="Liberar o site" Click="OnUnblockSiteClicked" Padding="10,4" />
+            </WrapPanel>
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Bloqueia o endereço com e sem www (youtube.com e www.youtube.com). Outros endereços do mesmo site, como m.youtube.com, e abas que já estavam abertas podem continuar funcionando." />
+            <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

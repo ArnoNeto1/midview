@@ -6,8 +6,9 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Closes the student's programs on one machine or on the whole class (the
-// Session's WindowsAppCloser). Forcing asks the teacher to confirm first,
-// since unsaved work in the programs that don't close is lost.
+// Session's WindowsAppCloser), after warning the student for the time the
+// teacher picks. Forcing goes ahead without asking the teacher: the choice
+// itself says that unsaved work is lost.
 public partial class CloseAppsWindow : Window
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -26,26 +27,15 @@ public partial class CloseAppsWindow : Window
     private async void OnCloseClicked(object sender, RoutedEventArgs e)
     {
         var mode = ForceRadioButton.IsChecked == true ? CloseAppsMode.Force : CloseAppsMode.Ask;
-        if (mode == CloseAppsMode.Force)
-        {
-            var where = _targets.Count == 1 ? $"em {_targets[0].Name}" : $"nas {_targets.Count} máquinas da turma";
-            var answer = MessageBox.Show(this,
-                $"Encerrar à força os programas {where}?\n\nO que não fechar em 10 segundos é encerrado e o trabalho não salvo nesses programas é perdido.",
-                "Midview", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
-            if (answer != MessageBoxResult.Yes)
-            {
-                return;
-            }
-        }
-
+        var delaySeconds = OneMinuteRadioButton.IsChecked == true ? 60
+            : ThirtySecondsRadioButton.IsChecked == true ? 30
+            : 0;
         CloseButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
-        ProgressTextBlock.Text = mode == CloseAppsMode.Force
-            ? "Fechando... (os programas têm 10 segundos antes de serem encerrados)"
-            : "Fechando...";
+        ProgressTextBlock.Text = delaySeconds == 0 ? "Fechando..." : "Avisando os alunos...";
 
         // All machines at once: an offline one must not hold up the rest.
-        var payload = new[] { (byte)mode };
+        var payload = CloseAppsCommand.Encode(mode, delaySeconds);
         var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => CloseOn(machine, payload))));
 
         var failures = results.Count(result => !result.Succeeded);

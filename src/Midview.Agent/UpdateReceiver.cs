@@ -240,7 +240,7 @@ public sealed class UpdateReceiver
             {
                 try
                 {
-                    send(Result(false, $"erro na máquina: {ex.Message}"));
+                    send(Result(false, $"erro na máquina: {ErrorText.Describe(ex)}"));
                 }
                 catch (Exception sendEx) when (sendEx is IOException or ObjectDisposedException)
                 {
@@ -249,7 +249,7 @@ public sealed class UpdateReceiver
             }
             if (record is not null && !UpdateStates.IsFinal(record.State))
             {
-                TrySave(record with { State = UpdateStates.Failed, Detail = $"interrompida: {ex.Message}" });
+                TrySave(record with { State = UpdateStates.Failed, Detail = $"interrompida: {ErrorText.Describe(ex)}" });
                 DeleteAttemptFiles(attemptId);
             }
         }
@@ -319,7 +319,7 @@ public sealed class UpdateReceiver
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return $"a pasta das versões não pôde ser preparada: {ex.Message}";
+            return $"a pasta das versões não pôde ser preparada: {ErrorText.Describe(ex)}";
         }
 
         CleanOldBuilds(last);
@@ -387,7 +387,7 @@ public sealed class UpdateReceiver
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            writeProblem = $"o pacote não pôde ser gravado: {ex.Message}";
+            writeProblem = $"o pacote não pôde ser gravado: {ErrorText.Describe(ex)}";
         }
 
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -413,7 +413,7 @@ public sealed class UpdateReceiver
                     }
                     catch (IOException ex)
                     {
-                        writeProblem = $"o pacote não pôde ser gravado: {ex.Message}";
+                        writeProblem = $"o pacote não pôde ser gravado: {ErrorText.Describe(ex)}";
                     }
                 }
             }
@@ -570,7 +570,7 @@ public sealed class UpdateReceiver
         }
         catch (Exception ex)
         {
-            TrySave(record with { State = UpdateStates.Failed, Detail = $"o atualizador não pôde ser iniciado: {ex.Message}" });
+            TrySave(record with { State = UpdateStates.Failed, Detail = $"o atualizador não pôde ser iniciado: {ErrorText.Describe(ex)}" });
             DeleteAttemptFiles(record.AttemptId);
             return;
         }

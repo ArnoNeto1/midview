@@ -13,7 +13,7 @@ public class UpdatePackageTests : IDisposable
 
     public UpdatePackageTests()
     {
-        Directory.CreateDirectory(Folder);
+        Directory.CreateDirectory(_package);
     }
 
     public void Dispose()
@@ -25,7 +25,7 @@ public class UpdatePackageTests : IDisposable
         }
     }
 
-    private string Folder => UpdatePackage.StudentProgramFolder(_package);
+    private string Folder => _package;
 
     private void WriteProgram(params string[] listed) => WriteProgram(listed, NetworkUpdate.ProtocolVersion);
 
@@ -72,9 +72,7 @@ public class UpdatePackageTests : IDisposable
     [Fact]
     public void Identify_APackageWithoutTheStudentProgram_IsTooOld()
     {
-        Directory.Delete(Folder);
-
-        var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(_package));
+        var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(Path.Combine(_package, "nao-existe")));
 
         Assert.Contains("antigo demais", error.Message);
     }
@@ -96,7 +94,7 @@ public class UpdatePackageTests : IDisposable
 
         var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(_package));
 
-        Assert.Equal("O pacote não tem Midview.Session.exe.", error.Message);
+        Assert.Equal("O programa do aluno não tem Midview.Session.exe.", error.Message);
     }
 
     [Fact]
@@ -107,7 +105,7 @@ public class UpdatePackageTests : IDisposable
 
         var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(_package));
 
-        Assert.StartsWith("O pacote está incompleto", error.Message);
+        Assert.StartsWith("O programa do aluno está incompleto", error.Message);
     }
 
     [Fact]

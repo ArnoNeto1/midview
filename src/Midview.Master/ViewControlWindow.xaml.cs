@@ -8,19 +8,36 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
+// Watching only leaves the student's keyboard and mouse alone; controlling
+// locks them and sends the teacher's input instead. The toolbar button
+// switches between the two on the same connection.
 public partial class ViewControlWindow : Window
 {
     private readonly ConnectionClient _client;
+    private readonly string _machineName;
     private readonly DispatcherTimer _heartbeatTimer;
     private WriteableBitmap? _screenBitmap;
     private bool _closing;
+    private bool _controlling;
 
-    public ViewControlWindow(ConnectionClient client)
+    public ViewControlWindow(ConnectionClient client, string machineName, bool control)
     {
         InitializeComponent();
         _client = client;
+        _machineName = machineName;
 
-        _client.SendStartControl();
+        // The first message starts the screen stream either way; a heartbeat
+        // starts it without locking anything.
+        if (control)
+        {
+            _client.SendStartControl();
+        }
+        else
+        {
+            _client.SendHeartbeat();
+        }
+        _controlling = control;
+        ShowMode();
 
         _heartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _heartbeatTimer.Tick += (_, _) => RunOrCloseOnFailure(() => _client.SendHeartbeat());
@@ -218,6 +235,11 @@ public partial class ViewControlWindow : Window
 
     private void SendKey(InputEventKind kind, KeyEventArgs e)
     {
+        if (!_controlling)
+        {
+            return;
+        }
+
         // WPF reports Alt, F10 and every Alt+key combination as Key.System,
         // with the real key in SystemKey -- e.Key alone would send a
         // meaningless code for all of them.
@@ -232,12 +254,44 @@ public partial class ViewControlWindow : Window
 
     private void SendInput(InputEventKind kind, int x, int y, ushort virtualKeyCode)
     {
+        if (!_controlling)
+        {
+            return;
+        }
+
         var buffer = new byte[11];
         buffer[0] = (byte)kind;
         BitConverter.GetBytes(x).CopyTo(buffer, 1);
         BitConverter.GetBytes(y).CopyTo(buffer, 5);
         BitConverter.GetBytes(virtualKeyCode).CopyTo(buffer, 9);
         RunOrCloseOnFailure(() => _client.SendInputEvent(buffer));
+    }
+
+    private void OnControlClicked(object sender, RoutedEventArgs e)
+    {
+        RunOrCloseOnFailure(() =>
+        {
+            if (_controlling)
+            {
+                _client.SendStopControl();
+            }
+            else
+            {
+                _client.SendStartControl();
+            }
+            _controlling = !_controlling;
+        });
+        ShowMode();
+        ScreenImage.Focus();
+    }
+
+    private void ShowMode()
+    {
+        Title = $"Midview - {(_controlling ? "controlando" : "vendo")} {_machineName}";
+        ControlButton.Content = _controlling ? "Parar de controlar (só ver)" : "Controlar";
+        ModeTextBlock.Text = _controlling
+            ? "Controlando: o teclado e o mouse do aluno estão travados."
+            : "Só vendo: o aluno continua usando o computador normalmente.";
     }
 
     private void OnDisconnectClicked(object sender, RoutedEventArgs e) => Close();

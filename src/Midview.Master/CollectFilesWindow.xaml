@@ -1,7 +1,7 @@
 <Window x:Class="Midview.Master.CollectFilesWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Recolher arquivos" Height="420" Width="520"
+        Title="Recolher arquivos" Height="480" Width="560"
         WindowStartupLocation="CenterOwner">
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top">
@@ -12,6 +12,13 @@
                 <Button x:Name="OpenFolderButton" DockPanel.Dock="Right" Content="Abrir pasta" Click="OnOpenFolderClicked"
                         IsEnabled="False" Padding="10,4" Margin="8,0,0,0" />
                 <Button x:Name="CollectButton" Content="Recolher" Click="OnCollectClicked" Padding="10,4" />
+            </DockPanel>
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,4,0,4"
+                       Text="Para começar a próxima aula com tudo vazio. Os arquivos vão para a Lixeira, de onde ainda podem ser recuperados." />
+            <DockPanel Margin="0,0,0,8">
+                <Button x:Name="ClearCollectedButton" DockPanel.Dock="Right" Content="Apagar os recolhidos neste PC"
+                        Click="OnClearCollectedClicked" Padding="10,4" Margin="8,0,0,0" />
+                <Button x:Name="ClearStudentsButton" Content="Apagar as pastas dos alunos" Click="OnClearStudentsClicked" Padding="10,4" />
             </DockPanel>
             <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" />
         </StackPanel>
