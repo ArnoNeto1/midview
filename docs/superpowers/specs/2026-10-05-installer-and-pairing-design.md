@@ -100,9 +100,13 @@ and uninstaller).
     `midview-build.json`, and the Master into another;
   - it runs Inno's compiler (`ISCC.exe`) on `installer\Midview.iss`, passing
     the version and the folders;
-  - the output is `dist\MidviewSetup.exe` (version `yyyy.MM.dd.HHmm` in its properties; named `Midview-Instalador-<yyyy.MM.dd-HHmm>.exe` until 2026-10-07), and the
-    version shown in Windows is `yyyy.MM.dd.HHmm`;
-  - `midview-build.json`'s label stays as today (date and commit).
+  - the output is `dist\MidviewSetup.exe`. The version Windows shows (the
+    wizard, Installed apps, the properties of the setup and of the programs)
+    is Midview's, set in `Directory.Build.props` (0.0.1 from 2026-10-07);
+    until 2026-10-07 the setup was `Midview-Instalador-<yyyy.MM.dd-HHmm>.exe`
+    and its version that date and time;
+  - `midview-build.json`'s label stays as today (date and commit): network
+    updates compare that, not the version.
 - **CI** (`pacote.yml`): builds the setup on `windows-latest` (installing
   Inno Setup with Chocolatey if the image lacks it) and checks the scripts
   under 5.1. It keeps the setup as a download (7 days) on a manual run, and

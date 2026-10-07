@@ -4,8 +4,8 @@
 ;
 ; Built by installer\Gerar-Instalador.ps1, which compiles a UTF-8-with-BOM
 ; copy of this file and passes:
-;   /DVersao=2026.10.05.1718         the version Windows shows in the file's
-;                                    properties (the file is always MidviewSetup.exe)
+;   /DVersao=0.0.1                   Midview's version (Directory.Build.props): the
+;                                    wizard, Installed apps and MidviewSetup.exe's properties
 ;   /DPrograma=<folder>              aluno\, professor\ and instalador\
 ;   /DSaida=<folder>                 where the setup goes
 ;   /DAssets=<folder>                the repository's assets\ (icon and wizard images,
@@ -15,7 +15,7 @@
 ; MidviewAgent service could not be configured (Configurar-Aluno.ps1).
 
 #ifndef Versao
-  #define Versao "0.0.0.0"
+  #define Versao "0.0.0"
 #endif
 #ifndef Programa
   #error Passe /DPrograma=<pasta com aluno, professor e instalador>: use installer\Gerar-Instalador.ps1.
@@ -34,6 +34,9 @@ AppVersion={#Versao}
 AppVerName=Midview {#Versao}
 AppPublisher=Midview
 VersionInfoVersion={#Versao}
+; The same text in the setup's properties, not a padded "0.0.1.0".
+VersionInfoTextVersion={#Versao}
+VersionInfoProductTextVersion={#Versao}
 DefaultDirName={code:PastaPadrao}
 UsePreviousAppDir=no
 DisableDirPage=yes

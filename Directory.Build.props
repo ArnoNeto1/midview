@@ -1,0 +1,13 @@
+<Project>
+  <!-- Midview's version, the one place to change it (0.0.1, 0.0.2, 0.1.0...).
+       The programs carry it in their file properties, and
+       installer\Gerar-Instalador.ps1 reads it for the setup: its wizard,
+       Installed apps and MidviewSetup.exe's properties. Network updates don't
+       go by it: they compare each build's date, time and commit
+       (midview-build.json). -->
+  <PropertyGroup>
+    <Version>0.0.1</Version>
+    <!-- "0.0.1" in the properties, not "0.0.1+<commit>". -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

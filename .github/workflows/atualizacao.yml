@@ -18,6 +18,7 @@ on:
       - 'src/Midview.Master/Update*'
       - 'src/Midview.Master/PairingSession.cs'
       - 'installer/**'
+      - 'Directory.Build.props'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/atualizacao.yml'
   pull_request:
@@ -27,6 +28,7 @@ on:
       - 'src/Midview.Master/Update*'
       - 'src/Midview.Master/PairingSession.cs'
       - 'installer/**'
+      - 'Directory.Build.props'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/atualizacao.yml'
   workflow_dispatch:

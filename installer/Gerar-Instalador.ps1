@@ -4,7 +4,7 @@
 #
 # Needs the .NET 8 SDK and Inno Setup 6. The programs are published
 # self-contained for win-x64, so no computer needs .NET installed. Output:
-#   <Output>\MidviewSetup.exe   the setup; its version (yyyy.MM.dd.HHmm) is in its file properties
+#   <Output>\MidviewSetup.exe   the setup; Midview's version (Directory.Build.props) is in its properties
 #   <Output>\programa\aluno, professor, instalador   what went into it (the tests use them)
 #
 # This file stays ASCII-only: Windows PowerShell 5.1 reads a .ps1 without a
@@ -104,7 +104,13 @@ function Write-BuildManifest([string]$Folder, [datetime]$When) {
 $iscc = Find-Iscc
 $when = Get-Date
 $invariant = [Globalization.CultureInfo]::InvariantCulture
-$version = $when.ToString('yyyy.MM.dd.HHmm', $invariant)
+# Midview's version, set in Directory.Build.props (the programs get it from
+# there too). The build's date, time and commit go in midview-build.json.
+[xml]$buildProps = Get-Content -LiteralPath (Join-Path $repository 'Directory.Build.props') -Raw
+$version = "$($buildProps.Project.PropertyGroup.Version)".Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "Directory.Build.props needs a Version like 0.0.1 (found '$version')."
+}
 
 New-Item -ItemType Directory -Path $Output -Force | Out-Null
 if (Test-Path -LiteralPath $programs) {

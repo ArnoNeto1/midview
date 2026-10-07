@@ -18,6 +18,7 @@ on:
       - 'src/Midview.Master/AppBlock*'
       - 'src/Midview.Master/CommandClient.cs'
       - 'installer/**'
+      - 'Directory.Build.props'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/bloqueio.yml'
   pull_request:
@@ -28,6 +29,7 @@ on:
       - 'src/Midview.Master/AppBlock*'
       - 'src/Midview.Master/CommandClient.cs'
       - 'installer/**'
+      - 'Directory.Build.props'
       - 'tests/Midview.E2E/**'
       - '.github/workflows/bloqueio.yml'
   workflow_dispatch:

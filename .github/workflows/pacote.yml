@@ -14,10 +14,12 @@ on:
     paths:
       - 'src/**'
       - 'installer/**'
+      - 'Directory.Build.props'
       - '.github/workflows/pacote.yml'
   pull_request:
     paths:
       - 'installer/**'
+      - 'Directory.Build.props'
       - '.github/workflows/pacote.yml'
   workflow_dispatch:
 
