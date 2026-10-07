@@ -1,5 +1,5 @@
 # Configura o Midview Aluno nesta máquina depois que o instalador
-# (Midview-Instalador) copiou os arquivos para a pasta acima desta:
+# (MidviewSetup) copiou os arquivos para a pasta acima desta:
 #   1. espera uma atualização pela rede terminar, se houver uma, e para o
 #      Midview;
 #   2. prepara a identidade da máquina (Midview.Agent.exe --prepare-install);

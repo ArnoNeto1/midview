@@ -42,7 +42,7 @@ New-Item -ItemType Directory -Path $Registros -Force | Out-Null
 
 $teacher = Join-Path $work 'professor.pfx'
 $machine = Join-Path $work 'maquina.json'
-$setup = @(Get-ChildItem -LiteralPath $Pacote -Filter 'Midview-Instalador-*.exe' | Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
+$setup = @(Get-ChildItem -LiteralPath $Pacote -Filter 'MidviewSetup.exe' | Select-Object -First 1 | ForEach-Object { $_.FullName })[0]
 $studentProgram = Join-Path $Pacote 'programa\aluno'
 $uninstaller = Join-Path $env:ProgramFiles 'Midview\unins000.exe'
 $data = Join-Path $env:ProgramData 'Midview'

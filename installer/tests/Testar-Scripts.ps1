@@ -46,10 +46,15 @@ foreach ($name in 'Comum.ps1', 'Parar-Aluno.ps1', 'Configurar-Aluno.ps1', 'Desin
 }
 Check (-not (Test-Path -LiteralPath (Join-Path $scripts 'Instalar-Aluno.ps1'))) 'and no longer the USB-stick installer'
 
-$setups = @(Get-ChildItem -LiteralPath $Pacote -Filter 'Midview-Instalador-*.exe')
-Check ($setups.Count -eq 1) "there is exactly one setup ($($setups.Count))"
-if ($setups.Count -eq 1) {
-    Check ($setups[0].Name -match '^Midview-Instalador-\d{4}\.\d{2}\.\d{2}-\d{4}\.exe$') "it is named with its date and time ($($setups[0].Name))"
+$setup = Join-Path $Pacote 'MidviewSetup.exe'
+Check (Test-Path -LiteralPath $setup) 'the setup is MidviewSetup.exe'
+$programsThere = @(Get-ChildItem -LiteralPath $Pacote -Filter '*.exe')
+Check ($programsThere.Count -eq 1) "and it is the only program there ($(($programsThere | ForEach-Object { $_.Name }) -join ', '))"
+if (Test-Path -LiteralPath $setup) {
+    # Not in the name any more: the date and time it was built are its
+    # version. Inno pads the text with spaces Windows doesn't show.
+    $setupVersion = "$((Get-Item -LiteralPath $setup).VersionInfo.ProductVersion)".Trim()
+    Check ($setupVersion -match '^\d{4}\.\d{1,2}\.\d{1,2}\.\d{1,4}$') "its version is in its file properties ($setupVersion)"
 }
 
 foreach ($program in 'aluno\Midview.Agent.exe', 'aluno\Midview.Session.exe', 'professor\Midview.Master.exe') {

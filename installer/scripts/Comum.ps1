@@ -133,7 +133,7 @@ function Set-ExecutavelDoServico([string]$CaminhoServico) {
     }
 }
 
-# Depois de instalar pelo Midview-Instalador (ou para desinstalar), nada do que uma
+# Depois de instalar pelo MidviewSetup (ou para desinstalar), nada do que uma
 # atualização pela rede deixou vale mais. Só com o serviço parado e
 # apontando para fora de Midview.update. -Obrigatorio (ao desinstalar, quando
 # não fica Agent nenhum para apagar depois) falha se Midview.update ficar.

@@ -4,8 +4,8 @@
 ;
 ; Built by installer\Gerar-Instalador.ps1, which compiles a UTF-8-with-BOM
 ; copy of this file and passes:
-;   /DVersao=2026.10.05.1718         the version Windows shows
-;   /DVersaoArquivo=2026.10.05-1718  in the file name
+;   /DVersao=2026.10.05.1718         the version Windows shows in the file's
+;                                    properties (the file is always MidviewSetup.exe)
 ;   /DPrograma=<folder>              aluno\, professor\ and instalador\
 ;   /DSaida=<folder>                 where the setup goes
 ;   /DAssets=<folder>                the repository's assets\ (icon and wizard images,
@@ -16,9 +16,6 @@
 
 #ifndef Versao
   #define Versao "0.0.0.0"
-#endif
-#ifndef VersaoArquivo
-  #define VersaoArquivo "dev"
 #endif
 #ifndef Programa
   #error Passe /DPrograma=<pasta com aluno, professor e instalador>: use installer\Gerar-Instalador.ps1.
@@ -60,7 +57,7 @@ ChangesAssociations=yes
 WizardImageFile={#Assets}\instalador-grande-164.bmp,{#Assets}\instalador-grande-328.bmp
 WizardSmallImageFile={#Assets}\instalador-pequena-55.bmp,{#Assets}\instalador-pequena-69.bmp,{#Assets}\instalador-pequena-83.bmp,{#Assets}\instalador-pequena-110.bmp
 OutputDir={#Saida}
-OutputBaseFilename=Midview-Instalador-{#VersaoArquivo}
+OutputBaseFilename=MidviewSetup
 Compression=lzma2
 SolidCompression=yes
 SetupLogging=yes

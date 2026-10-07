@@ -20,7 +20,7 @@ teacher's program, by pairing over the network.
 
 ## Goals
 
-- One file, `Midview-Instalador-<versão>.exe`, installs either kind of
+- One file, `MidviewSetup.exe` (its version in its file properties), installs either kind of
   computer, shows in "Aplicativos instalados", and uninstalls cleanly.
 - A freshly installed student machine trusts nobody until a teacher pairs
   with it. Pairing needs no USB stick, no files and no thumbprints typed by
@@ -100,7 +100,7 @@ and uninstaller).
     `midview-build.json`, and the Master into another;
   - it runs Inno's compiler (`ISCC.exe`) on `installer\Midview.iss`, passing
     the version and the folders;
-  - the output is `dist\Midview-Instalador-<yyyy.MM.dd-HHmm>.exe`, and the
+  - the output is `dist\MidviewSetup.exe` (version `yyyy.MM.dd.HHmm` in its properties; named `Midview-Instalador-<yyyy.MM.dd-HHmm>.exe` until 2026-10-07), and the
     version shown in Windows is `yyyy.MM.dd.HHmm`;
   - `midview-build.json`'s label stays as today (date and commit).
 - **CI** (`pacote.yml`): builds the setup on `windows-latest` (installing
@@ -262,7 +262,7 @@ the whole classroom list and reports how many machines answered.
      <build>" and opens the existing `UpdateWindow` on the bundled `aluno`
      folder, found next to the Master's own executable. Without that
      folder, as in a development build, the button is disabled with "Esta
-     cópia não traz o programa do aluno. Instale pelo Midview-Instalador."
+     cópia não traz o programa do aluno. Instale pelo MidviewSetup."
      To update a class: run the new setup on the teacher's PC, then click
      this.
   3. **Permitir novo professor.** Sends `AllowNewTeacher` to the class, after

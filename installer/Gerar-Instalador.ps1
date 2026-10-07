@@ -4,7 +4,7 @@
 #
 # Needs the .NET 8 SDK and Inno Setup 6. The programs are published
 # self-contained for win-x64, so no computer needs .NET installed. Output:
-#   <Output>\Midview-Instalador-<yyyy.MM.dd-HHmm>.exe
+#   <Output>\MidviewSetup.exe   the setup; its version (yyyy.MM.dd.HHmm) is in its file properties
 #   <Output>\programa\aluno, professor, instalador   what went into it (the tests use them)
 #
 # This file stays ASCII-only: Windows PowerShell 5.1 reads a .ps1 without a
@@ -105,13 +105,15 @@ $iscc = Find-Iscc
 $when = Get-Date
 $invariant = [Globalization.CultureInfo]::InvariantCulture
 $version = $when.ToString('yyyy.MM.dd.HHmm', $invariant)
-$fileVersion = $when.ToString('yyyy.MM.dd-HHmm', $invariant)
 
 New-Item -ItemType Directory -Path $Output -Force | Out-Null
 if (Test-Path -LiteralPath $programs) {
     Remove-Item -LiteralPath $programs -Recurse -Force
 }
-Get-ChildItem -LiteralPath $Output -Filter 'Midview-Instalador-*.exe' | Remove-Item -Force
+# The setup from an earlier run, under its name now or the one it had.
+foreach ($earlier in 'MidviewSetup.exe', 'Midview-Instalador-*.exe') {
+    Get-ChildItem -LiteralPath $Output -Filter $earlier | Remove-Item -Force
+}
 
 # Agent and Session side by side: the Agent launches the Session from its
 # own folder. The Session goes second on purpose: the few runtime files both
@@ -132,11 +134,11 @@ foreach ($script in Get-ChildItem -Path (Join-Path $PSScriptRoot 'scripts') -Fil
 $iss = Join-Path $programs 'Midview.iss'
 Copy-Text (Join-Path $PSScriptRoot 'Midview.iss') $iss $true
 $assets = Join-Path $repository 'assets'
-& $iscc '/Q' "/DVersao=$version" "/DVersaoArquivo=$fileVersion" "/DPrograma=$programs" "/DSaida=$Output" "/DAssets=$assets" $iss
+& $iscc '/Q' "/DVersao=$version" "/DPrograma=$programs" "/DSaida=$Output" "/DAssets=$assets" $iss
 if ($LASTEXITCODE -ne 0) {
     throw "ISCC failed (exit code $LASTEXITCODE)."
 }
 
-$setup = Join-Path $Output "Midview-Instalador-$fileVersion.exe"
+$setup = Join-Path $Output 'MidviewSetup.exe'
 Write-Host ''
-Write-Host "Setup ready: $setup" -ForegroundColor Green
+Write-Host "Setup ready: $setup (version $version)" -ForegroundColor Green

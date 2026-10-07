@@ -1,4 +1,4 @@
-# Para o Midview Aluno antes de o instalador (Midview-Instalador) copiar os
+# Para o Midview Aluno antes de o instalador (MidviewSetup) copiar os
 # arquivos novos: espera uma atualização pela rede terminar, se houver uma,
 # e para o serviço e a Session. Numa máquina ainda sem Midview, não faz
 # nada. Rodado pelo instalador, como administrador.

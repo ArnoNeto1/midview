@@ -47,12 +47,12 @@ public sealed class UpdatePackage : IDisposable
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
             throw new InvalidDataException(
-                "Este programa do aluno é antigo demais para atualizar pela rede (não tem midview-build.json): instale de novo com o Midview-Instalador atual.", ex);
+                "Este programa do aluno é antigo demais para atualizar pela rede (não tem midview-build.json): instale de novo com o MidviewSetup atual.", ex);
         }
 
         if (manifest.UpdateProtocol < NetworkUpdate.ProtocolVersion)
         {
-            throw new InvalidDataException("Este programa do aluno é antigo demais para atualizar pela rede: instale de novo com o Midview-Instalador atual.");
+            throw new InvalidDataException("Este programa do aluno é antigo demais para atualizar pela rede: instale de novo com o MidviewSetup atual.");
         }
         var missing = NetworkUpdate.RequiredFiles
             .FirstOrDefault(required => !manifest.Files.Contains(required, StringComparer.OrdinalIgnoreCase));

@@ -235,7 +235,7 @@ public partial class MachinesWindow : Window
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or InvalidDataException or IOException)
         {
-            StudentVersionTextBlock.Text = "Esta cópia não traz o programa do aluno. Instale pelo Midview-Instalador.";
+            StudentVersionTextBlock.Text = "Esta cópia não traz o programa do aluno. Instale pelo MidviewSetup.";
             UpdateButton.IsEnabled = false;
         }
     }
