@@ -1,7 +1,8 @@
 # Midview — Setup Program and Pairing (Design)
 
 Date: 2026-10-05
-Status: Implemented 2026-10-05 (not yet validated live)
+Status: Implemented 2026-10-05; used in the lab 2026-10-07 (installed, paired and reported
+working by the teacher) and run end to end on a real Windows machine in CI
 
 ## Context
 
