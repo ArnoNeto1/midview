@@ -31,6 +31,12 @@ public sealed class ConnectionClient : IDisposable
         return new ConnectionClient(channel);
     }
 
+    // Must be the first message: asks for the screen as ScreenFrame updates
+    // (see MessageType.ScreenStream).
+    public void SendScreenStream() => _channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+
+    public void SendFrameAck(int frameId) => _channel.Send(new Message(MessageType.FrameAck, ScreenFrame.EncodeAck(frameId)));
+
     public void SendStartControl() => _channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
 
     public void SendStopControl() => _channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));

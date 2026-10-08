@@ -131,6 +131,17 @@ public enum MessageType : byte
     // a ProgramCommand as TextMessage. The only message of a short-lived
     // connection, answered with one CommandAck (CommandResult).
     OpenProgram = 47,
+
+    // "Ver a tela"/"Controlar" as one message per update: a viewer that
+    // sends ScreenStream as its first message gets the screen as ScreenFrame
+    // messages (see ScreenFrame) instead of FrameTile, and answers each one
+    // it has drawn with a FrameAck. A viewer from before this opens with
+    // StartControl or a Heartbeat and still gets FrameTile; a Session from
+    // before this ignores ScreenStream and sends FrameTile, which the viewer
+    // still draws.
+    ScreenStream = 48,
+    ScreenFrame = 49,
+    FrameAck = 50,
 }
 
 public enum CloseAppsMode : byte

@@ -52,8 +52,14 @@ public sealed class SessionServer
 
     // Capture cadence is fully decoupled from message traffic (mouse-move
     // events alone can arrive far faster than any capture pipeline should
-    // run). ~15 fps is plenty to follow what a student is doing.
+    // run). ~15 fps for a viewer from before ScreenFrame, which drew one tile
+    // at a time and couldn't keep up with more; ScreenFrame viewers follow
+    // CaptureCadence instead.
     private const int CaptureIntervalMs = 66;
+
+    // How long the ScreenFrame loop waits for the viewer to acknowledge
+    // before giving up on an update and carrying on (see FrameCredit).
+    private static readonly TimeSpan DefaultFrameAckTimeout = TimeSpan.FromSeconds(1);
 
     private const int CaptureRetryDelayMs = 500;
 
@@ -88,6 +94,7 @@ public sealed class SessionServer
     private readonly ICountdownNotice? _countdownNotice;
     private readonly IWebsiteOpener? _websiteOpener;
     private readonly IProgramStarter? _programStarter;
+    private readonly TimeSpan _frameAckTimeout;
 
     // One controlling Master served at a time: the input lock and the
     // injected input belong to the machine, not to a connection. Preview
@@ -106,8 +113,9 @@ public sealed class SessionServer
         IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null,
         IScreenLockDisplay? screenLock = null, IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null,
         ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-        IProgramStarter? programStarter = null)
+        IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null)
     {
+        _frameAckTimeout = frameAckTimeout ?? DefaultFrameAckTimeout;
         _countdownNotice = countdownNotice;
         _websiteOpener = websiteOpener;
         _programStarter = programStarter;
@@ -174,10 +182,12 @@ public sealed class SessionServer
         // Master keeps one preview connection open to each machine in its
         // grid, so if previews were served like control connections, the
         // one-at-a-time slot below would always be taken and full control
-        // could never get in. A control connection's first message is
-        // whatever it sends first (ViewControlWindow sends StartControl, or
-        // a Heartbeat when it opens only to watch), so the control protocol
-        // itself is unchanged.
+        // could never get in. Anything not handled below is a control
+        // connection, and its first message also picks how the screen is
+        // sent: ScreenStream (ViewControlWindow now) for ScreenFrame updates,
+        // StartControl or a Heartbeat (a Master from before that) for one
+        // FrameTile per tile. So a new one-shot type must never be one a
+        // control connection opens with.
         var firstMessage = channel.Receive();
 
         client.ReceiveTimeout = ConnectionTimeoutMs;
@@ -864,14 +874,30 @@ public sealed class SessionServer
         // after a reconnect (also left the diff starting from a stale frame).
         var framePipeline = new FramePipeline(_screenCapture);
 
-        // The capture loop runs on its own thread at a fixed cadence,
-        // independent of how often messages arrive on the connection below.
-        // The two threads never touch the channel at the same time from
-        // opposite ends of a single call: this thread only sends
-        // (FrameTile), the loop below only receives -- the one
-        // reader/one writer pattern SslStream supports without locking.
+        // A viewer that opens with ScreenStream gets ScreenFrame updates it
+        // acknowledges; any other first message is a viewer from before
+        // that, which gets one FrameTile per tile.
+        var credit = firstMessage.Type == MessageType.ScreenStream ? new FrameCredit() : null;
+        var cadence = new CaptureCadence();
+
+        // The capture loop runs on its own thread, independent of how often
+        // messages arrive on the connection below. The two threads never
+        // touch the channel at the same time from opposite ends of a single
+        // call: this thread only sends (FrameTile or ScreenFrame), the loop
+        // below only receives -- the one reader/one writer pattern SslStream
+        // supports without locking.
         using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var captureThread = new Thread(() => CaptureLoop(framePipeline, channel, tcpClient, captureCts)) { IsBackground = true };
+        var captureThread = new Thread(() =>
+        {
+            if (credit is null)
+            {
+                CaptureLoop(framePipeline, channel, tcpClient, captureCts);
+            }
+            else
+            {
+                StreamScreenFrames(framePipeline, channel, tcpClient, captureCts, credit, cadence);
+            }
+        }) { IsBackground = true };
         captureThread.Start();
 
         try
@@ -879,6 +905,7 @@ public sealed class SessionServer
             var messageCount = 0;
             var maxGapMs = 0.0;
             var gapSw = System.Diagnostics.Stopwatch.StartNew();
+            var acks = new AckSummary();
 
             Midview.Protocol.Message? pendingMessage = firstMessage;
             while (!cancellationToken.IsCancellationRequested && tcpClient.Connected)
@@ -919,6 +946,15 @@ public sealed class SessionServer
                         if (isControlling)
                         {
                             _inputInjector.Inject(InputEventCodec.Decode(message.Payload));
+                            cadence.Activity(Environment.TickCount64);
+                        }
+                        break;
+
+                    case MessageType.FrameAck:
+                        if (credit is not null && ScreenFrame.DecodeAck(message.Payload) is { } frameId)
+                        {
+                            var now = Environment.TickCount64;
+                            acks.Add(credit.Acknowledge(frameId, now), now);
                         }
                         break;
                 }
@@ -977,6 +1013,92 @@ public sealed class SessionServer
             // Receive() -- it isn't watching any cancellation token.
             Console.WriteLine($"Capture loop stopped: {ex.Message}");
             tcpClient.Close();
+        }
+    }
+
+    // CaptureLoop for a ScreenFrame viewer: one message per update (more
+    // only for an update too big for one, see ScreenFrame.Split), only what
+    // changed, never more than FrameCredit.MaxUnacknowledged updates on their
+    // way before capturing again, at CaptureCadence's pace.
+    private void StreamScreenFrames(
+        FramePipeline framePipeline, SecureChannel channel, TcpClient tcpClient, CancellationTokenSource captureCts,
+        FrameCredit credit, CaptureCadence cadence)
+    {
+        try
+        {
+            while (credit.WaitForRoom(_frameAckTimeout, captureCts.Token))
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                ScreenUpdate update;
+                try
+                {
+                    update = framePipeline.CaptureNextUpdate();
+                }
+                catch (Exception ex)
+                {
+                    // As in CaptureLoop: the secure desktop is up for now.
+                    Console.WriteLine($"Screen capture failed, retrying: {ex.Message}");
+                    captureCts.Token.WaitHandle.WaitOne(CaptureRetryDelayMs);
+                    continue;
+                }
+
+                var now = Environment.TickCount64;
+                cadence.Captured(update.Regions.Count > 0, now);
+                var groups = ScreenFrame.Split(update.Regions);
+                var firstId = groups.Count > 0 ? credit.Send(now, groups.Count) : 0;
+                var messages = groups
+                    .Select((regions, i) => new ScreenFrame(firstId + i, update.Width, update.Height, regions).Encode())
+                    .ToList();
+                var workMs = (int)sw.ElapsedMilliseconds;
+                foreach (var payload in messages)
+                {
+                    channel.Send(new Midview.Protocol.Message(MessageType.ScreenFrame, payload));
+                }
+
+                var rest = cadence.RestMs(workMs, (int)sw.ElapsedMilliseconds, Environment.TickCount64);
+                if (rest > 0)
+                {
+                    captureCts.Token.WaitHandle.WaitOne(rest);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // As in CaptureLoop: only a failed send gets here.
+            Console.WriteLine($"Capture loop stopped: {ex.Message}");
+            tcpClient.Close();
+        }
+    }
+
+    // How long the viewer takes to acknowledge updates, from sending one to
+    // its FrameAck: capture to the teacher's screen and back, the delay the
+    // teacher actually sees. Logged once a second rather than per update.
+    private sealed class AckSummary
+    {
+        private int _count;
+        private long _totalMs;
+        private long _maxMs;
+        private long _sinceMs = Environment.TickCount64;
+
+        public void Add(long? roundTripMs, long nowMs)
+        {
+            if (roundTripMs is { } ms)
+            {
+                _count++;
+                _totalMs += ms;
+                _maxMs = Math.Max(_maxMs, ms);
+            }
+
+            if (_count > 0 && nowMs - _sinceMs >= 1000)
+            {
+                SessionDiagnostics.Log(
+                    $"viewer acknowledged={_count} average={_totalMs / _count}ms max={_maxMs}ms");
+                _count = 0;
+                _totalMs = 0;
+                _maxMs = 0;
+                _sinceMs = nowMs;
+            }
         }
     }
 }

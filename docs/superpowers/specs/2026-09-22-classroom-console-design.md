@@ -192,16 +192,19 @@ Where the implementation differs from, or fills in, the design above:
   now reads the first message after the TLS handshake: `RequestThumbnail`
   makes it a preview connection (no slot, no capture thread, no
   `FramePipeline`, no `InputLockManager`); anything else is a control
-  connection, served exactly as before. `ViewControlWindow` already sends
-  `StartControl` first, so the control protocol is unchanged.
+  connection, served exactly as before. `ViewControlWindow` then sent
+  `StartControl` first, so the control protocol was unchanged (since
+  2026-10-07 it sends `ScreenStream` first: see the screen stream note
+  below).
 - **A click only selects; watching and controlling are separate**
   (changed 2026-10-05, after the first live run: clicking a tile locked
   the student's keyboard and mouse at once, with no way to just look).
   Clicking a tile, left or right, selects it (a highlighted border); the
   toolbar's "Ver a tela" and "Controlar" act on the selected machine, and
   the tile's menu has the same two. Watching opens `ViewControlWindow`
-  sending a `Heartbeat` first instead of `StartControl`, which starts the
-  screen stream without locking anything, and it sends no input.
+  sending a `Heartbeat` instead of `StartControl` (after `ScreenStream`,
+  since 2026-10-07), so the screen streams without locking anything, and it
+  sends no input.
   Controlling opens it as before. The window's "Controlar" / "Parar de
   controlar (só ver)" button switches on the same connection with
   `StartControl` / `StopControl`.
@@ -221,6 +224,26 @@ Where the implementation differs from, or fills in, the design above:
   injected after `StartControl` (`SessionServerTests`: watching only
   neither locks nor injects; watching, then controlling, then watching
   again locks and releases).
+- **The screen streams as one message per update** (changed 2026-10-07,
+  to make "Ver a tela" and "Controlar" closer to live). `ViewControlWindow`
+  opens with `ScreenStream`; the Session then sends `ScreenFrame` messages
+  (`ScreenFrame`): the screen's size, so the window sets up its picture
+  once, and the tiles that changed merged into a few rectangles
+  (`TileRegions`: groups of nearby tiles, the whole area around a group
+  when the group fills half of it, bands for areas over ~4 megapixels), one
+  JPEG each. The window decodes on its receiving thread (`RemoteScreen`),
+  draws once for however many updates arrived, and answers `FrameAck` with
+  the newest it drew; the Session keeps at most two updates unacknowledged
+  and gives up on one after 1 s (`FrameCredit`), and captures every 33 ms
+  while something moves or the teacher gives input, 66 ms otherwise
+  (`CaptureCadence`). An update over 8 MB of JPEG goes as several messages
+  (`ScreenFrame.Split`). Mixed versions during a network update keep
+  working: a Session from before ignores `ScreenStream` and sends one
+  `FrameTile` per tile, which the window still draws (never acknowledged);
+  a Master from before never sends `ScreenStream` and gets the old 66 ms
+  `FrameTile` stream. Measured on the dev PC over loopback, a full-screen
+  change went from 7 to about 26 updates a second and about 40% fewer
+  bytes, with the window's own thread no longer the limit.
 - **Capture failure replies with an empty `ThumbnailFrame`** instead of no
   reply. With no reply, the Master's poll can only time out, and a reply
   that arrives late would then pair with the next request — so the Master

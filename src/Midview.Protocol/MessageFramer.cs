@@ -4,8 +4,9 @@ namespace Midview.Protocol;
 
 public static class MessageFramer
 {
-    // Far above anything real (a 64x64 JPEG tile is a few KB); stops a bad or
-    // hostile length prefix from making Read allocate up to 2 GB.
+    // Far above anything real (a full-screen ScreenFrame is a few hundred
+    // KB, a 64x64 JPEG tile a few KB); stops a bad or hostile length prefix
+    // from making Read allocate up to 2 GB.
     public const int MaxMessageLength = 16 * 1024 * 1024;
 
     // One write per message. With separate writes for the length, the type

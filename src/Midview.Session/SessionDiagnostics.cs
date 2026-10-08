@@ -2,7 +2,8 @@ namespace Midview.Session;
 
 public static class SessionDiagnostics
 {
-    // Written ~15 times a second while a Master is viewing, so it's capped:
+    // Written on every capture while a Master is viewing (15 to 30 times a
+    // second, see CaptureCadence), so it's capped:
     // past this size the current file becomes session-perf.log.old
     // (replacing any previous one) and a new file starts.
     private const long MaxLogBytes = 5 * 1024 * 1024;

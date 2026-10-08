@@ -16,9 +16,13 @@ public partial class ViewControlWindow : Window
     private readonly ConnectionClient _client;
     private readonly string _machineName;
     private readonly DispatcherTimer _heartbeatTimer;
+    private readonly RemoteScreen _remoteScreen = new();
     private WriteableBitmap? _screenBitmap;
     private bool _closing;
     private bool _controlling;
+
+    // 1 while a DrawChanges is waiting to run on the window's thread.
+    private int _drawScheduled;
 
     public ViewControlWindow(ConnectionClient client, string machineName, bool control)
     {
@@ -26,8 +30,11 @@ public partial class ViewControlWindow : Window
         _client = client;
         _machineName = machineName;
 
-        // The first message starts the screen stream either way; a heartbeat
-        // starts it without locking anything.
+        // Asks for the screen as ScreenFrame updates, which starts it; a
+        // Session from before that ignores the type and sends FrameTile,
+        // which is drawn just the same. StartControl then locks the student;
+        // a heartbeat only watches.
+        _client.SendScreenStream();
         if (control)
         {
             _client.SendStartControl();
@@ -84,29 +91,50 @@ public partial class ViewControlWindow : Window
             {
                 message = _client.ReceiveNext();
             }
-            catch (IOException)
+            catch (Exception)
             {
+                // Connection closed, or a message this can't read (longer
+                // than MessageFramer allows, say): past that the stream can't
+                // be trusted, and a window that closes says more than a
+                // picture that silently stops changing.
                 CloseFromFailure();
-                return; // connection closed
+                return;
             }
 
-            if (message.Type != MessageType.FrameTile)
+            // Decoded here, off the window's thread. A single malformed or
+            // out-of-bounds update shouldn't take down the whole view: it's
+            // skipped and receiving goes on.
+            try
+            {
+                switch (message.Type)
+                {
+                    case MessageType.ScreenFrame:
+                        if (ScreenFrame.Decode(message.Payload) is not { } frame)
+                        {
+                            continue;
+                        }
+                        _remoteScreen.AddFrame(frame);
+                        break;
+
+                    case MessageType.FrameTile when message.Payload.Length >= 8:
+                        var row = BitConverter.ToInt32(message.Payload, 0);
+                        var column = BitConverter.ToInt32(message.Payload, 4);
+                        _remoteScreen.AddTile(row, column, message.Payload[8..]);
+                        break;
+
+                    default:
+                        continue;
+                }
+            }
+            catch (Exception)
             {
                 continue;
             }
 
-            var row = BitConverter.ToInt32(message.Payload, 0);
-            var column = BitConverter.ToInt32(message.Payload, 4);
-            var jpegBytes = message.Payload[8..];
-
-            try
+            // One draw for however many updates arrive before it runs.
+            if (Interlocked.Exchange(ref _drawScheduled, 1) == 0)
             {
-                Dispatcher.Invoke(() => DrawTile(row, column, jpegBytes));
-            }
-            catch (Exception)
-            {
-                // A single malformed/out-of-bounds tile shouldn't take down
-                // the whole view -- just skip it and keep receiving.
+                Dispatcher.BeginInvoke(DispatcherPriority.Render, DrawChanges);
             }
         }
     }
@@ -114,50 +142,49 @@ public partial class ViewControlWindow : Window
     private int _bitmapWidth;
     private int _bitmapHeight;
 
-    private void DrawTile(int row, int column, byte[] jpegBytes)
+    // On the window's thread: copies what changed into the picture shown,
+    // then tells the Session the newest update is on screen.
+    private void DrawChanges()
     {
-        const int tileSize = 64; // must match Midview.Protocol.TileDiff.TileSize
-
-        using var stream = new MemoryStream(jpegBytes);
-        var decoder = new JpegBitmapDecoder(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-        var tileFrame = decoder.Frames[0];
-
-        // The Session's actual screen resolution isn't known ahead of time
-        // (it isn't sent over the wire), so grow the canvas to fit whatever
-        // tile positions actually arrive instead of assuming a fixed size --
-        // a hardcoded guess left the view permanently blank on any machine
-        // with a different resolution.
-        var requiredWidth = column * tileSize + tileFrame.PixelWidth;
-        var requiredHeight = row * tileSize + tileFrame.PixelHeight;
-        if (_screenBitmap is null || requiredWidth > _bitmapWidth || requiredHeight > _bitmapHeight)
+        Volatile.Write(ref _drawScheduled, 0); // anything arriving from now on schedules another draw
+        if (_closing)
         {
-            GrowCanvas(Math.Max(_bitmapWidth, requiredWidth), Math.Max(_bitmapHeight, requiredHeight));
+            return;
         }
 
-        var rect = new Int32Rect(column * tileSize, row * tileSize, tileFrame.PixelWidth, tileFrame.PixelHeight);
-        var stride = tileFrame.PixelWidth * 4;
-        var pixels = new byte[stride * tileFrame.PixelHeight];
-        tileFrame.CopyPixels(pixels, stride, 0);
-        _screenBitmap!.WritePixels(rect, pixels, stride, 0);
-
-        ScreenImage.Source = _screenBitmap;
-    }
-
-    private void GrowCanvas(int newWidth, int newHeight)
-    {
-        var newBitmap = new WriteableBitmap(newWidth, newHeight, 96, 96, PixelFormats.Bgra32, null);
-        if (_screenBitmap is not null)
+        var frameId = _remoteScreen.TakeChanges(picture =>
         {
-            var oldRect = new Int32Rect(0, 0, _bitmapWidth, _bitmapHeight);
-            var oldStride = _bitmapWidth * 4;
-            var oldPixels = new byte[oldStride * _bitmapHeight];
-            _screenBitmap.CopyPixels(oldRect, oldPixels, oldStride, 0);
-            newBitmap.WritePixels(oldRect, oldPixels, oldStride, 0);
-        }
+            try
+            {
+                // The Session's resolution arrives with the picture (or, from
+                // a Session from before ScreenFrame, the picture grows to fit
+                // its tiles), so the bitmap is made again only when it changes.
+                var parts = picture.Changed;
+                if (picture.Resized || _screenBitmap is null)
+                {
+                    _screenBitmap = new WriteableBitmap(picture.Width, picture.Height, 96, 96, PixelFormats.Bgr32, null);
+                    _bitmapWidth = picture.Width;
+                    _bitmapHeight = picture.Height;
+                    ScreenImage.Source = _screenBitmap;
+                    parts = new[] { new PixelRect(0, 0, picture.Width, picture.Height) };
+                }
 
-        _screenBitmap = newBitmap;
-        _bitmapWidth = newWidth;
-        _bitmapHeight = newHeight;
+                foreach (var part in parts)
+                {
+                    _screenBitmap.WritePixels(
+                        new Int32Rect(part.X, part.Y, part.Width, part.Height), picture.Pixels, picture.Stride, part.X, part.Y);
+                }
+            }
+            catch (Exception)
+            {
+                // As in ReceiveLoop: a bad update is skipped, the view stays.
+            }
+        });
+
+        if (frameId != 0)
+        {
+            RunOrCloseOnFailure(() => _client.SendFrameAck(frameId));
+        }
     }
 
     private void OnMouseMove(object sender, MouseEventArgs e)

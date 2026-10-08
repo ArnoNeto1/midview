@@ -428,9 +428,10 @@ public class SessionServerTests
         Assert.Equal(MessageType.FrameTile, firstMessage.Type);
     }
 
-    // What ViewControlWindow sends when it opens just to watch: a heartbeat,
-    // not StartControl. The screen must arrive, and the student keeps their
-    // own keyboard and mouse.
+    // What a Master from before ScreenStream sends when it opens just to
+    // watch: a heartbeat, not StartControl (the current one sends ScreenStream
+    // first, see the ScreenStream_ tests). The screen must arrive, and the
+    // student keeps their own keyboard and mouse.
     [Fact]
     public async Task WatchingOnly_SendsTheScreen_WithoutLockingOrInjecting()
     {
@@ -466,6 +467,102 @@ public class SessionServerTests
         await Task.Delay(300);
 
         Assert.Equal(1, harness.Injector.InjectCount); // watching again: input is dropped
+    }
+
+    // What ViewControlWindow sends first now: ScreenStream, then a heartbeat
+    // to only watch. The screen comes as ScreenFrame updates, with its size.
+    [Fact]
+    public async Task ScreenStream_SendsScreenFrames_WithTheScreensSize()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+
+        var message = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(MessageType.ScreenFrame, message.Type);
+        var frame = ScreenFrame.Decode(message.Payload);
+        Assert.NotNull(frame);
+        Assert.Equal((1, 200, 100), (frame.FrameId, frame.ScreenWidth, frame.ScreenHeight));
+        var region = Assert.Single(frame.Regions);
+        Assert.Equal((0, 0, 200, 100), (region.X, region.Y, region.Width, region.Height));
+        Assert.Equal(0, harness.Devices.DisableCalls);
+    }
+
+    // Never more than two updates on their way: the next waits for the
+    // viewer to say it has drawn them. The Session would give up waiting
+    // only after a minute here, so only the acknowledgement can release it.
+    [Fact]
+    public async Task ScreenStream_WaitsForTheViewer_BeforeSendingMore()
+    {
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), frameAckTimeout: TimeSpan.FromMinutes(1)); // different on every capture
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+
+        await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        var third = Task.Run(() => master.Channel.Receive());
+        await Task.Delay(500);
+        Assert.False(third.IsCompleted);
+
+        master.Channel.Send(new Message(MessageType.FrameAck, ScreenFrame.EncodeAck(2)));
+        var message = await third.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.ScreenFrame, message.Type);
+        Assert.Equal(3, ScreenFrame.Decode(message.Payload)!.FrameId);
+    }
+
+    // A viewer that skips acknowledging (an update it couldn't read, say)
+    // must not freeze its picture: after the timeout the Session carries on.
+    [Fact]
+    public async Task ScreenStream_ViewerThatNeverAcknowledges_StillGetsUpdates()
+    {
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), frameAckTimeout: TimeSpan.FromMilliseconds(200));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+
+        for (var expected = 1; expected <= 4; expected++)
+        {
+            var message = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(MessageType.ScreenFrame, message.Type);
+            Assert.Equal(expected, ScreenFrame.Decode(message.Payload)!.FrameId);
+        }
+    }
+
+    // As with FrameTile: the secure desktop (Win+L, a UAC prompt) makes
+    // capturing fail for a while, and the stream must pick up afterwards.
+    [Fact]
+    public async Task ScreenStream_CaptureFailures_AreRetried_AndFramesStillArrive()
+    {
+        using var harness = new ServerHarness(new FailingThenWorkingScreenCapture(failures: 3));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+
+        var message = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(MessageType.ScreenFrame, message.Type);
+        Assert.Equal(1, ScreenFrame.Decode(message.Payload)!.FrameId);
+    }
+
+    [Fact]
+    public async Task ScreenStream_ThenStartControl_LocksAndInjects()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.StartControl();
+        master.Channel.Send(new Message(MessageType.InputEvent, MouseMoveTo(10, 10)));
+
+        var message = await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        await WaitUntil(() => harness.Devices.DisableCalls == 1 && harness.Injector.InjectCount == 1);
+
+        Assert.Equal(MessageType.ScreenFrame, message.Type);
     }
 
     [Fact]
@@ -1457,7 +1554,7 @@ public class SessionServerTests
             IOpenProgramsLister? openPrograms = null, IScreenLockDisplay? screenLock = null,
             IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null, string? trustedMastersFile = null,
             ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-            IProgramStarter? programStarter = null)
+            IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -1469,7 +1566,7 @@ public class SessionServerTests
                 capture, Injector,
                 new InputLockManager(Devices, new FakeClock(), TimeSpan.FromSeconds(5)),
                 messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms, screenLock,
-                fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter);
+                fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter, frameAckTimeout);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -1519,7 +1616,9 @@ public class SessionServerTests
 
         public SecureChannel Channel { get; }
 
-        // What ViewControlWindow sends as soon as it opens.
+        // What a Master from before ScreenStream sends as soon as it opens to
+        // control, so the tests built on it cover the FrameTile stream; the
+        // current one sends ScreenStream first (see the ScreenStream_ tests).
         public void StartControl() => Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
 
         public Message ShowMessage(string text)
