@@ -34,16 +34,18 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly PowerCommandHandler _powerHandler;
     private readonly UpdateReceiver _updateReceiver;
     private readonly AppBlockCommandHandler _appBlock;
+    private readonly LabConfigCommandHandler _labConfig;
     private readonly TrustStore _masterTrustStore;
     private readonly PairingService _pairing;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
-        AppBlockCommandHandler appBlock, TrustStore masterTrustStore, PairingService pairing)
+        AppBlockCommandHandler appBlock, LabConfigCommandHandler labConfig, TrustStore masterTrustStore, PairingService pairing)
     {
         _masterTrustStore = masterTrustStore;
         _pairing = pairing;
         _appBlock = appBlock;
+        _labConfig = labConfig;
         _scheduledShutdown = scheduledShutdown;
         _powerHandler = powerHandler;
         _updateReceiver = updateReceiver;
@@ -83,6 +85,17 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile site-block state at startup: {ex.Message}");
             }
 
+            // Reapply the lab configuration too, isolated the same way: a
+            // registry error here must not keep the Agent from listening.
+            try
+            {
+                _labConfig.ReconcileAtStartup();
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Failed to reconcile lab configuration at startup: {ex.Message}");
+            }
+
             return Task.Run(async () =>
             {
                 var failing = false;
@@ -93,7 +106,7 @@ public sealed class AgentServerWorker : BackgroundService
                         var server = new AgentServer(
                             new TcpListener(IPAddress.Any, AgentPort), certificate, _masterTrustStore, commandHandler,
                             _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
-                            appBlock: _appBlock, pairing: _pairing);
+                            appBlock: _appBlock, labConfig: _labConfig, pairing: _pairing);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");

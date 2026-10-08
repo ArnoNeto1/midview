@@ -426,6 +426,25 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnLabConfigClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para configurar.";
+            return;
+        }
+        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        ShowOnce("painel", targets, () => new LabConfigWindow(targets, _masterCertificate) { Owner = this });
+    }
+
+    private void OnLabConfigMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            ShowOnce("painel", new[] { tile.Machine }, () => new LabConfigWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
+        }
+    }
+
     private void OnBlockAppsMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)

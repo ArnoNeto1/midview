@@ -52,6 +52,13 @@ public sealed class AppBlockEnforcer
     private readonly Dictionary<RunningProcess, DateTime?> _seen = new();
     private readonly Dictionary<(int SessionId, string Program), DateTime> _lastNotice = new();
     private AppBlockPolicy _policy = AppBlockPolicy.Lifted(0);
+
+    // Programs ended whenever the student starts them, whatever the app-block
+    // policy says: the lab-configuration panel's "Bloquear Edge" puts
+    // msedge.exe here (LabConfigCommandHandler). Still only the student's own
+    // processes (the candidate fence), so an elevated or system process of
+    // the same name is left alone, and Midview and the shell stay protected.
+    private IReadOnlySet<string> _alwaysEnd = new HashSet<string>(StringComparer.Ordinal);
     private long _generation;
     private long _summarizedGeneration = -1;
     private int _undecidedLogged;
@@ -60,6 +67,60 @@ public sealed class AppBlockEnforcer
     {
         _inspector = inspector;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
+    }
+
+    // The lab panel sets which programs are ended whatever the app-block
+    // policy says (Edge). Bumps the generation like Apply, so what is already
+    // open is looked at again and ended too.
+    public void SetAlwaysEnd(IReadOnlySet<string> programNames)
+    {
+        lock (_gate)
+        {
+            _alwaysEnd = programNames;
+            _generation++;
+            _seen.Clear();
+            _undecidedLogged = 0;
+        }
+        AgentLog.Warn($"Program blocking now also always ends: {(programNames.Count == 0 ? "nothing" : string.Join(", ", programNames))}.");
+    }
+
+    // Ends every one of the student's own processes of this name right now,
+    // once: used to close Chrome so a freshly-applied browser policy takes
+    // effect. Returns how many were ended; the session told, if any, through
+    // notice. Never throws.
+    public int EndNow(string programName, string? notice = null)
+    {
+        var ended = 0;
+        var sessions = new HashSet<int>();
+        try
+        {
+            foreach (var process in _inspector.ListInteractive())
+            {
+                var facts = _inspector.Inspect(process);
+                if (facts is null || facts.ImageName != programName || !AppBlockRules.IsCandidate(facts))
+                {
+                    continue;
+                }
+                if (_inspector.End(process))
+                {
+                    ended++;
+                    sessions.Add(process.SessionId);
+                }
+            }
+
+            if (ended > 0 && notice is not null)
+            {
+                foreach (var sessionId in sessions)
+                {
+                    _inspector.Notify(sessionId, notice);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AgentLog.Warn($"Couldn't close {programName}: {ex.Message}");
+        }
+        return ended;
     }
 
     public void Apply(AppBlockPolicy policy)
@@ -78,12 +139,14 @@ public sealed class AppBlockEnforcer
     public int EnforceOnce()
     {
         AppBlockPolicy policy;
+        IReadOnlySet<string> alwaysEnd;
         long generation;
         lock (_gate)
         {
             policy = _policy;
+            alwaysEnd = _alwaysEnd;
             generation = _generation;
-            if (!policy.IsActive)
+            if (!policy.IsActive && alwaysEnd.Count == 0)
             {
                 _seen.Clear();
                 _lastNotice.Clear();
@@ -119,7 +182,9 @@ public sealed class AppBlockEnforcer
         foreach (var process in toInspect)
         {
             var facts = _inspector.Inspect(process);
-            var forbidden = facts is not null && AppBlockRules.ShouldEnd(policy, facts);
+            var forbidden = facts is not null
+                && (AppBlockRules.ShouldEnd(policy, facts)
+                    || (AppBlockRules.IsCandidate(facts) && alwaysEnd.Contains(facts.ImageName)));
 
             lock (_gate)
             {

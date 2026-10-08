@@ -167,6 +167,60 @@ public class AppBlockEnforcerTests
         Assert.Equal(1, enforcer.EnforceOnce());
     }
 
+    [Fact]
+    public void AlwaysEnd_EndsThoseProgramsWithNoPolicy_AndStopsWhenCleared()
+    {
+        var enforcer = Create();
+        enforcer.SetAlwaysEnd(new HashSet<string>(StringComparer.Ordinal) { "msedge.exe" });
+        var edge = _inspector.Start("msedge.exe", "Microsoft Edge");
+        _inspector.Start("chrome.exe");
+
+        Assert.Equal(1, enforcer.EnforceOnce());
+        Assert.Equal(new[] { edge }, _inspector.Ended);
+
+        enforcer.SetAlwaysEnd(new HashSet<string>(StringComparer.Ordinal));
+        _inspector.Start("msedge.exe");
+        Assert.Equal(0, enforcer.EnforceOnce());
+    }
+
+    [Fact]
+    public void AlwaysEnd_AndABlockList_BothApply()
+    {
+        var enforcer = Create();
+        enforcer.Apply(BlockList("winword.exe"));
+        enforcer.SetAlwaysEnd(new HashSet<string>(StringComparer.Ordinal) { "msedge.exe" });
+        _inspector.Start("msedge.exe");
+        _inspector.Start("winword.exe");
+        _inspector.Start("chrome.exe");
+
+        Assert.Equal(2, enforcer.EnforceOnce());
+    }
+
+    [Fact]
+    public void EndNow_EndsEveryProcessOfThatName_AndTellsTheSessionOnce()
+    {
+        var enforcer = Create();
+        var a = _inspector.Start("chrome.exe", "Google Chrome");
+        var b = _inspector.Start("chrome.exe", "Google Chrome");
+        _inspector.Start("winword.exe");
+
+        var ended = enforcer.EndNow("chrome.exe", "fechado");
+
+        Assert.Equal(2, ended);
+        Assert.Equal(new[] { a, b }, _inspector.Ended);
+        Assert.Equal(new[] { "fechado" }, _inspector.Notices);
+    }
+
+    [Fact]
+    public void EndNow_NoNotice_WhenNothingMatched()
+    {
+        var enforcer = Create();
+        _inspector.Start("winword.exe");
+
+        Assert.Equal(0, enforcer.EndNow("chrome.exe", "fechado"));
+        Assert.Empty(_inspector.Notices);
+    }
+
     private sealed class FakeInspector : IProcessInspector
     {
         private readonly Dictionary<RunningProcess, ProcessFacts?> _processes = new();

@@ -223,6 +223,24 @@ public static class ProtectedStudentFolders
         }
     }
 
+    // True only when path is a real directory and not a reparse point
+    // (junction, symbolic link, mount point): opened as itself, never
+    // following a link. For a privileged action that walks a student-writable
+    // path -- so a link the student planted can't redirect it elsewhere.
+    // Never throws (a missing path, a link, or access denied all give false).
+    public static bool IsRealDirectory(string path)
+    {
+        try
+        {
+            using var handle = OpenAsItself(path, ReadControl);
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
     private static FileSystemAccessRule DenyDeleteChildRule(SecurityIdentifier student) => new(
         student, FileSystemRights.DeleteSubdirectoriesAndFiles, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Deny);
 

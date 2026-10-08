@@ -142,6 +142,31 @@ public enum MessageType : byte
     ScreenStream = 48,
     ScreenFrame = 49,
     FrameAck = 50,
+
+    // The lab-configuration panel (see LabConfig and
+    // docs/superpowers/specs/2026-10-08-lab-configuration-design.md).
+    // SetLabConfig is an Agent command carrying a LabConfig (answered with
+    // one CommandAck and a CommandResult); GetLabConfig, no payload, is
+    // answered with one LabConfigStatus carrying the LabConfig the Agent has
+    // verified is really applied. An Agent from before this answers
+    // CommandAck to GetLabConfig, so the Master can show "Midview antigo".
+    SetLabConfig = 51,
+    GetLabConfig = 52,
+    LabConfigStatus = 53,
+
+    // The lab panel's "RESET geral": an Agent command, no payload, that
+    // removes every lab policy (the whole Chrome policy subtree and the
+    // wallpaper lock, so it also clears what an older hand-run script left)
+    // and lifts the Edge block. Answered with one CommandAck and a
+    // CommandResult. Kept apart from SetLabConfig so turning one function off
+    // only removes that function's keys, while RESET wipes everything.
+    ResetLabConfig = 54,
+
+    // The lab panel's "Limpar perfis do Chrome": an Agent command, no
+    // payload, that closes the student's Chrome and deletes every user's
+    // saved Chrome profile (User Data), leaving the browser blank for the
+    // next class. Answered with one CommandAck and a CommandResult.
+    ClearChromeProfiles = 55,
 }
 
 public enum CloseAppsMode : byte

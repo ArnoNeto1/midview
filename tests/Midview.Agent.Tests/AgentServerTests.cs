@@ -1,11 +1,84 @@
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Win32;
 using Midview.Agent;
 using Midview.Protocol;
 using Xunit;
 
 public class AgentServerTests
 {
+    [Fact]
+    public async Task LabConfig_AppliesReadsBackAndResets_ThroughTheAgentServer()
+    {
+        using var agentCert = SelfSignedCertificate.Create("agent-under-test");
+        using var masterCert = SelfSignedCertificate.Create("master-under-test");
+
+        var rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
+        using var root = Registry.CurrentUser.CreateSubKey(rootPath, writable: true);
+        var statePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
+        var siteBlock = new SiteBlockCommandHandler(new SiteBlockState(), "unused", "unused-hosts", new FakeFirewallController());
+        var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath, writable: true));
+        var labConfig = new LabConfigCommandHandler(statePath, writer, new AppBlockEnforcer(new EmptyInspector()));
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = new AgentServer(
+            listener, agentCert, new TrustStore(new[] { masterCert.Thumbprint }), siteBlock, labConfig: labConfig);
+
+        Message Exchange(Message request)
+        {
+            using var tcpClient = new TcpClient();
+            tcpClient.Connect(IPAddress.Loopback, port);
+            using var channel = SecureChannel.AuthenticateAsClient(
+                tcpClient, "agent-under-test", masterCert, new TrustStore(new[] { agentCert.Thumbprint }));
+            channel.Send(request);
+            return channel.Receive();
+        }
+
+        using var stopServer = new CancellationTokenSource();
+        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        try
+        {
+            var set = await Task.Run(() => Exchange(new Message(
+                MessageType.SetLabConfig, (LabConfig.Off(1000) with { Lockdown = true, BlockDownloads = true }).Encode())))
+                .WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(MessageType.CommandAck, set.Type);
+            Assert.True(CommandResult.Decode(set.Payload).Succeeded);
+
+            var status = await Task.Run(() => Exchange(new Message(MessageType.GetLabConfig, Array.Empty<byte>())))
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(MessageType.LabConfigStatus, status.Type);
+            Assert.True(LabConfig.TryDecode(status.Payload, out var applied));
+            Assert.True(applied.Lockdown);
+            Assert.True(applied.BlockDownloads);
+            using (var chrome = root.OpenSubKey(@"Policies\Google\Chrome"))
+            {
+                Assert.Equal(3, chrome!.GetValue("DownloadRestriction"));
+            }
+
+            var reset = await Task.Run(() => Exchange(new Message(MessageType.ResetLabConfig, Array.Empty<byte>())))
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(CommandResult.Decode(reset.Payload).Succeeded);
+            Assert.Null(root.OpenSubKey(@"Policies\Google\Chrome"));
+        }
+        finally
+        {
+            stopServer.Cancel();
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            try { Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
+            File.Delete(statePath);
+        }
+    }
+
+    private sealed class EmptyInspector : IProcessInspector
+    {
+        public IReadOnlyList<RunningProcess> ListInteractive() => Array.Empty<RunningProcess>();
+        public ProcessFacts? Inspect(RunningProcess process) => null;
+        public bool End(RunningProcess process) => true;
+        public void Notify(int sessionId, string message) { }
+    }
+
     [Fact]
     public async Task ConnectionThatNeverHandshakes_DoesNotBlockTheNextCommand()
     {

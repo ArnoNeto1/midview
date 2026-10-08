@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Midview.Master\Midview.Master.csproj" />
     <ProjectReference Include="..\..\src\Midview.Session\Midview.Session.csproj" />
+    <ProjectReference Include="..\..\src\Midview.Agent\Midview.Agent.csproj" />
   </ItemGroup>
 </Project>

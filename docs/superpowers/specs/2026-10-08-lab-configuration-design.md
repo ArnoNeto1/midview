@@ -57,8 +57,9 @@ once; the teacher still sees one button. Names below are the console labels.
   Chrome opens; no manual step, unlike the `.bat`.
 - **Bloquear Edge** — ends `msedge.exe` whenever it starts, through the
   program-blocking enforcer (see below).
-- **RESET geral** — removes everything the above applied, in `HKLM` and
-  `HKCU`, and lifts the Edge block: the machine returns to default.
+- **RESET geral** — removes everything the above applied, under the `HKLM`
+  policy keys Midview uses, and lifts the Edge block: the machine returns to
+  default. (See the `HKCU` note under "Compatibility and safety".)
 
 The console shows each as a pair (ativar / desativar) plus RESET, inside the
 new window.
@@ -99,8 +100,8 @@ Mirrors site blocking exactly.
     actually applied, not just desired), and an Agent from before this
     answers `CommandAck`, so the console can show "Midview antigo".
 - **`Midview.Master`**
-  - A new toolbar button in the **Configurar** group, next to "Máquinas da
-    sala": **"Painel do laboratório"** (`OpensOptions`), opening a window
+  - A new toolbar button in the **Configurar** group, just before "Máquinas
+    da sala": **"Painel do laboratório"** (`OpensOptions`), opening a window
     with the function buttons, applied to the class. Matching entries in a
     machine's right-click menu apply to one machine. A `LabConfigClient`
     mirrors `AppBlockClient` (GetStatus / Apply over the Agent port 28900),
@@ -133,8 +134,19 @@ badge; the Painel window carries the detailed list.
 - State is written atomically and tolerates corruption; the Agent reapplies
   the desired state at boot, in both directions (applying and removing), as
   site blocking does after its one-directional bug.
-- RESET clears `HKLM` and `HKCU` policy paths, so it also cleans up what an
-  earlier hand-run `.bat` left under `HKCU`.
+- RESET clears the `HKLM` policy paths Midview uses (the whole Chrome policy
+  subtree, the wallpaper lock, the taskbar lock), so it also clears what an
+  earlier hand-run script left under those machine-wide keys. It does not
+  touch `HKCU`: Midview only ever writes `HKLM` (Chrome reads these
+  machine-wide, for every user), and the Agent runs as SYSTEM, whose `HKCU`
+  is not the student's — nothing Midview wrote lives in a student's hive, so
+  walking `HKEY_USERS` is out of scope.
+- **`ClearChromeProfiles` never follows a link.** It runs as SYSTEM over the
+  student's own profile folders, so before the recursive delete it checks
+  every segment from the profile root down to `User Data` is a real
+  directory and not a reparse point (`ProtectedStudentFolders.IsRealDirectory`,
+  the same open-as-itself guard the folder protection uses); a junction the
+  student plants to redirect the delete is refused and that account skipped.
 - Nothing here can block Midview or the shell: the Edge block goes through
   the enforcer, which already protects the shell, the session's own
   processes and Midview (`ProtectedPrograms`), and `msedge.exe` is not among
@@ -166,3 +178,37 @@ badge; the Painel window carries the detailed list.
   from inside it, or only class-wide there and per-machine from the tile
   menu (leaning: class-wide in the window, per-machine in the menu, like the
   other actions).
+
+## Revision 2026-10-08 (as built)
+
+After reviewing the owner's full lab-control suite (not just the browser
+`.bat`), the scope and a few design points settled as:
+
+- **Functions:** the browser lockdowns and Edge above, plus **Travar a barra
+  de tarefas** (a `LabConfig` flag: `NoPinningToTaskbar`, and the icon order
+  too when a `TaskbarLayout.xml` is present at
+  `%ProgramData%\Midview\`), **Limpar perfis do Chrome**
+  (`MessageType.ClearChromeProfiles`: the Agent closes Chrome and deletes
+  every user's `User Data` — a one-off action, not saved state), and
+  **Bloquear sites de distração** (social networks, games, YouTube) through
+  the **site blocking the Agent already has** (the hosts file, so it holds in
+  any browser), not a Chrome-only list. Blocking USB storage was considered
+  and left out for now.
+- **Status (`GetLabConfig`)** returns the configuration the Agent keeps
+  applying (its saved desired state), not a fresh registry read-back. The
+  Agent only answers a `SetLabConfig` with success once the registry write
+  itself succeeded as SYSTEM, so that per-machine ✓/✗ is the "did it take"
+  confirmation — the gap the owner hit with the hand-run scripts, where
+  nothing reported back.
+- **Messages:** `SetLabConfig = 51`, `GetLabConfig = 52`,
+  `LabConfigStatus = 53`, `ResetLabConfig = 54`, `ClearChromeProfiles = 55`.
+- **Console:** the **"Painel do laboratório"** button sits just before
+  "Máquinas da sala" in the Configurar group; the window applies each
+  function to the class (or one machine from the tile menu), reads each
+  machine's current state ("Ver o que está aplicado"), and shows a
+  per-machine result.
+- **Why this replaces the suite cleanly:** the Agent already runs as SYSTEM,
+  so there is no separate admin account or stored password, no scheduled
+  tasks runnable by every user, and no dependency on another program to
+  dispatch as administrator — the three real weaknesses of the hand-run
+  setup.

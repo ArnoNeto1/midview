@@ -60,12 +60,19 @@ var host = Host.CreateDefaultBuilder(args)
                 () => schedule.IsDueWithin(DateTime.Now, TimeSpan.FromMinutes(20)) || power.IsShutdownPending(),
                 UpdateReceiver.FreeBytesOn, new ProcessApplierLauncher(runningExe), SystemUpdateClock.Instance);
         });
-        services.AddSingleton(_ => new AppBlockEnforcer(new WindowsProcessInspector()));
+        services.AddSingleton<IProcessInspector>(new WindowsProcessInspector());
+        services.AddSingleton(provider => new AppBlockEnforcer(provider.GetRequiredService<IProcessInspector>()));
         services.AddSingleton(provider =>
         {
             var enforcer = provider.GetRequiredService<AppBlockEnforcer>();
             return new AppBlockCommandHandler(AppBlockCommandHandler.DefaultStatePath, enforcer.Apply, UacCheck.Warning);
         });
+        // The lab-configuration panel: writes Chrome and Windows policies
+        // (the enforcer ends Edge for it). One writer open on HKLM for the
+        // Agent's life.
+        services.AddSingleton(provider => new LabConfigCommandHandler(
+            LabConfigCommandHandler.DefaultStatePath, LabPolicyWriter.OpenMachine(),
+            provider.GetRequiredService<AppBlockEnforcer>()));
         // trusted-masters.json, read again whenever pairing (or anything
         // else) changes it.
         services.AddSingleton(TrustStore.FromFile(AgentServerWorker.TrustedMastersPath));
