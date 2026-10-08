@@ -69,11 +69,17 @@ public class TrustStoreTests : IDisposable
         File.WriteAllText(_path, $"[\"{A}\"]");
         var store = TrustStore.FromFile(_path);
         Assert.True(store.IsTrusted(A));
+        var stamp = File.GetLastWriteTimeUtc(_path);
 
         File.WriteAllText(_path, "[\"AAA");
         Assert.True(store.IsTrusted(A));
 
-        File.WriteAllText(_path, $"[\"{B}\"]");
+        // TrustStore tells a change by the file's write time and size, and
+        // writes this close together can land in the same tick of the file
+        // clock (forced here, so the test doesn't depend on how fast it runs):
+        // the good list must differ in size from the first one to be seen.
+        File.WriteAllText(_path, $"[ \"{B}\" ]");
+        File.SetLastWriteTimeUtc(_path, stamp);
         Assert.True(store.IsTrusted(B));
         Assert.False(store.IsTrusted(A));
     }
