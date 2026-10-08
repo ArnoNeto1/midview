@@ -184,6 +184,20 @@
                 <Border Style="{StaticResource Row}">
                     <DockPanel>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="De hoje" Click="OnClearDownloadsTodayClicked" />
+                            <Button Content="Tudo" Click="OnClearDownloadsAllClicked" Margin="0" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Apagar os downloads dos alunos" Style="{StaticResource FunctionName}" />
+                            <TextBlock Style="{StaticResource FunctionHint}"
+                                       Text="Apaga a pasta Downloads de cada aluno: só os arquivos de hoje, ou tudo. Não dá para desfazer." />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Style="{StaticResource Row}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="RESET geral" Click="OnResetClicked"
                                     ToolTip="Remove todas as configurações do painel e devolve a máquina ao padrão." />
                         </StackPanel>

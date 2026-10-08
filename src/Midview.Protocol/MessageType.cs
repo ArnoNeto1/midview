@@ -167,6 +167,22 @@ public enum MessageType : byte
     // saved Chrome profile (User Data), leaving the browser blank for the
     // next class. Answered with one CommandAck and a CommandResult.
     ClearChromeProfiles = 55,
+
+    // Uninstalling a program (see ProgramList and the lab-configuration
+    // design). GetInstalledPrograms, no payload, is answered with one
+    // InstalledPrograms carrying the names of the programs that can be
+    // uninstalled on that machine. UninstallPrograms (a ProgramList of names)
+    // is an Agent command that silently uninstalls each one it finds,
+    // answered with one CommandAck and a CommandResult. An Agent from before
+    // this answers CommandAck to GetInstalledPrograms.
+    GetInstalledPrograms = 56,
+    InstalledPrograms = 57,
+    UninstallPrograms = 58,
+
+    // Delete the students' downloads: an Agent command whose 1-byte payload
+    // is a DownloadsScope (today only, or everything in each user's Downloads
+    // folder). Answered with one CommandAck and a CommandResult.
+    ClearDownloads = 59,
 }
 
 public enum CloseAppsMode : byte

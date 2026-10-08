@@ -212,3 +212,31 @@ After reviewing the owner's full lab-control suite (not just the browser
   tasks runnable by every user, and no dependency on another program to
   dispatch as administrator — the three real weaknesses of the hand-run
   setup.
+
+## Revision 2026-10-08 (0.0.5: uninstall a program, clear downloads)
+
+Two more actions, in the same shape (Agent as SYSTEM, acts on each machine,
+reports a per-machine result):
+
+- **Desinstalar programa.** The machine's menu opens a window that reads the
+  installed programs from one machine (`GetInstalledPrograms` →
+  `InstalledPrograms`, a `ProgramList` of display names, from the Uninstall
+  keys under HKLM, 64- and 32-bit), the teacher marks some, and the Agent
+  silently uninstalls them on that machine or the class (`UninstallPrograms`).
+  Only a program with a silent uninstall is run -- its `QuietUninstallString`,
+  or `msiexec /x {guid} /qn` for an MSI -- run through `cmd.exe /s /c` with a
+  5-minute timeout, and the whole process tree is killed if it hangs (a SYSTEM
+  service has no desktop, so a window nobody can see would otherwise hang).
+  A program without a silent uninstall is listed but reported as not
+  removable, never run. UWP (Store) apps are out of scope. `ProgramUninstaller`
+  takes an injected registry base and command runner so tests use a throwaway
+  HKCU subtree and a fake runner.
+- **Apagar os downloads.** Two buttons in Manutenção (`ClearDownloads`, a
+  1-byte `DownloadsScope`): everything in each user's Downloads folder, or
+  only today's files (walked recursively, by each file's own date, pruning
+  folders left empty -- a folder's own timestamp is never used, so an old file
+  beside a new one survives). Same reparse-point guard as "Limpar perfis", and
+  an unknown/missing scope byte is refused rather than treated as "delete
+  all". Messages: `GetInstalledPrograms = 56`, `InstalledPrograms = 57`,
+  `UninstallPrograms = 58`, `ClearDownloads = 59`. Old Agents answer
+  CommandAck and are shown as "Midview antigo".

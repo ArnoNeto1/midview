@@ -71,6 +71,85 @@ public class AgentServerTests
         }
     }
 
+    [Fact]
+    public async Task UninstallAndClearDownloads_WorkThroughTheAgentServer()
+    {
+        using var agentCert = SelfSignedCertificate.Create("agent-under-test");
+        using var masterCert = SelfSignedCertificate.Create("master-under-test");
+
+        var rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
+        using var root = Registry.CurrentUser.CreateSubKey(rootPath, writable: true);
+        using (var app = root.CreateSubKey(@"Microsoft\Windows\CurrentVersion\Uninstall\AppQuiet", writable: true))
+        {
+            app.SetValue("DisplayName", "App Quiet");
+            app.SetValue("QuietUninstallString", "un.exe /S");
+        }
+        var ranCommands = new List<string>();
+        var uninstaller = new ProgramUninstaller(
+            Registry.CurrentUser.CreateSubKey(rootPath, writable: true), cmd => { ranCommands.Add(cmd); return 0; });
+
+        var usersRoot = Path.Combine(Path.GetTempPath(), $"midview-users-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(usersRoot, "aluno", "Downloads"));
+        File.WriteAllText(Path.Combine(usersRoot, "aluno", "Downloads", "x.bin"), "x");
+        var labStatePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
+        var labConfig = new LabConfigCommandHandler(
+            labStatePath, new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath + @"\lab", writable: true)),
+            new AppBlockEnforcer(new EmptyInspector()), usersRoot);
+
+        var siteBlock = new SiteBlockCommandHandler(new SiteBlockState(), "unused", "unused-hosts", new FakeFirewallController());
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var server = new AgentServer(
+            listener, agentCert, new TrustStore(new[] { masterCert.Thumbprint }), siteBlock,
+            labConfig: labConfig, uninstaller: uninstaller);
+
+        Message Exchange(Message request)
+        {
+            using var tcpClient = new TcpClient();
+            tcpClient.Connect(IPAddress.Loopback, port);
+            using var channel = SecureChannel.AuthenticateAsClient(
+                tcpClient, "agent-under-test", masterCert, new TrustStore(new[] { agentCert.Thumbprint }));
+            channel.Send(request);
+            return channel.Receive();
+        }
+
+        using var stopServer = new CancellationTokenSource();
+        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        try
+        {
+            var list = await Task.Run(() => Exchange(new Message(MessageType.GetInstalledPrograms, Array.Empty<byte>())))
+                .WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(MessageType.InstalledPrograms, list.Type);
+            Assert.True(ProgramList.TryDecode(list.Payload, out var programs));
+            Assert.Contains("App Quiet", programs);
+
+            var uninstall = await Task.Run(() => Exchange(new Message(MessageType.UninstallPrograms, ProgramList.Encode(new[] { "App Quiet" }))))
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(CommandResult.Decode(uninstall.Payload).Succeeded);
+            Assert.Equal(new[] { "un.exe /S" }, ranCommands);
+
+            // A missing scope byte is refused, not treated as "delete all".
+            var bad = await Task.Run(() => Exchange(new Message(MessageType.ClearDownloads, Array.Empty<byte>())))
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(CommandResult.Decode(bad.Payload).Succeeded);
+            Assert.NotEmpty(Directory.GetFileSystemEntries(Path.Combine(usersRoot, "aluno", "Downloads")));
+
+            var clear = await Task.Run(() => Exchange(new Message(MessageType.ClearDownloads, new[] { (byte)DownloadsScope.All })))
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(CommandResult.Decode(clear.Payload).Succeeded);
+            Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(usersRoot, "aluno", "Downloads")));
+        }
+        finally
+        {
+            stopServer.Cancel();
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            try { Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
+            try { File.Delete(labStatePath); } catch { }
+            try { Directory.Delete(usersRoot, recursive: true); } catch { }
+        }
+    }
+
     private sealed class EmptyInspector : IProcessInspector
     {
         public IReadOnlyList<RunningProcess> ListInteractive() => Array.Empty<RunningProcess>();

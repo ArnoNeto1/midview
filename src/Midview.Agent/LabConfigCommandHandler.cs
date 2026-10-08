@@ -159,6 +159,138 @@ public sealed class LabConfigCommandHandler
             : (true, cleared == 0 ? "nenhum perfil do Chrome para limpar" : $"perfis do Chrome limpos em {cleared} conta(s)");
     }
 
+    // Deletes the students' downloads: each user's Downloads folder, either
+    // everything in it or only today's files (DownloadsScope). As SYSTEM over
+    // the student's own folders, so the same link check as ClearChromeProfiles
+    // keeps it from following a junction out of the folder. Never throws.
+    public (bool Succeeded, string Detail) ClearDownloads(DownloadsScope scope)
+    {
+        var today = DateTime.Now.Date;
+        var cleared = 0;
+        var failed = 0;
+        try
+        {
+            if (Directory.Exists(_usersRoot))
+            {
+                foreach (var userDirectory in Directory.GetDirectories(_usersRoot))
+                {
+                    if (!ProtectedStudentFolders.IsRealDirectory(userDirectory))
+                    {
+                        continue;
+                    }
+                    var downloads = Path.Combine(userDirectory, "Downloads");
+                    if (!Directory.Exists(downloads))
+                    {
+                        continue;
+                    }
+                    if (!ProtectedStudentFolders.IsRealDirectory(downloads))
+                    {
+                        AgentLog.Warn($"Skipped Downloads under {userDirectory}: it is a link, not a real folder.");
+                        continue;
+                    }
+                    try
+                    {
+                        cleared += DeleteDownloads(downloads, scope, today, ref failed);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        // One account's folder going unreadable mid-way mustn't
+                        // stop the others.
+                        failed++;
+                        AgentLog.Warn($"Couldn't clear Downloads under {userDirectory}: {ex.Message}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AgentLog.Warn($"Couldn't list user profiles to clear downloads: {ex.Message}");
+            return (false, $"não foi possível limpar os downloads: {ErrorText.Describe(ex)}");
+        }
+
+        var what = scope == DownloadsScope.Today ? "downloads de hoje" : "downloads";
+        if (failed > 0)
+        {
+            return (cleared > 0, $"{what}: {cleared} item(ns) apagado(s); {failed} não deu para apagar agora");
+        }
+        return (true, cleared == 0 ? $"nenhum {what} para apagar" : $"{what}: {cleared} item(ns) apagado(s)");
+    }
+
+    // The entries deleted from one Downloads folder. Downloads was already
+    // checked to be a real folder.
+    private static int DeleteDownloads(string downloads, DownloadsScope scope, DateTime today, ref int failed)
+    {
+        if (scope == DownloadsScope.All)
+        {
+            var deleted = 0;
+            foreach (var entry in Directory.GetFileSystemEntries(downloads))
+            {
+                deleted += TryDelete(entry, Directory.Exists(entry), ref failed) ? 1 : 0;
+            }
+            return deleted;
+        }
+
+        return DeleteTodaysFiles(downloads, today, ref failed);
+    }
+
+    // "De hoje": only the files whose own date is today, however deep they
+    // sit, and any subfolder left empty because it held only today's files.
+    // A subfolder that is a link is never followed (it isn't a real folder the
+    // student downloaded into), so a planted junction can't redirect this.
+    private static int DeleteTodaysFiles(string folder, DateTime today, ref int failed)
+    {
+        var deleted = 0;
+        foreach (var file in Directory.GetFiles(folder))
+        {
+            if (File.GetLastWriteTime(file).Date == today)
+            {
+                deleted += TryDelete(file, isDirectory: false, ref failed) ? 1 : 0;
+            }
+        }
+        foreach (var sub in Directory.GetDirectories(folder))
+        {
+            if (!ProtectedStudentFolders.IsRealDirectory(sub))
+            {
+                continue;
+            }
+            deleted += DeleteTodaysFiles(sub, today, ref failed);
+            try
+            {
+                if (Directory.GetFileSystemEntries(sub).Length == 0)
+                {
+                    Directory.Delete(sub, recursive: false);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Leaving an empty subfolder is harmless; don't count it.
+            }
+        }
+        return deleted;
+    }
+
+    private static bool TryDelete(string path, bool isDirectory, ref int failed)
+    {
+        try
+        {
+            if (isDirectory)
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            else
+            {
+                File.Delete(path);
+            }
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            failed++;
+            AgentLog.Warn($"Couldn't delete a download ({path}): {ex.Message}");
+            return false;
+        }
+    }
+
     public void ReconcileAtStartup()
     {
         lock (_gate)

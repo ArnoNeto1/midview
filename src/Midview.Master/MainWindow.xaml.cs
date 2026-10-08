@@ -445,6 +445,16 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnUninstallMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            var classTargets = _tiles.Select(t => t.Machine).ToList();
+            ShowOnce("desinstalar", new[] { tile.Machine },
+                () => new UninstallWindow(tile.Machine, classTargets, _masterCertificate) { Owner = this });
+        }
+    }
+
     private void OnBlockAppsMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)

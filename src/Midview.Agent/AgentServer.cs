@@ -26,6 +26,7 @@ public sealed class AgentServer
     private readonly UpdateReceiver? _updateReceiver;
     private readonly AppBlockCommandHandler? _appBlock;
     private readonly LabConfigCommandHandler? _labConfig;
+    private readonly ProgramUninstaller? _uninstaller;
     private readonly PairingService? _pairing;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
@@ -35,7 +36,7 @@ public sealed class AgentServer
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
-        LabConfigCommandHandler? labConfig = null, PairingService? pairing = null)
+        LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -47,6 +48,7 @@ public sealed class AgentServer
         _updateReceiver = updateReceiver;
         _appBlock = appBlock;
         _labConfig = labConfig;
+        _uninstaller = uninstaller;
         _pairing = pairing;
     }
 
@@ -207,6 +209,36 @@ public sealed class AgentServer
         {
             var (succeeded, detail) = _labConfig?.ClearChromeProfiles()
                 ?? (false, "esta máquina não aceita o painel do laboratório");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.ClearDownloads)
+        {
+            // A missing or unknown scope byte must never fall through to the
+            // destructive "delete everything".
+            (bool Succeeded, string Detail) result =
+                message.Payload.Length != 1 || !Enum.IsDefined((DownloadsScope)message.Payload[0])
+                    ? (false, "pedido inválido")
+                    : _labConfig?.ClearDownloads((DownloadsScope)message.Payload[0])
+                      ?? (false, "esta máquina não aceita o painel do laboratório");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(result.Succeeded, result.Detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.GetInstalledPrograms && _uninstaller is not null)
+        {
+            channel.Send(new Message(MessageType.InstalledPrograms, ProgramList.Encode(_uninstaller.ListInstalled())));
+            return;
+        }
+
+        if (message.Type == MessageType.UninstallPrograms)
+        {
+            var (succeeded, detail) = _uninstaller is null
+                ? (false, "esta máquina não desinstala programas")
+                : ProgramList.TryDecode(message.Payload, out var names)
+                    ? _uninstaller.UninstallMany(names)
+                    : (false, "pedido inválido");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
         }

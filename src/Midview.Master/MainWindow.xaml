@@ -130,6 +130,7 @@
                                         <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
                                         <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
                                         <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
+                                        <MenuItem Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
                                         <Separator />
                                         <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
                                         <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />

@@ -30,6 +30,7 @@ public sealed class LabConfigClientTests : IDisposable
     private (KnownMachine Machine, int Port) StartAgent(bool withLabConfig)
     {
         LabConfigCommandHandler? labConfig = null;
+        ProgramUninstaller? uninstaller = null;
         if (withLabConfig)
         {
             var rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
@@ -37,6 +38,13 @@ public sealed class LabConfigClientTests : IDisposable
             var statePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
             var usersRoot = Path.Combine(Path.GetTempPath(), $"midview-users-{Guid.NewGuid():N}");
             labConfig = new LabConfigCommandHandler(statePath, writer, new AppBlockEnforcer(new EmptyInspector()), usersRoot);
+            using (var app = Registry.CurrentUser.CreateSubKey(
+                rootPath + @"\Microsoft\Windows\CurrentVersion\Uninstall\AppQuiet", writable: true))
+            {
+                app.SetValue("DisplayName", "App Quiet");
+                app.SetValue("QuietUninstallString", "un.exe /S");
+            }
+            uninstaller = new ProgramUninstaller(Registry.CurrentUser.CreateSubKey(rootPath, writable: true), _ => 0);
             _cleanup.Add(() => Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false));
             _cleanup.Add(() => File.Delete(statePath));
         }
@@ -45,7 +53,8 @@ public sealed class LabConfigClientTests : IDisposable
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var server = new AgentServer(listener, _agentCert, new TrustStore(new[] { _masterCert.Thumbprint }), siteBlock, labConfig: labConfig);
+        var server = new AgentServer(listener, _agentCert, new TrustStore(new[] { _masterCert.Thumbprint }), siteBlock,
+            labConfig: labConfig, uninstaller: uninstaller);
         var stop = new CancellationTokenSource();
         var served = Task.Run(() => server.Run(stop.Token));
         _cleanup.Add(() => { stop.Cancel(); try { served.Wait(TimeSpan.FromSeconds(5)); } catch { } });
@@ -79,6 +88,53 @@ public sealed class LabConfigClientTests : IDisposable
 
         Assert.True(status.OldAgent);
         Assert.Null(status.Config);
+    }
+
+    [Fact]
+    public async Task GetInstalledPrograms_ListsThem()
+    {
+        var (machine, port) = StartAgent(withLabConfig: true);
+
+        var result = await Task.Run(() => LabConfigClient.GetInstalledPrograms(machine, _masterCert, port))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(result.OldAgent);
+        Assert.Contains("App Quiet", result.Programs!);
+    }
+
+    [Fact]
+    public async Task UninstallPrograms_RunsThem()
+    {
+        var (machine, port) = StartAgent(withLabConfig: true);
+
+        var (ok, detail) = await Task.Run(() => LabConfigClient.UninstallPrograms(machine, _masterCert, new[] { "App Quiet" }, port))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(ok);
+        Assert.Contains("desinstalado", detail);
+    }
+
+    [Fact]
+    public async Task ClearDownloads_IsAccepted()
+    {
+        var (machine, port) = StartAgent(withLabConfig: true);
+
+        var (ok, _) = await Task.Run(() => LabConfigClient.ClearDownloads(machine, _masterCert, DownloadsScope.Today, port))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public async Task GetInstalledPrograms_AgainstAnOlderAgent_ReportsOldAgent()
+    {
+        var (machine, port) = StartAgent(withLabConfig: false);
+
+        var result = await Task.Run(() => LabConfigClient.GetInstalledPrograms(machine, _masterCert, port))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(result.OldAgent);
+        Assert.Null(result.Programs);
     }
 
     private sealed class EmptyInspector : IProcessInspector

@@ -1,0 +1,40 @@
+<Window x:Class="Midview.Master.UninstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Desinstalar programa" Height="620" Width="560"
+        WindowStartupLocation="CenterOwner" Loaded="OnWindowLoaded">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="A lista é lida de uma máquina. Marque os programas e desinstale nela ou na turma toda. Só remove programas com desinstalação silenciosa; os que não têm, o resultado avisa." />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                <TextBox x:Name="FilterTextBox" Width="260" TextChanged="OnFilterChanged" VerticalContentAlignment="Center" />
+                <TextBlock Text="  (filtrar pelo nome)" Foreground="Gray" VerticalAlignment="Center" />
+                <Button Content="Recarregar" Click="OnReloadClicked" Padding="10,3" Margin="12,0,0,0" />
+            </StackPanel>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <CheckBox x:Name="WholeClassCheckBox" Content="Aplicar na turma toda" Margin="0,0,0,8" />
+            <Button x:Name="UninstallButton" Content="Desinstalar os marcados" Click="OnUninstallClicked" Padding="12,6"
+                    HorizontalAlignment="Left" />
+            <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" Margin="0,8,0,4" />
+            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+            </ScrollViewer>
+        </StackPanel>
+
+        <Border BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,4,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="ProgramsList" Margin="8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="0,3" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</Window>

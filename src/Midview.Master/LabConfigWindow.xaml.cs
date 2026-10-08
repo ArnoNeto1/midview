@@ -59,6 +59,12 @@ public partial class LabConfigWindow : Window
     private async void OnClearChromeProfilesClicked(object sender, RoutedEventArgs e) =>
         await RunAsync(machine => LabConfigClient.ClearChromeProfiles(machine, _masterCertificate));
 
+    private async void OnClearDownloadsTodayClicked(object sender, RoutedEventArgs e) =>
+        await RunAsync(machine => LabConfigClient.ClearDownloads(machine, _masterCertificate, DownloadsScope.Today));
+
+    private async void OnClearDownloadsAllClicked(object sender, RoutedEventArgs e) =>
+        await RunAsync(machine => LabConfigClient.ClearDownloads(machine, _masterCertificate, DownloadsScope.All));
+
     private async void OnBlockDistractionClicked(object sender, RoutedEventArgs e) =>
         await RunAsync(machine => LabConfigClient.SetDistractionSites(machine, _masterCertificate, block: true));
 

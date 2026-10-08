@@ -160,6 +160,110 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
     }
 
     [Fact]
+    public void ClearDownloads_All_EmptiesEveryUsersDownloads()
+    {
+        var handler = Create();
+        var downloads = Path.Combine(_usersRoot, "aluno", "Downloads");
+        Directory.CreateDirectory(downloads);
+        File.WriteAllText(Path.Combine(downloads, "jogo.exe"), "x");
+        File.WriteAllText(Path.Combine(downloads, "foto.jpg"), "x");
+        Directory.CreateDirectory(Path.Combine(downloads, "pasta"));
+
+        var (ok, detail) = handler.ClearDownloads(DownloadsScope.All);
+
+        Assert.True(ok);
+        Assert.Contains("3 item", detail);
+        Assert.Empty(Directory.GetFileSystemEntries(downloads));
+        Assert.True(Directory.Exists(downloads)); // the folder stays, only its contents go
+    }
+
+    [Fact]
+    public void ClearDownloads_Today_LeavesOlderFiles()
+    {
+        var handler = Create();
+        var downloads = Path.Combine(_usersRoot, "aluno", "Downloads");
+        Directory.CreateDirectory(downloads);
+        var todayFile = Path.Combine(downloads, "hoje.pdf");
+        var oldFile = Path.Combine(downloads, "antigo.pdf");
+        File.WriteAllText(todayFile, "x");
+        File.WriteAllText(oldFile, "x");
+        File.SetLastWriteTime(oldFile, DateTime.Now.AddDays(-3));
+
+        var (ok, _) = handler.ClearDownloads(DownloadsScope.Today);
+
+        Assert.True(ok);
+        Assert.False(File.Exists(todayFile));
+        Assert.True(File.Exists(oldFile));
+    }
+
+    [Fact]
+    public void ClearDownloads_Today_InASubfolder_DeletesOnlyTodaysFile_AndKeepsOlderOnes()
+    {
+        var handler = Create();
+        var sub = Path.Combine(_usersRoot, "aluno", "Downloads", "projeto");
+        Directory.CreateDirectory(sub);
+        var todayFile = Path.Combine(sub, "hoje.txt");
+        var oldFile = Path.Combine(sub, "antigo.txt");
+        File.WriteAllText(todayFile, "x");
+        File.WriteAllText(oldFile, "x");
+        File.SetLastWriteTime(oldFile, DateTime.Now.AddDays(-5));
+        // Even though the folder's own time is today (a file was just written),
+        // the old file and the folder must stay.
+        Directory.SetLastWriteTime(sub, DateTime.Now);
+
+        handler.ClearDownloads(DownloadsScope.Today);
+
+        Assert.False(File.Exists(todayFile));
+        Assert.True(File.Exists(oldFile));
+        Assert.True(Directory.Exists(sub));
+    }
+
+    [Fact]
+    public void ClearDownloads_Today_RemovesASubfolderLeftEmpty()
+    {
+        var handler = Create();
+        var sub = Path.Combine(_usersRoot, "aluno", "Downloads", "sopra_hoje");
+        Directory.CreateDirectory(sub);
+        File.WriteAllText(Path.Combine(sub, "a.txt"), "x");
+
+        handler.ClearDownloads(DownloadsScope.Today);
+
+        Assert.False(Directory.Exists(sub));
+    }
+
+    [Fact]
+    public void ClearDownloads_WhenDownloadsIsAJunction_RefusesAndLeavesTheTargetAlone()
+    {
+        var handler = Create();
+        var outside = Path.Combine(Path.GetTempPath(), $"midview-dl-outside-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "precious.txt"), "keep");
+
+        Directory.CreateDirectory(Path.Combine(_usersRoot, "aluno"));
+        var mk = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", $"/c mklink /J \"{Path.Combine(_usersRoot, "aluno", "Downloads")}\" \"{outside}\"")
+        { UseShellExecute = false, CreateNoWindow = true })!;
+        mk.WaitForExit();
+        Assert.Equal(0, mk.ExitCode);
+
+        try
+        {
+            handler.ClearDownloads(DownloadsScope.All);
+            Assert.True(File.Exists(Path.Combine(outside, "precious.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(outside, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ClearDownloads_NothingThere_SaysSo()
+    {
+        Assert.Equal("nenhum downloads para apagar", Create().ClearDownloads(DownloadsScope.All).Detail);
+    }
+
+    [Fact]
     public void ClearChromeProfiles_NothingToClear_SaysSo()
     {
         var handler = Create();

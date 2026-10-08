@@ -73,6 +73,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new LabConfigCommandHandler(
             LabConfigCommandHandler.DefaultStatePath, LabPolicyWriter.OpenMachine(),
             provider.GetRequiredService<AppBlockEnforcer>()));
+        // Lists and silently uninstalls installed programs, for the console's
+        // "Desinstalar programa".
+        services.AddSingleton(_ => ProgramUninstaller.OpenMachine());
         // trusted-masters.json, read again whenever pairing (or anything
         // else) changes it.
         services.AddSingleton(TrustStore.FromFile(AgentServerWorker.TrustedMastersPath));

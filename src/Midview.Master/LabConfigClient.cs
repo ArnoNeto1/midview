@@ -70,6 +70,35 @@ public static class LabConfigClient
             : (false, $"sites de distração {verb} em {DistractionSites.Count - failed.Count} de {DistractionSites.Count}; faltou: {string.Join(", ", failed)}");
     }
 
+    public static (bool Succeeded, string Detail) ClearDownloads(
+        KnownMachine machine, X509Certificate2 masterCertificate, DownloadsScope scope, int port = ConnectionClient.AgentPort) =>
+        CommandClient.SendCommandForResult(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate,
+            MessageType.ClearDownloads, new[] { (byte)scope });
+
+    // Null Programs with OldAgent = true means an Agent from before this
+    // feature (it answered CommandAck to GetInstalledPrograms).
+    public sealed record InstalledResult(IReadOnlyList<string>? Programs, bool OldAgent);
+
+    public static InstalledResult GetInstalledPrograms(
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort)
+    {
+        var reply = CommandClient.Ask(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.GetInstalledPrograms, Array.Empty<byte>());
+        return reply.Type switch
+        {
+            MessageType.InstalledPrograms when ProgramList.TryDecode(reply.Payload, out var programs) => new InstalledResult(programs, false),
+            MessageType.CommandAck => new InstalledResult(null, true),
+            _ => throw new InvalidDataException($"resposta inesperada ({reply.Type})"),
+        };
+    }
+
+    public static (bool Succeeded, string Detail) UninstallPrograms(
+        KnownMachine machine, X509Certificate2 masterCertificate, IReadOnlyList<string> displayNames, int port = ConnectionClient.AgentPort) =>
+        CommandClient.SendCommandForResult(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate,
+            MessageType.UninstallPrograms, ProgramList.Encode(displayNames));
+
     private static string AgentThumbprint(KnownMachine machine) =>
         machine.AgentThumbprint is { Length: > 0 } thumbprint
             ? thumbprint
