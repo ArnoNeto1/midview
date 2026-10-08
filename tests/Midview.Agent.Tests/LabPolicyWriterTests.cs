@@ -87,6 +87,32 @@ public sealed class LabPolicyWriterTests : IDisposable
     }
 
     [Fact]
+    public void ForceGuest_EnablesGuestMode_EvenOverAStaleDisabledLeftover()
+    {
+        // As an older hand-run script left it: guest mode disabled, which
+        // silently defeats "enforced".
+        using (var chrome = _root.CreateSubKey(ChromePath, writable: true))
+        {
+            chrome!.SetValue("BrowserGuestModeEnabled", 0, RegistryValueKind.DWord);
+        }
+
+        Writer().Apply(LabConfig.Off(1) with { ForceGuest = true });
+
+        Assert.Equal(1, Read(ChromePath, "BrowserGuestModeEnforced"));
+        Assert.Equal(1, Read(ChromePath, "BrowserGuestModeEnabled"));
+    }
+
+    [Fact]
+    public void ForceGuest_Off_RemovesBothGuestValues()
+    {
+        Writer().Apply(LabConfig.Off(1) with { ForceGuest = true });
+        Writer().Apply(LabConfig.Off(2));
+
+        Assert.Null(Read(ChromePath, "BrowserGuestModeEnforced"));
+        Assert.Null(Read(ChromePath, "BrowserGuestModeEnabled"));
+    }
+
+    [Fact]
     public void ApplyLockdown_ClearsStaleUrlBlocklistEntries()
     {
         // As an older hand-run script left them (indices 100+).

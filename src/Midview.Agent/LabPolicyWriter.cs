@@ -194,10 +194,18 @@ public sealed class LabPolicyWriter : IDisposable
     private void ApplyForceGuest()
     {
         using var chrome = _base.Value.CreateSubKey(ChromePath, writable: true);
+        // Both, together: enforcing guest mode does nothing if guest mode is
+        // disabled, and an older hand-run script may have left
+        // BrowserGuestModeEnabled=0 behind, which silently defeated the force.
+        chrome.SetValue("BrowserGuestModeEnabled", 1, RegistryValueKind.DWord);
         chrome.SetValue("BrowserGuestModeEnforced", 1, RegistryValueKind.DWord);
     }
 
-    private void RemoveForceGuest() => DeleteValue(ChromePath, "BrowserGuestModeEnforced");
+    private void RemoveForceGuest()
+    {
+        DeleteValue(ChromePath, "BrowserGuestModeEnforced");
+        DeleteValue(ChromePath, "BrowserGuestModeEnabled");
+    }
 
     private void ApplyAdblock()
     {
