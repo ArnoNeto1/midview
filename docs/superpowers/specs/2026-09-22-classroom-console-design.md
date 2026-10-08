@@ -11,9 +11,8 @@ teacher types a host address and two certificate thumbprints by hand into
 plain text fields before clicking Connect. That's fine for the manual
 testing done so far, but the teacher manages a lab of 25+ computers and
 needs to see all of them at a glance and jump into full control of any
-one — the model Veyon's own console uses (a grid of live thumbnails,
-click one to open full control), which the teacher explicitly asked to
-match.
+one: a grid of live thumbnails, click one to open full control, which the
+teacher explicitly asked for.
 
 This spec covers the classroom console: a persisted list of known
 machines the teacher builds up once, a lightweight low-frequency preview
@@ -38,7 +37,7 @@ entry as Master's primary view.
 ## Non-goals
 
 - No auto-discovery of machines on the network (explicitly declined in
-  favor of manual registration, matching Veyon).
+  favor of manual registration).
 - No change to the full-control protocol, tile-diff pipeline, or input
   handling built and validated earlier today.
 - No multi-monitor or multi-teacher-viewing-the-same-machine handling —

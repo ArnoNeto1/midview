@@ -57,9 +57,9 @@ Built on the classroom console and the teacher-message work.
   as the working folder. The same fix makes "Entregar ao professor"
   (file collection) and `session-perf.log` land in the student's profile.
 
-- **Options, added 2026-10-05 (as in Veyon, asked for during the first live
-  run):** "Substituir arquivo com o mesmo nome" replaces a file of the
-  same name instead of saving "nome (2)"; an old copy open in a program
+- **Options, added 2026-10-05 (asked for during the first live run):**
+  "Substituir arquivo com o mesmo nome" replaces a file of the same name
+  instead of saving "nome (2)"; an old copy open in a program
   can't be replaced, so the new one is saved beside it and the teacher is
   told. "Depois de enviar" can open the "Arquivos do professor" folder or
   the file itself, with the program Windows opens it with, on the

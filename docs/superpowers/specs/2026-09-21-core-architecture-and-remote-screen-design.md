@@ -10,16 +10,16 @@ disabled until a restart; see `2026-10-05-screen-lock-design.md`)
 
 ## Context
 
-Treezeview (the existing project at `C:\Users\Neto\Desktop\Treezeview`) is a
-GPLv2 fork of Veyon, built for a Brazilian public school's computer lab. Its
+Treezeview (the existing project at `C:\Users\Neto\Desktop\Treezeview`) is
+GPLv2 software, built for a Brazilian public school's computer lab. Its
 copyleft license means it can never be relicensed as closed-source or sold
 under an exclusive license — any derivative of GPL code must stay GPL, and
-relicensing would require consent from every original Veyon copyright holder,
-which is not practical.
+relicensing would require consent from every copyright holder, which is not
+practical.
 
-Midview is a from-scratch rewrite, sharing no source code with Veyon or
-Treezeview, so that its owner holds full copyright and can license it however
-they choose in the future (including closed-source or commercial). It will
+Midview is a from-scratch rewrite, sharing no source code with Treezeview or
+any GPL program, so that its owner holds full copyright and can license it
+however they choose in the future (including closed-source or commercial). It will
 eventually reach feature parity with Treezeview: remote screen view/control
 with input locking, site/content blocking, broadcast text messages, private
 chat, closing all programs, and file distribution.
@@ -36,7 +36,7 @@ close-programs) each get their own design doc once this foundation exists.
 - **Network**: local school LAN only. No internet access, no NAT traversal,
   no relay infrastructure.
 - **Remote screen quality**: smooth, video-like updates during live
-  view/control (comparable to the current Veyon-based experience) — not an
+  view/control (comparable to what the lab uses today) — not an
   occasional-snapshot experience.
 - **Licensing goal**: zero reused GPL code. Third-party dependencies must be
   permissively licensed (MIT/BSD/Apache-2.0) or, if LGPL (e.g. a UI toolkit),
@@ -58,7 +58,7 @@ team.
 
 ## Architecture
 
-Three processes, replacing Veyon's four (service, server, worker, master):
+Three processes:
 
 - **MidviewAgent** — Windows Service, always running as SYSTEM. Installs
   itself, starts at boot, and launches `MidviewSession` inside whichever
@@ -68,9 +68,9 @@ Three processes, replacing Veyon's four (service, server, worker, master):
 - **MidviewSession** — one process per interactive user session, launched by
   `MidviewAgent`. Owns screen capture, input injection, the input-lock
   mechanism, and the network listener that accepts connections from
-  `MidviewMaster`. Replaces Veyon's server+worker split: with .NET's
-  async/task model, concurrent features are handled safely within one
-  process instead of needing separate OS processes per feature.
+  `MidviewMaster`. With .NET's async/task model, concurrent features are
+  handled safely within one process instead of needing separate OS
+  processes per feature.
 - **MidviewMaster** — the teacher's console GUI. For this sub-project: a
   minimal computer list plus a view/control window, enough to validate the
   full pipeline end-to-end. The fuller console UI (matching Treezeview's

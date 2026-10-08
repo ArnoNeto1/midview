@@ -14,7 +14,7 @@ Master. It works, but it is a folder of scripts, the teacher has to be
 authorized in the package before the first install, and nothing can be
 handed to another school as one download.
 
-This replaces it with what programs like Veyon do: one setup program with a
+This replaces it with one setup program with a
 "Professor" and an "Aluno" option, and trust set up afterwards, from the
 teacher's program, by pairing over the network.
 

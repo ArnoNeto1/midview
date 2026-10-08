@@ -7,9 +7,7 @@ Status: Implemented 2026-10-05 (not yet validated live)
 
 The teacher locks the students' screens so they pay attention: on the whole
 class or on one machine. Asked for during the first live run; the look was
-chosen by the owner to match Veyon's (which Treezeview, the GPL fork Midview
-replaces, inherited). Nothing is taken from Veyon: the look is redrawn from
-scratch.
+chosen by the owner and drawn from scratch for Midview.
 
 ## Design
 
@@ -79,9 +77,9 @@ scratch.
   with the reason (signed out: "Sem usuário logado"; restarting:
   "Offline"), until its keeper locks it again; the status line adds
   "Saíram do bloqueio: …" (`ScreenLockText`). Ctrl+Alt+Del itself can't be
-  blocked by a program: Veyon does it with the Interception driver, which
-  Midview declined for its commercial license (see the core design,
-  2026-09-21). From its screen the student can only end the lock by
+  blocked by a program: only a keyboard filter driver such as Interception
+  can, which Midview declined for its commercial license (see the core
+  design, 2026-09-21). From its screen the student can only end the lock by
   signing out, switching user or restarting, and is locked again on the
   way back in; going back to the desktop finds the lock still on, and Task
   Manager opens behind the lock with input still locked.
@@ -91,7 +89,7 @@ scratch.
 
 ## Out of scope
 
-A text on the lock screen (Veyon has none), locking at a scheduled time,
+A text on the lock screen, locking at a scheduled time,
 locking machines added to the grid after the class was locked, and keeping
 a class locked after the teacher's program closes.
 
