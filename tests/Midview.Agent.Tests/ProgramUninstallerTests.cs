@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Win32;
 using Midview.Agent;
 using Xunit;
@@ -9,6 +10,7 @@ public sealed class ProgramUninstallerTests : IDisposable
     private const string UninstallPath = @"Microsoft\Windows\CurrentVersion\Uninstall";
 
     private readonly string _rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
+    private readonly string _userRootPath = $@"Software\MidviewTestUser\{Guid.NewGuid():N}";
     private readonly RegistryKey _root;
     private readonly List<string> _commands = new();
     private int? _exitCode = 0;
@@ -22,6 +24,7 @@ public sealed class ProgramUninstallerTests : IDisposable
     {
         _root.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_rootPath, throwOnMissingSubKey: false); } catch { }
+        try { Registry.CurrentUser.DeleteSubKeyTree(_userRootPath, throwOnMissingSubKey: false); } catch { }
     }
 
     private void AddProgram(string keyName, Action<RegistryKey> fill)
@@ -30,8 +33,40 @@ public sealed class ProgramUninstallerTests : IDisposable
         fill(key);
     }
 
+    // Stands in for an entry under the logged-on student's own HKCU, as
+    // opposed to the machine-wide hive AddProgram writes to.
+    private void AddUserProgram(string keyName, Action<RegistryKey> fill)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey($@"{_userRootPath}\{UninstallPath}\{keyName}", writable: true);
+        fill(key);
+    }
+
     private ProgramUninstaller Uninstaller() =>
         new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), command => { _commands.Add(command); return _exitCode; });
+
+    // Same, but with a student "logged on": their SOFTWARE hive is the
+    // throwaway _userRootPath subtree instead of the real HKEY_USERS\<SID>.
+    private ProgramUninstaller UninstallerWithLoggedOnStudent() =>
+        new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true),
+            command => { _commands.Add(command); return _exitCode; },
+            () => Registry.CurrentUser.OpenSubKey(_userRootPath, writable: false));
+
+    // Same, but with canned "Name|PackageFullName" lines standing in for
+    // Get-AppxPackage's real output.
+    private ProgramUninstaller UninstallerWithAppxPackages(params string[] lines) =>
+        new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true),
+            command => { _commands.Add(command); return _exitCode; },
+            listAppxPackages: () => lines);
+
+    // Decodes the script passed to powershell.exe's -EncodedCommand in a
+    // captured command line, so assertions read the real script instead of a
+    // hardcoded Base64 blob that would break on every harmless wording change.
+    private static string DecodeEncodedCommand(string commandLine)
+    {
+        const string marker = "-EncodedCommand ";
+        var start = commandLine.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
+        return Encoding.Unicode.GetString(Convert.FromBase64String(commandLine[start..].Trim()));
+    }
 
     [Fact]
     public void ListInstalled_ShowsRealProgramsAndSkipsComponentsAndUpdates()
@@ -46,6 +81,89 @@ public sealed class ProgramUninstallerTests : IDisposable
         var listed = Uninstaller().ListInstalled();
 
         Assert.Equal(new[] { "App MSI", "App No Silent", "App Quiet" }, listed); // sorted, filtered
+    }
+
+    [Fact]
+    public void ListInstalled_AlsoIncludesTheLoggedOnStudentsOwnPrograms()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "un.exe /S"); });
+        AddUserProgram("UserApp", k => { k.SetValue("DisplayName", "User App"); k.SetValue("QuietUninstallString", "un2.exe /S"); });
+
+        var listed = UninstallerWithLoggedOnStudent().ListInstalled();
+
+        Assert.Equal(new[] { "Machine App", "User App" }, listed);
+    }
+
+    [Fact]
+    public void ListInstalled_NoLoggedOnStudent_OnlyUsesTheMachineHive()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "un.exe /S"); });
+
+        // Uninstaller() (no third argument) stands in for nobody at the
+        // console: the user-hive factory defaults to always null.
+        var listed = Uninstaller().ListInstalled();
+
+        Assert.Equal(new[] { "Machine App" }, listed);
+    }
+
+    [Fact]
+    public void Uninstall_StudentsOwnProgram_RunsItToo()
+    {
+        AddUserProgram("UserApp", k => { k.SetValue("DisplayName", "User App"); k.SetValue("QuietUninstallString", "un2.exe /S"); });
+
+        var (ok, detail) = UninstallerWithLoggedOnStudent().UninstallMany(new[] { "User App" });
+
+        Assert.True(ok);
+        Assert.Contains("1 desinstalado", detail);
+        Assert.Equal(new[] { "un2.exe /S" }, _commands);
+    }
+
+    [Fact]
+    public void ListInstalled_IncludesAppxPackagesAlongsideRegistryPrograms()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "un.exe /S"); });
+
+        var listed = UninstallerWithAppxPackages("Store App|Vendor.StoreApp_1.0.0.0_x64__abc123").ListInstalled();
+
+        Assert.Equal(new[] { "Machine App", "Store App" }, listed);
+    }
+
+    [Fact]
+    public void ListInstalled_SkipsMalformedAppxLines()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "un.exe /S"); });
+
+        var listed = UninstallerWithAppxPackages("no separator here", "Trailing Pipe With Nothing After|").ListInstalled();
+
+        Assert.Equal(new[] { "Machine App" }, listed);
+    }
+
+    [Fact]
+    public void Uninstall_AppxPackage_RunsRemoveAppxPackageAndProvisionedPackageCommand()
+    {
+        var (ok, detail) = UninstallerWithAppxPackages("Store App|Vendor.StoreApp_1.0.0.0_x64__abc123")
+            .UninstallMany(new[] { "Store App" });
+
+        Assert.True(ok);
+        Assert.Contains("1 desinstalado", detail);
+        var command = Assert.Single(_commands);
+        Assert.StartsWith("powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ", command);
+        var script = DecodeEncodedCommand(command);
+        Assert.Contains("Remove-AppxPackage -Package 'Vendor.StoreApp_1.0.0.0_x64__abc123' -AllUsers", script);
+        Assert.Contains("Remove-AppxProvisionedPackage", script);
+    }
+
+    [Fact]
+    public void Uninstall_AppxPackageNameWithSingleQuote_EscapesItInTheScript()
+    {
+        // Synthetic -- a real PackageFullName never contains a quote -- just
+        // to prove the escaping actually runs rather than assuming it does.
+        var (ok, _) = UninstallerWithAppxPackages("Odd App|Vendor.Odd'Name_1.0.0.0_x64__abc123")
+            .UninstallMany(new[] { "Odd App" });
+
+        Assert.True(ok);
+        var script = DecodeEncodedCommand(Assert.Single(_commands));
+        Assert.Contains("'Vendor.Odd''Name_1.0.0.0_x64__abc123'", script);
     }
 
     [Fact]
@@ -71,15 +189,96 @@ public sealed class ProgramUninstallerTests : IDisposable
     }
 
     [Fact]
-    public void Uninstall_NoSilentUninstall_IsNotRun()
+    public void Uninstall_NoUninstallStringAtAll_IsNotRunAndIsAFailure()
     {
-        AddProgram("AppNoSilent", k => { k.SetValue("DisplayName", "App No Silent"); k.SetValue("UninstallString", "\"C:\\b\\un.exe\""); });
+        // No QuietUninstallString, not an MSI, and no plain UninstallString
+        // either -- genuinely nothing to try.
+        AddProgram("AppNoSilent", k => { k.SetValue("DisplayName", "App No Silent"); });
 
         var (ok, detail) = Uninstaller().UninstallMany(new[] { "App No Silent" });
 
-        Assert.True(ok); // nothing failed; it just wasn't removed
+        // The teacher asked for this program to go; it's still there, so this
+        // must not look like success even though nothing crashed.
+        Assert.False(ok);
         Assert.Contains("sem desinstalação silenciosa", detail);
         Assert.Empty(_commands);
+    }
+
+    [Fact]
+    public void Uninstall_QuotedButStaleUninstallString_IsStillAttemptedAndFailsHonestly()
+    {
+        // Quoted, so the executable is trusted without checking it exists
+        // (a stale remnant after a manual uninstall is exactly the sort of
+        // thing this is trying to clean up) -- it's attempted and, since it
+        // can't actually start, reported as a real failure rather than a
+        // silent no-op.
+        AddProgram("AppGone", k => { k.SetValue("DisplayName", "App Gone"); k.SetValue("UninstallString", "\"C:\\nowhere\\un.exe\""); });
+        _exitCode = null; // the fake runner stands in for "couldn't start"
+
+        var (ok, _) = Uninstaller().UninstallMany(new[] { "App Gone" });
+
+        Assert.False(ok);
+        Assert.Single(_commands);
+    }
+
+    [Fact]
+    public void Uninstall_NoQuietString_FallsBackToGenericSilentSwitches()
+    {
+        // A plain, quoted UninstallString with no QuietUninstallString and no
+        // MSI flag -- the common shape for NSIS/Inno Setup installers that
+        // don't publish their own quiet switch.
+        AddProgram("AppPlain", k => { k.SetValue("DisplayName", "App Plain"); k.SetValue("UninstallString", "\"C:\\b\\un.exe\""); });
+
+        var (ok, detail) = Uninstaller().UninstallMany(new[] { "App Plain" });
+
+        Assert.True(ok);
+        Assert.Contains("1 desinstalado", detail);
+        Assert.Equal(new[] { "\"C:\\b\\un.exe\" /S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART" }, _commands);
+    }
+
+    [Fact]
+    public void Uninstall_UninstallStringWithExistingArguments_RunsItVerbatimWithoutGenericSwitches()
+    {
+        // Mirrors Microsoft's own installer shape for things like Copilot:
+        // "...\setup.exe" --uninstall --channel=stable --system-level. Those
+        // arguments ARE the uninstall invocation, not stylistic noise -- a
+        // generic /S tacked on (or instead of them) would silently do
+        // nothing useful rather than uninstall anything.
+        AddProgram("AppWithArgs", k =>
+        {
+            k.SetValue("DisplayName", "App With Args");
+            k.SetValue("UninstallString", "\"C:\\b\\setup.exe\" --uninstall --channel=stable --system-level");
+        });
+
+        var (ok, _) = Uninstaller().UninstallMany(new[] { "App With Args" });
+
+        Assert.True(ok);
+        Assert.Equal(new[] { "\"C:\\b\\setup.exe\" --uninstall --channel=stable --system-level" }, _commands);
+    }
+
+    [Fact]
+    public void Uninstall_UnquotedUninstallStringWithSpaces_IsResolvedByCheckingTheRealFile()
+    {
+        // Mirrors a real registry entry seen in the field: an unquoted path
+        // containing a space ("C:\Program Files\App\uninstall.exe"), no
+        // QuietUninstallString, no MSI flag. Resolving it needs a real file
+        // on disk, exactly like Windows' own ambiguous-unquoted-path rule.
+        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "Midview Fallback Test " + Guid.NewGuid().ToString("N")));
+        var exePath = Path.Combine(directory.FullName, "uninstall.exe");
+        File.WriteAllBytes(exePath, Array.Empty<byte>());
+        try
+        {
+            AddProgram("AppUnquoted", k => { k.SetValue("DisplayName", "App Unquoted"); k.SetValue("UninstallString", exePath); });
+
+            var (ok, _) = Uninstaller().UninstallMany(new[] { "App Unquoted" });
+
+            Assert.True(ok);
+            Assert.Equal(new[] { $"\"{exePath}\" /S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART" }, _commands);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]

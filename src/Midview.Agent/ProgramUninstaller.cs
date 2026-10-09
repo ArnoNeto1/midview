@@ -1,19 +1,26 @@
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Win32;
 
 namespace Midview.Agent;
 
 // Lists the programs installed on this machine and uninstalls them silently,
 // as the Agent's SYSTEM identity, for the console's "Desinstalar programa".
-// Reads the same place "Adicionar ou remover programas" does (the Uninstall
-// keys under HKLM, 64- and 32-bit), and only ever runs an uninstall that can
-// run silently -- a QuietUninstallString, or msiexec for an MSI. A program
-// without a silent uninstall is listed but reported as not removable this
-// way, never run (a normal uninstaller launched as SYSTEM would wait on a
-// window nobody can see).
+// Reads the same places "Adicionar ou remover programas" does: the Uninstall
+// keys under HKLM (64- and 32-bit, every student's programs) and, when
+// someone's logged on, that student's own HKCU (programs installed "just for
+// me", which HKLM alone misses entirely). Only ever runs a command believed
+// to be silent: a QuietUninstallString, msiexec for an MSI, or -- when
+// neither is published -- the program's own UninstallString with the
+// switches the two big non-MSI installer engines (NSIS, Inno Setup) each
+// recognize and harmlessly ignore from the other, so one guess covers most
+// EXE installers without knowing which engine built them. A program whose
+// UninstallString can't even be resolved to a real file is listed but
+// reported as not removable this way, never run (a normal uninstaller
+// launched as SYSTEM would wait on a window nobody can see).
 //
-// The base key and the command runner are injected so tests use a throwaway
-// HKCU subtree and a fake runner instead of the machine's real keys and
+// The base keys and the command runner are injected so tests use throwaway
+// subtrees and a fake runner instead of the machine's real keys and
 // processes.
 public sealed class ProgramUninstaller
 {
@@ -24,25 +31,68 @@ public sealed class ProgramUninstaller
     };
 
     private readonly Lazy<RegistryKey> _base;
+    private readonly Func<RegistryKey?> _userBase;
     private readonly Func<string, int?> _run;
+    private readonly Func<IReadOnlyList<string>> _listAppxPackages;
 
-    public ProgramUninstaller(RegistryKey machineBase, Func<string, int?> runCommand)
-        : this(() => machineBase, runCommand)
+    // userBase: the logged-on student's own SOFTWARE hive, re-resolved on
+    // every read (unlike machineBase, who's logged on can change between one
+    // class and the next) -- null skips HKCU entries for that read. Defaults
+    // to always null, so existing callers that only care about the machine
+    // hive don't need to know this exists. listAppxPackages: Store/UWP
+    // packages as "Name|PackageFullName" lines (AppxEntries); defaults to
+    // none, for the same reason.
+    public ProgramUninstaller(
+        RegistryKey machineBase, Func<string, int?> runCommand,
+        Func<RegistryKey?>? userBase = null, Func<IReadOnlyList<string>>? listAppxPackages = null)
+        : this(() => machineBase, userBase ?? (() => null), runCommand, listAppxPackages ?? (() => Array.Empty<string>()))
     {
     }
 
-    private ProgramUninstaller(Func<RegistryKey> machineBaseFactory, Func<string, int?> runCommand)
+    private ProgramUninstaller(
+        Func<RegistryKey> machineBaseFactory, Func<RegistryKey?> userBase,
+        Func<string, int?> runCommand, Func<IReadOnlyList<string>> listAppxPackages)
     {
         _base = new Lazy<RegistryKey>(machineBaseFactory);
+        _userBase = userBase;
         _run = runCommand;
+        _listAppxPackages = listAppxPackages;
     }
 
     // HKLM\SOFTWARE (read lazily, so a failure here can't stop the Agent
-    // starting) and the real command runner.
+    // starting), the logged-on student's own SOFTWARE hive, the real command
+    // runner, and the real AppX package lister.
     public static ProgramUninstaller OpenMachine() =>
         new(() => Registry.LocalMachine.OpenSubKey("SOFTWARE", writable: false)
                   ?? throw new IOException("HKLM\\SOFTWARE não pôde ser aberta"),
-            RunCommand);
+            UserSoftwareBase,
+            RunCommand,
+            ListInstalledAppxPackages);
+
+    // The console's logged-on student's own SOFTWARE hive (HKEY_USERS\<their
+    // SID>\SOFTWARE) -- a program they installed "just for me" lives here,
+    // under HKCU as far as they're concerned, not under the Agent's own
+    // SYSTEM profile that Registry.CurrentUser would actually open from a
+    // service. Only readable while their profile is loaded, which Windows
+    // does exactly when they're logged in -- null between classes, at the
+    // lock screen, or if nobody's at the console, and HKCU entries are simply
+    // skipped for that read rather than treated as an error.
+    private static RegistryKey? UserSoftwareBase()
+    {
+        if (UserSessionProcessLauncher.LoggedOnStudent() is not { } student)
+        {
+            return null;
+        }
+        try
+        {
+            return Registry.Users.OpenSubKey($@"{student.Student.Value}\SOFTWARE", writable: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            AgentLog.Warn($"Couldn't open the logged-on student's SOFTWARE hive: {ex.Message}");
+            return null;
+        }
+    }
 
     // The display names a teacher can choose from, each once, in order.
     public IReadOnlyList<string> ListInstalled()
@@ -77,7 +127,11 @@ public sealed class ProgramUninstaller
         if (noSilent > 0) parts.Add($"{noSilent} sem desinstalação silenciosa");
         if (failed > 0) parts.Add($"{failed} falhou(ram)");
         var detail = parts.Count == 0 ? "nada a desinstalar" : string.Join(", ", parts);
-        return (failed == 0, detail);
+        // Not installed here is fine -- there was nothing for this machine to
+        // do. Not removable (noSilent) is not: the teacher asked to remove
+        // something that's actually on this machine and it's still there, so
+        // that must not read as success alongside a real failure.
+        return (noSilent == 0 && failed == 0, detail);
     }
 
     private enum UninstallOutcome { Removed, NotFound, NoSilentUninstall, Failed }
@@ -135,21 +189,70 @@ public sealed class ProgramUninstaller
 
     private IEnumerable<Entry> Entries()
     {
-        foreach (var path in UninstallPaths)
+        foreach (var softwareRoot in SoftwareRoots())
         {
-            using var root = _base.Value.OpenSubKey(path, writable: false);
-            if (root is null)
+            foreach (var path in UninstallPaths)
             {
-                continue;
-            }
-            foreach (var subName in root.GetSubKeyNames())
-            {
-                using var key = root.OpenSubKey(subName);
-                if (key is null || ReadEntry(key, subName) is not { } entry)
+                using var root = softwareRoot.OpenSubKey(path, writable: false);
+                if (root is null)
                 {
                     continue;
                 }
-                yield return entry;
+                foreach (var subName in root.GetSubKeyNames())
+                {
+                    using var key = root.OpenSubKey(subName);
+                    if (key is null || ReadEntry(key, subName) is not { } entry)
+                    {
+                        continue;
+                    }
+                    yield return entry;
+                }
+            }
+        }
+
+        foreach (var entry in AppxEntries())
+        {
+            yield return entry;
+        }
+    }
+
+    // Store/UWP apps (Copilot among them, depending on how it got onto a
+    // machine) don't publish a classic UninstallString at all -- Windows
+    // removes them through its package manager instead. Kept behind the same
+    // Entry/SilentCommand shape as everything else above, so the rest of this
+    // class (matching by name, running the command, reporting the result)
+    // doesn't need to know the difference. _listAppxPackages already excludes
+    // shared framework packages (removing one could break every app that
+    // depends on it), resource-only packages (not a program on their own),
+    // and packages Windows itself marks NonRemovable (it would just refuse,
+    // the same as the missing Uninstall button for it in Settings).
+    private IEnumerable<Entry> AppxEntries()
+    {
+        foreach (var line in _listAppxPackages())
+        {
+            var separator = line.IndexOf('|');
+            if (separator <= 0 || separator == line.Length - 1)
+            {
+                continue; // malformed line (shouldn't happen); skip rather than guess
+            }
+            var name = line[..separator];
+            var packageFullName = line[(separator + 1)..];
+            yield return new Entry(name, AppxRemovalCommand(packageFullName));
+        }
+    }
+
+    // HKLM\SOFTWARE, always, plus the logged-on student's own SOFTWARE hive
+    // when there is one -- re-resolved here, not cached, so a different
+    // student logged on since the last read is picked up rather than a stale
+    // hive handle from whoever was at the console before.
+    private IEnumerable<RegistryKey> SoftwareRoots()
+    {
+        yield return _base.Value;
+        if (_userBase() is { } userSoftware)
+        {
+            using (userSoftware)
+            {
+                yield return userSoftware;
             }
         }
     }
@@ -175,7 +278,7 @@ public sealed class ProgramUninstaller
     }
 
     // The command that uninstalls without any window, or null when there
-    // isn't one (so it's never run as SYSTEM in the background).
+    // isn't one to even try (so it's never run as SYSTEM in the background).
     private static string? SilentCommandFor(RegistryKey key, string subKeyName)
     {
         if (key.GetValue("QuietUninstallString") is string quiet && !string.IsNullOrWhiteSpace(quiet))
@@ -187,7 +290,71 @@ public sealed class ProgramUninstaller
         {
             return $"msiexec.exe /x {subKeyName} /qn /norestart";
         }
+
+        // No QuietUninstallString and not an MSI: fall back to the plain
+        // UninstallString. When it already carries arguments, they're kept
+        // exactly as published and nothing is added -- for some installers
+        // (notably Microsoft's own "setup.exe --uninstall --channel=... "
+        // pattern) those arguments ARE the uninstall invocation, not
+        // stylistic noise, and overriding them with a generic switch could
+        // silently do the wrong thing (e.g. reinstall) instead of nothing.
+        // Only a bare executable path with no arguments gets the two generic
+        // installer engines' own silent switches appended: /S is NSIS's
+        // (Inno Setup ignores an unknown switch); /VERYSILENT
+        // /SUPPRESSMSGBOXES /NORESTART are Inno Setup's (NSIS ignores them
+        // the same way), so sending both covers either without knowing which
+        // one built this program.
+        if (key.GetValue("UninstallString") is string raw && !string.IsNullOrWhiteSpace(raw))
+        {
+            var (exePath, arguments) = SplitCommand(raw);
+            if (exePath is not null)
+            {
+                return string.IsNullOrEmpty(arguments)
+                    ? $"\"{exePath}\" /S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+                    : $"\"{exePath}\" {arguments}";
+            }
+        }
+
         return null;
+    }
+
+    // Splits a raw UninstallString into its executable path and whatever
+    // arguments already follow it, so a generic silent switch is appended
+    // only when there's nothing there to lose. Handles a quoted path
+    // ("C:\...\un.exe" /args) directly, and Windows' own ambiguous
+    // unquoted-with-spaces form (C:\Program Files\...\un.exe, with or without
+    // trailing arguments) by checking the real file -- this runs on the
+    // machine that has it, so the check is meaningful. A null path means no
+    // unquoted candidate matched a real file, so a malformed entry is never
+    // run.
+    private static (string? ExePath, string Arguments) SplitCommand(string uninstallString)
+    {
+        var text = uninstallString.Trim();
+        if (text.StartsWith('"'))
+        {
+            var closing = text.IndexOf('"', 1);
+            return closing > 0 ? (text[1..closing], text[(closing + 1)..].Trim()) : (null, "");
+        }
+
+        if (File.Exists(text))
+        {
+            return (text, "");
+        }
+
+        // Unquoted with trailing arguments: try each space as a possible
+        // split, shortest first -- the same resolution Windows itself uses
+        // for this ambiguous form.
+        var spaceIndex = text.IndexOf(' ');
+        while (spaceIndex > 0)
+        {
+            var candidate = text[..spaceIndex];
+            if (File.Exists(candidate))
+            {
+                return (candidate, text[(spaceIndex + 1)..].Trim());
+            }
+            spaceIndex = text.IndexOf(' ', spaceIndex + 1);
+        }
+        return (null, "");
     }
 
     // Runs a full command line through cmd.exe (so its own quoting holds),
@@ -232,4 +399,83 @@ public sealed class ProgramUninstaller
             return null;
         }
     }
+
+    // Every removable Store/UWP package as "Name|PackageFullName" lines.
+    // Name isn't always the polished title Settings shows -- e.g.
+    // "Microsoft.549981C3F5F10" for Cortana -- resolving the real,
+    // sometimes-localized display string needs an indirect-resource lookup
+    // this keeps out of scope; Name is stable, unambiguous, and good enough
+    // for a teacher to recognize most of the time. 30 s ceiling: enumerating
+    // every package is normally well under that, but this must never hang
+    // the Agent's answer to the teacher.
+    private static IReadOnlyList<string> ListInstalledAppxPackages()
+    {
+        const string script =
+            "Get-AppxPackage -AllUsers | " +
+            "Where-Object { -not $_.IsFramework -and -not $_.IsResourcePackage -and -not $_.NonRemovable } | " +
+            "ForEach-Object { \"$($_.Name)|$($_.PackageFullName)\" }";
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo("powershell.exe", PowerShellArguments(script))
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+            });
+            if (process is null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var lines = new List<string>();
+            string? line;
+            while ((line = process.StandardOutput.ReadLine()) is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    lines.Add(line.Trim());
+                }
+            }
+
+            if (!process.WaitForExit((int)TimeSpan.FromSeconds(30).TotalMilliseconds))
+            {
+                try { process.Kill(entireProcessTree: true); }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException) { }
+            }
+            return lines;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        {
+            AgentLog.Warn($"Couldn't list AppX packages: {ex.Message}");
+            return Array.Empty<string>();
+        }
+    }
+
+    // The command that removes one Store/UWP package: for the accounts
+    // currently on the machine (-AllUsers, same as the registry-based path
+    // reaching every student, not just whoever's logged on right now) and,
+    // when it was provisioned for new accounts too, so a different student
+    // number logging in later doesn't get it reinstalled automatically.
+    // Explicit exit codes, since a non-terminating PowerShell error wouldn't
+    // otherwise turn into a non-zero one on its own.
+    private static string AppxRemovalCommand(string packageFullName)
+    {
+        var escaped = packageFullName.Replace("'", "''");
+        var script =
+            "$ErrorActionPreference = 'Stop'; " +
+            "try { " +
+            $"Remove-AppxPackage -Package '{escaped}' -AllUsers; " +
+            $"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.PackageName -eq '{escaped}' }} | Remove-AppxProvisionedPackage -Online -NoRestart | Out-Null; " +
+            "exit 0 " +
+            "} catch { exit 1 }";
+        return $"powershell.exe {PowerShellArguments(script)}";
+    }
+
+    // -EncodedCommand (Base64 UTF-16LE) sidesteps the escaping that quoting a
+    // multi-statement script through cmd.exe's own quote-stripping (see
+    // RunCommand) would otherwise need.
+    private static string PowerShellArguments(string script) =>
+        "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " +
+        Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 }
