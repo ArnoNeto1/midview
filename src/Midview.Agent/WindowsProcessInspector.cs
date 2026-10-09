@@ -65,7 +65,7 @@ public sealed class WindowsProcessInspector : IProcessInspector
     private readonly object _gate = new();
     private readonly SemaphoreSlim _noticeShowing = new(1, 1);
     private readonly Dictionary<int, (SecurityIdentifier User, DateTime ReadAt)> _sessionUsers = new();
-    private readonly Dictionary<(string Path, long Length, DateTime Written), (string? Original, string? Description, SecurityIdentifier? Owner)> _files = new();
+    private readonly Dictionary<FileChangeKey, (string? Original, string? Description, SecurityIdentifier? Owner)> _files = new();
 
     public WindowsProcessInspector()
     {
@@ -263,8 +263,9 @@ public sealed class WindowsProcessInspector : IProcessInspector
         }
     }
 
-    // Version information and owner of an image file, kept per path, size
-    // and write time. Nothing is read from a network path: a share that
+    // Version information and owner of an image file, kept under a key that
+    // tells the file apart from a different one swapped in at the same path
+    // (see FileChangeKey). Nothing is read from a network path: a share that
     // doesn't answer must not hold up the Agent.
     private (string? Original, string? Description, SecurityIdentifier? Owner) FileFacts(string path)
     {
@@ -276,7 +277,13 @@ public sealed class WindowsProcessInspector : IProcessInspector
         try
         {
             var file = new FileInfo(path);
-            var key = (path, file.Length, file.LastWriteTimeUtc);
+            if (FileChangeKey.From(path, file) is not { } key)
+            {
+                // Can't pin down which file it is: read the facts afresh rather
+                // than trust (or keep) a cached entry that might be the wrong one.
+                return ReadFileFacts(path);
+            }
+
             lock (_gate)
             {
                 if (_files.TryGetValue(key, out var cached))
@@ -285,33 +292,37 @@ public sealed class WindowsProcessInspector : IProcessInspector
                 }
             }
 
-            string? original = null, description = null;
-            try
-            {
-                var version = FileVersionInfo.GetVersionInfo(path);
-                original = version.OriginalFilename;
-                description = version.FileDescription;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                // No version information: matched by its file name only.
-            }
-            var owner = ReadOwner(path);
-
+            var facts = ReadFileFacts(path);
             lock (_gate)
             {
                 if (_files.Count > 4096)
                 {
                     _files.Clear();
                 }
-                _files[key] = (original, description, owner);
+                _files[key] = facts;
             }
-            return (original, description, owner);
+            return facts;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return (null, null, null);
         }
+    }
+
+    private static (string? Original, string? Description, SecurityIdentifier? Owner) ReadFileFacts(string path)
+    {
+        string? original = null, description = null;
+        try
+        {
+            var version = FileVersionInfo.GetVersionInfo(path);
+            original = version.OriginalFilename;
+            description = version.FileDescription;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // No version information: matched by its file name only.
+        }
+        return (original, description, ReadOwner(path));
     }
 
     private static bool IsNetworkPath(string path)
