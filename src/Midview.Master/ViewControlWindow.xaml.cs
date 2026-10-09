@@ -47,7 +47,11 @@ public partial class ViewControlWindow : Window
         ShowMode();
 
         _heartbeatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _heartbeatTimer.Tick += (_, _) => RunOrCloseOnFailure(() => _client.SendHeartbeat());
+        _heartbeatTimer.Tick += (_, _) => RunOrCloseOnFailure(() =>
+        {
+            _client.SendHeartbeat();
+            PushClipboardIfChanged();
+        });
         _heartbeatTimer.Start();
 
         Task.Run(ReceiveLoop);
@@ -121,6 +125,13 @@ public partial class ViewControlWindow : Window
                         var column = BitConverter.ToInt32(message.Payload, 4);
                         _remoteScreen.AddTile(row, column, message.Payload[8..]);
                         break;
+
+                    case MessageType.ClipboardText:
+                        if (ClipboardText.Decode(message.Payload) is { } incomingClip)
+                        {
+                            Dispatcher.BeginInvoke(new Action(() => ApplyClipboard(incomingClip)));
+                        }
+                        continue;
 
                     default:
                         continue;
@@ -256,6 +267,70 @@ public partial class ViewControlWindow : Window
         return new Point(x, y);
     }
 
+    // The text last synced either way, so the same value isn't sent back as
+    // soon as it is applied (which would loop with the student's side).
+    private string? _lastClipboard;
+
+    // While controlling, sends the teacher's copied text to the student so it
+    // can be pasted there. Called on the heartbeat tick (the window's thread,
+    // which is where WPF's clipboard must be read).
+    private void PushClipboardIfChanged()
+    {
+        if (!_controlling)
+        {
+            return;
+        }
+        string text;
+        try
+        {
+            text = Clipboard.ContainsText() ? Clipboard.GetText() : string.Empty;
+        }
+        catch (Exception)
+        {
+            return; // clipboard busy; try again next tick
+        }
+        if (string.IsNullOrEmpty(text) || text == _lastClipboard)
+        {
+            return;
+        }
+        // Validate with the same strict encoder the wire uses, so invalid
+        // UTF-16 (a lone surrogate) is skipped here instead of throwing on
+        // the send and taking the console down.
+        if (!ClipboardText.TryEncode(text, out var payload) || payload.Length > ClipboardText.MaxBytes)
+        {
+            _lastClipboard = text; // don't re-attempt the same bad value every tick
+            return;
+        }
+        _lastClipboard = text;
+        RunOrCloseOnFailure(() => _client.SendClipboardBytes(payload));
+    }
+
+    // Puts the student's copied text on the teacher's clipboard.
+    private void ApplyClipboard(string text)
+    {
+        if (text == _lastClipboard)
+        {
+            return;
+        }
+        _lastClipboard = text;
+        try
+        {
+            Clipboard.SetText(text);
+        }
+        catch (Exception)
+        {
+            // Clipboard busy; the next change wins.
+        }
+    }
+
+    // The wheel delta (one notch is +/-120) goes in X, read back on the
+    // student's side; the cursor is already placed by the move stream.
+    private void OnMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        SendInput(InputEventKind.MouseWheel, e.Delta, 0, 0);
+        e.Handled = true;
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyDown, e);
 
     private void OnKeyUp(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyUp, e);
@@ -357,6 +432,6 @@ public partial class ViewControlWindow : Window
     private enum InputEventKind : byte
     {
         MouseMove = 0, MouseLeftDown = 1, MouseLeftUp = 2, KeyDown = 3, KeyUp = 4,
-        MouseRightDown = 5, MouseRightUp = 6,
+        MouseRightDown = 5, MouseRightUp = 6, MouseWheel = 7,
     }
 }

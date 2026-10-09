@@ -183,6 +183,11 @@ public enum MessageType : byte
     // is a DownloadsScope (today only, or everything in each user's Downloads
     // folder). Answered with one CommandAck and a CommandResult.
     ClearDownloads = 59,
+
+    // While a teacher controls a machine, the text copied on either side is
+    // sent to the other so it can be pasted there (ClipboardText both ways on
+    // the control connection). Text only, size-capped; see ClipboardText.
+    ClipboardText = 60,
 }
 
 public enum CloseAppsMode : byte

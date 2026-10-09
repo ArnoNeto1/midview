@@ -9,6 +9,7 @@ public enum InputEventKind
     KeyUp,
     MouseRightDown,
     MouseRightUp,
+    MouseWheel,
 }
 
 public sealed record InputEvent(InputEventKind Kind, int X, int Y, ushort VirtualKeyCode);

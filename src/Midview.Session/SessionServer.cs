@@ -94,6 +94,7 @@ public sealed class SessionServer
     private readonly ICountdownNotice? _countdownNotice;
     private readonly IWebsiteOpener? _websiteOpener;
     private readonly IProgramStarter? _programStarter;
+    private readonly IClipboard? _clipboard;
     private readonly TimeSpan _frameAckTimeout;
 
     // One controlling Master served at a time: the input lock and the
@@ -113,12 +114,13 @@ public sealed class SessionServer
         IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null,
         IScreenLockDisplay? screenLock = null, IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null,
         ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-        IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null)
+        IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, IClipboard? clipboard = null)
     {
         _frameAckTimeout = frameAckTimeout ?? DefaultFrameAckTimeout;
         _countdownNotice = countdownNotice;
         _websiteOpener = websiteOpener;
         _programStarter = programStarter;
+        _clipboard = clipboard;
         _screenLock = screenLock;
         _fileOpener = fileOpener;
         _recycleBin = recycleBin;
@@ -854,6 +856,7 @@ public sealed class SessionServer
         TcpClient tcpClient, SecureChannel channel, Midview.Protocol.Message firstMessage, CancellationToken cancellationToken)
     {
         var isControlling = false;
+        var clipboardBridge = _clipboard is null ? null : new ClipboardBridge(_clipboard);
 
         // An exception escaping a Timer callback would take the whole process down.
         using var heartbeatTimer = new System.Threading.Timer(_ =>
@@ -895,7 +898,7 @@ public sealed class SessionServer
             }
             else
             {
-                StreamScreenFrames(framePipeline, channel, tcpClient, captureCts, credit, cadence);
+                StreamScreenFrames(framePipeline, channel, tcpClient, captureCts, credit, cadence, clipboardBridge);
             }
         }) { IsBackground = true };
         captureThread.Start();
@@ -930,11 +933,13 @@ public sealed class SessionServer
                 {
                     case MessageType.StartControl:
                         isControlling = true;
+                        if (clipboardBridge is not null) clipboardBridge.Controlling = true;
                         _inputLockManager.StartLock();
                         break;
 
                     case MessageType.StopControl:
                         isControlling = false;
+                        if (clipboardBridge is not null) clipboardBridge.Controlling = false;
                         _inputLockManager.StopLock();
                         break;
 
@@ -947,6 +952,13 @@ public sealed class SessionServer
                         {
                             _inputInjector.Inject(InputEventCodec.Decode(message.Payload));
                             cadence.Activity(Environment.TickCount64);
+                        }
+                        break;
+
+                    case MessageType.ClipboardText:
+                        if (clipboardBridge is not null && Midview.Protocol.ClipboardText.Decode(message.Payload) is { } incoming)
+                        {
+                            clipboardBridge.ApplyRemote(incoming);
                         }
                         break;
 
@@ -1022,7 +1034,7 @@ public sealed class SessionServer
     // way before capturing again, at CaptureCadence's pace.
     private void StreamScreenFrames(
         FramePipeline framePipeline, SecureChannel channel, TcpClient tcpClient, CancellationTokenSource captureCts,
-        FrameCredit credit, CaptureCadence cadence)
+        FrameCredit credit, CaptureCadence cadence, ClipboardBridge? clipboardBridge = null)
     {
         try
         {
@@ -1054,6 +1066,15 @@ public sealed class SessionServer
                 foreach (var payload in messages)
                 {
                     channel.Send(new Midview.Protocol.Message(MessageType.ScreenFrame, payload));
+                }
+
+                // This is the only thread that writes to the channel, so the
+                // student's copied text is sent from here (throttled inside).
+                var copiedText = clipboardBridge?.PollLocal();
+                if (copiedText is not null)
+                {
+                    channel.Send(new Midview.Protocol.Message(
+                        MessageType.ClipboardText, Midview.Protocol.ClipboardText.Encode(copiedText)));
                 }
 
                 var rest = cadence.RestMs(workMs, (int)sw.ElapsedMilliseconds, Environment.TickCount64);

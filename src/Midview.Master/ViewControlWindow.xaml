@@ -14,7 +14,7 @@
             <Image x:Name="ScreenImage" Stretch="Uniform"
                    MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
                    MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
-                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" Focusable="True" />
+                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" MouseWheel="OnMouseWheel" Focusable="True" />
         </Grid>
     </DockPanel>
 </Window>

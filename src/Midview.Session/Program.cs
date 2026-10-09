@@ -89,6 +89,7 @@ var server = new SessionServer(
     new WindowsRecycleBin(),
     new WinFormsCountdownNotice(),
     new WindowsWebsiteOpener(),
-    new WindowsProgramStarter());
+    new WindowsProgramStarter(),
+    clipboard: new WindowsClipboard());
 
 server.Run(CancellationToken.None);

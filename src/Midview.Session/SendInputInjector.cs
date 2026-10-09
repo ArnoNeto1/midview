@@ -6,7 +6,7 @@ public sealed class SendInputInjector : IInputInjector
 {
     public void Inject(InputEvent inputEvent)
     {
-        var input = inputEvent.Kind switch
+        INPUT? built = inputEvent.Kind switch
         {
             InputEventKind.MouseMove => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE),
             InputEventKind.MouseLeftDown => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE),
@@ -15,9 +15,17 @@ public sealed class SendInputInjector : IInputInjector
             InputEventKind.MouseRightUp => MouseInput(inputEvent.X, inputEvent.Y, MOUSEEVENTF_RIGHTUP | MOUSEEVENTF_ABSOLUTE),
             InputEventKind.KeyDown => KeyboardInput(inputEvent.VirtualKeyCode, keyUp: false),
             InputEventKind.KeyUp => KeyboardInput(inputEvent.VirtualKeyCode, keyUp: true),
-            _ => throw new ArgumentOutOfRangeException(nameof(inputEvent)),
+            // The teacher's wheel delta rides in X (wheel notches, +up/-down).
+            InputEventKind.MouseWheel => MouseWheelInput(inputEvent.X),
+            // An event kind a newer Master added that this one doesn't know:
+            // ignore it instead of dropping the whole control connection.
+            _ => (INPUT?)null,
         };
 
+        if (built is not { } input)
+        {
+            return;
+        }
         var inputs = new[] { input };
         SendInput(1, inputs, Marshal.SizeOf<INPUT>());
     }
@@ -32,6 +40,21 @@ public sealed class SendInputInjector : IInputInjector
                 dx = NormalizeToAbsolute(x, SystemMetric.SM_CXSCREEN),
                 dy = NormalizeToAbsolute(y, SystemMetric.SM_CYSCREEN),
                 dwFlags = flags,
+            },
+        },
+    };
+
+    private static INPUT MouseWheelInput(int wheelDelta) => new()
+    {
+        type = INPUT_MOUSE,
+        u = new InputUnion
+        {
+            mi = new MOUSEINPUT
+            {
+                // Scrolls the window under the cursor the student already
+                // sees moved by the forwarded MouseMove events.
+                mouseData = unchecked((uint)wheelDelta),
+                dwFlags = MOUSEEVENTF_WHEEL,
             },
         },
     };
@@ -65,6 +88,7 @@ public sealed class SendInputInjector : IInputInjector
     private const uint MOUSEEVENTF_LEFTUP = 0x0004;
     private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
     private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+    private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
     [StructLayout(LayoutKind.Sequential)]

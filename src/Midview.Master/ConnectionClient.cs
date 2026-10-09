@@ -46,6 +46,12 @@ public sealed class ConnectionClient : IDisposable
     public void SendInputEvent(byte[] encodedEvent) =>
         _channel.Send(new Message(MessageType.InputEvent, encodedEvent));
 
+    public void SendClipboardText(string text) =>
+        _channel.Send(new Message(MessageType.ClipboardText, ClipboardText.Encode(text)));
+
+    public void SendClipboardBytes(byte[] payload) =>
+        _channel.Send(new Message(MessageType.ClipboardText, payload));
+
     public Message ReceiveNext() => _channel.Receive();
 
     public void Dispose() => _channel.Dispose();
