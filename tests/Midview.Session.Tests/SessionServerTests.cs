@@ -64,9 +64,9 @@ public class FixedSizeScreenCapture : IScreenCapture
 
 public class RecordingCountdownNotice : ICountdownNotice
 {
-    private readonly List<(string Message, string Done, TimeSpan Duration)> _shown = new();
+    private readonly List<(string Message, string Done, TimeSpan Duration, TimeSpan Linger)> _shown = new();
 
-    public IReadOnlyList<(string Message, string Done, TimeSpan Duration)> Shown
+    public IReadOnlyList<(string Message, string Done, TimeSpan Duration, TimeSpan Linger)> Shown
     {
         get
         {
@@ -77,11 +77,11 @@ public class RecordingCountdownNotice : ICountdownNotice
         }
     }
 
-    public void Show(string message, string doneMessage, TimeSpan duration)
+    public void Show(string message, string doneMessage, TimeSpan duration, TimeSpan linger)
     {
         lock (_shown)
         {
-            _shown.Add((message, doneMessage, duration));
+            _shown.Add((message, doneMessage, duration, linger));
         }
     }
 }
@@ -1102,7 +1102,7 @@ public class SessionServerTests
         Assert.Equal((true, "aluno avisado; os programas fecham em 1 segundo"), result);
         Assert.Empty(display.Shown);
         var (message, done) = CountdownText.CloseApps(force);
-        Assert.Equal(new[] { (message, done, TimeSpan.FromSeconds(1)) }, countdown.Shown);
+        Assert.Equal(new[] { (message, done, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(8)) }, countdown.Shown);
 
         await WaitUntil(() => closer.ForceFlags.Count == 1);
         Assert.Equal(new[] { force }, closer.ForceFlags);
@@ -1123,6 +1123,25 @@ public class SessionServerTests
         Assert.True(result.Succeeded);
         Assert.Equal(new[] { notice }, display.Shown);
         Assert.Equal(new[] { mode == CloseAppsMode.Force }, closer.ForceFlags);
+    }
+
+    [Theory]
+    [InlineData(CloseAppsMode.Ask, "O professor está fechando seus programas.")]
+    [InlineData(CloseAppsMode.Force, "O professor encerrou seus programas.")]
+    public async Task CloseApps_Now_WithTheBanner_ClosesNow_AndShowsA10sNoticeThatClosesItself(CloseAppsMode mode, string notice)
+    {
+        var closer = new FakeAppCloser(asked: 1, forced: 0);
+        var countdown = new RecordingCountdownNotice();
+        using var harness = new ServerHarness(new CountingScreenCapture(), appCloser: closer, countdownNotice: countdown);
+        using var teacher = harness.ConnectMaster();
+
+        var result = await Task.Run(() => teacher.CloseApps(mode)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.True(result.Succeeded);
+        // Closed on the spot (not after a delay).
+        Assert.Equal(new[] { mode == CloseAppsMode.Force }, closer.ForceFlags);
+        // A 10s banner that lingers 0 past the count, so it closes itself at the end.
+        Assert.Equal(new[] { (notice, notice, TimeSpan.FromSeconds(10), TimeSpan.Zero) }, countdown.Shown);
     }
 
     [Fact]

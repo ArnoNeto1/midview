@@ -147,14 +147,11 @@ public sealed class CountdownBanner : Form
 // programs), on a short-lived STA thread of its own like the messages.
 public sealed class WinFormsCountdownNotice : ICountdownNotice
 {
-    // How long "O professor fechou seus programas." stays up.
-    private static readonly TimeSpan Linger = TimeSpan.FromSeconds(8);
-
-    public void Show(string message, string doneMessage, TimeSpan duration)
+    public void Show(string message, string doneMessage, TimeSpan duration, TimeSpan linger)
     {
         var endsAtUtc = DateTime.UtcNow + duration;
         var thread = new Thread(() =>
-            Application.Run(new CountdownBanner(message, doneMessage, endsAtUtc, Linger, ScreenLockState.Default)))
+            Application.Run(new CountdownBanner(message, doneMessage, endsAtUtc, linger, ScreenLockState.Default)))
         {
             IsBackground = true,
             Name = "Countdown banner",

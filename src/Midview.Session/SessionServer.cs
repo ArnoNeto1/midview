@@ -92,6 +92,10 @@ public sealed class SessionServer
     private readonly IFileOpener? _fileOpener;
     private readonly IRecycleBin? _recycleBin;
     private readonly ICountdownNotice? _countdownNotice;
+    // The read-only banner for "Agora, sem esperar" and how long the delayed
+    // banner keeps "...fechou..." up after the count.
+    private static readonly TimeSpan ReadNoticeDuration = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan CloseDoneLinger = TimeSpan.FromSeconds(8);
     private readonly IWebsiteOpener? _websiteOpener;
     private readonly IProgramStarter? _programStarter;
     private readonly IClipboard? _clipboard;
@@ -761,8 +765,21 @@ public sealed class SessionServer
         var force = mode == CloseAppsMode.Force;
         if (delaySeconds == 0)
         {
-            TryNotify(force ? "O professor encerrou seus programas." : "O professor está fechando seus programas.");
-            return CloseAll(force);
+            // "Agora, sem esperar": the programs close on the spot, and the
+            // student sees a banner saying so that counts down 10s so they can
+            // read it, then closes itself (no action waits on it, so it
+            // lingers 0 past the count).
+            var result = CloseAll(force);
+            var notice = force ? "O professor encerrou seus programas." : "O professor está fechando seus programas.";
+            if (_countdownNotice is not null)
+            {
+                TryCountdown(notice, notice, ReadNoticeDuration, TimeSpan.Zero);
+            }
+            else
+            {
+                TryNotify(notice);
+            }
+            return result;
         }
 
         // The time left counts down on the student's screen; without the
@@ -771,7 +788,8 @@ public sealed class SessionServer
         if (_countdownNotice is not null)
         {
             var (running, done) = CountdownText.CloseApps(force);
-            TryCountdown(running, done, TimeSpan.FromSeconds(delaySeconds));
+            // After the time is up the banner shows "...fechou..." for a moment.
+            TryCountdown(running, done, TimeSpan.FromSeconds(delaySeconds), CloseDoneLinger);
         }
         else
         {
@@ -808,11 +826,11 @@ public sealed class SessionServer
         }
     }
 
-    private void TryCountdown(string message, string doneMessage, TimeSpan duration)
+    private void TryCountdown(string message, string doneMessage, TimeSpan duration, TimeSpan linger)
     {
         try
         {
-            _countdownNotice!.Show(message, doneMessage, duration);
+            _countdownNotice!.Show(message, doneMessage, duration, linger);
         }
         catch (Exception ex)
         {
