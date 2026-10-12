@@ -13,6 +13,7 @@ public sealed class ChatConnection : IChatConnection
     // nobody types for a while isn't dropped as a dead connection.
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(10);
 
     private readonly TcpClient _tcpClient;
     private readonly SecureChannel _channel;
@@ -37,15 +38,26 @@ public sealed class ChatConnection : IChatConnection
     public event Action<string>? Closed;
 
     public static ChatConnection Open(
-        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort)
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort,
+        TimeSpan? handshakeTimeout = null)
     {
         var tcpClient = TcpConnect.WithTimeout(machine.HostAddress, port, ConnectTimeout);
         try
         {
             tcpClient.NoDelay = true;
+            // A frozen Session still completes the TCP handshake (Windows does
+            // it from the listen backlog) but never answers TLS: give up
+            // instead of waiting on "Conectando..." forever.
+            var timeoutMs = (int)(handshakeTimeout ?? HandshakeTimeout).TotalMilliseconds;
+            tcpClient.ReceiveTimeout = timeoutMs;
+            tcpClient.SendTimeout = timeoutMs;
             var channel = SecureChannel.AuthenticateAsClient(
                 tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
             channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+            // From here on the receive loop waits for the student's lines for
+            // as long as the conversation lasts: the Session sends the teacher
+            // no heartbeats, so silence isn't a dead connection.
+            tcpClient.ReceiveTimeout = 0;
             return new ChatConnection(tcpClient, channel);
         }
         catch

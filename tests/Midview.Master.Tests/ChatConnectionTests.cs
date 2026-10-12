@@ -72,6 +72,59 @@ public class ChatConnectionTests
         Assert.False(string.IsNullOrEmpty(await closed.Task.WaitAsync(TimeSpan.FromSeconds(10))));
     }
 
+    [Fact]
+    public async Task StudentMachineNeverAnswersTheHandshake_OpenGivesUp()
+    {
+        using var certificates = new Certificates();
+        // A frozen Session: Windows still completes the TCP handshake from the
+        // listen backlog, but nothing ever accepts the connection or answers.
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            var open = Task.Run(() => ChatConnection.Open(
+                Machine(certificates), certificates.Master, port, TimeSpan.FromMilliseconds(500)));
+
+            var finished = await Task.WhenAny(open, Task.Delay(TimeSpan.FromSeconds(10)));
+
+            Assert.True(finished == open, "Open is still waiting for a handshake that never comes");
+            await Assert.ThrowsAnyAsync<IOException>(() => open);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task QuietConversation_OutlivesTheHandshakeTimeout()
+    {
+        using var certificates = new Certificates();
+        var chats = new RecordingChatWindows();
+        using var session = new ThumbnailPollerTests.LoopbackSession(
+            0, certificates.Session, certificates.Master, chatWindows: chats);
+        var handshakeTimeout = TimeSpan.FromMilliseconds(500);
+        var studentLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var closed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var chat = await Task.Run(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, session.Port, handshakeTimeout)).WaitAsync(TimeSpan.FromSeconds(10));
+        chat.StudentMessageReceived += text => studentLine.TrySetResult(text);
+        chat.Closed += reason => closed.TrySetResult(reason);
+        chat.Start();
+        await WaitUntil(() => chats.Window is not null);
+
+        // The student takes a while to answer, and the Session sends the
+        // teacher no heartbeats: the silence is longer than the handshake's
+        // timeout.
+        await Task.Delay(handshakeTimeout * 3);
+
+        Assert.False(closed.Task.IsCompleted, "The conversation was dropped while waiting for the student");
+        Assert.True(chats.Window!.StudentTypes("Ainda estou aqui"));
+        Assert.Equal("Ainda estou aqui", await studentLine.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
     private static KnownMachine Machine(Certificates certificates) =>
         new("Aluno-1", "127.0.0.1", certificates.Session.Thumbprint, null);
 
