@@ -1,15 +1,14 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Windows;
 using System.Windows.Controls;
-using Midview.Protocol;
 
 namespace Midview.Master;
 
 // Starts programs on one machine or on the whole class, as the student (the
 // Session's WindowsProgramStarter), from commands typed as in Windows' Run
-// box, one per line. What was typed is checked here first (ProgramCommand),
-// and again on each machine. It can also go into the "Abrir programa" menu
-// (SavedMenu), to start with a click.
+// box, one per line. What was typed is checked here first (TypedText, then
+// ProgramCommand), and again on each machine. It can also go into the
+// "Abrir programa" menu (SavedMenu), to start with a click.
 public partial class OpenProgramWindow : Window
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -34,11 +33,16 @@ public partial class OpenProgramWindow : Window
 
     private async void OnOpenClicked(object sender, RoutedEventArgs e)
     {
-        if (!ProgramCommand.TryParseLines(CommandTextBox.Text, out var commands, out var problem))
+        if (!TypedText.TryParseCommands(CommandTextBox.Text, out var commands, out var problem, out var invalidAt))
         {
-            ProblemTextBlock.Text = problem;
+            ProblemTextBlock.Text = invalidAt < 0 ? problem : $"{problem} Ele ficou selecionado: apague-o e tente de novo.";
             ProblemTextBlock.Visibility = Visibility.Visible;
             CommandTextBox.Focus();
+            if (invalidAt >= 0)
+            {
+                // The text stays, with the character selected, for the teacher to fix.
+                CommandTextBox.Select(invalidAt, 1);
+            }
             return;
         }
 

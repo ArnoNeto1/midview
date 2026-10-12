@@ -135,7 +135,7 @@ public partial class MainWindow
         }
         else
         {
-            if (!ProgramCommand.TryParseLines(entry.Target, out var commands, out var problem))
+            if (!TypedText.TryParseCommands(entry.Target, out var commands, out var problem, out _))
             {
                 StatusTextBlock.Text = $"{entry.Name}: {problem}";
                 return;
