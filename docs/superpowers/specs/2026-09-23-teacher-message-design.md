@@ -34,7 +34,10 @@ for the whole class or for one machine. Built on the classroom console
   "Enviar mensagem..." in a tile's right-click menu, open
   `SendMessageWindow`. It sends to every target in parallel (an offline
   machine never holds up the rest) and reports "Enviada para N de M",
-  listing each machine it didn't reach and why.
+  listing each machine it didn't reach and why. Text that can't be encoded
+  (an unpaired UTF-16 surrogate: half of an emoji, pasted) isn't sent: the
+  window says so and selects the character, keeping the text to fix
+  (`TypedText`; until 2026-10-12 it closed the Master).
 - **`CommandClient`** (renamed from `AgentCommandClient`, now used for the
   Agent's site-blocking commands and for messages) gained a 5 s connect
   timeout, so a switched-off machine fails in seconds instead of Windows'
@@ -55,5 +58,7 @@ scheduled or recurring messages, and message history.
 - `CommandClientTests` (Master, Windows-only): a message to a real
   loopback `SessionServer` is shown and acked; nothing listening fails
   quickly instead of hanging.
+- `TypedTextTests` (Master): the first unpaired surrogate is found exactly
+  where `TextMessage.Encode` would throw, and whole emoji pass.
 - The message window itself and `SendMessageWindow` are live-tested only,
   like the rest of the UI.

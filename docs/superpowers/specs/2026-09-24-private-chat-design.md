@@ -41,7 +41,10 @@ console and the teacher-message work
   thread, the heartbeat timer, serialized sends, and a single `Closed` event
   however the conversation ended. Closing the window ends the conversation
   on the student's side; if the connection drops, the window says so and
-  the teacher reopens it to reconnect.
+  the teacher reopens it to reconnect. A line that can't be encoded (text
+  pasted with half an emoji) gets "(não enviada: o texto tem um caractere
+  inválido)": `ChatConnection.Send` throws for it and the conversation goes
+  on (until 2026-10-12 it closed the Master).
 - `TcpConnect.WithTimeout` (Master) is now shared by `CommandClient`,
   `ThumbnailPoller` and `ChatConnection` (5 s connect timeout).
 
@@ -60,7 +63,8 @@ in the chat.
   slot.
 - `ChatConnectionTests` (Master, Windows-only): lines reach both sides over
   a real loopback `SessionServer`; `Dispose` ends the conversation on the
-  student's side; the student side closing raises `Closed`.
+  student's side; the student side closing raises `Closed`; a line that
+  can't be encoded throws without ending the conversation.
 - Checked on Linux by compiling the non-UI sources into a scratch project:
   all of the above except what needs GDI+, plus an idle conversation
   surviving 18 s (past the Session's 15 s receive timeout) thanks to the

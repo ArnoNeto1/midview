@@ -31,6 +31,18 @@ public partial class SendMessageWindow : Window
 
     private async void OnSendClicked(object sender, RoutedEventArgs e)
     {
+        // Text that can't be encoded isn't sent: the text stays, with the
+        // character selected, for the teacher to fix.
+        var invalid = TypedText.IndexOfInvalidCharacter(MessageTextBox.Text);
+        if (invalid >= 0)
+        {
+            ResultTextBlock.Text = "Não enviada: o texto tem um caractere inválido (talvez metade de um emoji colado). "
+                + "Ele ficou selecionado: apague-o e envie de novo.";
+            MessageTextBox.Focus();
+            MessageTextBox.Select(invalid, 1);
+            return;
+        }
+
         var payload = TextMessage.Encode(MessageTextBox.Text.Trim());
         SendButton.IsEnabled = false;
         ResultTextBlock.Text = "Enviando...";

@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -80,7 +81,17 @@ public partial class ChatWindow : Window
         InputTextBox.Clear();
         Append($"Você: {text}");
         // Off the UI thread: a dropping connection can take a while to fail.
-        if (!await Task.Run(() => connection.Send(text)))
+        bool sent;
+        try
+        {
+            sent = await Task.Run(() => connection.Send(text));
+        }
+        catch (EncoderFallbackException)
+        {
+            Append("(não enviada: o texto tem um caractere inválido)");
+            return;
+        }
+        if (!sent)
         {
             Append("(não enviada: a conversa caiu)");
         }

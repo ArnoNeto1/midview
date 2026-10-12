@@ -77,6 +77,9 @@ public sealed class ChatConnection : IChatConnection
         _receiveThread.Start();
     }
 
+    // False if the line couldn't be sent; the conversation is over then.
+    // Throws EncoderFallbackException for text that isn't valid UTF-16
+    // (pasted with half an emoji), leaving the conversation on.
     public bool Send(string text) => TrySend(new Message(MessageType.ChatText, TextMessage.Encode(text)));
 
     public void Dispose() => Close("conversa encerrada");

@@ -1,3 +1,4 @@
+using System.Text;
 using Midview.Master;
 using Midview.Protocol;
 using Midview.Session;
@@ -25,6 +26,30 @@ public class ChatConnectionTests
 
         Assert.True(chats.Window.StudentTypes("Quase!"));
         Assert.Equal("Quase!", await studentLine.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    // Text pasted with half an emoji can't be encoded: Send throws (ChatWindow
+    // says so), nothing reaches the student, and the conversation goes on.
+    [Fact]
+    public async Task ALineThatCantBeEncoded_ThrowsAndTheConversationGoesOn()
+    {
+        using var certificates = new Certificates();
+        var chats = new RecordingChatWindows();
+        using var session = new ThumbnailPollerTests.LoopbackSession(
+            0, certificates.Session, certificates.Master, chatWindows: chats);
+        var closed = false;
+
+        using var chat = await Task.Run(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, session.Port)).WaitAsync(TimeSpan.FromSeconds(10));
+        chat.Closed += _ => closed = true;
+        chat.Start();
+
+        Assert.Throws<EncoderFallbackException>(() => chat.Send("olá \ud83c"));
+
+        Assert.True(chat.Send("oi"));
+        await WaitUntil(() => chats.Window?.TeacherLines.Count == 1);
+        Assert.Equal("oi", chats.Window!.TeacherLines[0]);
+        Assert.False(closed);
     }
 
     [Fact]
