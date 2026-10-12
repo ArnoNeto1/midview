@@ -16,9 +16,13 @@
                                              IsEnabled="False" ToolTip="Abre a tela da máquina selecionada, só para ver." />
                         <local:ToolbarButton x:Name="ControlButton" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
                                              IsEnabled="False" ToolTip="Controla a máquina selecionada e trava o teclado e o mouse do aluno." />
-                        <!-- Becomes "Desbloquear telas" while any screen is locked (UpdateScreenLockButton). -->
+                        <!-- Becomes "Desbloquear telas" while any screen is locked (UpdateScreenLockButton).
+                             Width overridden from the shared 74: "Desbloquear" alone measures 67px at this
+                             font, wider than the 66px the default width leaves (74 minus the chrome's 8px
+                             padding), so it broke mid-word instead of wrapping at the space. 84 leaves 76px,
+                             comfortably over the 67px it needs. -->
                         <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear telas" Icon="&#xE7F4;" Badge="&#xE72E;"
-                                             Click="OnScreenLockClassClicked"
+                                             Width="84" Click="OnScreenLockClassClicked"
                                              ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
                     </StackPanel>
                     <TextBlock Text="Tela" Style="{StaticResource ToolbarGroupCaption}" />
