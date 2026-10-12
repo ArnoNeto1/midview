@@ -597,6 +597,17 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnChatClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para conversar.";
+            return;
+        }
+        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        ShowOnce("bate-papo", targets, () => new ClassChatWindow(targets, _masterCertificate) { Owner = this });
+    }
+
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)

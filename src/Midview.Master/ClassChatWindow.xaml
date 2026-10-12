@@ -1,0 +1,16 @@
+<Window x:Class="Midview.Master.ClassChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Bate-papo da turma" Height="480" Width="480"
+        Loaded="OnWindowLoaded" Closed="OnWindowClosed">
+    <DockPanel Margin="8">
+        <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,6" />
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Button x:Name="SendButton" DockPanel.Dock="Right" Content="Enviar" Click="OnSendClicked"
+                    IsEnabled="False" Padding="12,4" Margin="8,0,0,0" />
+            <TextBox x:Name="InputTextBox" FontSize="13" KeyDown="OnInputKeyDown" TextChanged="OnInputChanged" />
+        </DockPanel>
+        <TextBox x:Name="TranscriptTextBox" IsReadOnly="True" TextWrapping="Wrap" FontSize="13"
+                 VerticalScrollBarVisibility="Auto" />
+    </DockPanel>
+</Window>

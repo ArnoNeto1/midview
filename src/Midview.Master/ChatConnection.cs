@@ -7,7 +7,7 @@ namespace Midview.Master;
 // The teacher's side of a private chat with one machine: one connection for
 // the whole conversation. Opening it pops the chat window up on the
 // student's screen; closing it (Dispose) ends the conversation there.
-public sealed class ChatConnection : IDisposable
+public sealed class ChatConnection : IChatConnection
 {
     // Well inside the Session's 15 s receive timeout, so a conversation where
     // nobody types for a while isn't dropped as a dead connection.

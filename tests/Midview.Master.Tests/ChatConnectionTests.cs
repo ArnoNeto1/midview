@@ -100,7 +100,7 @@ public class ChatConnectionTests
         }
     }
 
-    private sealed class RecordingChatWindows : IChatWindows
+    internal sealed class RecordingChatWindows : IChatWindows
     {
         public RecordingWindow? Window { get; private set; }
 
@@ -111,7 +111,7 @@ public class ChatConnectionTests
         }
     }
 
-    private sealed class RecordingWindow : IChatWindow
+    internal sealed class RecordingWindow : IChatWindow
     {
         private readonly List<string> _teacherLines = new();
 

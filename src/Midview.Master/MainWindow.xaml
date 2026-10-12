@@ -2,11 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Midview - Sala de aula" Height="760" Width="1360"
+        Title="Midview - Sala de aula" Height="760" Width="1440"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
         Closed="OnWindowClosed">
     <DockPanel>
-        <!-- Grouped like the actions they hold; one row from about 1340 px wide,
+        <!-- Grouped like the actions they hold; one row from about 1410 px wide,
              and whole groups move to a second row on a narrower window. -->
         <Border DockPanel.Dock="Top" Background="{StaticResource SlateBrush}" Padding="8,2">
             <WrapPanel>
@@ -33,6 +33,9 @@
                     <StackPanel Orientation="Horizontal">
                         <local:ToolbarButton Content="Mensagem" Icon="&#xE8BD;" Click="OnMessageClassClicked" OpensOptions="True"
                                              ToolTip="Envia uma mensagem para a turma toda." />
+                        <!-- No options arrow: like "Ligar", it acts right away, opening the chat on every student's screen. -->
+                        <local:ToolbarButton Content="Bate-papo" Icon="&#xE8F2;" Click="OnChatClassClicked"
+                                             ToolTip="Abre uma conversa com a turma toda: o que você escreve aparece para todos os alunos, e as respostas deles só para você." />
                         <local:ToolbarButton Content="Enviar arquivo" Icon="&#xE898;" Click="OnFileClassClicked" OpensOptions="True"
                                              ToolTip="Envia um arquivo para a turma toda." />
                         <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" Click="OnCollectClassClicked" OpensOptions="True"
