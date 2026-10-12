@@ -604,8 +604,11 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para conversar.";
             return;
         }
+        // One class chat at a time, whoever is in the room list now: a second
+        // one would pop a second chat up on every student's screen. Machines
+        // added meanwhile join when it's closed and opened again.
         var targets = _tiles.Select(tile => tile.Machine).ToList();
-        ShowOnce("bate-papo", targets, () => new ClassChatWindow(targets, _masterCertificate) { Owner = this });
+        ShowOnce("bate-papo", Array.Empty<KnownMachine>(), () => new ClassChatWindow(targets, _masterCertificate) { Owner = this });
     }
 
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)

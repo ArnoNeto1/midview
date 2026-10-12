@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -54,7 +55,17 @@ public partial class ClassChatWindow : Window
 
         InputTextBox.Clear();
         Append($"Você: {text}");
-        if (await _chat.SendAsync(text) == 0)
+        int reached;
+        try
+        {
+            reached = await _chat.SendAsync(text);
+        }
+        catch (EncoderFallbackException)
+        {
+            Append("(não enviada: o texto tem um caractere inválido)");
+            return;
+        }
+        if (reached == 0)
         {
             Append("(não enviada: nenhuma máquina está na conversa)");
         }

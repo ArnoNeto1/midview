@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Text;
 using Midview.Master;
 using Midview.Protocol;
 using Midview.Session;
@@ -25,7 +26,8 @@ public class ClassChatTests
     public async Task WhileConnecting_TheStatusSaysHowManyAreStillComing()
     {
         var fakes = new FakeConnections();
-        var aluno2 = fakes.Hold("Aluno-2");
+        // The first in the list is slow too: the others don't wait for it.
+        var aluno1 = fakes.Hold("Aluno-1");
         var aluno3 = fakes.Hold("Aluno-3");
         using var chat = new ClassChat(Machines("Aluno-1", "Aluno-2", "Aluno-3"), fakes.Open);
         Assert.Equal("Conectando a 3 máquinas...", chat.Status);
@@ -34,7 +36,7 @@ public class ClassChatTests
         await WaitUntil(() => chat.ConnectedCount == 1);
         Assert.Equal("Conectado a 1 de 3 máquinas. Aguardando 2.", chat.Status);
 
-        aluno2.Set();
+        aluno1.Set();
         aluno3.Set();
         await connecting;
         Assert.Equal("Conectado a 3 de 3 máquinas.", chat.Status);
@@ -163,6 +165,44 @@ public class ClassChatTests
         Assert.Equal("Conectado a 1 de 3 máquinas. Não conectou: Aluno-2 (Offline), Aluno-10 (Offline).", chat.Status);
     }
 
+    // Every machine takes the line at the same time, so one slow to take it
+    // doesn't hold it up for the rest.
+    [Fact]
+    public async Task ALine_GoesToEveryMachineAtOnce()
+    {
+        var fakes = new FakeConnections();
+        using var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
+        await chat.ConnectAsync();
+        foreach (var connection in fakes.Opened.Values)
+        {
+            connection.HeldLine = "oi";
+        }
+
+        var sending = chat.SendAsync("oi");
+        await WaitUntil(() => fakes.Opened.Values.All(connection => connection.Holding));
+        foreach (var connection in fakes.Opened.Values)
+        {
+            connection.SendReleased.Set();
+        }
+
+        Assert.Equal(2, await sending);
+    }
+
+    // Text pasted with half an emoji can't be encoded, so sending it fails
+    // (ClassChatWindow says so); the lines after it still go out.
+    [Fact]
+    public async Task ALineThatCantBeEncoded_FailsWithoutStoppingTheNextOnes()
+    {
+        var fakes = new FakeConnections();
+        using var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
+        await chat.ConnectAsync();
+
+        await Assert.ThrowsAsync<EncoderFallbackException>(() => chat.SendAsync("olá \ud83d"));
+
+        Assert.Equal(2, await chat.SendAsync("oi"));
+        Assert.Equal("Conectado a 2 de 2 máquinas.", chat.Status);
+    }
+
     [Fact]
     public async Task Lines_ReachEachMachineInTheOrderTheyWereTyped()
     {
@@ -197,6 +237,20 @@ public class ClassChatTests
         Assert.Equal(0, changes);
     }
 
+    // The teacher closed the window before some machines' turn to connect
+    // came: the chat doesn't pop up on those students' screens at all.
+    [Fact]
+    public async Task ConnectAsync_AfterDispose_OpensNothing()
+    {
+        var fakes = new FakeConnections();
+        var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
+
+        chat.Dispose();
+        await chat.ConnectAsync();
+
+        Assert.Empty(fakes.Opened);
+    }
+
     // The teacher closed the window before every machine had answered.
     [Fact]
     public async Task AMachineThatConnectsAfterDispose_IsClosedAtOnce()
@@ -205,7 +259,7 @@ public class ClassChatTests
         var aluno2 = fakes.Hold("Aluno-2");
         var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
         var connecting = chat.ConnectAsync();
-        await WaitUntil(() => chat.ConnectedCount == 1);
+        await WaitUntil(() => chat.ConnectedCount == 1 && fakes.IsOpening("Aluno-2"));
 
         chat.Dispose();
         aluno2.Set();
@@ -269,6 +323,7 @@ public class ClassChatTests
     private sealed class FakeConnections
     {
         private readonly ConcurrentDictionary<string, FakeConnection> _opened = new();
+        private readonly ConcurrentDictionary<string, bool> _opening = new();
         private readonly Dictionary<string, ManualResetEventSlim> _held = new();
 
         public Dictionary<string, Exception> Unreachable { get; } = new();
@@ -278,8 +333,12 @@ public class ClassChatTests
         // Opening this machine waits until the returned event is set.
         public ManualResetEventSlim Hold(string name) => _held[name] = new ManualResetEventSlim();
 
+        // Its opening has begun (and may be waiting on Hold).
+        public bool IsOpening(string name) => _opening.ContainsKey(name);
+
         public IChatConnection Open(KnownMachine machine)
         {
+            _opening[machine.Name] = true;
             if (_held.TryGetValue(machine.Name, out var gate))
             {
                 gate.Wait(TimeSpan.FromSeconds(10));
@@ -329,6 +388,8 @@ public class ClassChatTests
 
         public bool Send(string text)
         {
+            // Throws for text that isn't valid UTF-16, like ChatConnection.
+            TextMessage.Encode(text);
             if (text == HeldLine)
             {
                 Holding = true;

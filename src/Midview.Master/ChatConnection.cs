@@ -29,8 +29,10 @@ public sealed class ChatConnection : IChatConnection
         _heartbeatTimer = new Timer(_ => TrySend(new Message(MessageType.Heartbeat, Array.Empty<byte>())));
     }
 
-    // Both raised on a background thread. Closed is raised once, however the
-    // conversation ended (including Dispose), with a short reason.
+    // Raised on whichever thread finds out: StudentMessageReceived on a
+    // background thread; Closed there too when the student's side ends it,
+    // or on the caller's thread from Dispose or a Send that fails. Closed is
+    // raised once, however the conversation ended, with a short reason.
     public event Action<string>? StudentMessageReceived;
     public event Action<string>? Closed;
 
@@ -54,11 +56,13 @@ public sealed class ChatConnection : IChatConnection
     }
 
     // Separate from Open so event handlers can be attached before anything
-    // can be received.
+    // can be received. The timer is armed first: a connection the student's
+    // side drops at once makes the receive thread close it, timer included,
+    // and arming a disposed timer would throw.
     public void Start()
     {
-        _receiveThread.Start();
         _heartbeatTimer.Change(HeartbeatInterval, HeartbeatInterval);
+        _receiveThread.Start();
     }
 
     public bool Send(string text) => TrySend(new Message(MessageType.ChatText, TextMessage.Encode(text)));

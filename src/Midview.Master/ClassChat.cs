@@ -106,6 +106,17 @@ public sealed class ClassChat : IDisposable
 
     private void Connect(KnownMachine machine)
     {
+        // Opening pops the chat up on the student's screen: not once the
+        // conversation is over (the window was closed before this machine's
+        // turn came).
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+        }
+
         IChatConnection connection;
         try
         {
