@@ -83,6 +83,9 @@ public sealed class InviteHost : IDisposable
     // had (port 0, for tests, takes any free one). giveClass must not throw:
     // each machine's failure belongs in InviteResult.LeftOut (as
     // ClassGrant.Give does), or the outcome would claim nobody got the class.
+    // Both network loops are started on the thread pool, never on the
+    // caller's context: Master calls this on its UI thread, and every packet
+    // sent to the port would otherwise be handled there.
     public static InviteHost Open(
         X509Certificate2 certificate, string teacherName, Func<TeacherGrant, InviteResult> giveClass, TimeSpan lifetime,
         Action<string>? joining = null, int tcpPort = TeacherInvite.Port, int udpPort = TeacherInvite.Port)
@@ -105,8 +108,8 @@ public sealed class InviteHost : IDisposable
         var host = new InviteHost(certificate, teacherName, giveClass, joining, tcp, udp);
         host._stop.Token.Register(host.OnStopped);
         host._stop.CancelAfter(lifetime);
-        _ = host.AcceptAsync();
-        _ = host.AnswerProbesAsync();
+        _ = Task.Run(host.AcceptAsync);
+        _ = Task.Run(host.AnswerProbesAsync);
         return host;
     }
 

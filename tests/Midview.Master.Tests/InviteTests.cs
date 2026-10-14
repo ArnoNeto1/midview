@@ -77,6 +77,43 @@ public class InviteTests : IDisposable
             progress);
     }
 
+    // The Master opens the invite on its UI thread. If the loops kept that
+    // thread's context, every packet and connection would be handled there,
+    // and junk sent to the port could freeze the window. A context that
+    // drops whatever is posted to it stands in for a UI thread that is busy:
+    // an invite whose loops used it would never answer.
+    [Fact]
+    public async Task TheInviteLoops_NeverRunOnTheThreadThatOpenedIt()
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DroppingContext());
+        InviteHost host;
+        try
+        {
+            host = Open();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.Single(InviteJoin.Find(Targets(host), Listen));
+        var (from, result) = await Join(host.Code, _teacherB, host);
+        Assert.Equal("PROF-01", from);
+        Assert.Equal(TheClass.Given, result.Given);
+        Assert.Equal(InviteEnd.Given, (await host.Outcome.WaitAsync(Wait)).End);
+    }
+
+    private sealed class DroppingContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+        }
+
+        public override void Send(SendOrPostCallback d, object? state) =>
+            throw new NotSupportedException("Nothing here waits on a send.");
+    }
+
     [Fact]
     public async Task AWrongSecret_IsRefused_AndEndsTheInvite()
     {
