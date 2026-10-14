@@ -120,13 +120,14 @@ Port **28902**, TCP and UDP, on A's PC, open only while A's invite is.
    `{"midview":1,"invite":"<guid>"}` to UDP 28902 on the same targets as
    Wake-on-LAN and discovery (`WakeOnLanSender.BroadcastTargets`), and
    collects replies for 2 seconds. A Master with an open invite replies to
-   the sender with `{"midview":1,"invite":"<guid>","name":"PROF-01"}`. The
-   address is the reply's source address. Packets over 2 KB, without
+   the sender with `{"midview":1,"invite":"<guid>","name":"PROF-01","port":28902}`.
+   B connects to the reply's source address on that port. (A false reply
+   can only point B at a certificate the code doesn't match.) Packets over 2 KB, without
    `"midview":1`, with another guid, or not valid JSON are ignored. A probe
    gets one reply, about its size, so it can't amplify traffic. Nothing
    derived from the code is ever broadcast.
 3. **B checks who answered.** For each reply (at most 10, in the order they
-   came), B connects to TCP 28902 with its own certificate
+   came), B connects to the port it named with its own certificate
    (`SecureChannel.AuthenticateAsClientAcceptingAnyServer`; A uses
    `AuthenticateAsServerAcceptingAnyClient`). With the thumbprint of the
    certificate it got, B computes `v` from the `s` that was typed. If it
@@ -178,8 +179,9 @@ classroom list once. The tiles appear as for a paired machine.
 **`TrustTeacher`**, a trusted-only Agent command:
 
 - Payload: the new teacher's thumbprint (40 hex characters) and computer
-  name. Anything else is refused with "Identificação de professor
-  inválida.".
+  name. Anything else is refused with "identificação de professor
+  inválida" (lower case, like the Agent's other details: the Master shows
+  it as "ALUNO-07 (identificação de professor inválida)").
 - It is handled after the existing trust gate in `AgentServer`, so only a
   teacher the machine already trusts can send it; from anyone else the
   connection is closed unanswered and logged, as today.
