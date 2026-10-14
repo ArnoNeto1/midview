@@ -188,6 +188,23 @@ public enum MessageType : byte
     // sent to the other so it can be pasted there (ClipboardText both ways on
     // the control connection). Text only, size-capped; see ClipboardText.
     ClipboardText = 60,
+
+    // "Dar acesso a um colega" (see TeacherInvite and
+    // docs/superpowers/specs/2026-10-14-teacher-invite-design.md).
+    // TrustTeacher is an Agent command, from a trusted teacher only: trust
+    // another teacher too (a TeacherGrant), with nothing on the student's
+    // screen. Answered with one CommandAck carrying a CommandResult; an Agent
+    // from before this answers CommandAck [0], which the Master shows as
+    // "Midview antigo".
+    TrustTeacher = 61,
+
+    // Teacher to teacher, on TeacherInvite.Port, never to a student machine:
+    // the colleague's InviteJoin (an InviteJoinRequest) is answered with
+    // InviteDone (an InviteResult) or InviteRefused (why, UTF-8, in
+    // Portuguese).
+    InviteJoin = 62,
+    InviteDone = 63,
+    InviteRefused = 64,
 }
 
 public enum CloseAppsMode : byte

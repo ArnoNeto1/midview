@@ -17,6 +17,19 @@ public class MessageFramerTests
         Assert.Equal(new byte[] { 1, 2, 3 }, result.Payload);
     }
 
+    [Fact]
+    public void Read_WithALimit_RefusesALongerMessage_BeforeReadingIt()
+    {
+        var stream = new MemoryStream();
+        MessageFramer.Write(stream, new Message(MessageType.InviteJoin, new byte[100]));
+
+        stream.Position = 0;
+        Assert.Throws<InvalidDataException>(() => MessageFramer.Read(stream, 100));
+
+        stream.Position = 0;
+        Assert.Equal(100, MessageFramer.Read(stream, 101).Payload.Length);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

@@ -27,11 +27,16 @@ public static class MessageFramer
         stream.Flush();
     }
 
-    public static Message Read(Stream stream)
+    public static Message Read(Stream stream) => Read(stream, MaxMessageLength);
+
+    // For a side that doesn't trust the other yet (see TeacherInvite): a
+    // message whose type and payload are longer than maxLength is refused
+    // before it is read.
+    public static Message Read(Stream stream, int maxLength)
     {
         var header = ReadExact(stream, 4);
         var length = BinaryPrimitives.ReadInt32BigEndian(header);
-        if (length < 1 || length > MaxMessageLength)
+        if (length < 1 || length > Math.Min(maxLength, MaxMessageLength))
         {
             throw new InvalidDataException($"Invalid message length {length}");
         }

@@ -43,6 +43,8 @@ public sealed class SecureChannel : IDisposable
 
     public Message Receive() => MessageFramer.Read(_sslStream);
 
+    public Message Receive(int maxLength) => MessageFramer.Read(_sslStream, maxLength);
+
     public void Dispose() => _sslStream.Dispose();
 
     private static SecureChannel Server(TcpClient client, X509Certificate2 serverCertificate, Func<X509Certificate, bool> accept)
