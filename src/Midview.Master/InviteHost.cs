@@ -80,7 +80,9 @@ public sealed class InviteHost : IDisposable
     // Opens the invite for lifetime. joining gets the colleague's computer
     // name (on a background thread) once the right secret arrived, before
     // the machines are told. Throws SocketException when a port can't be
-    // had (port 0, for tests, takes any free one).
+    // had (port 0, for tests, takes any free one). giveClass must not throw:
+    // each machine's failure belongs in InviteResult.LeftOut (as
+    // ClassGrant.Give does), or the outcome would claim nobody got the class.
     public static InviteHost Open(
         X509Certificate2 certificate, string teacherName, Func<TeacherGrant, InviteResult> giveClass, TimeSpan lifetime,
         Action<string>? joining = null, int tcpPort = TeacherInvite.Port, int udpPort = TeacherInvite.Port)
@@ -237,14 +239,25 @@ public sealed class InviteHost : IDisposable
         var sent = false;
         try
         {
-            _joining?.Invoke(teacherName);
+            try
+            {
+                _joining?.Invoke(teacherName);
+            }
+            catch (Exception)
+            {
+                // It only updates teacher A's window: whatever it does, the class is still given.
+            }
+
             result = _giveClass(new TeacherGrant(channel.RemoteThumbprint, teacherName));
-            channel.Send(new Message(MessageType.InviteDone, result.Encode()));
-            sent = true;
-        }
-        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
-        {
-            // The colleague left; the machines were told anyway.
+            try
+            {
+                channel.Send(new Message(MessageType.InviteDone, result.Encode()));
+                sent = true;
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+            {
+                // The colleague left; the machines were told anyway.
+            }
         }
         finally
         {

@@ -204,6 +204,22 @@ public class InviteTests : IDisposable
     }
 
     [Fact]
+    public async Task AFailingJoiningCallback_DoesNotStopTheClassBeingGiven()
+    {
+        var host = Open(joining: _ => throw new IOException("window gone"));
+
+        var (from, result) = await Join(host.Code, _teacherB, host);
+
+        Assert.Equal("PROF-01", from);
+        Assert.Equal(TheClass.Given, result.Given);
+        Assert.Equal(new TeacherGrant(_teacherB.Thumbprint, "PROF-02"), _grants.Single());
+        var outcome = await host.Outcome.WaitAsync(Wait);
+        Assert.Equal(InviteEnd.Given, outcome.End);
+        Assert.Equal("PROF-02", outcome.TeacherName);
+        Assert.True(outcome.ListSent);
+    }
+
+    [Fact]
     public async Task WithTwoInvitesOpen_TheCodeFindsItsOwnTeacher()
     {
         using var teacherC = SelfSignedCertificate.Create("teacher-c");
