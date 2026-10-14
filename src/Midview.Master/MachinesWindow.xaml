@@ -29,6 +29,10 @@
                 <TextBlock x:Name="SearchStatusTextBlock" VerticalAlignment="Center" Margin="12,0,0,0"
                            TextWrapping="Wrap" MaxWidth="440" Foreground="{StaticResource InkMutedBrush}" />
             </StackPanel>
+            <TextBlock Margin="0,8,0,0" Foreground="{StaticResource InkMutedBrush}">
+                <Run Text="Um colega já tem estas máquinas?" />
+                <Hyperlink Click="OnJoinClassClicked">Entrar na sala de um colega...</Hyperlink>
+            </TextBlock>
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
@@ -43,8 +47,11 @@
                 <StackPanel>
                     <TextBlock Text="Outro professor" Style="{StaticResource SectionTitle}" />
                     <TextBlock Style="{StaticResource SectionHint}"
-                               Text="Para um colega parear o computador dele com as máquinas desta sala: por 10 minutos, elas aceitam parear com outro professor." />
-                    <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked" HorizontalAlignment="Left" />
+                               Text="Para um colega ter as máquinas desta sala: dê a ele um código (nada aparece na tela dos alunos), ou deixe as máquinas aceitarem o pareamento dele por 10 minutos." />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Dar acesso a um colega..." Click="OnGiveAccessClicked" />
+                        <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked" Margin="8,0,0,0" />
+                    </StackPanel>
                     <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
             </Border>

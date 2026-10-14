@@ -11,6 +11,9 @@ namespace Midview.Master;
 // same certificate (same thumbprint), so it's already trusted on every
 // Agent/Session that has this one thumbprint registered -- no lab
 // machine needs to be touched again to add a second authorized teacher.
+// Copying it still works, but "Dar acesso a um colega" (TeacherInvite) now
+// gives a colleague the class under their own identity, with no file to
+// copy.
 public static class MasterIdentity
 {
     public static string DefaultCertificatePath => Path.Combine(

@@ -659,7 +659,7 @@ public partial class MainWindow : Window
         {
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddresses,
-                () => OpenAddMachineWindow(existing: null)) { Owner = this };
+                () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             window.Show();
@@ -674,6 +674,18 @@ public partial class MainWindow : Window
             await window.SearchAsync();
         }
     }
+
+    // "Dar acesso a um colega": one invite at a time, so asking again brings
+    // the open one back.
+    private void OpenGiveAccessWindow() =>
+        ShowOnce("convite", Array.Empty<KnownMachine>(),
+            () => new GiveAccessWindow(_masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList()) { Owner = this });
+
+    private void OpenJoinClassWindow() =>
+        ShowOnce("entrar-na-sala", Array.Empty<KnownMachine>(),
+            () => new JoinClassWindow(_masterCertificate, AddMachines) { Owner = this });
+
+    private void OnJoinClassClicked(object sender, RoutedEventArgs e) => OpenJoinClassWindow();
 
     private void OnRemoveMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -729,14 +741,22 @@ public partial class MainWindow : Window
     // Called by MachinesWindow when a pairing is confirmed (see Roster.Place).
     // The grid changes first; a failure to write the list then propagates
     // for MachinesWindow to report.
-    private void AddPairedMachine(KnownMachine machine)
+    private void AddPairedMachine(KnownMachine machine) => AddMachines(new[] { machine });
+
+    // Also called by JoinClassWindow with a colleague's class: each machine
+    // placed as a paired one (Roster.Place, in the colleague's order), then
+    // the list saved once.
+    private void AddMachines(IReadOnlyList<KnownMachine> machines)
     {
-        var (index, replaces, placed) = Roster.Place(_tiles.Select(tile => tile.Machine).ToList(), machine);
-        if (replaces)
+        foreach (var machine in machines)
         {
-            RemoveTileAt(index);
+            var (index, replaces, placed) = Roster.Place(_tiles.Select(tile => tile.Machine).ToList(), machine);
+            if (replaces)
+            {
+                RemoveTileAt(index);
+            }
+            InsertTile(index, placed);
         }
-        InsertTile(index, placed);
         UpdateEmptyHint();
         SaveRoster();
     }

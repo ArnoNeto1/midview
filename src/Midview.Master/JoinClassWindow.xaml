@@ -1,0 +1,20 @@
+<Window x:Class="Midview.Master.JoinClassWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Entrar na sala de um colega" Height="320" Width="500"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
+        FocusManager.FocusedElement="{Binding ElementName=CodeTextBox}">
+    <StackPanel Margin="20">
+        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}"
+                   Text="Peça ao colega que já tem a sala para clicar em &quot;Máquinas da sala&quot; &gt; &quot;Dar acesso a um colega&quot;, e digite aqui o código que aparecer na tela dele." />
+        <TextBlock Text="Código do convite:" Margin="0,14,0,4" Foreground="{StaticResource InkBrush}" />
+        <StackPanel Orientation="Horizontal">
+            <TextBox x:Name="CodeTextBox" Width="200" FontFamily="Consolas" FontSize="20" Padding="6,3"
+                     MaxLength="20" CharacterCasing="Upper" />
+            <Button x:Name="JoinButton" Content="Entrar" Click="OnJoinClicked" IsDefault="True"
+                    Margin="8,0,0,0" Padding="16,4" />
+        </StackPanel>
+        <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Margin="0,14,0,0" Foreground="{StaticResource InkBrush}" />
+    </StackPanel>
+</Window>

@@ -82,7 +82,7 @@
                         <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" Click="OnLabConfigClassClicked" OpensOptions="True"
                                              ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, bloquear downloads, Edge e sites de distração, travar a barra de tarefas e limpar os perfis do Chrome." />
                         <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
-                                             ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, permite outro professor e tem os ajustes avançados." />
+                                             ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
                     </StackPanel>
                     <TextBlock Text="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
                 </StackPanel>
@@ -98,9 +98,11 @@
             <StackPanel x:Name="EmptyRosterPanel" Visibility="Collapsed" Panel.ZIndex="1"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock FontSize="14" TextAlignment="Center" Foreground="{StaticResource InkMutedBrush}"
-                           Text="Nenhuma máquina na sala ainda.&#x0a;Instale o Midview Aluno nas máquinas e procure-as na rede." />
-                <Button Content="Procurar máquinas na rede" Click="OnSearchNetworkClicked"
-                        HorizontalAlignment="Center" Margin="0,12,0,0" Padding="16,7" />
+                           Text="Nenhuma máquina na sala ainda.&#x0a;Instale o Midview Aluno nas máquinas e procure-as na rede,&#x0a;ou peça um código a um colega que já tem a sala." />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+                    <Button Content="Procurar máquinas na rede" Click="OnSearchNetworkClicked" Padding="16,7" />
+                    <Button Content="Entrar na sala de um colega" Click="OnJoinClassClicked" Padding="16,7" Margin="8,0,0,0" />
+                </StackPanel>
             </StackPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <ItemsControl x:Name="MachinesItemsControl" Margin="10">

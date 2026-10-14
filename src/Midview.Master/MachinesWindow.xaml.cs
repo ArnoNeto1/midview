@@ -11,8 +11,10 @@ namespace Midview.Master;
 
 // "Máquinas da sala": find the machines with Midview on this network and
 // pair with them (each shows a code the teacher compares), push the student
-// program installed with this one to the class, let another teacher pair
-// for 10 minutes, and open the advanced settings (AddMachineWindow).
+// program installed with this one to the class, give a colleague the class
+// with a code or take a colleague's (GiveAccessWindow, JoinClassWindow), let
+// another teacher pair for 10 minutes, and open the advanced settings
+// (AddMachineWindow).
 public partial class MachinesWindow : Window
 {
     private const string MismatchText =
@@ -23,6 +25,8 @@ public partial class MachinesWindow : Window
     private readonly Action<KnownMachine> _addPaired;
     private readonly Func<IReadOnlyList<FoundMachine>, int> _refreshAddresses;
     private readonly Action _openAdvanced;
+    private readonly Action _openGiveAccess;
+    private readonly Action _openJoinClass;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
     private bool _closed;
@@ -31,10 +35,13 @@ public partial class MachinesWindow : Window
     // both may throw when the list can't be written to disk.
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
-        Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced)
+        Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced,
+        Action openGiveAccess, Action openJoinClass)
     {
         InitializeComponent();
         _openAdvanced = openAdvanced;
+        _openGiveAccess = openGiveAccess;
+        _openJoinClass = openJoinClass;
         _masterCertificate = masterCertificate;
         _roster = roster;
         _addPaired = addPaired;
@@ -44,6 +51,10 @@ public partial class MachinesWindow : Window
     }
 
     private void OnAdvancedClicked(object sender, RoutedEventArgs e) => _openAdvanced();
+
+    private void OnGiveAccessClicked(object sender, RoutedEventArgs e) => _openGiveAccess();
+
+    private void OnJoinClassClicked(object sender, RoutedEventArgs e) => _openJoinClass();
 
     private async void OnSearchClicked(object sender, RoutedEventArgs e) => await SearchAsync();
 
