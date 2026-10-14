@@ -11,6 +11,9 @@ namespace Midview.Agent;
 public sealed class PairingService
 {
     private readonly object _gate = new();
+    // trusted-masters.json is read, changed and written back: two teachers
+    // added at once (a pairing and a TrustTeacher) must not lose one.
+    private readonly object _writeGate = new();
     private readonly TrustStore _trust;
     private readonly string _trustedMastersPath;
     private readonly IPairingCodeDisplay _display;
@@ -60,6 +63,33 @@ public sealed class PairingService
             AgentLog.Warn($"New-teacher pairing allowed until {until:HH:mm}.");
             return (true, $"liberada até {until:HH:mm}");
         }
+    }
+
+    // TrustTeacher, from a trusted teacher (AgentServer checks that): trust
+    // the colleague that teacher let in with "Dar acesso a um colega".
+    // Nothing shows on the student's screen: the colleague was checked by
+    // the teacher's own program, with the code.
+    public (bool Succeeded, string Detail) TrustTeacher(string senderThumbprint, byte[] payload)
+    {
+        if (TeacherGrant.Decode(payload) is not { } grant)
+        {
+            return (false, "identificação de professor inválida");
+        }
+
+        try
+        {
+            lock (_writeGate)
+            {
+                TrustedMastersFile.Add(_trustedMastersPath, grant.Thumbprint);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return (false, $"não foi possível gravar o professor nesta máquina: {ErrorText.Describe(ex)}");
+        }
+
+        AgentLog.Warn($"Teacher {senderThumbprint} gave access to teacher {grant.Thumbprint} ({grant.Name}).");
+        return (true, "liberada");
     }
 
     // Everything after a PairRequest, over that connection (receive and send
@@ -162,7 +192,10 @@ public sealed class PairingService
 
         try
         {
-            TrustedMastersFile.Add(_trustedMastersPath, masterThumbprint);
+            lock (_writeGate)
+            {
+                TrustedMastersFile.Add(_trustedMastersPath, masterThumbprint);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {

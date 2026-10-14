@@ -42,12 +42,12 @@ public class AgentPairingTests : IDisposable
         _teacher.Dispose();
     }
 
-    private (TcpClient Tcp, SecureChannel Channel) Connect()
+    private (TcpClient Tcp, SecureChannel Channel) Connect(X509Certificate2? teacher = null)
     {
         var tcp = new TcpClient();
         tcp.Connect(IPAddress.Loopback, _port);
         tcp.ReceiveTimeout = 30_000;
-        return (tcp, SecureChannel.AuthenticateAsClientAcceptingAnyServer(tcp, "agent-under-test", _teacher));
+        return (tcp, SecureChannel.AuthenticateAsClientAcceptingAnyServer(tcp, "agent-under-test", teacher ?? _teacher));
     }
 
     // The teacher's side of Pairing, by hand (the Master's PairingSession
@@ -74,12 +74,12 @@ public class AgentPairingTests : IDisposable
     }
 
     // The reply, or null when the Agent closed the connection unanswered.
-    private Message? Command(MessageType type)
+    private Message? Command(MessageType type, byte[]? payload = null, X509Certificate2? teacher = null)
     {
-        var (tcp, channel) = Connect();
+        var (tcp, channel) = Connect(teacher);
         using var _ = tcp;
         using var __ = channel;
-        channel.Send(new Message(type, Array.Empty<byte>()));
+        channel.Send(new Message(type, payload ?? Array.Empty<byte>()));
         try
         {
             return channel.Receive();
@@ -116,6 +116,7 @@ public class AgentPairingTests : IDisposable
     [InlineData(MessageType.BlockDomain)]
     [InlineData(MessageType.UnblockDomain)]
     [InlineData(MessageType.AllowNewTeacher)]
+    [InlineData(MessageType.TrustTeacher)]
     public async Task ATeacherItDoesNotTrust_IsCutOffUnanswered(MessageType command)
     {
         File.WriteAllText(_trustedPath, $"[\"{new string('C', 40)}\"]");
@@ -137,6 +138,22 @@ public class AgentPairingTests : IDisposable
         var (succeeded, detail) = CommandResult.Decode(ack!.Payload);
         Assert.True(succeeded);
         Assert.StartsWith("liberada até", detail);
+    }
+
+    [Fact]
+    public async Task TrustTeacher_FromATrustedTeacher_LetsTheColleagueIn()
+    {
+        using var colleague = SelfSignedCertificate.Create("colleague-under-test");
+        File.WriteAllText(_trustedPath, $"[\"{_teacher.Thumbprint}\"]");
+        Assert.Null(await Task.Run(() => Command(MessageType.UnblockInternet, teacher: colleague)).WaitAsync(TimeSpan.FromSeconds(30)));
+
+        var ack = await Task.Run(() => Command(MessageType.TrustTeacher, new TeacherGrant(colleague.Thumbprint, "PROF-02").Encode()))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal((true, "liberada"), CommandResult.Decode(ack!.Payload));
+        Assert.Empty(_display.Shown);
+        var reply = await Task.Run(() => Command(MessageType.UnblockInternet, teacher: colleague)).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(MessageType.CommandAck, reply!.Type);
     }
 
     private sealed class RecordingDisplay : IPairingCodeDisplay

@@ -238,6 +238,66 @@ public class PairingServiceTests : IDisposable
         Assert.Equal(TeacherStatus.Others, service.TeachersSeenBy(TeacherB));
     }
 
+    [Fact]
+    public void TrustTeacher_AddsTheColleague_AndKeepsTheOthers()
+    {
+        Trust(TeacherA);
+
+        var (succeeded, detail) = NewService().TrustTeacher(TeacherA, new TeacherGrant(TeacherB.ToLowerInvariant(), "PROF-02").Encode());
+
+        Assert.True(succeeded);
+        Assert.Equal("liberada", detail);
+        Assert.Equal(new[] { TeacherA, TeacherB }, TrustedMastersFile.Load(_path));
+        Assert.Empty(_display.Shown);
+    }
+
+    [Fact]
+    public void TrustTeacher_Twice_KeepsOneEntry()
+    {
+        Trust(TeacherA);
+        var service = NewService();
+        var grant = new TeacherGrant(TeacherB, "PROF-02").Encode();
+
+        service.TrustTeacher(TeacherA, grant);
+        service.TrustTeacher(TeacherA, grant);
+
+        Assert.Equal(new[] { TeacherA, TeacherB }, TrustedMastersFile.Load(_path));
+    }
+
+    public static TheoryData<string> BadGrants => new()
+    {
+        "{\"thumbprint\":\"\",\"name\":\"PROF-02\"}",
+        $"{{\"thumbprint\":\"{new string('B', 39)}\",\"name\":\"PROF-02\"}}",
+        $"{{\"thumbprint\":\"G{new string('B', 39)}\",\"name\":\"PROF-02\"}}",
+        "{\"name\":\"PROF-02\"}",
+        "not json",
+    };
+
+    [Theory]
+    [MemberData(nameof(BadGrants))]
+    public void TrustTeacher_WithoutAThumbprint_IsRefused(string payload)
+    {
+        Trust(TeacherA);
+
+        var (succeeded, detail) = NewService().TrustTeacher(TeacherA, Encoding.UTF8.GetBytes(payload));
+
+        Assert.False(succeeded);
+        Assert.Equal("identificação de professor inválida", detail);
+        Assert.Equal(new[] { TeacherA }, TrustedMastersFile.Load(_path));
+    }
+
+    [Fact]
+    public void TrustTeacher_WithAnUnreadableList_IsRefused_AndLeavesItAlone()
+    {
+        File.WriteAllText(_path, "not json");
+
+        var (succeeded, detail) = NewService().TrustTeacher(TeacherA, new TeacherGrant(TeacherB, "PROF-02").Encode());
+
+        Assert.False(succeeded);
+        Assert.StartsWith("não foi possível gravar o professor nesta máquina", detail);
+        Assert.Equal("not json", File.ReadAllText(_path));
+    }
+
     private sealed class FakeDisplay : IPairingCodeDisplay
     {
         public bool SomeoneLoggedOn { get; set; } = true;

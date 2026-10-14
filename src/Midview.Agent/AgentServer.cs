@@ -132,6 +132,14 @@ public sealed class AgentServer
             return;
         }
 
+        if (message.Type == MessageType.TrustTeacher)
+        {
+            var (trusted, trustDetail) = _pairing?.TrustTeacher(channel.RemoteThumbprint, message.Payload)
+                ?? (false, "esta máquina não aceita outro professor");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(trusted, trustDetail)));
+            return;
+        }
+
         // Power commands say what happened (a CommandResult, whose first
         // byte is the same 1/0 the site-blocking commands answer with).
         if (message.Type == MessageType.Power)
