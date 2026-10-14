@@ -6,7 +6,7 @@
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
         Loaded="OnLoaded" Closed="OnClosed">
     <StackPanel Margin="20">
-        <TextBlock x:Name="LeadTextBlock" Text="Passe este código ao colega:" FontSize="14" Foreground="{StaticResource InkBrush}" />
+        <TextBlock x:Name="LeadTextBlock" Text="Passe este código ao colega:" FontSize="14" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
         <TextBlock x:Name="CodeTextBlock" FontFamily="Consolas" FontSize="40" FontWeight="Bold"
                    Foreground="{StaticResource InkBrush}" Margin="0,10,0,10" />
         <TextBlock x:Name="HintTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}" />
