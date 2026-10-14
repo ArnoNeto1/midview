@@ -99,6 +99,11 @@ const
   TipoProfessor = 'professor';
   TipoAluno = 'aluno';
   CodigoFalhaAoConfigurar = 10;
+  { "Dar acesso a um colega": the teacher's program listens here while an
+    invite is open (TeacherInvite.Port). }
+  PortaConvite = '28902';
+  RegraConviteTcp = 'MidviewProfessorConvite';
+  RegraConviteUdp = 'MidviewProfessorConviteBusca';
 
 var
   PaginaTipo: TInputOptionWizardPage;
@@ -190,6 +195,36 @@ begin
     '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" -Erro "' + ArquivoDeErro + '"' + Argumentos,
     '', SW_HIDE, ewWaitUntilTerminated, Codigo);
   Log(Format('%s%s: started=%d, exit code=%d', [Script, Argumentos, Ord(Result), Codigo]));
+end;
+
+function RodarNetsh(const Argumentos: String): Boolean;
+var
+  Codigo: Integer;
+begin
+  Codigo := -1;
+  Result := Exec(ExpandConstant('{sys}\netsh.exe'), Argumentos, '', SW_HIDE, ewWaitUntilTerminated, Codigo) and (Codigo = 0);
+  Log(Format('netsh %s: exit code=%d', [Argumentos, Codigo]));
+end;
+
+{ "add rule" never replaces a rule with the same name, so they are deleted
+  first (deleting one that isn't there just fails, harmlessly). }
+procedure ApagarRegrasDoConvite;
+begin
+  RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteTcp + '"');
+  RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteUdp + '"');
+end;
+
+{ The Master runs without administrator rights, so it can't open its own
+  port: the setup does, for this program and the local network only. }
+function CriarRegrasDoConvite: Boolean;
+var
+  Restricao: String;
+begin
+  ApagarRegrasDoConvite;
+  Restricao := ' dir=in action=allow localport=' + PortaConvite +
+    ' program="' + ExpandConstant('{app}\Midview.Master.exe') + '" remoteip=localsubnet profile=any';
+  Result := RodarNetsh('advfirewall firewall add rule name="' + RegraConviteTcp + '" protocol=TCP' + Restricao) and
+    RodarNetsh('advfirewall firewall add rule name="' + RegraConviteUdp + '" protocol=UDP' + Restricao);
 end;
 
 function DescreverFalha(const ArquivoDeErro: String; Codigo: Integer): String;
@@ -289,13 +324,23 @@ begin
     Result := 'Não foi possível parar o Midview desta máquina: ' + DescreverFalha(ArquivoDeErro, Codigo);
 end;
 
-{ Aluno: once the files are in place, set up and start the service. }
+{ Once the files are in place. Professor: open the invite's port. Aluno:
+  set up and start the service. }
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ArquivoDeErro: String;
   Codigo: Integer;
 begin
-  if (CurStep <> ssPostInstall) or not EhAluno then
+  if CurStep <> ssPostInstall then
+    Exit;
+  if EhProfessor then begin
+    if not CriarRegrasDoConvite then
+      SuppressibleMsgBox('O Midview Professor foi instalado, mas a regra do firewall não pôde ser criada: ' +
+        '"Dar acesso a um colega" não vai funcionar neste computador. Rode o instalador de novo.',
+        mbError, MB_OK, IDOK);
+    Exit;
+  end;
+  if not EhAluno then
     Exit;
   WizardForm.StatusLabel.Caption := 'Configurando o serviço do Midview...';
   ArquivoDeErro := ExpandConstant('{tmp}\configurar-erro.txt');
@@ -328,13 +373,20 @@ begin
       'Para trazer as máquinas, instale o Midview Aluno nelas e clique em "Máquinas da sala" > "Procurar na rede".';
 end;
 
-{ Aluno: undo what a lesson left and remove the service, before the files go. }
+{ Professor: close the invite's port. Aluno: undo what a lesson left and
+  remove the service, before the files go. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Argumentos, ArquivoDeErro: String;
   Codigo: Integer;
 begin
-  if (CurUninstallStep <> usUninstall) or (TipoInstalado <> TipoAluno) then
+  if CurUninstallStep <> usUninstall then
+    Exit;
+  if TipoInstalado = TipoProfessor then begin
+    ApagarRegrasDoConvite;
+    Exit;
+  end;
+  if TipoInstalado <> TipoAluno then
     Exit;
 
   Argumentos := '';
