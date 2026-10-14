@@ -46,6 +46,15 @@ public partial class OpenWebsiteWindow : Window
                 NameTextBox.Text.Trim() is { Length: > 0 } name ? name : SavedMenu.NameFor(address), address.AbsoluteUri))
             : null;
 
+        // The window stays open, and "Abrir site" brings it back as it was:
+        // it is cleared now, ready for the next site (the summary below still
+        // names this one), and what the teacher types while this one goes out
+        // is kept.
+        AddressTextBox.Clear();
+        NameTextBox.Clear();
+        SaveCheckBox.IsChecked = false;
+        AddressTextBox.Focus();
+
         OpenButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
         ProgressTextBlock.Text = $"Abrindo {address.AbsoluteUri}...";
