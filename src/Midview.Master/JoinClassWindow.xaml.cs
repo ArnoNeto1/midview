@@ -40,9 +40,13 @@ public partial class JoinClassWindow : Window
         try
         {
             var teacherName = Environment.MachineName;
-            var targets = WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks(), TeacherInvite.Port);
+            // Looking up the network cards is inside Task.Run too: it can
+            // throw (NetworkInformationException), and the UI thread
+            // shouldn't wait for it.
             var (_, result) = await Task.Run(() => InviteJoin.Join(
-                code, _masterCertificate, teacherName, targets, TeacherInvite.ListenTime, progress.Report));
+                code, _masterCertificate, teacherName,
+                WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks(), TeacherInvite.Port),
+                TeacherInvite.ListenTime, progress.Report));
             try
             {
                 _addMachines(InviteJoin.ToKnownMachines(result));
@@ -61,6 +65,16 @@ public partial class JoinClassWindow : Window
         }
         catch (SocketException ex)
         {
+            ShowStatus($"A procura falhou: {ErrorText.Describe(ex)}", isError: true);
+            JoinButton.IsEnabled = true;
+            CodeTextBox.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            // This is async void and Master has no handler for exceptions
+            // left unhandled on the UI thread: anything else (the network
+            // cards couldn't be read, say) would close the program in the
+            // middle of the class.
             ShowStatus($"A procura falhou: {ErrorText.Describe(ex)}", isError: true);
             JoinButton.IsEnabled = true;
             CodeTextBox.IsEnabled = true;
