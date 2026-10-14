@@ -1,7 +1,7 @@
 # Midview — Giving a Colleague the Class by Invite Code (Design)
 
 Date: 2026-10-14
-Status: Approved by the owner on 2026-10-14; not yet implemented
+Status: Implemented 2026-10-14 (not yet validated live)
 
 ## Context
 
