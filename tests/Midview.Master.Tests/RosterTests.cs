@@ -81,4 +81,31 @@ public class RosterTests
 
         Assert.Empty(Roster.NewAddresses(roster, found));
     }
+
+    // How MainWindow takes a colleague's class: Place, one machine at a time,
+    // in the colleague's order.
+    [Fact]
+    public void AColleaguesClass_PlacedOneByOne_ReplacesWhatWasThere_AndKeepsClassroomOrder()
+    {
+        var roster = new List<KnownMachine> { Machine("Aluno-2", "10.0.0.2", X), Machine("Lab-9", "10.0.0.9", null) };
+        var given = new[]
+        {
+            Machine("Aluno-1", "10.0.0.1", new string('C', 40)),
+            Machine("Aluno-2", "10.0.0.22", X),
+            Machine("Aluno-10", "10.0.0.10", Y),
+        };
+
+        foreach (var machine in given)
+        {
+            var (index, replaces, placed) = Roster.Place(roster, machine);
+            if (replaces)
+            {
+                roster.RemoveAt(index);
+            }
+            roster.Insert(index, placed);
+        }
+
+        Assert.Equal(new[] { "Aluno-1", "Aluno-2", "Aluno-10", "Lab-9" }, roster.Select(machine => machine.Name));
+        Assert.Equal("10.0.0.22", roster[1].HostAddress);
+    }
 }
