@@ -745,17 +745,24 @@ public partial class MainWindow : Window
 
     // Also called by JoinClassWindow with a colleague's class: each machine
     // placed as a paired one (Roster.Place, in the colleague's order), then
-    // the list saved once.
+    // the list saved once. A machine already in the list exactly as given
+    // keeps its tile: replacing it would give a locked screen back.
     private void AddMachines(IReadOnlyList<KnownMachine> machines)
     {
         foreach (var machine in machines)
         {
-            var (index, replaces, placed) = Roster.Place(_tiles.Select(tile => tile.Machine).ToList(), machine);
-            if (replaces)
+            var roster = _tiles.Select(tile => tile.Machine).ToList();
+            var placed = Roster.Place(roster, machine);
+            if (!Roster.Changes(roster, placed))
             {
-                RemoveTileAt(index);
+                continue;
             }
-            InsertTile(index, placed);
+
+            if (placed.Replaces)
+            {
+                RemoveTileAt(placed.Index);
+            }
+            InsertTile(placed.Index, placed.Machine);
         }
         UpdateEmptyHint();
         SaveRoster();

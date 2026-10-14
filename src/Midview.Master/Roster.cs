@@ -26,6 +26,14 @@ public static class Roster
         return (position < 0 ? roster.Count : position, false, paired);
     }
 
+    // Whether applying what Place worked out would change the list: false
+    // when the machine is already there exactly as given (a colleague's class
+    // joined again). Place already kept the network card learned, so a plain
+    // comparison tells. MainWindow then leaves that machine's tile alone:
+    // replacing it would stop its poller and give a locked screen back.
+    public static bool Changes(IReadOnlyList<KnownMachine> roster, (int Index, bool Replaces, KnownMachine Machine) placed) =>
+        !placed.Replaces || roster[placed.Index] != placed.Machine;
+
     // Machines that answered a search from another address than the list
     // has, matched by Agent thumbprint. An answer is only a hint: connecting
     // still checks the pinned thumbprint, so a false one can only make a
