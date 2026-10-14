@@ -30,7 +30,10 @@ public partial class MainWindow : Window
     private PowerSchedule? _powerSchedule;
     private AppBlockPolicy? _appBlockPolicy;
 
-    private MachineTile? _selectedTile;
+    // The grid's selection: a plain click picks one, Ctrl/Shift add more. The
+    // anchor is the one "Ver a tela" and "Controlar" act on; "Bloquear seleção"
+    // acts on all of them.
+    private readonly GridSelection<MachineTile> _selection;
 
     // The machines whose screen is locked, each kept so by its own
     // connection; how each one last answered, for the status line.
@@ -48,6 +51,7 @@ public partial class MainWindow : Window
         Width = Math.Min(Width, SystemParameters.WorkArea.Width);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
+        _selection = new GridSelection<MachineTile>(_tiles);
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
 
@@ -67,41 +71,64 @@ public partial class MainWindow : Window
 
     private void SelectTileOf(object sender)
     {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
         {
-            Select(tile);
+            return;
         }
+        var modifiers = System.Windows.Input.Keyboard.Modifiers;
+        if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift))
+        {
+            _selection.ShiftClick(tile);
+        }
+        else if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))
+        {
+            _selection.CtrlClick(tile);
+        }
+        else
+        {
+            _selection.Click(tile);
+        }
+        RefreshSelection();
     }
 
-    private void Select(MachineTile? tile)
+    // Paints the tiles, enables the buttons that need a selection, and shows how
+    // many are selected -- after any change to _selection.
+    private void RefreshSelection()
     {
-        if (_selectedTile is not null)
+        var selected = _selection.Selected;
+        var marked = new HashSet<MachineTile>(selected);
+        foreach (var tile in _tiles)
         {
-            _selectedTile.IsSelected = false;
+            tile.IsSelected = marked.Contains(tile);
         }
-        _selectedTile = tile;
-        if (tile is not null)
+
+        var anchor = _selection.Anchor;
+        ViewButton.IsEnabled = anchor is not null;
+        ControlButton.IsEnabled = anchor is not null;
+        BlockSelectedButton.IsEnabled = selected.Count > 0;
+        UnblockSelectedButton.IsEnabled = selected.Count > 0;
+
+        StatusTextBlock.Text = selected.Count switch
         {
-            tile.IsSelected = true;
-        }
-        ViewButton.IsEnabled = tile is not null;
-        ControlButton.IsEnabled = tile is not null;
-        StatusTextBlock.Text = tile is null ? string.Empty : $"Selecionada: {tile.Name}";
+            0 => string.Empty,
+            1 => $"Selecionada: {anchor!.Name}",
+            _ => $"Selecionadas: {selected.Count}",
+        };
     }
 
     private void OnViewSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selectedTile is not null)
+        if (_selection.Anchor is { } tile)
         {
-            OpenScreen(_selectedTile, control: false);
+            OpenScreen(tile, control: false);
         }
     }
 
     private void OnControlSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selectedTile is not null)
+        if (_selection.Anchor is { } tile)
         {
-            OpenScreen(_selectedTile, control: true);
+            OpenScreen(tile, control: true);
         }
     }
 
@@ -217,6 +244,36 @@ public partial class MainWindow : Window
             UnlockScreen(tile);
         }
         StatusTextBlock.Text = "Telas desbloqueadas.";
+    }
+
+    // Locks or unlocks only the machines marked on the grid -- more than one,
+    // or fewer than the whole class.
+    private void OnBlockSelectedClicked(object sender, RoutedEventArgs e)
+    {
+        var selected = _selection.Selected;
+        if (selected.Count == 0)
+        {
+            return;
+        }
+        foreach (var tile in selected)
+        {
+            LockScreen(tile);
+        }
+        ShowScreenLockStatus();
+    }
+
+    private void OnUnblockSelectedClicked(object sender, RoutedEventArgs e)
+    {
+        var selected = _selection.Selected;
+        if (selected.Count == 0)
+        {
+            return;
+        }
+        foreach (var tile in selected)
+        {
+            UnlockScreen(tile);
+        }
+        StatusTextBlock.Text = "Telas das máquinas selecionadas desbloqueadas.";
     }
 
     private void UpdateScreenLockButton()
@@ -832,12 +889,10 @@ public partial class MainWindow : Window
     private void RemoveTileAt(int index)
     {
         var tile = _tiles[index];
-        if (tile == _selectedTile)
-        {
-            Select(null);
-        }
         UnlockScreen(tile);
         _tiles.RemoveAt(index);
+        _selection.Prune();
+        RefreshSelection();
         if (_pollers.Remove(tile, out var poller))
         {
             poller.Dispose();

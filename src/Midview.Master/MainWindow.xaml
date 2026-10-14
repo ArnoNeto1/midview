@@ -24,6 +24,12 @@
                         <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear telas" Icon="&#xE7F4;" Badge="&#xE72E;"
                                              Width="84" Click="OnScreenLockClassClicked"
                                              ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
+                        <local:ToolbarButton x:Name="BlockSelectedButton" Content="Bloquear seleção" Icon="&#xE7F4;" Badge="&#xE72E;"
+                                             Width="84" IsEnabled="False" Click="OnBlockSelectedClicked"
+                                             ToolTip="Bloqueia a tela só das máquinas marcadas. Ctrl+clique marca várias; Shift+clique marca uma faixa." />
+                        <local:ToolbarButton x:Name="UnblockSelectedButton" Content="Desbloquear seleção" Icon="&#xE785;"
+                                             Width="84" IsEnabled="False" Click="OnUnblockSelectedClicked"
+                                             ToolTip="Libera a tela das máquinas marcadas." />
                     </StackPanel>
                     <TextBlock Text="Tela" Style="{StaticResource ToolbarGroupCaption}" />
                 </StackPanel>
