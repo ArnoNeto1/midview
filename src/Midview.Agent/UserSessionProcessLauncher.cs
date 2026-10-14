@@ -110,6 +110,93 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         }
     }
 
+    // Runs a command line as the student logged on at the console -- not as
+    // this SYSTEM service -- with no window, waiting a few minutes for it.
+    // A program installed "just for me" (OneDrive is the usual one) has its
+    // uninstaller remove only the copy belonging to whoever runs it, so run as
+    // SYSTEM it would leave the student's copy behind; it has to run as the
+    // student. The command goes through cmd.exe /s /c the same way the SYSTEM
+    // runner does, so an uninstall string with its own quoted paths isn't
+    // mangled. Returns the exit code, or null when there's nobody logged on, or
+    // it couldn't start, or it didn't finish in time (then it's killed, so a
+    // "silent" uninstaller still wanting a window nobody can see isn't left
+    // running in the student's session).
+    public static int? RunInLoggedOnStudentSession(string commandLine)
+    {
+        var sessionId = WTSGetActiveConsoleSessionId();
+        if (sessionId == 0xFFFFFFFF || !WTSQueryUserToken(sessionId, out var userToken))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!DuplicateTokenEx(userToken, 0x02000000, IntPtr.Zero,
+                    SECURITY_IMPERSONATION_LEVEL.SecurityIdentification, TOKEN_TYPE.TokenPrimary, out var primaryToken))
+            {
+                return null;
+            }
+
+            var environment = IntPtr.Zero;
+            try
+            {
+                // The student's own environment (USERPROFILE, APPDATA, TEMP...),
+                // so the uninstaller resolves their per-user paths, not this
+                // service's. If it can't be built, the process still starts.
+                if (!CreateEnvironmentBlock(out environment, primaryToken, false))
+                {
+                    environment = IntPtr.Zero;
+                }
+
+                var startupInfo = new STARTUPINFO { cb = Marshal.SizeOf<STARTUPINFO>() };
+                // applicationName null: the command line names cmd.exe, found on
+                // PATH, and CreateProcessW may write to the buffer, so it's a
+                // StringBuilder.
+                var commandBuffer = new StringBuilder("cmd.exe /s /c \"" + commandLine + "\"");
+                var created = CreateProcessAsUser(
+                    primaryToken, null, commandBuffer, IntPtr.Zero, IntPtr.Zero, false,
+                    CREATE_NO_WINDOW | (environment == IntPtr.Zero ? 0 : CREATE_UNICODE_ENVIRONMENT), environment,
+                    null, ref startupInfo, out var processInfo);
+                if (!created)
+                {
+                    return null;
+                }
+
+                try
+                {
+                    const uint timeoutMilliseconds = 5 * 60 * 1000;
+                    if (WaitForSingleObject(processInfo.hProcess, timeoutMilliseconds) == WAIT_OBJECT_0
+                        && GetExitCodeProcess(processInfo.hProcess, out var exitCode))
+                    {
+                        return unchecked((int)exitCode);
+                    }
+
+                    // Didn't finish in time (or the code couldn't be read):
+                    // don't leave it running in the student's session.
+                    TerminateProcess(processInfo.hProcess, 1);
+                    return null;
+                }
+                finally
+                {
+                    CloseHandle(processInfo.hThread);
+                    CloseHandle(processInfo.hProcess);
+                }
+            }
+            finally
+            {
+                if (environment != IntPtr.Zero)
+                {
+                    DestroyEnvironmentBlock(environment);
+                }
+                CloseHandle(primaryToken);
+            }
+        }
+        finally
+        {
+            CloseHandle(userToken);
+        }
+    }
+
     // At every start of Session, before it runs, so its two Desktop folders
     // are already there and protected (recreated if they went missing).
     // Never keeps Session from starting: what fails is logged.
@@ -204,6 +291,7 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
 
     private const uint CREATE_NO_WINDOW = 0x08000000;
     private const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+    private const uint WAIT_OBJECT_0 = 0x00000000;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct STARTUPINFO
@@ -235,12 +323,21 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
 
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool CreateProcessAsUser(
-        IntPtr token, string applicationName, StringBuilder? commandLine, IntPtr processAttributes,
+        IntPtr token, string? applicationName, StringBuilder? commandLine, IntPtr processAttributes,
         IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment,
         string? currentDirectory, ref STARTUPINFO startupInfo, out PROCESS_INFORMATION processInfo);
 
     [DllImport("kernel32.dll")]
     private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetExitCodeProcess(IntPtr handle, out uint exitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(IntPtr handle, uint exitCode);
 
     [DllImport("userenv.dll", SetLastError = true)]
     private static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);

@@ -5,19 +5,25 @@ using Microsoft.Win32;
 namespace Midview.Agent;
 
 // Lists the programs installed on this machine and uninstalls them silently,
-// as the Agent's SYSTEM identity, for the console's "Desinstalar programa".
-// Reads the same places "Adicionar ou remover programas" does: the Uninstall
-// keys under HKLM (64- and 32-bit, every student's programs) and, when
-// someone's logged on, that student's own HKCU (programs installed "just for
-// me", which HKLM alone misses entirely). Only ever runs a command believed
-// to be silent: a QuietUninstallString, msiexec for an MSI, or -- when
-// neither is published -- the program's own UninstallString with the
+// for the console's "Desinstalar programa". Reads the same places "Adicionar
+// ou remover programas" does: the Uninstall keys under HKLM (64- and 32-bit,
+// every student's programs) and, when someone's logged on, that student's own
+// HKCU (programs installed "just for me", which HKLM alone misses entirely).
+// A machine-wide program is removed as the Agent's SYSTEM identity; a per-user
+// one is removed in the student's own session instead, because its uninstaller
+// only removes the copy belonging to whoever runs it -- run as SYSTEM it would
+// leave the student's copy behind (OneDrive is the usual one). Only ever runs a
+// command believed to be silent: a QuietUninstallString, msiexec for an MSI,
+// or -- when neither is published -- the program's own UninstallString with the
 // switches the two big non-MSI installer engines (NSIS, Inno Setup) each
 // recognize and harmlessly ignore from the other, so one guess covers most
-// EXE installers without knowing which engine built them. A program whose
-// UninstallString can't even be resolved to a real file is listed but
-// reported as not removable this way, never run (a normal uninstaller
-// launched as SYSTEM would wait on a window nobody can see).
+// EXE installers without knowing which engine built them. Office Click-to-Run
+// is the one named exception: its published UninstallString is an interactive
+// Add/Remove Programs call, so DisplayLevel=False is added to make it silent
+// (see SilentArguments). A program whose UninstallString can't even be resolved
+// to a real file is listed but reported as not removable this way, never run
+// (a normal uninstaller launched as SYSTEM would wait on a window nobody can
+// see).
 //
 // The base keys and the command runner are injected so tests use throwaway
 // subtrees and a fake runner instead of the machine's real keys and
@@ -33,6 +39,7 @@ public sealed class ProgramUninstaller
     private readonly Lazy<RegistryKey> _base;
     private readonly Func<RegistryKey?> _userBase;
     private readonly Func<string, int?> _run;
+    private readonly Func<string, int?> _runInStudentSession;
     private readonly Func<IReadOnlyList<string>> _listAppxPackages;
 
     // userBase: the logged-on student's own SOFTWARE hive, re-resolved on
@@ -42,20 +49,30 @@ public sealed class ProgramUninstaller
     // hive don't need to know this exists. listAppxPackages: Store/UWP
     // packages as "Name|PackageFullName" lines (AppxEntries); defaults to
     // none, for the same reason.
+    // runInStudentSession: runs a command as the student logged on at the
+    // console rather than as this SYSTEM service -- used for their "just for me"
+    // programs, whose uninstaller only removes the copy belonging to whoever
+    // runs it. Defaults to the same runner as everything else, so a caller that
+    // doesn't distinguish the two (and the tests that don't) keeps today's
+    // behavior.
     public ProgramUninstaller(
         RegistryKey machineBase, Func<string, int?> runCommand,
-        Func<RegistryKey?>? userBase = null, Func<IReadOnlyList<string>>? listAppxPackages = null)
-        : this(() => machineBase, userBase ?? (() => null), runCommand, listAppxPackages ?? (() => Array.Empty<string>()))
+        Func<RegistryKey?>? userBase = null, Func<IReadOnlyList<string>>? listAppxPackages = null,
+        Func<string, int?>? runInStudentSession = null)
+        : this(() => machineBase, userBase ?? (() => null), runCommand,
+               listAppxPackages ?? (() => Array.Empty<string>()), runInStudentSession ?? runCommand)
     {
     }
 
     private ProgramUninstaller(
         Func<RegistryKey> machineBaseFactory, Func<RegistryKey?> userBase,
-        Func<string, int?> runCommand, Func<IReadOnlyList<string>> listAppxPackages)
+        Func<string, int?> runCommand, Func<IReadOnlyList<string>> listAppxPackages,
+        Func<string, int?> runInStudentSession)
     {
         _base = new Lazy<RegistryKey>(machineBaseFactory);
         _userBase = userBase;
         _run = runCommand;
+        _runInStudentSession = runInStudentSession;
         _listAppxPackages = listAppxPackages;
     }
 
@@ -67,7 +84,8 @@ public sealed class ProgramUninstaller
                   ?? throw new IOException("HKLM\\SOFTWARE não pôde ser aberta"),
             UserSoftwareBase,
             RunCommand,
-            ListInstalledAppxPackages);
+            ListInstalledAppxPackages,
+            UserSessionProcessLauncher.RunInLoggedOnStudentSession);
 
     // The console's logged-on student's own SOFTWARE hive (HKEY_USERS\<their
     // SID>\SOFTWARE) -- a program they installed "just for me" lives here,
@@ -155,13 +173,24 @@ public sealed class ProgramUninstaller
             return UninstallOutcome.NoSilentUninstall;
         }
 
+        // An entry that removes a whole suite (Office 2007's Setup Controller)
+        // stands in for its same-named siblings -- run it alone, or the sibling
+        // MSI would run too and fail once the suite is already gone.
+        if (silent.Any(e => e.SupersedesSameName))
+        {
+            silent = silent.Where(e => e.SupersedesSameName).ToList();
+        }
+
         var anyFailed = false;
         var anyRemoved = false;
         foreach (var entry in silent)
         {
+            // A program from the student's own hive is removed in their session;
+            // everything machine-wide, as this SYSTEM service.
+            var run = entry.PerUser ? _runInStudentSession : _run;
             try
             {
-                var code = _run(entry.SilentCommand!);
+                var code = run(entry.SilentCommand!);
                 // 0 = done; 3010 = done, needs a reboot; 1641 = done, reboot
                 // started. Anything else (or no exit code) is a failure.
                 if (code is 0 or 3010 or 1641)
@@ -185,26 +214,27 @@ public sealed class ProgramUninstaller
         return anyFailed ? UninstallOutcome.Failed : anyRemoved ? UninstallOutcome.Removed : UninstallOutcome.NoSilentUninstall;
     }
 
-    private sealed record Entry(string DisplayName, string? SilentCommand);
+    private sealed record Entry(string DisplayName, string? SilentCommand, bool PerUser = false, bool SupersedesSameName = false);
 
     private IEnumerable<Entry> Entries()
     {
-        foreach (var softwareRoot in SoftwareRoots())
+        foreach (var entry in RegistryEntries(_base.Value, perUser: false))
         {
-            foreach (var path in UninstallPaths)
+            yield return entry;
+        }
+
+        // The logged-on student's own SOFTWARE hive, when there is one --
+        // re-resolved here, not cached, so a different student logged on since
+        // the last read is picked up rather than a stale hive handle from
+        // whoever was at the console before. Its programs are "just for me": the
+        // uninstaller has to run as that student (PerUser), not as this SYSTEM
+        // service, or it would leave the student's copy behind.
+        if (_userBase() is { } userSoftware)
+        {
+            using (userSoftware)
             {
-                using var root = softwareRoot.OpenSubKey(path, writable: false);
-                if (root is null)
+                foreach (var entry in RegistryEntries(userSoftware, perUser: true))
                 {
-                    continue;
-                }
-                foreach (var subName in root.GetSubKeyNames())
-                {
-                    using var key = root.OpenSubKey(subName);
-                    if (key is null || ReadEntry(key, subName) is not { } entry)
-                    {
-                        continue;
-                    }
                     yield return entry;
                 }
             }
@@ -213,6 +243,27 @@ public sealed class ProgramUninstaller
         foreach (var entry in AppxEntries())
         {
             yield return entry;
+        }
+    }
+
+    private static IEnumerable<Entry> RegistryEntries(RegistryKey softwareRoot, bool perUser)
+    {
+        foreach (var path in UninstallPaths)
+        {
+            using var root = softwareRoot.OpenSubKey(path, writable: false);
+            if (root is null)
+            {
+                continue;
+            }
+            foreach (var subName in root.GetSubKeyNames())
+            {
+                using var key = root.OpenSubKey(subName);
+                if (key is null || ReadEntry(key, subName, perUser) is not { } entry)
+                {
+                    continue;
+                }
+                yield return entry;
+            }
         }
     }
 
@@ -241,23 +292,7 @@ public sealed class ProgramUninstaller
         }
     }
 
-    // HKLM\SOFTWARE, always, plus the logged-on student's own SOFTWARE hive
-    // when there is one -- re-resolved here, not cached, so a different
-    // student logged on since the last read is picked up rather than a stale
-    // hive handle from whoever was at the console before.
-    private IEnumerable<RegistryKey> SoftwareRoots()
-    {
-        yield return _base.Value;
-        if (_userBase() is { } userSoftware)
-        {
-            using (userSoftware)
-            {
-                yield return userSoftware;
-            }
-        }
-    }
-
-    private static Entry? ReadEntry(RegistryKey key, string subKeyName)
+    private static Entry? ReadEntry(RegistryKey key, string subKeyName, bool perUser)
     {
         if (key.GetValue("DisplayName") is not string displayName || string.IsNullOrWhiteSpace(displayName))
         {
@@ -274,21 +309,25 @@ public sealed class ProgramUninstaller
             return null; // a patch/update under another program
         }
 
-        return new Entry(displayName.Trim(), SilentCommandFor(key, subKeyName));
+        var (command, supersedesSameName) = SilentCommandFor(key, subKeyName);
+        return new Entry(displayName.Trim(), command, perUser, supersedesSameName);
     }
 
     // The command that uninstalls without any window, or null when there
     // isn't one to even try (so it's never run as SYSTEM in the background).
-    private static string? SilentCommandFor(RegistryKey key, string subKeyName)
+    // SupersedesSameName is true for an entry that removes a whole suite other
+    // same-named entries belong to (Office 2007's Setup Controller), so those
+    // siblings aren't also run.
+    private static (string? Command, bool SupersedesSameName) SilentCommandFor(RegistryKey key, string subKeyName)
     {
         if (key.GetValue("QuietUninstallString") is string quiet && !string.IsNullOrWhiteSpace(quiet))
         {
-            return quiet;
+            return (quiet, false);
         }
         var isMsi = key.GetValue("WindowsInstaller") is int msi && msi == 1;
         if (isMsi && subKeyName.StartsWith('{') && subKeyName.EndsWith('}'))
         {
-            return $"msiexec.exe /x {subKeyName} /qn /norestart";
+            return ($"msiexec.exe /x {subKeyName} /qn /norestart", false);
         }
 
         // No QuietUninstallString and not an MSI: fall back to the plain
@@ -309,13 +348,111 @@ public sealed class ProgramUninstaller
             var (exePath, arguments) = SplitCommand(raw);
             if (exePath is not null)
             {
-                return string.IsNullOrEmpty(arguments)
-                    ? $"\"{exePath}\" /S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
-                    : $"\"{exePath}\" {arguments}";
+                if (string.IsNullOrEmpty(arguments))
+                {
+                    return ($"\"{exePath}\" {GenericSilentSwitches(exePath)}", false);
+                }
+                if (Office2007ProductToUninstall(exePath, arguments) is { } product)
+                {
+                    return (Office2007SilentUninstall(exePath, product), true);
+                }
+                return ($"\"{exePath}\" {SilentArguments(exePath, arguments)}", false);
             }
         }
 
-        return null;
+        return (null, false);
+    }
+
+    // Office 2007's ARP entry runs "...\Office Setup Controller\setup.exe"
+    // /uninstall <PRODUCT> /dll OSETUP.DLL -- a visible uninstall (no good in
+    // session 0) with no DisplayLevel switch of its own. Returns the <PRODUCT>
+    // to remove, or null when this isn't that pattern.
+    private static string? Office2007ProductToUninstall(string exePath, string arguments)
+    {
+        if (!string.Equals(Path.GetFileName(exePath), "setup.exe", StringComparison.OrdinalIgnoreCase)
+            || arguments.IndexOf("OSETUP.DLL", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return null;
+        }
+        var tokens = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var uninstall = Array.FindIndex(tokens, t => string.Equals(t, "/uninstall", StringComparison.OrdinalIgnoreCase));
+        return uninstall >= 0 && uninstall + 1 < tokens.Length ? tokens[uninstall + 1] : null;
+    }
+
+    // Removes an Office 2007 product silently. Its setup.exe only goes quiet
+    // with a config.xml that sets Display Level="none", so the command writes
+    // one to a temp file, runs setup.exe /uninstall <PRODUCT> /config <file>,
+    // and deletes it after -- all as a PowerShell -EncodedCommand, the same way
+    // AppxRemovalCommand carries a multi-statement script through cmd.exe
+    // intact. Removing the suite also removes its same-named MSI entry, so that
+    // sibling isn't run too (see SupersedesSameName).
+    private static string Office2007SilentUninstall(string setupExePath, string product)
+    {
+        var escapedPath = setupExePath.Replace("'", "''");
+        var config =
+            $"<Configuration Product=\"{product}\">" +
+            "<Display Level=\"none\" CompletionNotice=\"no\" SuppressModal=\"yes\" AcceptEula=\"yes\" />" +
+            "<Setting Id=\"SETUP_REBOOT\" Value=\"Never\" />" +
+            "</Configuration>";
+        var script =
+            "$ErrorActionPreference = 'Stop'; " +
+            $"$xml = '{config.Replace("'", "''")}'; " +
+            "$f = Join-Path $env:TEMP ('midview-office2007-' + [guid]::NewGuid().ToString('N') + '.xml'); " +
+            "Set-Content -LiteralPath $f -Value $xml -Encoding UTF8; " +
+            "try { " +
+            $"& '{escapedPath}' /uninstall {product} /config $f; " +
+            "$code = $LASTEXITCODE " +
+            "} finally { Remove-Item -LiteralPath $f -ErrorAction SilentlyContinue }; " +
+            "if ($null -eq $code) { exit 1 } else { exit $code }";
+        return $"powershell.exe {PowerShellArguments(script)}";
+    }
+
+    // The published arguments, kept as they are for every installer but one.
+    // Office Click-to-Run publishes its uninstall as an "Add/Remove Programs"
+    // (scenariosubtype=ARP) call of OfficeClickToRun.exe with no DisplayLevel,
+    // so it tries to put a progress window on screen. Run as SYSTEM in session 0
+    // there's no screen for it and the removal never finishes, so the Office is
+    // listed, "uninstalled", and still there. DisplayLevel=False hands the work
+    // to the Click-to-Run service (itself SYSTEM) with no UI -- the supported
+    // silent removal; forceappshutdown=True closes an Office app still holding a
+    // file open, which nobody could close by hand in session 0 either. Both are
+    // added only when the string doesn't already set them, so a string that's
+    // already silent is left to say so once.
+    private static string SilentArguments(string exePath, string arguments)
+    {
+        var isOfficeClickToRunArp =
+            string.Equals(Path.GetFileName(exePath), "OfficeClickToRun.exe", StringComparison.OrdinalIgnoreCase)
+            && arguments.Contains("scenariosubtype=ARP", StringComparison.OrdinalIgnoreCase);
+        if (!isOfficeClickToRunArp)
+        {
+            return arguments;
+        }
+
+        if (!arguments.Contains("DisplayLevel=", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments += " DisplayLevel=False";
+        }
+        if (!arguments.Contains("forceappshutdown=", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments += " forceappshutdown=True";
+        }
+        return arguments;
+    }
+
+    // The silent switches to append to a bare UninstallString (one with no
+    // arguments of its own). /S is NSIS's and Inno Setup ignores it; /VERYSILENT
+    // /SUPPRESSMSGBOXES /NORESTART are Inno Setup's and NSIS ignores them -- so
+    // both cover either engine. WinRAR's own uninstaller is the exception: it
+    // goes silent with /S alone and exits 0 doing nothing when the Inno switches
+    // are tacked on too, so it gets just /S.
+    private static string GenericSilentSwitches(string exePath)
+    {
+        var directory = Path.GetDirectoryName(exePath);
+        var isWinRarUninstaller =
+            string.Equals(Path.GetFileName(exePath), "uninstall.exe", StringComparison.OrdinalIgnoreCase)
+            && directory is not null
+            && string.Equals(Path.GetFileName(directory.TrimEnd('\\', '/')), "WinRAR", StringComparison.OrdinalIgnoreCase);
+        return isWinRarUninstaller ? "/S" : "/S /VERYSILENT /SUPPRESSMSGBOXES /NORESTART";
     }
 
     // Splits a raw UninstallString into its executable path and whatever

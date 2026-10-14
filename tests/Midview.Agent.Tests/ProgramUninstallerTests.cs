@@ -13,6 +13,7 @@ public sealed class ProgramUninstallerTests : IDisposable
     private readonly string _userRootPath = $@"Software\MidviewTestUser\{Guid.NewGuid():N}";
     private readonly RegistryKey _root;
     private readonly List<string> _commands = new();
+    private readonly List<string> _studentCommands = new();
     private int? _exitCode = 0;
 
     public ProgramUninstallerTests()
@@ -57,6 +58,17 @@ public sealed class ProgramUninstallerTests : IDisposable
         new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true),
             command => { _commands.Add(command); return _exitCode; },
             listAppxPackages: () => lines);
+
+    // A student is "logged on", and the two runners are kept apart: machine-wide
+    // programs go to the SYSTEM runner (_commands), the student's own go to the
+    // runner that stands in for running in the student's session
+    // (_studentCommands).
+    private ProgramUninstaller UninstallerWithSeparateRunners() =>
+        new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true),
+            command => { _commands.Add(command); return _exitCode; },
+            () => Registry.CurrentUser.OpenSubKey(_userRootPath, writable: false),
+            null,
+            command => { _studentCommands.Add(command); return _exitCode; });
 
     // Decodes the script passed to powershell.exe's -EncodedCommand in a
     // captured command line, so assertions read the real script instead of a
@@ -330,5 +342,145 @@ public sealed class ProgramUninstallerTests : IDisposable
 
         Assert.True(ok);
         Assert.Contains("1 desinstalado", detail);
+    }
+
+    [Fact]
+    public void Uninstall_OfficeClickToRun_AddsSilentSwitchesSoItRunsWithoutAWindow()
+    {
+        // Office Click-to-Run publishes its uninstall as an Add/Remove Programs
+        // (scenariosubtype=ARP) call of OfficeClickToRun.exe, with no
+        // DisplayLevel: run as published it tries to show a progress window,
+        // which never appears in the Agent's session 0, so the Office stays put.
+        AddProgram("HomeStudent2019Retail - pt-br", k =>
+        {
+            k.SetValue("DisplayName", "Microsoft Office Home and Student 2019 - pt-br");
+            k.SetValue("UninstallString",
+                "\"C:\\Program Files\\Common Files\\Microsoft Shared\\ClickToRun\\OfficeClickToRun.exe\" " +
+                "scenario=install scenariosubtype=ARP sourcetype=None " +
+                "productstoremove=HomeStudent2019Retail.16_pt-br_x-none culture=pt-br version.16=16.0");
+        });
+
+        Uninstaller().UninstallMany(new[] { "Microsoft Office Home and Student 2019 - pt-br" });
+
+        var command = Assert.Single(_commands);
+        Assert.Contains("OfficeClickToRun.exe", command);
+        Assert.Contains("scenariosubtype=ARP", command);       // the real invocation is kept
+        Assert.Contains("DisplayLevel=False", command);         // ...and made silent
+        Assert.Contains("forceappshutdown=True", command);      // ...closing apps nobody can close in session 0
+    }
+
+    [Fact]
+    public void Uninstall_OfficeClickToRunThatIsAlreadySilent_IsNotGivenASecondDisplayLevel()
+    {
+        // A published string that already says DisplayLevel is left to say it
+        // once, not contradicted by a second one tacked on the end.
+        AddProgram("Office", k =>
+        {
+            k.SetValue("DisplayName", "Office Already Silent");
+            k.SetValue("UninstallString",
+                "\"C:\\x\\OfficeClickToRun.exe\" scenario=install scenariosubtype=ARP DisplayLevel=False productstoremove=Foo");
+        });
+
+        Uninstaller().UninstallMany(new[] { "Office Already Silent" });
+
+        var command = Assert.Single(_commands);
+        Assert.Equal(1, command.Split("DisplayLevel=").Length - 1);
+    }
+
+    [Fact]
+    public void Uninstall_PerUserProgram_RunsInTheStudentSessionNotAsSystem()
+    {
+        // A program in the student's own hive (OneDrive is the usual one) is
+        // installed "just for me": its uninstaller only removes it for whoever
+        // runs it, so running it as SYSTEM would leave the student's copy
+        // behind. It has to run in the student's session.
+        AddUserProgram("UserApp", k => { k.SetValue("DisplayName", "User App"); k.SetValue("QuietUninstallString", "un2.exe /S"); });
+
+        var (ok, _) = UninstallerWithSeparateRunners().UninstallMany(new[] { "User App" });
+
+        Assert.True(ok);
+        Assert.Equal(new[] { "un2.exe /S" }, _studentCommands);
+        Assert.Empty(_commands);
+    }
+
+    [Fact]
+    public void Uninstall_MachineWideProgram_RunsAsSystemNotInTheStudentSession()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "un.exe /S"); });
+
+        var (ok, _) = UninstallerWithSeparateRunners().UninstallMany(new[] { "Machine App" });
+
+        Assert.True(ok);
+        Assert.Equal(new[] { "un.exe /S" }, _commands);
+        Assert.Empty(_studentCommands);
+    }
+
+    [Fact]
+    public void Uninstall_Office2007SetupController_WritesASilentConfigAndRunsSetup()
+    {
+        // Office 2007 isn't Click-to-Run: its ARP entry runs the Office Setup
+        // Controller setup.exe, which has no DisplayLevel switch. Silent removal
+        // needs a config.xml with Display Level="none"; the command writes that
+        // file, runs setup.exe /config, then cleans it up.
+        AddProgram("ENTERPRISE", k =>
+        {
+            k.SetValue("DisplayName", "Microsoft Office Enterprise 2007");
+            k.SetValue("UninstallString",
+                "\"C:\\Program Files (x86)\\Common Files\\Microsoft Shared\\OFFICE12\\Office Setup Controller\\setup.exe\" " +
+                "/uninstall ENTERPRISE /dll OSETUP.DLL");
+        });
+
+        Uninstaller().UninstallMany(new[] { "Microsoft Office Enterprise 2007" });
+
+        var command = Assert.Single(_commands);
+        Assert.StartsWith("powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ", command);
+        var script = DecodeEncodedCommand(command);
+        Assert.Contains("Display Level=\"none\"", script);
+        Assert.Contains("/uninstall ENTERPRISE", script);
+        Assert.Contains("/config", script);
+        Assert.Contains("Product=\"ENTERPRISE\"", script);
+        Assert.Contains("Office Setup Controller\\setup.exe", script);
+    }
+
+    [Fact]
+    public void Uninstall_Office2007_SupersedesTheSameNamedMsiSibling()
+    {
+        // Office 2007 registers two ARP entries with the same display name: the
+        // Setup Controller orchestrator and the product MSI. The orchestrator
+        // removes the whole suite, so it must run alone -- the MSI sibling would
+        // otherwise run too and report a failure once the suite is already gone.
+        AddProgram("ENTERPRISE", k =>
+        {
+            k.SetValue("DisplayName", "Microsoft Office Enterprise 2007");
+            k.SetValue("UninstallString",
+                "\"C:\\x\\OFFICE12\\Office Setup Controller\\setup.exe\" /uninstall ENTERPRISE /dll OSETUP.DLL");
+        });
+        AddProgram("{90120000-0030-0000-0000-0000000FF1CE}", k =>
+        {
+            k.SetValue("DisplayName", "Microsoft Office Enterprise 2007");
+            k.SetValue("WindowsInstaller", 1);
+        });
+
+        Uninstaller().UninstallMany(new[] { "Microsoft Office Enterprise 2007" });
+
+        var command = Assert.Single(_commands);
+        Assert.DoesNotContain("msiexec", command, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Uninstall_WinRar_UsesOnlyItsOwnSilentSwitchNotTheGenericBundle()
+    {
+        // WinRAR's uninstaller goes silent with /S alone; the generic Inno/NSIS
+        // bundle makes it exit 0 without removing anything. Quoted path so the
+        // test doesn't depend on the file existing on the build machine.
+        AddProgram("WinRAR archiver", k =>
+        {
+            k.SetValue("DisplayName", "WinRAR 6.11 (64-bit)");
+            k.SetValue("UninstallString", "\"C:\\Program Files\\WinRAR\\uninstall.exe\"");
+        });
+
+        Uninstaller().UninstallMany(new[] { "WinRAR 6.11 (64-bit)" });
+
+        Assert.Equal(new[] { "\"C:\\Program Files\\WinRAR\\uninstall.exe\" /S" }, _commands);
     }
 }
