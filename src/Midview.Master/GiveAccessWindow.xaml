@@ -1,7 +1,7 @@
 <Window x:Class="Midview.Master.GiveAccessWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dar acesso a um colega" Height="360" Width="500"
+        Title="Dar acesso a um colega" SizeToContent="Height" MinHeight="300" MaxHeight="640" Width="500"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
         Loaded="OnLoaded" Closed="OnClosed">
@@ -10,7 +10,10 @@
         <TextBlock x:Name="CodeTextBlock" FontFamily="Consolas" FontSize="40" FontWeight="Bold"
                    Foreground="{StaticResource InkBrush}" Margin="0,10,0,10" />
         <TextBlock x:Name="HintTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}" />
-        <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{StaticResource InkBrush}" />
+        <!-- The list of machines that were not released can be long: it scrolls, so the button stays in view. -->
+        <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
+        </ScrollViewer>
         <Button x:Name="CloseButton" Content="Cancelar" Click="OnCloseClicked"
                 HorizontalAlignment="Left" Margin="0,16,0,0" Padding="14,5" />
     </StackPanel>
