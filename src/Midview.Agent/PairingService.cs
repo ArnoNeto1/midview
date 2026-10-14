@@ -7,7 +7,9 @@ namespace Midview.Agent;
 // Pairing). A machine with no teacher takes the first confirmed pairing; a
 // teacher it already trusts may pair again (a lost classroom list); anyone
 // else only while a trusted teacher's "Permitir novo professor" lasts, which
-// ends with the first new teacher. One pairing at a time.
+// ends with the first new teacher. One pairing at a time. It also takes
+// TrustTeacher: a trusted teacher gives a colleague access ("Dar acesso a um
+// colega"), and the colleague is added to the same list.
 public sealed class PairingService
 {
     private readonly object _gate = new();

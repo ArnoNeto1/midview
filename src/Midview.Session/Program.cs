@@ -47,8 +47,9 @@ else
 Console.WriteLine($"This machine's certificate thumbprint (give this to the teacher's MidviewMaster): {serverCertificate.Thumbprint}");
 
 // trusted-masters.json: the teachers this machine trusts, written by the
-// Agent when a teacher pairs and read again whenever it changes, so a
-// teacher who pairs is accepted on their next connection. With no teacher
+// Agent when a teacher pairs (or when a trusted teacher gives a colleague
+// access, TrustTeacher) and read again whenever it changes, so a teacher who
+// pairs is accepted on their next connection. With no teacher
 // yet, Session still runs and refuses everyone: pairing goes through the
 // Agent. A thumbprint on the command line is still accepted for one-off
 // manual testing.
