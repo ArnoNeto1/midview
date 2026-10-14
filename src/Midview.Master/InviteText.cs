@@ -9,6 +9,17 @@ public static class InviteText
         $"Vale por 10 minutos, uma vez (até {expiresAt:HH:mm}). Deixe esta janela aberta até o colega entrar. "
         + (machines == 1 ? "Vai liberar a máquina da sua sala." : $"Vai liberar as {machines} máquinas da sua sala.");
 
+    // The teacher who gave the class, once the invite is over.
+    public static string Ended(InviteOutcome outcome) => outcome.End switch
+    {
+        InviteEnd.Given when !outcome.ListSent =>
+            $"{Given(outcome.TeacherName!, outcome.Result!)} A conexão caiu antes de a lista chegar ao colega: gere outro código para ele (as máquinas não se repetem).",
+        InviteEnd.Given => Given(outcome.TeacherName!, outcome.Result!),
+        InviteEnd.WrongCode => "Alguém na rede tentou entrar com um código errado. O convite foi cancelado. Gere outro se ainda precisar.",
+        InviteEnd.Expired => "O código expirou. Gere outro se ainda precisar.",
+        _ => "O convite foi cancelado.",
+    };
+
     // The teacher who gave the class: who got it.
     public static string Given(string teacherName, InviteResult result) =>
         result.Total == 0

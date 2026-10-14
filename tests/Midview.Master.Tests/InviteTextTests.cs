@@ -34,6 +34,22 @@ public class InviteTextTests
     }
 
     [Fact]
+    public void Ended_SaysHowTheInviteEnded()
+    {
+        var one = new InviteResult(new[] { Machine("ALUNO-01") }, Array.Empty<LeftOutMachine>());
+
+        Assert.Equal("PROF-02 recebeu acesso a 1 de 1 máquinas.", InviteText.Ended(new InviteOutcome(InviteEnd.Given, "PROF-02", one, ListSent: true)));
+        Assert.Equal(
+            "PROF-02 recebeu acesso a 1 de 1 máquinas. A conexão caiu antes de a lista chegar ao colega: gere outro código para ele (as máquinas não se repetem).",
+            InviteText.Ended(new InviteOutcome(InviteEnd.Given, "PROF-02", one, ListSent: false)));
+        Assert.Equal(
+            "Alguém na rede tentou entrar com um código errado. O convite foi cancelado. Gere outro se ainda precisar.",
+            InviteText.Ended(new InviteOutcome(InviteEnd.WrongCode)));
+        Assert.Equal("O código expirou. Gere outro se ainda precisar.", InviteText.Ended(new InviteOutcome(InviteEnd.Expired)));
+        Assert.Equal("O convite foi cancelado.", InviteText.Ended(new InviteOutcome(InviteEnd.Cancelled)));
+    }
+
+    [Fact]
     public void Waiting_SaysUntilWhen_AndHowManyMachines()
     {
         var at = new DateTime(2026, 10, 14, 14, 32, 0);

@@ -15,7 +15,7 @@ public static class DiscoveryClient
 {
     // Keeps an unreachable target from ending the listening early: without
     // it, Windows fails the next receive after a "port unreachable".
-    private const int SioUdpConnReset = -1744830452;
+    internal const int SioUdpConnReset = -1744830452;
 
     public static IReadOnlyList<FoundMachine> Search(string masterThumbprint, IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
     {
