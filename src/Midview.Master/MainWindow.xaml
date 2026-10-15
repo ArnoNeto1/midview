@@ -104,7 +104,11 @@
                     <Button Content="Entrar na sala de um colega" Click="OnJoinClassClicked" Padding="16,7" Margin="8,0,0,0" />
                 </StackPanel>
             </StackPanel>
-            <ScrollViewer x:Name="MachinesScrollViewer" VerticalScrollBarVisibility="Auto" ScrollChanged="OnMachinesScrolled">
+            <!-- No focus rectangle: the grid takes keyboard focus on Esc and on a
+                 press in the empty space (so no tile keeps a focus border), and a
+                 dotted line around the whole grid would read as a selection. -->
+            <ScrollViewer x:Name="MachinesScrollViewer" VerticalScrollBarVisibility="Auto" ScrollChanged="OnMachinesScrolled"
+                          FocusVisualStyle="{x:Null}">
                 <!-- Transparent rather than no background, so a press on the space
                      between and around the tiles reaches it and can start a selection
                      rectangle; the tiles, being buttons, take their own presses. It is
