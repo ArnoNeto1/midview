@@ -163,6 +163,12 @@ public partial class MainWindow : Window
         }
         GridSurface.ReleaseMouseCapture();
         EndBand();
+        // The tile last clicked keeps keyboard focus, and with it a focus
+        // border: off it, so nothing on the grid looks selected after Esc.
+        if (GridSurface.IsKeyboardFocusWithin)
+        {
+            MachinesScrollViewer.Focus();
+        }
         ClearSelection();
         e.Handled = true;
     }
@@ -212,8 +218,16 @@ public partial class MainWindow : Window
     }
 
     // Released, or taken away (another window came up): the rectangle goes,
-    // and the selection stays as the rectangle last left it.
-    private void OnGridSurfaceLostCapture(object sender, MouseEventArgs e) => EndBand();
+    // and the selection stays as the rectangle last left it. LostMouseCapture
+    // bubbles up from the tile buttons, which capture the mouse while pressed:
+    // only the surface's own capture ending ends the rectangle.
+    private void OnGridSurfaceLostCapture(object sender, MouseEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, GridSurface))
+        {
+            EndBand();
+        }
+    }
 
     // The wheel can scroll the grid during a drag: the rectangle's far corner
     // stays under the mouse, over the tiles that moved there.

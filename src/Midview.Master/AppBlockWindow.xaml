@@ -20,7 +20,7 @@
 
             <DockPanel Margin="0,0,0,4">
                 <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Atualizar lista" Click="OnRefreshClicked" Padding="10,4" Margin="8,0,0,0" />
-                <TextBlock Text="Programas abertos na turma" FontWeight="Bold" VerticalAlignment="Center" />
+                <TextBlock Text="Programas abertos" FontWeight="Bold" VerticalAlignment="Center" />
             </DockPanel>
         </StackPanel>
 

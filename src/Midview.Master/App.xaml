@@ -118,15 +118,18 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardLineHoverBrush}" />
                             </Trigger>
+                            <!-- Focus is not selection (a tile Ctrl+clicked off keeps focus):
+                                 the subtler hover line, and before the selected trigger so
+                                 that one still wins on a tile that is both. -->
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardLineHoverBrush}" />
+                            </Trigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                 <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
                                 <Setter TargetName="Card" Property="BorderThickness" Value="2" />
                                 <Setter TargetName="Card" Property="Padding" Value="6" />
                                 <Setter TargetName="Card" Property="Background" Value="{StaticResource SelectedFillBrush}" />
                             </DataTrigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
-                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
