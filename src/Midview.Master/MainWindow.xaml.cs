@@ -3,6 +3,9 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Midview.Protocol;
 
@@ -11,7 +14,9 @@ namespace Midview.Master;
 // The classroom console: one live thumbnail per machine in the teacher's
 // classroom list; clicking one selects it, and "Ver a tela" or "Controlar"
 // opens its screen. Testing and saving machines, one-off connections and
-// site-blocking commands live in AddMachineWindow.
+// site-blocking commands live in AddMachineWindow. Several machines can be
+// selected (Ctrl/Shift+click, or a rectangle dragged over the grid's empty
+// space), and a tile's menu then acts on all of them.
 public partial class MainWindow : Window
 {
     private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
@@ -30,7 +35,24 @@ public partial class MainWindow : Window
     private PowerSchedule? _powerSchedule;
     private AppBlockPolicy? _appBlockPolicy;
 
-    private MachineTile? _selectedTile;
+    // The grid's selection: a plain click picks one, Ctrl/Shift add more, and a
+    // rectangle dragged over the grid's empty space picks every tile it
+    // touches. "Ver a tela" and "Controlar" need exactly one; a tile's menu
+    // acts on all of them (TargetsOf).
+    private readonly GridSelection<MachineTile> _selection;
+
+    // A press on the grid's empty space that may become a selection rectangle:
+    // where it started (on GridSurface, so it scrolls with the tiles), whether
+    // Ctrl was held (the rectangle then adds to the selection), and whether the
+    // mouse has moved far enough yet to be a drag rather than a click.
+    private Point? _bandStart;
+    private bool _bandAdds;
+    private bool _bandDragging;
+
+    // The tile menu's items shown only with several machines selected, and
+    // those for one machine only (MainWindow.xaml).
+    private const string SeveralOnlyTag = "varias";
+    private const string OneOnlyTag = "uma";
 
     // The machines whose screen is locked, each kept so by its own
     // connection; how each one last answered, for the status line.
@@ -48,6 +70,7 @@ public partial class MainWindow : Window
         Width = Math.Min(Width, SystemParameters.WorkArea.Width);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
+        _selection = new GridSelection<MachineTile>(_tiles);
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
 
@@ -63,45 +86,253 @@ public partial class MainWindow : Window
     // chosen on purpose with the toolbar's buttons or the tile's menu.
     private void OnMachineClicked(object sender, RoutedEventArgs e) => SelectTileOf(sender);
 
-    private void OnMachineRightClicked(object sender, System.Windows.Input.MouseButtonEventArgs e) => SelectTileOf(sender);
+    // The right button keeps a selection of several that the tile is part of,
+    // for its menu to act on all of them; otherwise it selects just this tile.
+    private void OnMachineRightClicked(object sender, MouseButtonEventArgs e) => RightClickTileOf(sender);
 
     private void SelectTileOf(object sender)
     {
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
+        {
+            return;
+        }
+        var modifiers = Keyboard.Modifiers;
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            _selection.ShiftClick(tile);
+        }
+        else if (modifiers.HasFlag(ModifierKeys.Control))
+        {
+            _selection.CtrlClick(tile);
+        }
+        else
+        {
+            _selection.Click(tile);
+        }
+        RefreshSelection();
+    }
+
+    private void RightClickTileOf(object sender)
+    {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            Select(tile);
+            _selection.RightClick(tile);
+            RefreshSelection();
         }
     }
 
-    private void Select(MachineTile? tile)
+    // Paints the tiles, enables the buttons that need one machine, and shows
+    // what is selected -- after any change to _selection.
+    private void RefreshSelection()
     {
-        if (_selectedTile is not null)
+        var selected = _selection.Selected;
+        var marked = new HashSet<MachineTile>(selected);
+        foreach (var tile in _tiles)
         {
-            _selectedTile.IsSelected = false;
+            tile.IsSelected = marked.Contains(tile);
         }
-        _selectedTile = tile;
-        if (tile is not null)
+
+        ViewButton.IsEnabled = selected.Count == 1;
+        ControlButton.IsEnabled = selected.Count == 1;
+        StatusTextBlock.Text = selected.Count switch
         {
-            tile.IsSelected = true;
+            0 => string.Empty,
+            1 => $"Selecionada: {selected[0].Name}",
+            _ => $"Selecionadas: {selected.Count}",
+        };
+    }
+
+    // A click on empty space or Esc. Nothing selected, nothing to change: the
+    // status bar may still be saying how the last action went.
+    private void ClearSelection()
+    {
+        if (_selection.Selected.Count == 0)
+        {
+            return;
         }
-        ViewButton.IsEnabled = tile is not null;
-        ControlButton.IsEnabled = tile is not null;
-        StatusTextBlock.Text = tile is null ? string.Empty : $"Selecionada: {tile.Name}";
+        _selection.Clear();
+        RefreshSelection();
+    }
+
+    // Esc lets go of the selection, and of a rectangle being dragged.
+    private void OnWindowKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape)
+        {
+            return;
+        }
+        GridSurface.ReleaseMouseCapture();
+        EndBand();
+        ClearSelection();
+        e.Handled = true;
+    }
+
+    // A press on the grid's empty space -- a tile, being a button, takes its
+    // own presses, and the scroll bar is outside GridSurface. Moved far enough
+    // it becomes a selection rectangle (UpdateBand); released before that it
+    // is a click (OnGridSurfaceMouseUp).
+    private void OnGridSurfaceMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _bandStart = e.GetPosition(GridSurface);
+        _bandAdds = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        _bandDragging = false;
+        _selection.BeginBand();
+        // Off any tile clicked before, which would keep its focus border
+        // even once the rectangle leaves it out.
+        MachinesScrollViewer.Focus();
+        GridSurface.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void OnGridSurfaceMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_bandStart is { } start && GridSurface.IsMouseCaptured)
+        {
+            UpdateBand(start, e.GetPosition(GridSurface));
+        }
+    }
+
+    // A plain click on empty space clears the selection. With Ctrl held it
+    // leaves it, as a Ctrl-drag that touched no tile would.
+    private void OnGridSurfaceMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_bandStart is null)
+        {
+            return;
+        }
+        var click = !_bandDragging;
+        var adds = _bandAdds;
+        GridSurface.ReleaseMouseCapture();
+        EndBand();
+        if (click && !adds)
+        {
+            ClearSelection();
+        }
+        e.Handled = true;
+    }
+
+    // Released, or taken away (another window came up): the rectangle goes,
+    // and the selection stays as the rectangle last left it.
+    private void OnGridSurfaceLostCapture(object sender, MouseEventArgs e) => EndBand();
+
+    // The wheel can scroll the grid during a drag: the rectangle's far corner
+    // stays under the mouse, over the tiles that moved there.
+    private void OnMachinesScrolled(object sender, ScrollChangedEventArgs e)
+    {
+        if (_bandStart is { } start && GridSurface.IsMouseCaptured)
+        {
+            UpdateBand(start, Mouse.GetPosition(GridSurface));
+        }
+    }
+
+    private void UpdateBand(Point start, Point current)
+    {
+        if (!_bandDragging)
+        {
+            if (!RubberBand.IsDrag(start, current))
+            {
+                return;
+            }
+            _bandDragging = true;
+            SelectionBand.Visibility = Visibility.Visible;
+        }
+
+        var band = RubberBand.Between(start, current);
+        Canvas.SetLeft(SelectionBand, band.X);
+        Canvas.SetTop(SelectionBand, band.Y);
+        SelectionBand.Width = band.Width;
+        SelectionBand.Height = band.Height;
+
+        // Only a change repaints and rewrites the status bar: the mouse moves
+        // far more often than the rectangle reaches another tile.
+        var before = _selection.Selected;
+        _selection.Band(RubberBand.Touched(band, TileBounds()), _bandAdds);
+        if (!before.SequenceEqual(_selection.Selected))
+        {
+            RefreshSelection();
+        }
+    }
+
+    private void EndBand()
+    {
+        _bandStart = null;
+        _bandDragging = false;
+        SelectionBand.Visibility = Visibility.Collapsed;
+    }
+
+    // Each tile's card (the button, without its margin) on GridSurface, in
+    // grid order, the same surface the rectangle is measured on.
+    private IEnumerable<(MachineTile Item, Rect Bounds)> TileBounds()
+    {
+        foreach (var tile in _tiles)
+        {
+            if (MachinesItemsControl.ItemContainerGenerator.ContainerFromItem(tile) is DependencyObject container
+                && VisualTreeHelper.GetChildrenCount(container) > 0
+                && VisualTreeHelper.GetChild(container, 0) is FrameworkElement card
+                && card.IsVisible)
+            {
+                yield return (tile, card.TransformToAncestor(GridSurface).TransformBounds(new Rect(card.RenderSize)));
+            }
+        }
+    }
+
+    // What a tile's menu acts on: every selected tile, in grid order, when
+    // this one is part of a selection of several; otherwise just this one.
+    private IReadOnlyList<MachineTile> TargetsOf(MachineTile tile) => _selection.TargetsOf(tile);
+
+    private IReadOnlyList<KnownMachine> MachinesOf(MachineTile tile) =>
+        TargetsOf(tile).Select(target => target.Machine).ToList();
+
+    // Also reached from the keyboard (the menu key), with no right-click
+    // before it to settle the selection.
+    private void OnMachineMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var element = (FrameworkElement)sender;
+        if (element.DataContext is not MachineTile tile || element.ContextMenu is not { } menu)
+        {
+            return;
+        }
+        RightClickTileOf(sender);
+        ShowMenuFor(menu, TargetsOf(tile).Count);
+    }
+
+    // With several machines the menu first says how many, and leaves out what
+    // only makes sense for one (watching, controlling, chatting, uninstalling,
+    // editing, removing); with one it is the menu it always was.
+    private static void ShowMenuFor(ContextMenu menu, int machines)
+    {
+        var several = machines > 1;
+        foreach (var item in menu.Items.OfType<Control>())
+        {
+            switch (item.Tag)
+            {
+                case SeveralOnlyTag:
+                    item.Visibility = several ? Visibility.Visible : Visibility.Collapsed;
+                    if (item is MenuItem header)
+                    {
+                        header.Header = $"{machines} máquinas selecionadas";
+                    }
+                    break;
+                case OneOnlyTag:
+                    item.Visibility = several ? Visibility.Collapsed : Visibility.Visible;
+                    break;
+            }
+        }
     }
 
     private void OnViewSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selectedTile is not null)
+        if (_selection.Selected is [var tile])
         {
-            OpenScreen(_selectedTile, control: false);
+            OpenScreen(tile, control: false);
         }
     }
 
     private void OnControlSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selectedTile is not null)
+        if (_selection.Selected is [var tile])
         {
-            OpenScreen(_selectedTile, control: true);
+            OpenScreen(tile, control: true);
         }
     }
 
@@ -236,7 +467,10 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            LockScreen(tile);
+            foreach (var target in TargetsOf(tile))
+            {
+                LockScreen(target);
+            }
             ShowScreenLockStatus();
         }
     }
@@ -245,8 +479,14 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            UnlockScreen(tile);
-            StatusTextBlock.Text = $"Tela de {tile.Name} desbloqueada.";
+            var targets = TargetsOf(tile);
+            foreach (var target in targets)
+            {
+                UnlockScreen(target);
+            }
+            StatusTextBlock.Text = targets.Count == 1
+                ? $"Tela de {tile.Name} desbloqueada."
+                : $"Telas de {targets.Count} máquinas desbloqueadas.";
         }
     }
 
@@ -325,7 +565,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenSendMessageWindow(new[] { tile.Machine });
+            OpenSendMessageWindow(MachinesOf(tile));
         }
     }
 
@@ -343,7 +583,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenSendFileWindow(new[] { tile.Machine });
+            OpenSendFileWindow(MachinesOf(tile));
         }
     }
 
@@ -364,7 +604,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenCollectFilesWindow(new[] { tile.Machine });
+            OpenCollectFilesWindow(MachinesOf(tile));
         }
     }
 
@@ -385,7 +625,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenCloseAppsWindow(new[] { tile.Machine });
+            OpenCloseAppsWindow(MachinesOf(tile));
         }
     }
 
@@ -436,7 +676,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenSiteBlockWindow(new[] { tile.Machine });
+            OpenSiteBlockWindow(MachinesOf(tile));
         }
     }
 
@@ -457,7 +697,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenLabConfigWindow(new[] { tile.Machine });
+            OpenLabConfigWindow(MachinesOf(tile));
         }
     }
 
@@ -478,7 +718,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenAppBlockWindow(new[] { tile.Machine });
+            OpenAppBlockWindow(MachinesOf(tile));
         }
     }
 
@@ -521,7 +761,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenPowerWindow(new[] { tile.Machine });
+            OpenPowerWindow(MachinesOf(tile));
         }
     }
 
@@ -539,7 +779,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenPowerWindow(new[] { tile.Machine }, PowerAction.Restart);
+            OpenPowerWindow(MachinesOf(tile), PowerAction.Restart);
         }
     }
 
@@ -573,7 +813,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            Wake(new[] { tile.Machine });
+            Wake(MachinesOf(tile));
         }
     }
 
@@ -878,12 +1118,16 @@ public partial class MainWindow : Window
     private void RemoveTileAt(int index)
     {
         var tile = _tiles[index];
-        if (tile == _selectedTile)
-        {
-            Select(null);
-        }
+        var wasSelected = tile.IsSelected;
         UnlockScreen(tile);
         _tiles.RemoveAt(index);
+        // Out of the selection too; the buttons and status bar only change if
+        // it was in it (a replaced or moved machine is a new tile).
+        _selection.Prune();
+        if (wasSelected)
+        {
+            RefreshSelection();
+        }
         if (_pollers.Remove(tile, out var poller))
         {
             poller.Dispose();

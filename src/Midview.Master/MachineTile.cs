@@ -65,7 +65,8 @@ public sealed class MachineTile : INotifyPropertyChanged
     }
 
     // The machine "Ver a tela" and "Controlar" act on: a click on a tile
-    // selects it, it never opens anything by itself.
+    // selects it, it never opens anything by itself. Several can be selected
+    // (MainWindow's GridSelection); the two buttons then wait for just one.
     public bool IsSelected
     {
         get => _isSelected;

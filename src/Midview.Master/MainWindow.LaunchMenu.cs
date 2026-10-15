@@ -11,7 +11,9 @@ namespace Midview.Master;
 // (SavedMenu), each opening with one click, then "Outro site..." or "Outro
 // programa..." for the window. On the toolbar for the whole class (straight
 // to the window while nothing is saved), and on a machine's own menu for
-// that machine only. Delete over an item takes it out of the menu.
+// that machine only. Delete over an item takes it out of the menu. With
+// several machines selected, a machine's menu acts on all of them
+// (TargetsOf).
 public partial class MainWindow
 {
     private const string MenuHintTag = "dica";
@@ -32,7 +34,7 @@ public partial class MainWindow
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            ShowLaunchWindow(LaunchKind.Website, new[] { tile.Machine });
+            ShowLaunchWindow(LaunchKind.Website, MachinesOf(tile));
         }
     }
 
@@ -40,7 +42,7 @@ public partial class MainWindow
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            ShowLaunchWindow(LaunchKind.Program, new[] { tile.Machine });
+            ShowLaunchWindow(LaunchKind.Program, MachinesOf(tile));
         }
     }
 
@@ -83,7 +85,7 @@ public partial class MainWindow
         // Raised again by the items inside: only the parent opening counts.
         if (ReferenceEquals(e.OriginalSource, sender) && sender is MenuItem { DataContext: MachineTile tile } parent)
         {
-            FillLaunchMenu(parent.Items, kind, () => new[] { tile.Machine });
+            FillLaunchMenu(parent.Items, kind, () => MachinesOf(tile));
         }
     }
 

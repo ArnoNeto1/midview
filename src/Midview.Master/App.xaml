@@ -21,6 +21,9 @@
         <SolidColorBrush x:Key="InkMutedBrush" Color="#5B6B6F" />
         <SolidColorBrush x:Key="SelectedLineBrush" Color="#D99A1E" />
         <SolidColorBrush x:Key="SelectedFillBrush" Color="#FFF6DC" />
+        <!-- The selection rectangle dragged over the grid: the selected tiles'
+             line color, see-through so the tiles show under it. -->
+        <SolidColorBrush x:Key="SelectionBandFillBrush" Color="#D99A1E" Opacity="0.15" />
         <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
         <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
 

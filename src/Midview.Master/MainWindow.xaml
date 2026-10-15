@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Midview.Master"
         Title="Midview - Sala de aula" Height="760" Width="1440"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
-        Closed="OnWindowClosed">
+        Closed="OnWindowClosed" KeyDown="OnWindowKeyDown">
     <DockPanel>
         <!-- Grouped like the actions they hold; one row from about 1410 px wide,
              and whole groups move to a second row on a narrower window. -->
@@ -104,94 +104,113 @@
                     <Button Content="Entrar na sala de um colega" Click="OnJoinClassClicked" Padding="16,7" Margin="8,0,0,0" />
                 </StackPanel>
             </StackPanel>
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="MachinesItemsControl" Margin="10">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
-                                    PreviewMouseRightButtonDown="OnMachineRightClicked"
-                                    ToolTip="Clique para selecionar. Botão direito para mais opções.">
-                                <Button.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="Ver a tela" Click="OnViewMachineClicked" />
-                                        <MenuItem Header="Controlar (trava o teclado e o mouse do aluno)" Click="OnControlMachineClicked" />
-                                        <MenuItem Header="Bloquear a tela" Click="OnLockMachineClicked" />
-                                        <MenuItem Header="Desbloquear a tela" Click="OnUnlockMachineClicked" />
-                                        <Separator />
-                                        <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
-                                        <MenuItem Header="Conversar (chat)..." Click="OnChatMachineClicked" />
-                                        <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
-                                        <MenuItem Header="Recolher arquivos..." Click="OnCollectMachineClicked" />
-                                        <!-- Filled with the saved items when opened (MainWindow.LaunchMenu.cs). -->
-                                        <MenuItem Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
-                                            <MenuItem Header="Outro site..." Click="OnOpenWebsiteMachineClicked" />
-                                        </MenuItem>
-                                        <MenuItem Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
-                                            <MenuItem Header="Outro programa..." Click="OnOpenProgramMachineClicked" />
-                                        </MenuItem>
-                                        <Separator />
-                                        <MenuItem Header="Fechar programas..." Click="OnCloseAppsMachineClicked" />
-                                        <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
-                                        <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
-                                        <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
-                                        <MenuItem Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
-                                        <Separator />
-                                        <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
-                                        <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
-                                        <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
-                                        <Separator />
-                                        <MenuItem Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />
-                                        <MenuItem Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
-                                    </ContextMenu>
-                                </Button.ContextMenu>
-                                <StackPanel>
-                                    <Border Width="256" Height="144" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
-                                        <Grid>
-                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
-                                            <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10" FontSize="13"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       TextAlignment="Center" TextWrapping="Wrap" />
-                                        </Grid>
-                                    </Border>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource InkBrush}"
-                                               Margin="0,7,0,1" HorizontalAlignment="Center" />
-                                    <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ScreenLockAlert}" Value="True">
-                                                        <Setter Property="Foreground" Value="#B3261E" />
-                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ScreenLockBadge}" Value="">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding BlockBadge}" Value="">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+            <ScrollViewer x:Name="MachinesScrollViewer" VerticalScrollBarVisibility="Auto" ScrollChanged="OnMachinesScrolled">
+                <!-- Transparent rather than no background, so a press on the space
+                     between and around the tiles reaches it and can start a selection
+                     rectangle; the tiles, being buttons, take their own presses. It is
+                     inside the ScrollViewer with the tiles, so the rectangle (drawn on
+                     the Canvas above them) scrolls with them. -->
+                <Grid x:Name="GridSurface" Background="Transparent"
+                      MouseLeftButtonDown="OnGridSurfaceMouseDown" MouseMove="OnGridSurfaceMouseMove"
+                      MouseLeftButtonUp="OnGridSurfaceMouseUp" LostMouseCapture="OnGridSurfaceLostCapture">
+                    <ItemsControl x:Name="MachinesItemsControl" Margin="10">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
+                                        PreviewMouseRightButtonDown="OnMachineRightClicked" ContextMenuOpening="OnMachineMenuOpening"
+                                        ToolTip="Clique para selecionar. Botão direito para mais opções.">
+                                    <Button.ContextMenu>
+                                        <!-- With several machines selected (OnMachineMenuOpening) the items
+                                             tagged "varias" show, those tagged "uma" (one machine only) hide,
+                                             and the rest act on all of them. -->
+                                        <ContextMenu>
+                                            <MenuItem Tag="varias" IsEnabled="False" FontWeight="SemiBold" Visibility="Collapsed" />
+                                            <Separator Tag="varias" Visibility="Collapsed" />
+                                            <MenuItem Tag="uma" Header="Ver a tela" Click="OnViewMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" Click="OnControlMachineClicked" />
+                                            <MenuItem Header="Bloquear a tela" Click="OnLockMachineClicked" />
+                                            <MenuItem Header="Desbloquear a tela" Click="OnUnlockMachineClicked" />
+                                            <Separator />
+                                            <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Conversar (chat)..." Click="OnChatMachineClicked" />
+                                            <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
+                                            <MenuItem Header="Recolher arquivos..." Click="OnCollectMachineClicked" />
+                                            <!-- Filled with the saved items when opened (MainWindow.LaunchMenu.cs). -->
+                                            <MenuItem Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
+                                                <MenuItem Header="Outro site..." Click="OnOpenWebsiteMachineClicked" />
+                                            </MenuItem>
+                                            <MenuItem Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
+                                                <MenuItem Header="Outro programa..." Click="OnOpenProgramMachineClicked" />
+                                            </MenuItem>
+                                            <Separator />
+                                            <MenuItem Header="Fechar programas..." Click="OnCloseAppsMachineClicked" />
+                                            <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
+                                            <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
+                                            <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
+                                            <Separator />
+                                            <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
+                                            <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
+                                            <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
+                                            <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
+                                            <Separator Tag="uma" />
+                                            <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                    <StackPanel>
+                                        <Border Width="256" Height="144" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
+                                            <Grid>
+                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10" FontSize="13"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           TextAlignment="Center" TextWrapping="Wrap" />
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource InkBrush}"
+                                                   Margin="0,7,0,1" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ScreenLockAlert}" Value="True">
+                                                            <Setter Property="Foreground" Value="#B3261E" />
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding ScreenLockBadge}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding BlockBadge}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Canvas IsHitTestVisible="False">
+                        <Rectangle x:Name="SelectionBand" Visibility="Collapsed" StrokeThickness="1"
+                                   Stroke="{StaticResource SelectedLineBrush}" Fill="{StaticResource SelectionBandFillBrush}" />
+                    </Canvas>
+                </Grid>
             </ScrollViewer>
         </Grid>
     </DockPanel>
