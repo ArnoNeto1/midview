@@ -173,6 +173,11 @@ public partial class MainWindow : Window
         window.Show();
     }
 
+    // Targets are machines of the classroom list, each once, so as many of
+    // them as tiles is all of them: the windows then say "turma toda"
+    // (TargetsText) instead of naming them.
+    private bool IsWholeClass(IReadOnlyList<KnownMachine> targets) => targets.Count == _tiles.Count;
+
     private static void BringBack(Window window)
     {
         if (window.WindowState == WindowState.Minimized)
@@ -343,7 +348,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("arquivo", targets, () => new SendFileWindow(targets, _masterCertificate) { Owner = this });
+        ShowOnce("arquivo", targets, () => new SendFileWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnCollectClassClicked(object sender, RoutedEventArgs e)
     {
@@ -364,7 +369,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenCollectFilesWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("recolher", targets, () => new CollectFilesWindow(targets, _masterCertificate) { Owner = this });
+        ShowOnce("recolher", targets, () => new CollectFilesWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -385,7 +390,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("fechar", targets, () => new CloseAppsWindow(targets, _masterCertificate) { Owner = this });
+        ShowOnce("fechar", targets, () => new CloseAppsWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnBlockAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -394,14 +399,24 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
             return;
         }
-        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        OpenAppBlockWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
+    // The block is remembered and resent (onClassPolicyApplied) only for the
+    // whole class, whether it came from the toolbar or from a tile's menu with
+    // every machine selected: both are the same window (ShowOnce's key).
+    private void OpenAppBlockWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        var wholeClass = IsWholeClass(targets);
         ShowOnce("programas", targets, () => new AppBlockWindow(
-            targets, _masterCertificate,
-            policy =>
-            {
-                Volatile.Write(ref _appBlockPolicy, policy);
-                SaveAppBlockPolicy(policy);
-            })
+            targets, wholeClass, _masterCertificate,
+            wholeClass
+                ? policy =>
+                {
+                    Volatile.Write(ref _appBlockPolicy, policy);
+                    SaveAppBlockPolicy(policy);
+                }
+                : null)
         {
             Owner = this,
         });
@@ -414,17 +429,19 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear sites.";
             return;
         }
-        var targets = _tiles.Select(tile => tile.Machine).ToList();
-        ShowOnce("sites", targets, () => new SiteBlockWindow(targets, _masterCertificate) { Owner = this });
+        OpenSiteBlockWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnSiteBlockMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            ShowOnce("sites", new[] { tile.Machine }, () => new SiteBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
+            OpenSiteBlockWindow(new[] { tile.Machine });
         }
     }
+
+    private void OpenSiteBlockWindow(IReadOnlyList<KnownMachine> targets) =>
+        ShowOnce("sites", targets, () => new SiteBlockWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnLabConfigClassClicked(object sender, RoutedEventArgs e)
     {
@@ -433,17 +450,19 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para configurar.";
             return;
         }
-        var targets = _tiles.Select(tile => tile.Machine).ToList();
-        ShowOnce("painel", targets, () => new LabConfigWindow(targets, _masterCertificate) { Owner = this });
+        OpenLabConfigWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnLabConfigMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            ShowOnce("painel", new[] { tile.Machine }, () => new LabConfigWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
+            OpenLabConfigWindow(new[] { tile.Machine });
         }
     }
+
+    private void OpenLabConfigWindow(IReadOnlyList<KnownMachine> targets) =>
+        ShowOnce("painel", targets, () => new LabConfigWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnUninstallMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -459,7 +478,7 @@ public partial class MainWindow : Window
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            ShowOnce("programas", new[] { tile.Machine }, () => new AppBlockWindow(new[] { tile.Machine }, _masterCertificate) { Owner = this });
+            OpenAppBlockWindow(new[] { tile.Machine });
         }
     }
 
@@ -527,7 +546,7 @@ public partial class MainWindow : Window
     // "Desligar" and "Reiniciar" each have their own, set to their action.
     private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets, PowerAction action = PowerAction.Shutdown) =>
         ShowOnce(action == PowerAction.Restart ? "reiniciar" : "desligar", targets,
-            () => new PowerWindow(targets, _masterCertificate, action) { Owner = this });
+            () => new PowerWindow(targets, IsWholeClass(targets), _masterCertificate, action) { Owner = this });
 
     // For the whole room, whichever machines are in it.
     private void OnScheduleClicked(object sender, RoutedEventArgs e) =>
@@ -631,7 +650,7 @@ public partial class MainWindow : Window
     }
 
     private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("mensagem", targets, () => new SendMessageWindow(targets, _masterCertificate) { Owner = this });
+        ShowOnce("mensagem", targets, () => new SendMessageWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
     private void OnEditMachineClicked(object sender, RoutedEventArgs e)
     {

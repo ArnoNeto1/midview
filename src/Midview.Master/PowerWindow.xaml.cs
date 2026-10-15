@@ -15,15 +15,14 @@ public partial class PowerWindow : Window
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;
 
-    public PowerWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate,
+    // wholeClass: targets is every machine in the classroom list (TargetsText).
+    public PowerWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate,
         PowerAction initialAction = PowerAction.Shutdown)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"Em: {targets[0].Name}"
-            : $"Na turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
         if (initialAction == PowerAction.Restart)
         {
             RestartRadioButton.IsChecked = true;

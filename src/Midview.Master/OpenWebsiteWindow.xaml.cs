@@ -14,14 +14,13 @@ public partial class OpenWebsiteWindow : Window
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;
 
-    public OpenWebsiteWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate)
+    // wholeClass: targets is every machine in the classroom list (TargetsText).
+    public OpenWebsiteWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"Em: {targets[0].Name}"
-            : $"Na turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
         OpenButton.Content = targets.Count == 1 ? "Abrir na máquina" : "Abrir nas máquinas";
     }
 

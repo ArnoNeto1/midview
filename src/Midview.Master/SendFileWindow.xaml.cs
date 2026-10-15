@@ -19,14 +19,13 @@ public partial class SendFileWindow : Window
     private readonly X509Certificate2 _masterCertificate;
     private string? _filePath;
 
-    public SendFileWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate)
+    // wholeClass: targets is every machine in the classroom list (TargetsText).
+    public SendFileWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"Para: {targets[0].Name}"
-            : $"Para a turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.To, targets, wholeClass);
     }
 
     private void OnChooseFileClicked(object sender, RoutedEventArgs e)

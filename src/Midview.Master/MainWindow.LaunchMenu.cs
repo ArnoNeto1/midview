@@ -182,8 +182,8 @@ public partial class MainWindow
         ShowOnce(kind == LaunchKind.Website ? "site" : "programa", targets, () =>
         {
             Window window = kind == LaunchKind.Website
-                ? new OpenWebsiteWindow(targets, _masterCertificate)
-                : new OpenProgramWindow(targets, _masterCertificate);
+                ? new OpenWebsiteWindow(targets, IsWholeClass(targets), _masterCertificate)
+                : new OpenProgramWindow(targets, IsWholeClass(targets), _masterCertificate);
             window.Owner = this;
             return window;
         });

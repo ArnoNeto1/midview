@@ -20,14 +20,13 @@ public partial class CollectFilesWindow : Window
     private readonly X509Certificate2 _masterCertificate;
     private string? _lastCollectionDirectory;
 
-    public CollectFilesWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate)
+    // wholeClass: targets is every machine in the classroom list (TargetsText).
+    public CollectFilesWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"De: {targets[0].Name}"
-            : $"Da turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.From, targets, wholeClass);
     }
 
     public static string CollectionsDirectory => Path.Combine(

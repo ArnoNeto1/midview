@@ -13,15 +13,14 @@ public partial class SendMessageWindow : Window
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;
 
-    public SendMessageWindow(IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate)
+    // wholeClass: targets is every machine in the classroom list (TargetsText).
+    public SendMessageWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
         MessageTextBox.MaxLength = TextMessage.MaxLength;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"Para: {targets[0].Name}"
-            : $"Para a turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.To, targets, wholeClass);
     }
 
     private void OnWindowLoaded(object sender, RoutedEventArgs e) => MessageTextBox.Focus();

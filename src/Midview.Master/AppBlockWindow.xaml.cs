@@ -27,17 +27,17 @@ public partial class AppBlockWindow : Window
 
     // onClassPolicyApplied is set only when the target is the whole class, so
     // the Master remembers and resends it; a one-machine block isn't kept.
+    // Nor is one for a few machines picked on the grid. wholeClass: targets
+    // is every machine in the classroom list (TargetsText).
     public AppBlockWindow(
-        IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate,
+        IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate,
         Action<AppBlockPolicy>? onClassPolicyApplied = null)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
         _onClassPolicyApplied = onClassPolicyApplied;
-        TargetsTextBlock.Text = targets.Count == 1
-            ? $"Em: {targets[0].Name}"
-            : $"Na turma toda ({targets.Count} máquinas)";
+        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
         ProgramsList.ItemsSource = _rows;
         Loaded += async (_, _) => await LoadAsync();
     }
