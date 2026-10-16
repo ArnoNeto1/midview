@@ -27,6 +27,7 @@ public sealed class AgentServer
     private readonly AppBlockCommandHandler? _appBlock;
     private readonly LabConfigCommandHandler? _labConfig;
     private readonly ProgramUninstaller? _uninstaller;
+    private readonly PendingUninstalls? _pendingUninstalls;
     private readonly PairingService? _pairing;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
@@ -36,7 +37,8 @@ public sealed class AgentServer
         SiteBlockCommandHandler commandHandler, PowerCommandHandler? powerHandler = null,
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
-        LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null)
+        LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
+        PendingUninstalls? pendingUninstalls = null)
     {
         _listener = listener;
         _serverCertificate = serverCertificate;
@@ -49,6 +51,7 @@ public sealed class AgentServer
         _appBlock = appBlock;
         _labConfig = labConfig;
         _uninstaller = uninstaller;
+        _pendingUninstalls = pendingUninstalls;
         _pairing = pairing;
     }
 
@@ -245,7 +248,7 @@ public sealed class AgentServer
             var (succeeded, detail) = _uninstaller is null
                 ? (false, "esta máquina não desinstala programas")
                 : ProgramList.TryDecode(message.Payload, out var names)
-                    ? _uninstaller.UninstallMany(names)
+                    ? UninstallAndRemember(_uninstaller, names)
                     : (false, "pedido inválido");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
@@ -261,6 +264,15 @@ public sealed class AgentServer
 
         var success = _commandHandler.Handle(message.Type, message.Payload);
         channel.Send(new Message(MessageType.CommandAck, new[] { (byte)(success ? 1 : 0) }));
+    }
+
+    // Remembered before anything runs, so the students who aren't logged on
+    // lose their own copies at their next logon (PendingUninstallWorker) even
+    // if this machine restarts midway through the uninstalls.
+    private (bool Succeeded, string Detail) UninstallAndRemember(ProgramUninstaller uninstaller, IReadOnlyList<string> names)
+    {
+        _pendingUninstalls?.Add(names);
+        return uninstaller.UninstallMany(names);
     }
 
     // The MAC address of the card this connection came in on, as the

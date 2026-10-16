@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace Midview.Agent;
@@ -25,6 +26,14 @@ namespace Midview.Agent;
 // (a normal uninstaller launched as SYSTEM would wait on a window nobody can
 // see).
 //
+// A program is found by its display name, which the teacher picked from one
+// machine's list; when this machine has no entry by exactly that name, one
+// whose name differs only in its version number is taken instead (see
+// WithoutVersion), so "Opera GX Stable 112.0.5197.60" picked on one machine
+// still removes 113.0.1 on the next. One uninstall at a time: a teacher's
+// request and the logon pass (PendingUninstallWorker) wait for each other,
+// as Windows Installer would make two msiexec runs do anyway.
+//
 // The base keys and the command runner are injected so tests use throwaway
 // subtrees and a fake runner instead of the machine's real keys and
 // processes.
@@ -41,6 +50,7 @@ public sealed class ProgramUninstaller
     private readonly Func<string, int?> _run;
     private readonly Func<string, int?> _runInStudentSession;
     private readonly Func<IReadOnlyList<string>> _listAppxPackages;
+    private readonly object _gate = new();
 
     // userBase: the logged-on student's own SOFTWARE hive, re-resolved on
     // every read (unlike machineBase, who's logged on can change between one
@@ -128,14 +138,17 @@ public sealed class ProgramUninstaller
     public (bool Succeeded, string Detail) UninstallMany(IReadOnlyList<string> displayNames)
     {
         int removed = 0, notFound = 0, noSilent = 0, failed = 0;
-        foreach (var name in displayNames)
+        lock (_gate)
         {
-            switch (UninstallOne(name))
+            foreach (var name in displayNames)
             {
-                case UninstallOutcome.Removed: removed++; break;
-                case UninstallOutcome.NotFound: notFound++; break;
-                case UninstallOutcome.NoSilentUninstall: noSilent++; break;
-                default: failed++; break;
+                switch (UninstallOne(name, Entries))
+                {
+                    case UninstallOutcome.Removed: removed++; break;
+                    case UninstallOutcome.NotFound: notFound++; break;
+                    case UninstallOutcome.NoSilentUninstall: noSilent++; break;
+                    default: failed++; break;
+                }
             }
         }
 
@@ -152,15 +165,73 @@ public sealed class ProgramUninstaller
         return (noSilent == 0 && failed == 0, detail);
     }
 
+    // For the logon pass (PendingUninstallWorker): the programs a teacher
+    // asked to remove, looked for again in the student logged on now -- in
+    // their "just for me" programs only, since the machine-wide ones and the
+    // Store packages (removed for every account) were already handled when the
+    // teacher asked. Returns the names it removed, for the log.
+    public IReadOnlyList<string> UninstallStudentsOwn(IReadOnlyList<string> displayNames)
+    {
+        var removed = new List<string>();
+        lock (_gate)
+        {
+            foreach (var name in displayNames)
+            {
+                if (UninstallOne(name, StudentEntries) == UninstallOutcome.Removed)
+                {
+                    removed.Add(name);
+                }
+            }
+        }
+        return removed;
+    }
+
+    // A display name with its version numbers taken out, for finding the same
+    // program at another version: "Opera GX Stable 112.0.5197.60" and "7-Zip
+    // 23.01 (x64)" become "Opera GX Stable" and "7-Zip (x64)". Only numbers
+    // with a dot count as a version, so "Office 2016" or "Java 8 Update 431"
+    // keep theirs (and are found by their exact name only). Empty when the
+    // whole name was a version.
+    public static string WithoutVersion(string displayName)
+    {
+        var text = VersionNumber.Replace(displayName, " ");
+        text = EmptyBrackets.Replace(text, " ");
+        text = Spaces.Replace(text, " ");
+        return text.Trim(' ', '-', '–', '—', ',', ':', '_');
+    }
+
+    private static readonly Regex VersionNumber = new(@"(?<![\w.])[vV]?\d+(?:\.\d+)+(?![\w.])", RegexOptions.CultureInvariant);
+    private static readonly Regex EmptyBrackets = new(@"\(\s*\)|\[\s*\]", RegexOptions.CultureInvariant);
+    private static readonly Regex Spaces = new(@"\s+", RegexOptions.CultureInvariant);
+
     private enum UninstallOutcome { Removed, NotFound, NoSilentUninstall, Failed }
 
-    private UninstallOutcome UninstallOne(string displayName)
+    // The entries a teacher's pick stands for: those named exactly that, or,
+    // when there are none, those whose name differs only in the version. The
+    // same program can sit under both the 64- and 32-bit hives (some runtimes
+    // do), so every entry found is returned, not just the first.
+    private static List<Entry> Matching(IEnumerable<Entry> entries, string displayName)
     {
-        // The same program can sit under both the 64- and 32-bit hives (some
-        // runtimes do); run every entry with that name, not just the first.
-        var matches = Entries()
-            .Where(e => string.Equals(e.DisplayName, displayName.Trim(), StringComparison.CurrentCultureIgnoreCase))
-            .ToList();
+        var all = entries.ToList();
+        var name = displayName.Trim();
+        var exact = all.Where(e => string.Equals(e.DisplayName, name, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        if (exact.Count > 0)
+        {
+            return exact;
+        }
+
+        var withoutVersion = WithoutVersion(name);
+        return withoutVersion.Length == 0
+            ? exact
+            : all.Where(e => string.Equals(WithoutVersion(e.DisplayName), withoutVersion, StringComparison.CurrentCultureIgnoreCase)).ToList();
+    }
+
+    private UninstallOutcome UninstallOne(string displayName, Func<IEnumerable<Entry>> entries)
+    {
+        // Read again for every program, not once for all of them: removing
+        // one can remove others with it (a suite), and their entries must not
+        // be run after they're gone.
+        var matches = Matching(entries(), displayName);
         if (matches.Count == 0)
         {
             return UninstallOutcome.NotFound;
@@ -223,6 +294,19 @@ public sealed class ProgramUninstaller
             yield return entry;
         }
 
+        foreach (var entry in StudentEntries())
+        {
+            yield return entry;
+        }
+
+        foreach (var entry in AppxEntries())
+        {
+            yield return entry;
+        }
+    }
+
+    private IEnumerable<Entry> StudentEntries()
+    {
         // The logged-on student's own SOFTWARE hive, when there is one --
         // re-resolved here, not cached, so a different student logged on since
         // the last read is picked up rather than a stale hive handle from
@@ -238,11 +322,6 @@ public sealed class ProgramUninstaller
                     yield return entry;
                 }
             }
-        }
-
-        foreach (var entry in AppxEntries())
-        {
-            yield return entry;
         }
     }
 

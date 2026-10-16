@@ -27,7 +27,9 @@ public sealed class LabConfigClientTests : IDisposable
         _masterCert.Dispose();
     }
 
-    private (KnownMachine Machine, int Port) StartAgent(bool withLabConfig)
+    // runUninstaller: what the Agent's uninstaller does with each command
+    // (succeeds at once, by default).
+    private (KnownMachine Machine, int Port) StartAgent(bool withLabConfig, Func<string, int?>? runUninstaller = null)
     {
         LabConfigCommandHandler? labConfig = null;
         ProgramUninstaller? uninstaller = null;
@@ -44,7 +46,7 @@ public sealed class LabConfigClientTests : IDisposable
                 app.SetValue("DisplayName", "App Quiet");
                 app.SetValue("QuietUninstallString", "un.exe /S");
             }
-            uninstaller = new ProgramUninstaller(Registry.CurrentUser.CreateSubKey(rootPath, writable: true), _ => 0);
+            uninstaller = new ProgramUninstaller(Registry.CurrentUser.CreateSubKey(rootPath, writable: true), runUninstaller ?? (_ => 0));
             _cleanup.Add(() => Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false));
             _cleanup.Add(() => File.Delete(statePath));
         }
@@ -112,6 +114,33 @@ public sealed class LabConfigClientTests : IDisposable
 
         Assert.True(ok);
         Assert.Contains("desinstalado", detail);
+    }
+
+    [Fact]
+    public async Task UninstallPrograms_ASlowUninstall_IsWaitedFor()
+    {
+        // Longer than the 20 s every other command gets: a big program takes
+        // minutes, and the teacher used to see "Sem resposta" for a machine
+        // that went on to remove it.
+        var (machine, port) = StartAgent(withLabConfig: true, runUninstaller: _ =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(25));
+            return 0;
+        });
+
+        var (ok, detail) = await Task.Run(() => LabConfigClient.UninstallPrograms(machine, _masterCert, new[] { "App Quiet" }, port))
+            .WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.True(ok);
+        Assert.Contains("1 desinstalado", detail);
+    }
+
+    [Fact]
+    public void UninstallTimeout_GrowsWithThePrograms()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(20) + TimeSpan.FromMinutes(10), LabConfigClient.UninstallTimeout(0));
+        Assert.Equal(TimeSpan.FromSeconds(20) + TimeSpan.FromMinutes(10), LabConfigClient.UninstallTimeout(1));
+        Assert.Equal(TimeSpan.FromSeconds(20) + TimeSpan.FromMinutes(30), LabConfigClient.UninstallTimeout(3));
     }
 
     [Fact]

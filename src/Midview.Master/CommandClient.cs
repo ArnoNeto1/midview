@@ -33,12 +33,15 @@ public static class CommandClient
         Exchange(hostAddress, port, targetThumbprint, masterCertificate, questionType, payload);
 
     // For commands whose acknowledgement also says what happened (a
-    // CommandResult), e.g. how many programs were asked to close.
+    // CommandResult), e.g. how many programs were asked to close. timeout is
+    // for a command known to take longer than TimeoutMs on the other side
+    // (uninstalling programs); a machine that's switched off midway is still
+    // noticed in a minute or two, by TCP keep-alive.
     public static (bool Succeeded, string Detail) SendCommandForResult(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
-        MessageType commandType, byte[] payload)
+        MessageType commandType, byte[] payload, TimeSpan? timeout = null)
     {
-        var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload);
+        var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload, timeout);
         return ack.Type switch
         {
             MessageType.CommandAck => CommandResult.Decode(ack.Payload),
@@ -53,7 +56,7 @@ public static class CommandClient
 
     private static Message Exchange(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
-        MessageType commandType, byte[] payload)
+        MessageType commandType, byte[] payload, TimeSpan? timeout = null)
     {
         using var tcpClient = TcpConnect.WithTimeout(hostAddress, port, ConnectTimeout);
         tcpClient.ReceiveTimeout = TimeoutMs;
@@ -62,6 +65,31 @@ public static class CommandClient
             tcpClient, hostAddress, masterCertificate, new TrustStore(new[] { targetThumbprint }));
 
         channel.Send(new Message(commandType, payload));
+        if (timeout is { } longWait)
+        {
+            tcpClient.ReceiveTimeout = (int)longWait.TotalMilliseconds;
+            EnableKeepAlive(tcpClient.Client);
+        }
         return channel.Receive();
+    }
+
+    // While waiting a long time for an answer, TCP keep-alive starts asking
+    // whether the machine is still there after 30 s of quiet, and gives up
+    // after 6 unanswered tries 10 s apart -- a machine switched off or
+    // unplugged midway shows as "Sem resposta" in about a minute and a half,
+    // not at the end of the whole wait. An older Windows that lacks the finer
+    // settings keeps its defaults, and the timeout still ends the wait.
+    private static void EnableKeepAlive(Socket socket)
+    {
+        try
+        {
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 30);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 6);
+        }
+        catch (SocketException)
+        {
+        }
     }
 }

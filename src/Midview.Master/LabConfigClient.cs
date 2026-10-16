@@ -97,7 +97,14 @@ public static class LabConfigClient
         KnownMachine machine, X509Certificate2 masterCertificate, IReadOnlyList<string> displayNames, int port = ConnectionClient.AgentPort) =>
         CommandClient.SendCommandForResult(
             machine.HostAddress, port, AgentThumbprint(machine), masterCertificate,
-            MessageType.UninstallPrograms, ProgramList.Encode(displayNames));
+            MessageType.UninstallPrograms, ProgramList.Encode(displayNames), UninstallTimeout(displayNames.Count));
+
+    // How long a machine may take to answer an uninstall: it answers only once
+    // every program is done, and gives each uninstaller up to 5 minutes (a big
+    // one like Office takes several), sometimes two for one program (its 64-
+    // and 32-bit entries) -- so 10 minutes a program, on top of the usual 20 s.
+    public static TimeSpan UninstallTimeout(int programCount) =>
+        TimeSpan.FromSeconds(20) + TimeSpan.FromMinutes(10) * Math.Max(1, programCount);
 
     private static string AgentThumbprint(KnownMachine machine) =>
         machine.AgentThumbprint is { Length: > 0 } thumbprint

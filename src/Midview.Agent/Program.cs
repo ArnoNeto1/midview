@@ -76,6 +76,9 @@ var host = Host.CreateDefaultBuilder(args)
         // Lists and silently uninstalls installed programs, for the console's
         // "Desinstalar programa".
         services.AddSingleton(_ => ProgramUninstaller.OpenMachine());
+        // What the teacher asked to remove, kept for the students who weren't
+        // logged on then (PendingUninstallWorker removes their copies at logon).
+        services.AddSingleton(_ => new PendingUninstalls(PendingUninstalls.DefaultPath));
         // trusted-masters.json, read again whenever pairing (or anything
         // else) changes it.
         services.AddSingleton(TrustStore.FromFile(AgentServerWorker.TrustedMastersPath));
@@ -90,6 +93,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddHostedService<InputLockWorker>();
         services.AddHostedService<ScheduledShutdownWorker>();
         services.AddHostedService<AppBlockWorker>();
+        services.AddHostedService<PendingUninstallWorker>();
     })
     .Build();
 
