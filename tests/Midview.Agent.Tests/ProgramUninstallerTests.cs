@@ -201,6 +201,70 @@ public sealed class ProgramUninstallerTests : IDisposable
     }
 
     [Fact]
+    public void Uninstall_AnotherVersionHere_RemovesIt()
+    {
+        // Picked from a machine with 112, this one has 113.
+        AddProgram("Opera GX 113", k => { k.SetValue("DisplayName", "Opera GX Stable 113.0.5230.47"); k.SetValue("QuietUninstallString", "opera113.exe /S"); });
+
+        var (ok, detail) = Uninstaller().UninstallMany(new[] { "Opera GX Stable 112.0.5197.60" });
+
+        Assert.True(ok);
+        Assert.Contains("1 desinstalado", detail);
+        Assert.Equal(new[] { "opera113.exe /S" }, _commands);
+    }
+
+    [Fact]
+    public void Uninstall_ExactNameHere_LeavesTheOtherVersionsAlone()
+    {
+        // Two versions side by side, one of them the one picked: only that one goes.
+        AddProgram("Python 3.11", k => { k.SetValue("DisplayName", "Python 3.11.4 (64-bit)"); k.SetValue("QuietUninstallString", "py311.exe /quiet"); });
+        AddProgram("Python 3.12", k => { k.SetValue("DisplayName", "Python 3.12.1 (64-bit)"); k.SetValue("QuietUninstallString", "py312.exe /quiet"); });
+
+        Uninstaller().UninstallMany(new[] { "Python 3.11.4 (64-bit)" });
+
+        Assert.Equal(new[] { "py311.exe /quiet" }, _commands);
+    }
+
+    [Fact]
+    public void Uninstall_NumberWithoutADot_MustMatchExactly()
+    {
+        // "Update 431" isn't a version number to ignore: a different program
+        // as far as matching goes.
+        AddProgram("Java 8", k => { k.SetValue("DisplayName", "Java 8 Update 441"); k.SetValue("QuietUninstallString", "java.exe /s"); });
+
+        var (ok, detail) = Uninstaller().UninstallMany(new[] { "Java 8 Update 431" });
+
+        Assert.True(ok);
+        Assert.Contains("1 não instalado", detail);
+        Assert.Empty(_commands);
+    }
+
+    [Fact]
+    public void UninstallStudentsOwn_RemovesOnlyTheStudentsCopy_InTheirSession()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Shared App"); k.SetValue("QuietUninstallString", "machine.exe /S"); });
+        AddUserProgram("UserApp", k => { k.SetValue("DisplayName", "Shared App"); k.SetValue("QuietUninstallString", "user.exe /S"); });
+        AddUserProgram("Discord", k => { k.SetValue("DisplayName", "Discord"); k.SetValue("QuietUninstallString", "Update.exe --uninstall -s"); });
+
+        var removed = UninstallerWithSeparateRunners().UninstallStudentsOwn(new[] { "Shared App", "Discord", "Not Here" });
+
+        Assert.Equal(new[] { "Shared App", "Discord" }, removed);
+        Assert.Equal(new[] { "user.exe /S", "Update.exe --uninstall -s" }, _studentCommands);
+        Assert.Empty(_commands); // the machine-wide copy was the teacher's request's to remove
+    }
+
+    [Fact]
+    public void UninstallStudentsOwn_NobodyLoggedOn_RemovesNothing()
+    {
+        AddProgram("MachineApp", k => { k.SetValue("DisplayName", "Machine App"); k.SetValue("QuietUninstallString", "machine.exe /S"); });
+
+        var removed = Uninstaller().UninstallStudentsOwn(new[] { "Machine App" });
+
+        Assert.Empty(removed);
+        Assert.Empty(_commands);
+    }
+
+    [Fact]
     public void Uninstall_NoUninstallStringAtAll_IsNotRunAndIsAFailure()
     {
         // No QuietUninstallString, not an MSI, and no plain UninstallString

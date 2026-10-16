@@ -98,31 +98,48 @@ public partial class UninstallWindow : Window
         IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
         // Name what is going, so a program checked earlier and then hidden by
-        // the filter isn't removed as a surprise.
-        ProgressTextBlock.Text = $"Desinstalando em {targets.Count} máquina(s): {string.Join(", ", chosen)}...";
+        // the filter isn't removed as a surprise. A machine answers only when
+        // it's done with every program, which can take minutes: each one's
+        // line shows as soon as it does.
+        var going = $"Desinstalando em {targets.Count} máquina(s): {string.Join(", ", chosen)}. Pode levar alguns minutos.";
+        ProgressTextBlock.Text = going;
+        var lines = new List<string>();
 
-        var results = await Task.WhenAll(targets.Select(machine => Task.Run(() =>
+        var results = await Task.WhenAll(targets.Select(async machine =>
         {
-            if (string.IsNullOrEmpty(machine.AgentThumbprint))
+            var result = await Task.Run(() =>
             {
-                return (machine.Name, false, "pareie-a de novo em \"Máquinas da sala\"");
-            }
-            try
-            {
-                var (ok, detail) = LabConfigClient.UninstallPrograms(machine, _masterCertificate, chosen);
-                // An Agent from before this feature answers a bare CommandAck,
-                // which decodes to (false, ""); say so instead of a blank line.
-                if (!ok && string.IsNullOrEmpty(detail))
+                if (string.IsNullOrEmpty(machine.AgentThumbprint))
                 {
-                    return (machine.Name, false, "Midview antigo nesta máquina: atualize-a pela rede");
+                    return (machine.Name, false, "pareie-a de novo em \"Máquinas da sala\"");
                 }
-                return (machine.Name, ok, detail);
-            }
-            catch (Exception ex)
+                try
+                {
+                    var (ok, detail) = LabConfigClient.UninstallPrograms(machine, _masterCertificate, chosen);
+                    // An Agent from before this feature answers a bare CommandAck,
+                    // which decodes to (false, ""); say so instead of a blank line.
+                    if (!ok && string.IsNullOrEmpty(detail))
+                    {
+                        return (machine.Name, false, "Midview antigo nesta máquina: atualize-a pela rede");
+                    }
+                    return (machine.Name, ok, detail);
+                }
+                catch (Exception ex)
+                {
+                    return (machine.Name, false, FailureText.DescribeAgent(ex));
+                }
+            });
+
+            // Back on the window's thread here (the await resumes where it
+            // started), so the window can be updated directly.
+            lines.Add($"{(result.Item2 ? "✓" : "✗")} {result.Item1}: {result.Item3}");
+            ResultTextBlock.Text = string.Join("\n", lines);
+            if (lines.Count < targets.Count)
             {
-                return (machine.Name, false, FailureText.DescribeAgent(ex));
+                ProgressTextBlock.Text = $"{going}\n{lines.Count} de {targets.Count} máquina(s) terminaram.";
             }
-        })));
+            return result;
+        }));
 
         var failures = results.Count(r => !r.Item2);
         ProgressTextBlock.Text = failures == 0

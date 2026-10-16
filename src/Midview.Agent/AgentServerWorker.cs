@@ -36,19 +36,21 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly AppBlockCommandHandler _appBlock;
     private readonly LabConfigCommandHandler _labConfig;
     private readonly ProgramUninstaller _uninstaller;
+    private readonly PendingUninstalls _pendingUninstalls;
     private readonly TrustStore _masterTrustStore;
     private readonly PairingService _pairing;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
         AppBlockCommandHandler appBlock, LabConfigCommandHandler labConfig, ProgramUninstaller uninstaller,
-        TrustStore masterTrustStore, PairingService pairing)
+        PendingUninstalls pendingUninstalls, TrustStore masterTrustStore, PairingService pairing)
     {
         _masterTrustStore = masterTrustStore;
         _pairing = pairing;
         _appBlock = appBlock;
         _labConfig = labConfig;
         _uninstaller = uninstaller;
+        _pendingUninstalls = pendingUninstalls;
         _scheduledShutdown = scheduledShutdown;
         _powerHandler = powerHandler;
         _updateReceiver = updateReceiver;
@@ -109,7 +111,8 @@ public sealed class AgentServerWorker : BackgroundService
                         var server = new AgentServer(
                             new TcpListener(IPAddress.Any, AgentPort), certificate, _masterTrustStore, commandHandler,
                             _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
-                            appBlock: _appBlock, labConfig: _labConfig, uninstaller: _uninstaller, pairing: _pairing);
+                            appBlock: _appBlock, labConfig: _labConfig, uninstaller: _uninstaller, pairing: _pairing,
+                            pendingUninstalls: _pendingUninstalls);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");

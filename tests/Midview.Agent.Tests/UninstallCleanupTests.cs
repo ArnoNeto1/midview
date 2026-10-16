@@ -82,6 +82,22 @@ public class UninstallCleanupTests : IDisposable
     }
 
     [Fact]
+    public void ThePendingUninstalls_AreForgotten_SoAReinstallDoesNotResumeThem()
+    {
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"midview-pending-uninstall-{Guid.NewGuid():N}.json");
+        new PendingUninstalls(pendingPath).Add(new[] { "Discord" });
+        File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");
+
+        var failures = UninstallCleanup.Run(
+            _statePath, _hostsPath, new FakeFirewallController(), new FakeInputDeviceController(), _netshCalls.Add,
+            pendingUninstallsPath: pendingPath);
+
+        Assert.Empty(failures);
+        Assert.False(File.Exists(pendingPath));
+        Assert.Empty(new PendingUninstalls(pendingPath).Current());
+    }
+
+    [Fact]
     public void AFailingStep_DoesNotStopTheOthers_AndIsReported()
     {
         File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");

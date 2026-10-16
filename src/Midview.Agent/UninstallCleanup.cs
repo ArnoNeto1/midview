@@ -13,7 +13,8 @@ public static class UninstallCleanup
     public static IReadOnlyList<string> Run(
         string statePath, string hostsFilePath, IFirewallController firewall, IInputDeviceController devices,
         Action<string[]> runNetsh, string? appBlockStatePath = null,
-        IEnumerable<(string Desktop, SecurityIdentifier Student)>? studentDesktops = null)
+        IEnumerable<(string Desktop, SecurityIdentifier Student)>? studentDesktops = null,
+        string? pendingUninstallsPath = null)
     {
         var failures = new List<string>();
 
@@ -52,6 +53,16 @@ public static class UninstallCleanup
             {
                 File.Delete(appBlockStatePath);
                 File.Delete(appBlockStatePath + ".tmp");
+            });
+        }
+        // Nor the programs a teacher once asked to remove, from the students
+        // who hadn't logged on since (PendingUninstalls).
+        if (pendingUninstallsPath is not null)
+        {
+            Step(failures, "esquecer os programas a desinstalar", () =>
+            {
+                File.Delete(pendingUninstallsPath);
+                File.Delete(pendingUninstallsPath + ".tmp");
             });
         }
 

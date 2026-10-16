@@ -47,7 +47,8 @@ public static class InstallCommands
             AgentServerWorker.SiteBlockStatePath, AgentServerWorker.HostsFilePath,
             new NetshFirewallController(AgentServerWorker.AgentPort, AgentServerWorker.SessionPort),
             new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args),
-            AppBlockCommandHandler.DefaultStatePath, ProtectedStudentFolders.AllStudentDesktops());
+            AppBlockCommandHandler.DefaultStatePath, ProtectedStudentFolders.AllStudentDesktops(),
+            PendingUninstalls.DefaultPath);
         foreach (var failure in failures)
         {
             Console.Error.WriteLine(failure);

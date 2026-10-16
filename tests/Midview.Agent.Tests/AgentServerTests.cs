@@ -92,6 +92,8 @@ public class AgentServerTests
         Directory.CreateDirectory(Path.Combine(usersRoot, "aluno", "Downloads"));
         File.WriteAllText(Path.Combine(usersRoot, "aluno", "Downloads", "x.bin"), "x");
         var labStatePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"midview-pending-{Guid.NewGuid():N}.json");
+        var pending = new PendingUninstalls(pendingPath);
         var labConfig = new LabConfigCommandHandler(
             labStatePath, new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath + @"\lab", writable: true)),
             new AppBlockEnforcer(new EmptyInspector()), usersRoot);
@@ -102,7 +104,7 @@ public class AgentServerTests
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var server = new AgentServer(
             listener, agentCert, new TrustStore(new[] { masterCert.Thumbprint }), siteBlock,
-            labConfig: labConfig, uninstaller: uninstaller);
+            labConfig: labConfig, uninstaller: uninstaller, pendingUninstalls: pending);
 
         Message Exchange(Message request)
         {
@@ -128,6 +130,8 @@ public class AgentServerTests
                 .WaitAsync(TimeSpan.FromSeconds(5));
             Assert.True(CommandResult.Decode(uninstall.Payload).Succeeded);
             Assert.Equal(new[] { "un.exe /S" }, ranCommands);
+            // Kept for the students who weren't logged on.
+            Assert.Equal(new[] { "App Quiet" }, pending.Current());
 
             // A missing scope byte is refused, not treated as "delete all".
             var bad = await Task.Run(() => Exchange(new Message(MessageType.ClearDownloads, Array.Empty<byte>())))
@@ -146,6 +150,7 @@ public class AgentServerTests
             await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
             try { Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
             try { File.Delete(labStatePath); } catch { }
+            try { File.Delete(pendingPath); } catch { }
             try { Directory.Delete(usersRoot, recursive: true); } catch { }
         }
     }

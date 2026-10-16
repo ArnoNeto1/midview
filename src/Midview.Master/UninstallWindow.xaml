@@ -7,7 +7,7 @@
         <StackPanel DockPanel.Dock="Top">
             <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,4" />
             <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
-                       Text="A lista é lida de uma máquina. Marque os programas e desinstale nela ou na turma toda. Só remove programas com desinstalação silenciosa; os que não têm, o resultado avisa." />
+                       Text="A lista é lida de uma máquina. Marque os programas e desinstale nela ou na turma toda; cada máquina acha o programa pelo nome, mesmo numa versão diferente. Só remove programas com desinstalação silenciosa; os que não têm, o resultado avisa. Um programa instalado só para um aluno sai agora da conta aberta na máquina, e das outras contas quando cada aluno entrar (nos próximos 14 dias)." />
             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                 <TextBox x:Name="FilterTextBox" Width="260" TextChanged="OnFilterChanged" VerticalContentAlignment="Center" />
                 <TextBlock Text="  (filtrar pelo nome)" Foreground="Gray" VerticalAlignment="Center" />
