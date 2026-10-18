@@ -140,7 +140,10 @@ public sealed record UpdateRecord(
 public static class UpdateRecordFile
 {
     private const int MoveAttempts = 20;
+    private const int ReadAttempts = 20;
+    private const int SharingViolation = 32;
     private static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan ReadRetryDelay = TimeSpan.FromMilliseconds(25);
 
     // Missing or unreadable: no attempt to report.
     public static UpdateRecord? Load(string path)
@@ -188,12 +191,25 @@ public static class UpdateRecordFile
         }
     }
 
+    // While WriteDurably swaps the file in, opening it fails for a moment:
+    // the retries (half a second in all) wait that out, so a status question
+    // asked while the receiver saves its next step still finds the attempt.
     internal static byte[] ReadShared(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        using var buffer = new MemoryStream();
-        stream.CopyTo(buffer);
-        return buffer.ToArray();
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var buffer = new MemoryStream();
+                stream.CopyTo(buffer);
+                return buffer.ToArray();
+            }
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) == SharingViolation && attempt < ReadAttempts)
+            {
+                Thread.Sleep(ReadRetryDelay);
+            }
+        }
     }
 }
 

@@ -76,6 +76,28 @@ public class UpdateRecordTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhileTheRecordIsBeingSwappedIn_WaitsAndReadsIt()
+    {
+        UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Verifying));
+
+        // Save swapping the record in holds it like this for a moment: a
+        // status question then must not say there's no attempt. Let go from
+        // a thread of its own, as above.
+        var swap = new FileStream(_paths.StatePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var release = new Thread(() =>
+        {
+            Thread.Sleep(100);
+            swap.Dispose();
+        });
+        release.Start();
+
+        var record = UpdateRecordFile.Load(_paths.StatePath);
+        release.Join();
+
+        Assert.Equal(UpdateStates.Verifying, record?.State);
+    }
+
+    [Fact]
     public void Load_ReadsWhileTheRecordIsHeldOpen()
     {
         UpdateRecordFile.Save(_paths.StatePath, Record(UpdateStates.Applying));
