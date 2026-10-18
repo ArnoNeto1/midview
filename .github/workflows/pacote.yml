@@ -3,7 +3,11 @@
 # PowerShell 5.1 -- the PowerShell lab machines run them with. Run by hand
 # ("Run workflow"), it also keeps the setup for download for 7 days
 # (artifact storage is small on the free plan, so not on every run); for a
-# pushed v* tag, it attaches the setup to that GitHub Release.
+# pushed v* tag, it attaches the setup to that GitHub Release. Run by hand on
+# master with "publicar", it publishes the version itself: it creates the
+# v<Version> tag (Directory.Build.props) on that commit and its Release, with
+# the setup and the given notes -- for when pushing a tag isn't at hand. A
+# version already published is refused, never overwritten.
 name: Instalador
 
 on:
@@ -22,6 +26,15 @@ on:
       - 'Directory.Build.props'
       - '.github/workflows/pacote.yml'
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar a versão (tag v<versão> e Release com o instalador); só no master'
+        type: boolean
+        default: false
+      notas:
+        description: 'Texto da versão (Markdown), ao publicar'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -70,4 +83,27 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          files: ${{ runner.temp }}/Midview-Instalador/MidviewSetup.exe
+
+      - name: Conferir a versão a publicar
+        id: versao
+        if: github.event_name == 'workflow_dispatch' && inputs.publicar && github.ref == 'refs/heads/master'
+        shell: pwsh
+        run: |
+          $versao = (Select-Xml -Path Directory.Build.props -XPath '//Version').Node.InnerText.Trim()
+          if (-not $versao) { throw 'Directory.Build.props sem <Version>.' }
+          if (git ls-remote --tags origin "refs/tags/v$versao") { throw "A versão v$versao já foi publicada." }
+          "tag=v$versao" >> $env:GITHUB_OUTPUT
+          "nome=Versão $versao" >> $env:GITHUB_OUTPUT
+
+      # The tag this creates, made with the workflow's own token, doesn't
+      # start the tag run above again.
+      - name: Publicar a versão (Run workflow, publicar)
+        if: steps.versao.outputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versao.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.versao.outputs.nome }}
+          body: ${{ inputs.notas }}
           files: ${{ runner.temp }}/Midview-Instalador/MidviewSetup.exe
