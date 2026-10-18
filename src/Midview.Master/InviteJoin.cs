@@ -58,10 +58,16 @@ public static class InviteJoin
     // most TeacherInvite.MaxResponders, in the order they answered.
     public static IReadOnlyList<(IPEndPoint Endpoint, string Name)> Find(IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
     {
-        var id = Guid.NewGuid();
-        var packet = TeacherInvite.EncodeProbe(id);
         using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, 0)) { EnableBroadcast = true };
         udp.Client.IOControl(DiscoveryClient.SioUdpConnReset, new byte[] { 0, 0, 0, 0 }, null);
+        return Find(udp, Guid.NewGuid(), targets, listenTime);
+    }
+
+    // udp: where the answers arrive. The tests queue answers there first.
+    internal static IReadOnlyList<(IPEndPoint Endpoint, string Name)> Find(
+        UdpClient udp, Guid id, IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
+    {
+        var packet = TeacherInvite.EncodeProbe(id);
         foreach (var target in targets)
         {
             try
@@ -75,31 +81,18 @@ public static class InviteJoin
         }
 
         var found = new List<(IPEndPoint Endpoint, string Name)>();
-        var deadline = DateTime.UtcNow + listenTime;
-        while (found.Count < TeacherInvite.MaxResponders && deadline - DateTime.UtcNow is var left && left > TimeSpan.Zero)
+        DiscoveryClient.Listen(udp, listenTime, received =>
         {
-            try
+            if (TeacherInvite.ParseReply(received.Buffer) is { } reply && reply.ProbeId == id)
             {
-                using var timeout = new CancellationTokenSource(left);
-                var received = udp.ReceiveAsync(timeout.Token).AsTask().GetAwaiter().GetResult();
-                if (TeacherInvite.ParseReply(received.Buffer) is { } reply && reply.ProbeId == id)
+                var endpoint = new IPEndPoint(received.RemoteEndPoint.Address, reply.Port);
+                if (!found.Any(entry => entry.Endpoint.Equals(endpoint)))
                 {
-                    var endpoint = new IPEndPoint(received.RemoteEndPoint.Address, reply.Port);
-                    if (!found.Any(entry => entry.Endpoint.Equals(endpoint)))
-                    {
-                        found.Add((endpoint, reply.Name));
-                    }
+                    found.Add((endpoint, reply.Name));
                 }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (SocketException)
-            {
-                // Keep listening.
-            }
-        }
+            return found.Count < TeacherInvite.MaxResponders;
+        });
         return found;
     }
 

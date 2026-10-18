@@ -17,12 +17,22 @@ public static class DiscoveryClient
     // it, Windows fails the next receive after a "port unreachable".
     internal const int SioUdpConnReset = -1744830452;
 
+    // At most this many answers are read once listenTime is over. A busy PC
+    // may only get to them then, but they arrived in time. The cap keeps
+    // junk that never stops coming from holding the listening open.
+    internal const int MaxLateAnswers = 1000;
+
     public static IReadOnlyList<FoundMachine> Search(string masterThumbprint, IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
     {
-        var probe = new DiscoveryProbe(Guid.NewGuid(), masterThumbprint);
-        var packet = Discovery.Encode(probe);
         using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, 0)) { EnableBroadcast = true };
         udp.Client.IOControl(SioUdpConnReset, new byte[] { 0, 0, 0, 0 }, null);
+        return Search(udp, new DiscoveryProbe(Guid.NewGuid(), masterThumbprint), targets, listenTime);
+    }
+
+    // udp: where the answers arrive. The tests queue answers there first.
+    internal static IReadOnlyList<FoundMachine> Search(UdpClient udp, DiscoveryProbe probe, IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
+    {
+        var packet = Discovery.Encode(probe);
         foreach (var target in targets)
         {
             try
@@ -36,16 +46,31 @@ public static class DiscoveryClient
         }
 
         var answers = new List<(IPAddress, DiscoveryReply)>();
+        Listen(udp, listenTime, received =>
+        {
+            if (Discovery.ParseReply(received.Buffer) is { } reply)
+            {
+                answers.Add((received.RemoteEndPoint.Address, reply));
+            }
+            return true;
+        });
+        return Merge(probe.Id, answers);
+    }
+
+    // Hands take every packet that arrives within listenTime, then the ones
+    // already waiting when it is over (at most MaxLateAnswers), until take
+    // says it has enough.
+    internal static void Listen(UdpClient udp, TimeSpan listenTime, Func<UdpReceiveResult, bool> take)
+    {
         var deadline = DateTime.UtcNow + listenTime;
         while (deadline - DateTime.UtcNow is var left && left > TimeSpan.Zero)
         {
             try
             {
                 using var timeout = new CancellationTokenSource(left);
-                var received = udp.ReceiveAsync(timeout.Token).AsTask().GetAwaiter().GetResult();
-                if (Discovery.ParseReply(received.Buffer) is { } reply)
+                if (!take(udp.ReceiveAsync(timeout.Token).AsTask().GetAwaiter().GetResult()))
                 {
-                    answers.Add((received.RemoteEndPoint.Address, reply));
+                    return;
                 }
             }
             catch (OperationCanceledException)
@@ -57,7 +82,23 @@ public static class DiscoveryClient
                 // Keep listening.
             }
         }
-        return Merge(probe.Id, answers);
+
+        for (var late = 0; late < MaxLateAnswers && udp.Available > 0; late++)
+        {
+            try
+            {
+                IPEndPoint? from = null;
+                var buffer = udp.Receive(ref from);
+                if (!take(new UdpReceiveResult(buffer, from!)))
+                {
+                    return;
+                }
+            }
+            catch (SocketException)
+            {
+                // Keep reading what is waiting.
+            }
+        }
     }
 
     // One entry per machine (by Agent; a machine with two cards answers

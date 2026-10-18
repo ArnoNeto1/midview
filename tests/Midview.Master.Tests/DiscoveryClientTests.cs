@@ -53,4 +53,41 @@ public class DiscoveryClientTests
         await answering.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(new[] { new FoundMachine("ALUNO-07", "127.0.0.1", X, TeacherStatus.None, false) }, found);
     }
+
+    // A busy teacher PC can get to its socket only after the listening
+    // time. The answers waiting there arrived in time: they count.
+    [Fact]
+    public void Search_CountsTheAnswersWaiting_WhenTheListeningIsOver()
+    {
+        var probe = new DiscoveryProbe(Guid.NewGuid(), Master);
+        using var masterSide = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        WaitingPackets.Queue(
+            masterSide,
+            Discovery.Encode(new DiscoveryReply(probe.Id, "ALUNO-07", X, TeacherStatus.None, false)),
+            Discovery.Encode(new DiscoveryReply(probe.Id, "ALUNO-02", Y, TeacherStatus.You, false)));
+
+        var found = DiscoveryClient.Search(masterSide, probe, Array.Empty<IPEndPoint>(), TimeSpan.Zero);
+
+        Assert.Equal(
+            new[]
+            {
+                new FoundMachine("ALUNO-02", "127.0.0.1", Y, TeacherStatus.You, false),
+                new FoundMachine("ALUNO-07", "127.0.0.1", X, TeacherStatus.None, false),
+            },
+            found);
+    }
+
+    // Junk that keeps coming must not hold the search open.
+    [Fact]
+    public void Search_ReadsOnlySoManyAnswers_WhenTheListeningIsOver()
+    {
+        using var masterSide = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        masterSide.Client.ReceiveBufferSize = 1 << 20;
+        WaitingPackets.Queue(masterSide, Enumerable.Repeat(new byte[] { 0 }, DiscoveryClient.MaxLateAnswers + 5).ToArray());
+
+        var found = DiscoveryClient.Search(masterSide, new DiscoveryProbe(Guid.NewGuid(), Master), Array.Empty<IPEndPoint>(), TimeSpan.Zero);
+
+        Assert.Empty(found);
+        Assert.Equal(5, masterSide.Available);
+    }
 }

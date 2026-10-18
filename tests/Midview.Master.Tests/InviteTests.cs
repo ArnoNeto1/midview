@@ -282,6 +282,27 @@ public class InviteTests : IDisposable
         Assert.False(other.Outcome.IsCompleted);
     }
 
+    // Under load, both invites answered in time but the join read the
+    // second answer only after the listening time, and missed it. Answers
+    // waiting in the socket arrived in time: they count.
+    [Fact]
+    public void Find_CountsTheAnswersWaiting_WhenTheListeningIsOver()
+    {
+        var probe = Guid.NewGuid();
+        using var joinSide = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        WaitingPackets.Queue(
+            joinSide,
+            TeacherInvite.EncodeReply(probe, "PROF-03", 50003),
+            TeacherInvite.EncodeReply(Guid.NewGuid(), "PROF-09", 50009),
+            TeacherInvite.EncodeReply(probe, "PROF-01", 50001));
+
+        var found = InviteJoin.Find(joinSide, probe, Array.Empty<IPEndPoint>(), TimeSpan.Zero);
+
+        Assert.Equal(
+            new[] { (new IPEndPoint(IPAddress.Loopback, 50003), "PROF-03"), (new IPEndPoint(IPAddress.Loopback, 50001), "PROF-01") },
+            found);
+    }
+
     [Fact]
     public void APortInUse_CannotOpenASecondInvite()
     {

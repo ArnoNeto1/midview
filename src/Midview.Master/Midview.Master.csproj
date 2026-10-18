@@ -15,4 +15,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Midview.Master.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>
