@@ -215,9 +215,15 @@
                                                 <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10,10,10,22" FontSize="13"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            TextAlignment="Center" TextWrapping="Wrap" />
-                                                <Border VerticalAlignment="Bottom" Background="#B8111A1D" CornerRadius="0,0,7,7" Padding="6,2,6,3">
+                                                <!-- Light enough to see the screen through; the name's shadow
+                                                     keeps it readable over a white page. -->
+                                                <Border VerticalAlignment="Bottom" Background="#66111A1D" CornerRadius="0,0,7,7" Padding="6,2,6,3">
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11" Foreground="White"
-                                                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                                        <TextBlock.Effect>
+                                                            <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="0" Opacity="0.9" />
+                                                        </TextBlock.Effect>
+                                                    </TextBlock>
                                                 </Border>
                                             </Grid>
                                         </Border>
