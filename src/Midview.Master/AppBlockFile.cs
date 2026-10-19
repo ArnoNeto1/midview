@@ -10,9 +10,7 @@ namespace Midview.Master;
 // not kept here.
 public static class AppBlockFile
 {
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Midview", "app-block.json");
+    public static string DefaultPath => Path.Combine(MasterData.Folder, "app-block.json");
 
     // Missing or unreadable means nothing blocked class-wide; an unreadable
     // file is moved aside rather than lost.

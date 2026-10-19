@@ -35,6 +35,7 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly Thread _thread;
     private readonly Func<PowerSchedule?>? _powerSchedule;
     private readonly Func<AppBlockPolicy?>? _appBlockPolicy;
+    private readonly Func<(int Width, int Height)>? _thumbnailSize;
     private readonly TimeSpan _agentRetryInterval;
     private long? _sentAppBlockSavedAt;
     private DateTime _nextAppBlockAttempt = DateTime.MinValue;
@@ -46,11 +47,13 @@ public sealed class ThumbnailPoller : IDisposable
 
     // powerSchedule: the teacher's current timetable (read on the poller's
     // thread), which this machine's Agent is given whenever it changes.
+    // thumbnailSize: how big the grid's tiles are now (TileSize.Request),
+    // read before each request; without it, the size tiles always had.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
         Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
-        TimeSpan? agentRetryInterval = null)
+        TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
@@ -58,6 +61,7 @@ public sealed class ThumbnailPoller : IDisposable
         _agentPort = agentPort;
         _powerSchedule = powerSchedule;
         _appBlockPolicy = appBlockPolicy;
+        _thumbnailSize = thumbnailSize;
         _agentRetryInterval = agentRetryInterval ?? DefaultAgentRetryInterval;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
@@ -101,7 +105,10 @@ public sealed class ThumbnailPoller : IDisposable
                         new TrustStore(new[] { _machine.SessionThumbprint }));
                 }
 
-                channel.Send(new Message(MessageType.RequestThumbnail, Array.Empty<byte>()));
+                var request = _thumbnailSize?.Invoke() is { } size
+                    ? ThumbnailRequest.Encode(size.Width, size.Height)
+                    : Array.Empty<byte>();
+                channel.Send(new Message(MessageType.RequestThumbnail, request));
                 var reply = channel.Receive();
                 if (reply.Type != MessageType.ThumbnailFrame)
                 {

@@ -24,6 +24,49 @@ public class ThumbnailPollerTests
     }
 
     [Fact]
+    public async Task AskedForASize_ReceivesThatSize_AndFollowsItWhenItChanges()
+    {
+        using var session = new LoopbackSession();
+        var size = (Width: 160, Height: 90);
+        var sizes = new List<(int, int)>();
+        var secondThumbnail = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var poller = new ThumbnailPoller(
+            session.Machine(), session.MasterCertificate, session.Port, thumbnailSize: () =>
+            {
+                lock (sizes)
+                {
+                    return size;
+                }
+            });
+        poller.ThumbnailReceived += jpeg =>
+        {
+            using var thumbnail = TileCodec.DecodeTile(jpeg);
+            lock (sizes)
+            {
+                sizes.Add((thumbnail.Width, thumbnail.Height));
+                if (sizes.Count == 1)
+                {
+                    // The teacher made the tiles bigger.
+                    size = (640, 360);
+                }
+                else
+                {
+                    secondThumbnail.TrySetResult();
+                }
+            }
+        };
+        poller.Start();
+
+        await secondThumbnail.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(10));
+
+        lock (sizes)
+        {
+            Assert.Equal((160, 90), sizes[0]);
+            Assert.Equal((640, 360), sizes[1]);
+        }
+    }
+
+    [Fact]
     public async Task SessionRunning_KeepsPolling()
     {
         using var session = new LoopbackSession();

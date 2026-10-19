@@ -16,9 +16,7 @@ namespace Midview.Master;
 // copy.
 public static class MasterIdentity
 {
-    public static string DefaultCertificatePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Midview", "master-identity.pfx");
+    public static string DefaultCertificatePath => Path.Combine(MasterData.Folder, "master-identity.pfx");
 
     public static X509Certificate2 LoadOrCreate(string certificatePath)
     {

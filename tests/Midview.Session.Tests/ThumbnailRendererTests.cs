@@ -28,4 +28,14 @@ public class ThumbnailRendererTests
         Assert.Equal(240, thumbnail.Width);
         Assert.Equal(180, thumbnail.Height);
     }
+
+    [Fact]
+    public void Render_WithinALargerBox_ReturnsALargerJpeg()
+    {
+        var jpeg = ThumbnailRenderer.Render(new FixedSizeScreenCapture(1920, 1080), 640, 360);
+
+        using var thumbnail = TileCodec.DecodeTile(jpeg);
+        Assert.Equal(640, thumbnail.Width);
+        Assert.Equal(360, thumbnail.Height);
+    }
 }

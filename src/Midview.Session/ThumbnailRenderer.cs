@@ -9,13 +9,17 @@ namespace Midview.Session;
 // full-control feed's tile-diffing or capture thread.
 public static class ThumbnailRenderer
 {
-    public const int MaxWidth = 320;
-    public const int MaxHeight = 180;
+    // What a request that doesn't say a size gets (ThumbnailRequest).
+    public const int MaxWidth = ThumbnailRequest.DefaultWidth;
+    public const int MaxHeight = ThumbnailRequest.DefaultHeight;
 
-    public static byte[] Render(IScreenCapture capture)
+    public static byte[] Render(IScreenCapture capture) => Render(capture, MaxWidth, MaxHeight);
+
+    // Within the box the teacher's tile asked for (ThumbnailRequest).
+    public static byte[] Render(IScreenCapture capture, int maxWidth, int maxHeight)
     {
         using var frame = capture.CaptureFrame();
-        var size = FitWithin(frame.Width, frame.Height, MaxWidth, MaxHeight);
+        var size = FitWithin(frame.Width, frame.Height, maxWidth, maxHeight);
 
         using var thumbnail = new Bitmap(size.Width, size.Height);
         using (var graphics = Graphics.FromImage(thumbnail))

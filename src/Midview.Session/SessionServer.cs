@@ -308,7 +308,9 @@ public sealed class SessionServer
         {
             if (message.Type == MessageType.RequestThumbnail)
             {
-                channel.Send(new Midview.Protocol.Message(MessageType.ThumbnailFrame, RenderThumbnailOrEmpty()));
+                var (maxWidth, maxHeight) = ThumbnailRequest.Decode(message.Payload);
+                channel.Send(new Midview.Protocol.Message(
+                    MessageType.ThumbnailFrame, RenderThumbnailOrEmpty(maxWidth, maxHeight)));
             }
             message = channel.Receive();
         }
@@ -318,11 +320,11 @@ public sealed class SessionServer
     // locked): an empty reply keeps requests and replies paired, so the
     // Master can show "screen unavailable" instead of treating the machine
     // as offline and reconnecting on every poll.
-    private byte[] RenderThumbnailOrEmpty()
+    private byte[] RenderThumbnailOrEmpty(int maxWidth, int maxHeight)
     {
         try
         {
-            return ThumbnailRenderer.Render(_screenCapture);
+            return ThumbnailRenderer.Render(_screenCapture, maxWidth, maxHeight);
         }
         catch (Exception ex)
         {

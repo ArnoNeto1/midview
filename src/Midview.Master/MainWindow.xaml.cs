@@ -63,6 +63,15 @@ public partial class MainWindow : Window
     // isn't locked anymore got out (signed out, restarted, switched user).
     private readonly HashSet<MachineTile> _wereLocked = new();
 
+    // How wide the tiles' screens are drawn (TileSize) and Windows' scale
+    // on this window's monitor: the pollers read both on their own threads
+    // to ask each machine for a thumbnail that size.
+    private int _tileWidth = TileSize.Default;
+    private double _dpiScale = 1.0;
+
+    // Wheel turns not yet worth a whole step (a touchpad sends small ones).
+    private int _wheelDelta;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -71,6 +80,14 @@ public partial class MainWindow : Window
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
         _selection = new GridSelection<MachineTile>(_tiles);
+        _dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        TileSizeSlider.Minimum = TileSize.Smallest;
+        TileSizeSlider.Maximum = TileSize.Largest;
+        TileSizeSlider.Ticks = new DoubleCollection(TileSize.Widths.Select(width => (double)width));
+        ShowTilesAt(GridViewFile.LoadTileWidth(GridViewFile.DefaultPath));
+        // Only now: setting the slider's range above moved it, which isn't
+        // the teacher choosing a size.
+        TileSizeSlider.ValueChanged += OnTileSizeSliderChanged;
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
 
@@ -155,8 +172,15 @@ public partial class MainWindow : Window
     }
 
     // Esc lets go of the selection, and of a rectangle being dragged.
+    // Ctrl +, - and 0 resize the tiles.
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && TileWidthForKey(e.Key) is { } width)
+        {
+            ResizeTiles(width);
+            e.Handled = true;
+            return;
+        }
         if (e.Key != Key.Escape)
         {
             return;
@@ -171,6 +195,107 @@ public partial class MainWindow : Window
         }
         ClearSelection();
         e.Handled = true;
+    }
+
+    // Ctrl +, Ctrl - and Ctrl 0, on the main keys or the number pad, as a
+    // browser zooms.
+    private int? TileWidthForKey(Key key) => key switch
+    {
+        Key.OemPlus or Key.Add => TileSize.Larger(_tileWidth),
+        Key.OemMinus or Key.Subtract => TileSize.Smaller(_tileWidth),
+        Key.D0 or Key.NumPad0 => TileSize.Default,
+        _ => null,
+    };
+
+    // Ctrl + the wheel resizes the tiles instead of scrolling the grid.
+    private void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            return;
+        }
+        _wheelDelta += e.Delta;
+        var width = _tileWidth;
+        for (; _wheelDelta >= Mouse.MouseWheelDeltaForOneLine; _wheelDelta -= Mouse.MouseWheelDeltaForOneLine)
+        {
+            width = TileSize.Larger(width);
+        }
+        for (; _wheelDelta <= -Mouse.MouseWheelDeltaForOneLine; _wheelDelta += Mouse.MouseWheelDeltaForOneLine)
+        {
+            width = TileSize.Smaller(width);
+        }
+        ResizeTiles(width);
+        e.Handled = true;
+    }
+
+    private void OnTileSizeSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) =>
+        ResizeTiles((int)e.NewValue);
+
+    private void OnSmallerTilesClicked(object sender, RoutedEventArgs e) => ResizeTiles(TileSize.Smaller(_tileWidth));
+
+    private void OnLargerTilesClicked(object sender, RoutedEventArgs e) => ResizeTiles(TileSize.Larger(_tileWidth));
+
+    // Once, for the machines and window as they are now: adding machines or
+    // resizing the window afterwards doesn't resize the tiles again.
+    private void OnFitAllClicked(object sender, RoutedEventArgs e)
+    {
+        var tiles = Enumerable.Range(0, _tiles.Count)
+            .Select(index => MachinesItemsControl.ItemContainerGenerator.ContainerFromIndex(index))
+            .OfType<FrameworkElement>()
+            .ToList();
+        if (tiles.Count == 0)
+        {
+            return;
+        }
+
+        // What a tile adds around its screen, as drawn now: the card, its
+        // margin, and the name and badges (the tallest, since a row is as
+        // tall as its tallest tile).
+        var chromeWidth = tiles.Max(tile => tile.ActualWidth) - _tileWidth;
+        var chromeHeight = tiles.Max(tile => tile.ActualHeight) - TileSize.HeightOf(_tileWidth);
+        // Inside the grid's margin, and a pixel short so rounding never
+        // wraps a last tile onto a row of its own.
+        var margin = MachinesItemsControl.Margin;
+        var availableWidth = MachinesScrollViewer.ActualWidth - margin.Left - margin.Right - 1;
+        var availableHeight = MachinesScrollViewer.ActualHeight - margin.Top - margin.Bottom - 1;
+
+        ResizeTiles(TileSize.ToFitAll(_tiles.Count, availableWidth, availableHeight, chromeWidth, chromeHeight));
+    }
+
+    // The teacher chose a size: shown now, and the next time Midview opens.
+    private void ResizeTiles(int width)
+    {
+        if (width == _tileWidth)
+        {
+            return;
+        }
+        ShowTilesAt(width);
+        try
+        {
+            GridViewFile.SaveTileWidth(GridViewFile.DefaultPath, width);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O tamanho das telas não pôde ser guardado: {ErrorText.Describe(ex)}";
+        }
+    }
+
+    // Every tile's screen at this width (MainWindow.xaml's TileWidth and
+    // TileHeight); each machine is asked for a thumbnail to match from its
+    // next poll on, and the slider follows.
+    private void ShowTilesAt(int width)
+    {
+        Volatile.Write(ref _tileWidth, width);
+        Resources["TileWidth"] = (double)width;
+        Resources["TileHeight"] = (double)TileSize.HeightOf(width);
+        TileSizeSlider.Value = width;
+    }
+
+    // Thumbnails stay sharp on a monitor with another scale.
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        Volatile.Write(ref _dpiScale, newDpi.DpiScaleX);
     }
 
     // A press on the grid's empty space -- a tile, being a button, takes its
@@ -1103,7 +1228,8 @@ public partial class MainWindow : Window
         var poller = new ThumbnailPoller(
             machine, _masterCertificate,
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
-            appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy));
+            appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
+            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _tileWidth), Volatile.Read(ref _dpiScale)));
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>

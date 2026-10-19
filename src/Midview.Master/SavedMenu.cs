@@ -12,11 +12,9 @@ public sealed record MenuEntry(string Name, string Target);
 // menus, in the order they were saved, next to the classroom list.
 public static class SavedMenu
 {
-    public static string WebsitesPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Midview", "menu-sites.json");
+    public static string WebsitesPath => Path.Combine(MasterData.Folder, "menu-sites.json");
 
-    public static string ProgramsPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Midview", "menu-programas.json");
+    public static string ProgramsPath => Path.Combine(MasterData.Folder, "menu-programas.json");
 
     // A name already in the menu gets the new target, in its place, instead
     // of a second item with the same name.

@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Midview.Master"
         Title="Midview - Sala de aula" Height="760" Width="1440"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
-        Closed="OnWindowClosed" KeyDown="OnWindowKeyDown">
+        Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
     <DockPanel>
         <!-- Grouped like the actions they hold; one row from about 1410 px wide,
              and whole groups move to a second row on a narrower window. -->
@@ -91,7 +91,27 @@
 
         <Border DockPanel.Dock="Bottom" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
                 BorderThickness="0,1,0,0" Padding="14,7">
-            <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource InkMutedBrush}" FontSize="13" TextWrapping="Wrap" />
+            <DockPanel>
+                <!-- How big each machine's screen is drawn (TileSize, remembered in
+                     GridViewFile); also Ctrl + the mouse wheel and Ctrl +, -, 0. -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <Button Content="Caber todas" Click="OnFitAllClicked" Padding="10,2" FontSize="12"
+                            ToolTip="Deixa as telas no maior tamanho em que todas as máquinas cabem na janela, sem rolar." />
+                    <Button Click="OnSmallerTilesClicked" Padding="6,3" Margin="12,0,6,0"
+                            ToolTip="Telas menores, para ver mais máquinas de uma vez (Ctrl + roda do mouse ou Ctrl -).">
+                        <TextBlock Text="&#xE71F;" FontFamily="{StaticResource IconFont}" FontSize="12" />
+                    </Button>
+                    <Slider x:Name="TileSizeSlider" Width="140" VerticalAlignment="Center" IsSnapToTickEnabled="True"
+                            TickPlacement="None"
+                            ToolTip="Tamanho das telas dos alunos (Ctrl + roda do mouse)." />
+                    <Button Click="OnLargerTilesClicked" Padding="6,3" Margin="6,0,0,0"
+                            ToolTip="Telas maiores, para ver melhor cada máquina (Ctrl + roda do mouse ou Ctrl +).">
+                        <TextBlock Text="&#xE8A3;" FontFamily="{StaticResource IconFont}" FontSize="12" />
+                    </Button>
+                </StackPanel>
+                <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource InkMutedBrush}" FontSize="13" TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+            </DockPanel>
         </Border>
 
         <Grid Background="{StaticResource CanvasBrush}">
@@ -167,8 +187,10 @@
                                             <MenuItem Tag="uma" Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                         </ContextMenu>
                                     </Button.ContextMenu>
-                                    <StackPanel>
-                                        <Border Width="256" Height="144" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
+                                    <!-- As wide as the teacher made the tiles (ShowTilesAt): a long
+                                         name is cut short rather than widening its tile. -->
+                                    <StackPanel Width="{DynamicResource TileWidth}">
+                                        <Border Height="{DynamicResource TileHeight}" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
                                             <Grid>
                                                 <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
                                                 <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10" FontSize="13"
@@ -177,8 +199,9 @@
                                             </Grid>
                                         </Border>
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource InkBrush}"
-                                                   Margin="0,7,0,1" HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center">
+                                                   Margin="0,7,0,1" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center"
+                                                   TextAlignment="Center" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
@@ -194,7 +217,8 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center">
+                                        <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center"
+                                                   TextAlignment="Center" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Style.Triggers>

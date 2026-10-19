@@ -26,9 +26,7 @@ public static class WakeTask
 
     private static readonly XNamespace Task = "http://schemas.microsoft.com/windows/2004/02/mit/task";
 
-    public static string LogPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Midview", "ligar-turma.log");
+    public static string LogPath => Path.Combine(MasterData.Folder, "ligar-turma.log");
 
     // The task's definition, in the XML schtasks.exe imports.
     public static string BuildXml(PowerSchedule schedule, string masterPath, DateTime today)

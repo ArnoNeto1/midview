@@ -676,6 +676,22 @@ public class SessionServerTests
     }
 
     [Fact]
+    public async Task RequestThumbnail_WithASize_RepliesAtThatSize()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(1920, 1080));
+        using var preview = harness.ConnectMaster();
+
+        var small = await Task.Run(() => preview.RequestThumbnail(ThumbnailRequest.Encode(160, 90))).WaitAsync(TimeSpan.FromSeconds(5));
+        // The same connection, after the teacher made the tiles bigger.
+        var large = await Task.Run(() => preview.RequestThumbnail(ThumbnailRequest.Encode(960, 540))).WaitAsync(TimeSpan.FromSeconds(5));
+
+        using var smallThumbnail = TileCodec.DecodeTile(small.Payload);
+        using var largeThumbnail = TileCodec.DecodeTile(large.Payload);
+        Assert.Equal((160, 90), (smallThumbnail.Width, smallThumbnail.Height));
+        Assert.Equal((960, 540), (largeThumbnail.Width, largeThumbnail.Height));
+    }
+
+    [Fact]
     public async Task NoTeacherYet_RefusesConnections_ThenAcceptsTheTeacherOncePaired()
     {
         var trustedMastersFile = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid():N}.json");
@@ -1718,9 +1734,11 @@ public class SessionServerTests
             return CommandResult.Decode(Channel.Receive().Payload);
         }
 
-        public Message RequestThumbnail()
+        public Message RequestThumbnail() => RequestThumbnail(Array.Empty<byte>());
+
+        public Message RequestThumbnail(byte[] payload)
         {
-            Channel.Send(new Message(MessageType.RequestThumbnail, Array.Empty<byte>()));
+            Channel.Send(new Message(MessageType.RequestThumbnail, payload));
             return Channel.Receive();
         }
 

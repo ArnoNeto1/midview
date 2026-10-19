@@ -17,7 +17,8 @@ public enum MessageType : byte
     // Classroom-console preview feed. A connection whose first message is
     // RequestThumbnail is a preview connection: each request gets exactly
     // one ThumbnailFrame reply (a JPEG, or an empty payload when the screen
-    // can't be captured right now, e.g. while it's locked).
+    // can't be captured right now, e.g. while it's locked). Each request
+    // says how big (ThumbnailRequest).
     RequestThumbnail = 12,
     ThumbnailFrame = 13,
 

@@ -11,9 +11,7 @@ public static class KnownMachinesFile
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Midview", "known-machines.json");
+    public static string DefaultPath => Path.Combine(MasterData.Folder, "known-machines.json");
 
     // An unreadable file is moved aside to "<path>.corrupt" (returned
     // through corruptCopyPath) rather than deleted, or left in place to

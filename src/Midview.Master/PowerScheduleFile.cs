@@ -9,9 +9,7 @@ namespace Midview.Master;
 // machine's Agent, and what the wake task on this PC follows.
 public static class PowerScheduleFile
 {
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Midview", "power-schedule.json");
+    public static string DefaultPath => Path.Combine(MasterData.Folder, "power-schedule.json");
 
     // Missing or unreadable means no schedule; an unreadable file is moved
     // aside to "<path>.corrupt" rather than lost.
