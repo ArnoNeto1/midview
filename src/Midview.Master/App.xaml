@@ -102,18 +102,25 @@
             <Setter Property="Margin" Value="6,10,6,10" />
         </Style>
 
-        <!-- A student machine in the grid: a white card around its screen and name. -->
+        <!-- A student machine in the grid: a card whose screen reaches its edges,
+             with any badges below it. -->
         <Style x:Key="MachineTileButton" TargetType="Button">
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-            <Setter Property="Margin" Value="8" />
+            <Setter Property="Margin" Value="4" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
-                                BorderThickness="1" CornerRadius="8" Padding="7">
-                            <ContentPresenter />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="Card" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
+                                    BorderThickness="1" CornerRadius="8">
+                                <ContentPresenter />
+                            </Border>
+                            <!-- Selection is drawn over the screen's edge: with no padding
+                                 left, a thicker card border would move the screen. -->
+                            <Border x:Name="SelectionRing" BorderBrush="{StaticResource SelectedLineBrush}" BorderThickness="3"
+                                    CornerRadius="8" IsHitTestVisible="False" Visibility="Collapsed" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource CardLineHoverBrush}" />
@@ -126,8 +133,7 @@
                             </Trigger>
                             <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                 <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
-                                <Setter TargetName="Card" Property="BorderThickness" Value="2" />
-                                <Setter TargetName="Card" Property="Padding" Value="6" />
+                                <Setter TargetName="SelectionRing" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="Card" Property="Background" Value="{StaticResource SelectedFillBrush}" />
                             </DataTrigger>
                         </ControlTemplate.Triggers>

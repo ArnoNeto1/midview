@@ -199,20 +199,29 @@
                                             <MenuItem Tag="uma" Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                         </ContextMenu>
                                     </Button.ContextMenu>
-                                    <!-- As wide as the teacher made the tiles (ShowTilesAt): a long
+                                    <!-- As wide as the teacher made the tiles (ShowTilesAt). The screen
+                                         fills the card, with the name over its bottom edge, where the
+                                         student's taskbar is, so a tile is nearly all screen. A long
                                          name is cut short rather than widening its tile. -->
                                     <StackPanel Width="{DynamicResource TileWidth}">
-                                        <Border Height="{DynamicResource TileHeight}" Background="#111A1D" CornerRadius="4" ClipToBounds="True">
+                                        <Border Height="{DynamicResource TileHeight}" Background="#111A1D" CornerRadius="7">
                                             <Grid>
-                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
-                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10" FontSize="13"
+                                                <!-- A brush, not an Image: it follows the rounded corners. -->
+                                                <Border CornerRadius="7">
+                                                    <Border.Background>
+                                                        <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="Uniform" />
+                                                    </Border.Background>
+                                                </Border>
+                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource ChalkTextBrush}" Margin="10,10,10,22" FontSize="13"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            TextAlignment="Center" TextWrapping="Wrap" />
+                                                <Border VerticalAlignment="Bottom" Background="#B8111A1D" CornerRadius="0,0,7,7" Padding="6,2,6,3">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11" Foreground="White"
+                                                               HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                </Border>
                                             </Grid>
                                         </Border>
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource InkBrush}"
-                                                   Margin="0,7,0,1" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding ScreenLockBadge}" FontSize="12" HorizontalAlignment="Center"
+                                        <TextBlock Text="{Binding ScreenLockBadge}" FontSize="11" HorizontalAlignment="Center" Margin="4,3,4,2"
                                                    TextAlignment="Center" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -229,7 +238,7 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Text="{Binding BlockBadge}" FontSize="12" Foreground="#B3261E" HorizontalAlignment="Center"
+                                        <TextBlock Text="{Binding BlockBadge}" FontSize="11" Foreground="#B3261E" HorizontalAlignment="Center" Margin="4,3,4,2"
                                                    TextAlignment="Center" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
