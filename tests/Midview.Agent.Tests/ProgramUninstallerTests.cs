@@ -507,6 +507,62 @@ public sealed class ProgramUninstallerTests : IDisposable
     }
 
     [Fact]
+    public void Uninstall_Office2007_WaitsForSetupAndKeepsItsConfigUntilItEnds()
+    {
+        // Office 2007's setup.exe is a window program, and PowerShell's & doesn't
+        // wait for one: the command used to end at once with no exit code
+        // ("falhou") and delete the config while setup.exe was starting, so
+        // setup.exe then waited in session 0 on a question nobody could see. The
+        // command is run here the way the Agent runs it, against a stand-in
+        // setup.exe (Midview.Agent.Tests.FakeSetup) that takes 2 s and exits 3010.
+        var setup = Path.Combine(AppContext.BaseDirectory, "setup.exe");
+        AddProgram("ENTERPRISE", k =>
+        {
+            k.SetValue("DisplayName", "Microsoft Office Enterprise 2007");
+            k.SetValue("UninstallString", $"\"{setup}\" /uninstall ENTERPRISE /dll OSETUP.DLL");
+        });
+        Uninstaller().UninstallMany(new[] { "Microsoft Office Enterprise 2007" });
+        var report = Path.Combine(Path.GetTempPath(), $"midview-fake-setup-{Guid.NewGuid():N}.txt");
+
+        try
+        {
+            var code = RunLikeTheAgent(Assert.Single(_commands), new()
+            {
+                ["MIDVIEW_FAKE_SETUP_REPORT"] = report,
+                ["MIDVIEW_FAKE_SETUP_EXIT"] = "3010",
+            });
+
+            Assert.Equal(3010, code);
+            var seen = File.ReadAllLines(report);
+            Assert.StartsWith("/uninstall ENTERPRISE /dll OSETUP.DLL /config ", seen[0]);
+            Assert.Contains("Display Level=\"none\"", seen[1]);
+            Assert.Equal("config still there", seen[2]);
+        }
+        finally
+        {
+            File.Delete(report);
+        }
+    }
+
+    // Runs a command line as ProgramUninstaller.RunCommand does: through
+    // cmd.exe /s /c, with no window, waiting for cmd.exe to end.
+    private static int RunLikeTheAgent(string commandLine, Dictionary<string, string> environment)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe", "/s /c \"" + commandLine + "\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var (name, value) in environment)
+        {
+            start.Environment[name] = value;
+        }
+        using var process = System.Diagnostics.Process.Start(start)!;
+        Assert.True(process.WaitForExit(60_000), "The command didn't end within a minute.");
+        return process.ExitCode;
+    }
+
+    [Fact]
     public void Uninstall_Office2007_SupersedesTheSameNamedMsiSibling()
     {
         // Office 2007 registers two ARP entries with the same display name: the

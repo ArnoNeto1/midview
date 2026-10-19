@@ -460,14 +460,21 @@ public sealed class ProgramUninstaller
 
     // Removes an Office 2007 product silently. Its setup.exe only goes quiet
     // with a config.xml that sets Display Level="none", so the command writes
-    // one to a temp file, runs setup.exe /uninstall <PRODUCT> /config <file>,
-    // and deletes it after -- all as a PowerShell -EncodedCommand, the same way
-    // AppxRemovalCommand carries a multi-statement script through cmd.exe
-    // intact. Removing the suite also removes its same-named MSI entry, so that
-    // sibling isn't run too (see SupersedesSameName).
+    // one to a temp file, runs setup.exe /uninstall <PRODUCT> /dll OSETUP.DLL
+    // (as its entry publishes it) /config <file>, and deletes it after -- all
+    // as a PowerShell -EncodedCommand, the same way AppxRemovalCommand carries
+    // a multi-statement script through cmd.exe intact. setup.exe is a window
+    // program, which PowerShell's & doesn't wait for (no exit code, and the
+    // config deleted before setup.exe read it), so Start-Process -Wait runs it.
+    // One left by an earlier try that ended that way still waits, in session
+    // 0, on a question nobody can see, and would make this one fail as "setup
+    // already running": it's stopped first. Removing the suite also removes its
+    // same-named MSI entry, so that sibling isn't run too (see
+    // SupersedesSameName).
     private static string Office2007SilentUninstall(string setupExePath, string product)
     {
         var escapedPath = setupExePath.Replace("'", "''");
+        var escapedProduct = product.Replace("'", "''");
         var config =
             $"<Configuration Product=\"{product}\">" +
             "<Display Level=\"none\" CompletionNotice=\"no\" SuppressModal=\"yes\" AcceptEula=\"yes\" />" +
@@ -478,9 +485,13 @@ public sealed class ProgramUninstaller
             $"$xml = '{config.Replace("'", "''")}'; " +
             "$f = Join-Path $env:TEMP ('midview-office2007-' + [guid]::NewGuid().ToString('N') + '.xml'); " +
             "Set-Content -LiteralPath $f -Value $xml -Encoding UTF8; " +
+            "Get-CimInstance Win32_Process -Filter \"Name = 'setup.exe'\" | " +
+            $"Where-Object {{ $_.ExecutablePath -eq '{escapedPath}' }} | " +
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; " +
             "try { " +
-            $"& '{escapedPath}' /uninstall {product} /config $f; " +
-            "$code = $LASTEXITCODE " +
+            $"$p = Start-Process -FilePath '{escapedPath}' " +
+            $"-ArgumentList ('/uninstall {escapedProduct} /dll OSETUP.DLL /config \"' + $f + '\"') -Wait -PassThru; " +
+            "$code = $p.ExitCode " +
             "} finally { Remove-Item -LiteralPath $f -ErrorAction SilentlyContinue }; " +
             "if ($null -eq $code) { exit 1 } else { exit $code }";
         return $"powershell.exe {PowerShellArguments(script)}";

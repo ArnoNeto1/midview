@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Stands in for Office 2007's Setup Controller setup.exe in the Agent's
+       tests. WinExe like the real one: PowerShell doesn't wait for a window
+       program the way it waits for a console one, and that's what the tests
+       check the uninstall command against. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>setup</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

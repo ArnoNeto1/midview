@@ -12,5 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Midview.Agent\Midview.Agent.csproj" />
+    <!-- Its setup.exe lands next to the tests (see ProgramUninstallerTests). -->
+    <ProjectReference Include="..\Midview.Agent.Tests.FakeSetup\Midview.Agent.Tests.FakeSetup.csproj" />
   </ItemGroup>
 </Project>
