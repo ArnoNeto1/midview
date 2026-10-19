@@ -16,23 +16,24 @@ public class GridViewFileTests : IDisposable
     }
 
     [Fact]
-    public void NoFileYet_IsTheDefaultSize() => Assert.Equal(TileSize.Default, GridViewFile.LoadTileWidth(GridViewPath));
+    public void NoFileYet_IsTheDefaultSize_WithEveryMachineShown() =>
+        Assert.Equal(new GridView(TileSize.Default, OnlineOnly: false), GridViewFile.Load(GridViewPath));
 
     [Fact]
     public void SaveThenLoad_RoundTrips()
     {
-        GridViewFile.SaveTileWidth(GridViewPath, 384);
+        GridViewFile.Save(GridViewPath, new GridView(384, OnlineOnly: true));
 
-        Assert.Equal(384, GridViewFile.LoadTileWidth(GridViewPath));
+        Assert.Equal(new GridView(384, OnlineOnly: true), GridViewFile.Load(GridViewPath));
     }
 
     [Fact]
-    public void AnUnreadableFile_IsTheDefaultSize()
+    public void AnUnreadableFile_IsTheDefault()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(GridViewPath, "{ não é json");
 
-        Assert.Equal(TileSize.Default, GridViewFile.LoadTileWidth(GridViewPath));
+        Assert.Equal(new GridView(TileSize.Default, OnlineOnly: false), GridViewFile.Load(GridViewPath));
     }
 
     [Fact]
@@ -41,6 +42,25 @@ public class GridViewFileTests : IDisposable
         Directory.CreateDirectory(_directory);
         File.WriteAllText(GridViewPath, """{ "TileWidth": 300 }""");
 
-        Assert.Equal(320, GridViewFile.LoadTileWidth(GridViewPath));
+        Assert.Equal(320, GridViewFile.Load(GridViewPath).TileWidth);
+    }
+
+    // What 0.0.19 saved, before the filter existed.
+    [Fact]
+    public void AFileWithOnlyTheSize_ShowsEveryMachine()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(GridViewPath, """{"TileWidth":384}""");
+
+        Assert.Equal(new GridView(384, OnlineOnly: false), GridViewFile.Load(GridViewPath));
+    }
+
+    [Fact]
+    public void NoSize_ButTheFilter_IsTheDefaultSizeWithTheFilter()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(GridViewPath, """{ "OnlineOnly": true }""");
+
+        Assert.Equal(new GridView(TileSize.Default, OnlineOnly: true), GridViewFile.Load(GridViewPath));
     }
 }

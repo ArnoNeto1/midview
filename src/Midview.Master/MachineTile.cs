@@ -4,6 +4,15 @@ using System.Windows.Media;
 
 namespace Midview.Master;
 
+// Whether the machine answered its last poll, for "Só online": Connecting
+// until the first answer or failure.
+public enum TilePresence
+{
+    Connecting,
+    Online,
+    Offline,
+}
+
 // One cell of the classroom grid. Only ever touched on the UI thread.
 public sealed class MachineTile : INotifyPropertyChanged
 {
@@ -13,6 +22,7 @@ public sealed class MachineTile : INotifyPropertyChanged
     private bool _isSelected;
     private string _screenLockBadge = string.Empty;
     private bool _screenLockAlert;
+    private TilePresence _presence;
 
     public MachineTile(KnownMachine machine)
     {
@@ -108,6 +118,20 @@ public sealed class MachineTile : INotifyPropertyChanged
         }
     }
 
+    // What "Só online" goes by (GridFilter); set with every poll's outcome.
+    public TilePresence Presence
+    {
+        get => _presence;
+        private set
+        {
+            if (_presence != value)
+            {
+                _presence = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public void ShowScreenLock(string text, bool alert)
     {
         ScreenLockBadge = text;
@@ -118,14 +142,26 @@ public sealed class MachineTile : INotifyPropertyChanged
     {
         Thumbnail = thumbnail;
         Status = string.Empty;
+        Presence = TilePresence.Online;
     }
 
-    // Clears the last thumbnail: a stale image would suggest the machine
-    // still looks like that.
+    // The machine answered, but its screen can't be captured right now
+    // (e.g. it's locked): still online.
+    public void ShowScreenUnavailable()
+    {
+        Thumbnail = null;
+        Status = "Tela indisponível";
+        Presence = TilePresence.Online;
+    }
+
+    // Why the machine couldn't be polled (FailureText.Status). Clears the
+    // last thumbnail: a stale image would suggest the machine still looks
+    // like that.
     public void ShowStatus(string status)
     {
         Thumbnail = null;
         Status = status;
+        Presence = FailureText.MeansMachineIsOn(status) ? TilePresence.Online : TilePresence.Offline;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

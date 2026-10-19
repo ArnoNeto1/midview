@@ -25,7 +25,7 @@ public static class TileSize
     // For a width that isn't a step (a hand-edited preferences file).
     public static int Snap(int width) => Widths.MinBy(step => Math.Abs(step - width));
 
-    // "Caber todas": the largest step at which every machine is in view
+    // "Visualizar todos": the largest step at which every machine shown is in view
     // without scrolling, in a WrapPanel of availableWidth x availableHeight.
     // chromeWidth/chromeHeight is what a tile adds around its thumbnail
     // (border, padding, margin, the name and badges below it). When even the

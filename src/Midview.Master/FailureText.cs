@@ -12,8 +12,11 @@ namespace Midview.Master;
 // the technical message, which is what helps with something unexpected.
 public static class FailureText
 {
+    private const string NobodyLoggedIn = "Sem usuário logado";
+    private const string CertificateRefused = "Certificado recusado";
+
     // For connections to a Session (port 5901).
-    public static string Describe(Exception ex) => Known(ex, refused: "Sem usuário logado") ?? Technical(ex);
+    public static string Describe(Exception ex) => Known(ex, refused: NobodyLoggedIn) ?? Technical(ex);
 
     // For the Agent's commands (port 28900): the Agent runs whether or not
     // anyone is logged in, so a refused connection means it isn't running.
@@ -21,7 +24,12 @@ public static class FailureText
         Known(ex, refused: "O Midview não está rodando nessa máquina") ?? Technical(ex);
 
     // The grid's tile status: always one of the short ones.
-    public static string Status(Exception ex) => Known(ex, refused: "Sem usuário logado") ?? "Sem resposta";
+    public static string Status(Exception ex) => Known(ex, refused: NobodyLoggedIn) ?? "Sem resposta";
+
+    // Whether a tile's Status still means the machine is on and answering
+    // ("Só online"): refused at the login screen, or answering but not
+    // trusting this teacher. Offline, no answer or not found is not.
+    public static bool MeansMachineIsOn(string status) => status is NobodyLoggedIn or CertificateRefused;
 
     private static string? Known(Exception ex, string refused) => ex switch
     {
@@ -37,7 +45,7 @@ public static class FailureText
         // Either side didn't trust the other's certificate: a wrong
         // thumbprint here, or this Master missing from the machine's
         // trusted-masters.json.
-        AuthenticationException => "Certificado recusado",
+        AuthenticationException => CertificateRefused,
         // Connected, but the machine stopped answering or hung up.
         IOException => "Sem resposta",
         _ => null,

@@ -95,8 +95,12 @@
                 <!-- How big each machine's screen is drawn (TileSize, remembered in
                      GridViewFile); also Ctrl + the mouse wheel and Ctrl +, -, 0. -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <Button Content="Caber todas" Click="OnFitAllClicked" Padding="10,2" FontSize="12"
-                            ToolTip="Deixa as telas no maior tamanho em que todas as máquinas cabem na janela, sem rolar." />
+                    <Button Content="Visualizar todos" Click="OnFitAllClicked" Padding="10,2" FontSize="12"
+                            ToolTip="Deixa as telas no maior tamanho em que todas as máquinas mostradas cabem na janela, sem rolar." />
+                    <!-- GridFilter: hides the machines that are off or not answering. -->
+                    <ToggleButton x:Name="OnlineOnlyButton" Content="Só online" Click="OnOnlineOnlyClicked" Padding="10,2" FontSize="12"
+                                  Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Mostra só as máquinas ligadas e respondendo; as desligadas ou sem resposta saem da grade. As ações para a turma toda continuam valendo para todas as máquinas." />
                     <Button Click="OnSmallerTilesClicked" Padding="6,3" Margin="12,0,6,0"
                             ToolTip="Telas menores, para ver mais máquinas de uma vez (Ctrl + roda do mouse ou Ctrl -).">
                         <TextBlock Text="&#xE71F;" FontFamily="{StaticResource IconFont}" FontSize="12" />
@@ -123,6 +127,14 @@
                     <Button Content="Procurar máquinas na rede" Click="OnSearchNetworkClicked" Padding="16,7" />
                     <Button Content="Entrar na sala de um colega" Click="OnJoinClassClicked" Padding="16,7" Margin="8,0,0,0" />
                 </StackPanel>
+            </StackPanel>
+            <!-- "Só online" hiding every machine (GridFilter.EmptyNotice). -->
+            <StackPanel x:Name="NoneShownPanel" Visibility="Collapsed" Panel.ZIndex="1"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock x:Name="NoneShownText" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"
+                           Foreground="{StaticResource InkMutedBrush}" />
+                <Button Content="Mostrar todas as máquinas" Click="OnShowAllMachinesClicked" Padding="16,7" Margin="0,12,0,0"
+                        HorizontalAlignment="Center" />
             </StackPanel>
             <!-- No focus rectangle: the grid takes keyboard focus on Esc and on a
                  press in the empty space (so no tile keeps a focus border), and a

@@ -1,9 +1,12 @@
+using System.Collections;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -69,6 +72,13 @@ public partial class MainWindow : Window
     private int _tileWidth = TileSize.Default;
     private double _dpiScale = 1.0;
 
+    // "Só online": the grid shows only the machines that answer (GridFilter).
+    // _shownTiles is the grid's own list of _tiles (its default view),
+    // filtered and kept up to date as machines answer or stop answering;
+    // selecting only ever reaches the tiles it shows.
+    private bool _onlineOnly;
+    private readonly ListCollectionView _shownTiles;
+
     // Wheel turns not yet worth a whole step (a touchpad sends small ones).
     private int _wheelDelta;
 
@@ -79,15 +89,23 @@ public partial class MainWindow : Window
         Width = Math.Min(Width, SystemParameters.WorkArea.Width);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
-        _selection = new GridSelection<MachineTile>(_tiles);
+        _shownTiles = (ListCollectionView)CollectionViewSource.GetDefaultView(_tiles);
+        _shownTiles.Filter = item => GridFilter.Shows((MachineTile)item, _onlineOnly);
+        _shownTiles.IsLiveFiltering = true;
+        _shownTiles.LiveFilteringProperties.Add(nameof(MachineTile.Presence));
+        ((INotifyCollectionChanged)_shownTiles).CollectionChanged += OnShownTilesChanged;
+        _selection = new GridSelection<MachineTile>(new ShownTiles(_shownTiles));
         _dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
         TileSizeSlider.Minimum = TileSize.Smallest;
         TileSizeSlider.Maximum = TileSize.Largest;
         TileSizeSlider.Ticks = new DoubleCollection(TileSize.Widths.Select(width => (double)width));
-        ShowTilesAt(GridViewFile.LoadTileWidth(GridViewFile.DefaultPath));
+        var gridView = GridViewFile.Load(GridViewFile.DefaultPath);
+        ShowTilesAt(gridView.TileWidth);
         // Only now: setting the slider's range above moved it, which isn't
         // the teacher choosing a size.
         TileSizeSlider.ValueChanged += OnTileSizeSliderChanged;
+        _onlineOnly = gridView.OnlineOnly;
+        OnlineOnlyButton.IsChecked = _onlineOnly;
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
 
@@ -235,12 +253,13 @@ public partial class MainWindow : Window
 
     private void OnLargerTilesClicked(object sender, RoutedEventArgs e) => ResizeTiles(TileSize.Larger(_tileWidth));
 
-    // Once, for the machines and window as they are now: adding machines or
-    // resizing the window afterwards doesn't resize the tiles again.
+    // "Visualizar todos": once, for the machines shown and the window as they
+    // are now -- adding machines or resizing the window afterwards doesn't
+    // resize the tiles again.
     private void OnFitAllClicked(object sender, RoutedEventArgs e)
     {
-        var tiles = Enumerable.Range(0, _tiles.Count)
-            .Select(index => MachinesItemsControl.ItemContainerGenerator.ContainerFromIndex(index))
+        var tiles = _shownTiles.Cast<MachineTile>()
+            .Select(tile => MachinesItemsControl.ItemContainerGenerator.ContainerFromItem(tile))
             .OfType<FrameworkElement>()
             .ToList();
         if (tiles.Count == 0)
@@ -259,7 +278,29 @@ public partial class MainWindow : Window
         var availableWidth = MachinesScrollViewer.ActualWidth - margin.Left - margin.Right - 1;
         var availableHeight = MachinesScrollViewer.ActualHeight - margin.Top - margin.Bottom - 1;
 
-        ResizeTiles(TileSize.ToFitAll(_tiles.Count, availableWidth, availableHeight, chromeWidth, chromeHeight));
+        ResizeTiles(TileSize.ToFitAll(tiles.Count, availableWidth, availableHeight, chromeWidth, chromeHeight));
+    }
+
+    private void OnOnlineOnlyClicked(object sender, RoutedEventArgs e) => ShowOnlineOnly(OnlineOnlyButton.IsChecked == true);
+
+    // The button under "Nenhuma máquina online agora".
+    private void OnShowAllMachinesClicked(object sender, RoutedEventArgs e) => ShowOnlineOnly(false);
+
+    // The teacher turned "Só online" on or off: shown now, and the next time
+    // Midview opens.
+    private void ShowOnlineOnly(bool onlineOnly)
+    {
+        OnlineOnlyButton.IsChecked = onlineOnly;
+        if (onlineOnly == _onlineOnly)
+        {
+            return;
+        }
+        _onlineOnly = onlineOnly;
+        // The view's own Refresh: MachinesItemsControl.Items.Refresh() left
+        // the hidden tiles in when tried.
+        _shownTiles.Refresh();
+        UpdateEmptyHint();
+        SaveGridView();
     }
 
     // The teacher chose a size: shown now, and the next time Midview opens.
@@ -270,14 +311,46 @@ public partial class MainWindow : Window
             return;
         }
         ShowTilesAt(width);
+        SaveGridView();
+    }
+
+    private void SaveGridView()
+    {
         try
         {
-            GridViewFile.SaveTileWidth(GridViewFile.DefaultPath, width);
+            GridViewFile.Save(GridViewFile.DefaultPath, new GridView(_tileWidth, _onlineOnly));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O tamanho das telas não pôde ser guardado: {ErrorText.Describe(ex)}";
+            StatusTextBlock.Text = $"O tamanho e o filtro das telas não puderam ser guardados: {ErrorText.Describe(ex)}";
         }
+    }
+
+    // A tile the grid stopped showing ("Só online") leaves the selection, so
+    // "Ver a tela", "Controlar" and a tile's menu never act on a hidden one.
+    private void OnShownTilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        _selection.Prune();
+        if (!_selection.Selected.SequenceEqual(_tiles.Where(tile => tile.IsSelected)))
+        {
+            RefreshSelection();
+        }
+    }
+
+    // The grid's filtered list, as GridSelection reads it: live, in grid order.
+    private sealed class ShownTiles : IReadOnlyList<MachineTile>
+    {
+        private readonly ListCollectionView _view;
+
+        public ShownTiles(ListCollectionView view) => _view = view;
+
+        public int Count => _view.Count;
+
+        public MachineTile this[int index] => (MachineTile)_view.GetItemAt(index);
+
+        public IEnumerator<MachineTile> GetEnumerator() => _view.Cast<MachineTile>().GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     // Every tile's screen at this width (MainWindow.xaml's TileWidth and
@@ -1223,6 +1296,15 @@ public partial class MainWindow : Window
     private void InsertTile(int index, KnownMachine machine)
     {
         var tile = new MachineTile(machine);
+        // A machine "Só online" hides can still change what the grid says
+        // when it shows none (still looking, or none online).
+        tile.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MachineTile.Presence))
+            {
+                UpdateEmptyHint();
+            }
+        };
         _tiles.Insert(index, tile);
 
         var poller = new ThumbnailPoller(
@@ -1239,7 +1321,7 @@ public partial class MainWindow : Window
             {
                 if (image is null)
                 {
-                    tile.ShowStatus("Tela indisponível");
+                    tile.ShowScreenUnavailable();
                 }
                 else
                 {
@@ -1303,8 +1385,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateEmptyHint() =>
+    // No machines at all, or "Só online" hiding every one of them: said in
+    // the grid instead of leaving it blank.
+    private void UpdateEmptyHint()
+    {
         EmptyRosterPanel.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly);
+        NoneShownText.Text = notice ?? string.Empty;
+        NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
