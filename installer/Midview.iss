@@ -59,6 +59,9 @@ ChangesAssociations=yes
 ; Inno picks the file that fits the screen's scale.
 WizardImageFile={#Assets}\instalador-grande-164.bmp,{#Assets}\instalador-grande-328.bmp
 WizardSmallImageFile={#Assets}\instalador-pequena-55.bmp,{#Assets}\instalador-pequena-69.bmp,{#Assets}\instalador-pequena-83.bmp,{#Assets}\instalador-pequena-110.bmp
+; The repository's LICENSE (Gerar-Instalador.ps1 copies it next to the
+; programs): the wizard asks to accept it, a silent install clicks through.
+LicenseFile={#Programa}\aluno\LICENSE.txt
 OutputDir={#Saida}
 OutputBaseFilename=MidviewSetup
 Compression=lzma2
@@ -263,7 +266,7 @@ end;
 
 procedure InitializeWizard;
 begin
-  PaginaTipo := CreateInputOptionPage(wpWelcome,
+  PaginaTipo := CreateInputOptionPage(wpLicense,
     'Tipo de instalação', 'Este computador é o do professor ou uma máquina de aluno?',
     'Escolha uma opção e clique em Avançar.', True, False);
   PaginaTipo.Add('Professor: o computador de onde você controla a sala');

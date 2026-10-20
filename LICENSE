@@ -1,0 +1,128 @@
+LICENÇA DE USO DO MIDVIEW
+
+Versão 1.0, de 20 de outubro de 2026.
+
+Copyright © 2026 MidView. Todos os direitos reservados.
+
+Esta licença é um acordo entre MidView ("Titular") e a escola, a rede de ensino ou a pessoa que instala ou usa o Midview ("Licenciado"). Ao aceitar esta licença no instalador, ou ao instalar, copiar ou usar o Midview, o Licenciado declara que leu e aceita os termos abaixo. Se não concordar com eles, não instale nem use o Midview.
+
+
+1. DEFINIÇÕES
+
+1.1. "Midview" ou "Software": o programa Midview em todas as suas partes, isto é, o programa do professor, o serviço e os programas instalados nas máquinas dos alunos, o instalador, as atualizações, os textos, as imagens e a documentação.
+
+1.2. "Instituição": a escola, a secretaria ou a rede de ensino responsável pelos computadores em que o Midview é instalado.
+
+1.3. "Usuários": os professores, técnicos e alunos que usam os computadores com o Midview.
+
+1.4. "Dados": as imagens de tela, o texto copiado durante o controle remoto, as mensagens, os arquivos, os nomes de computadores e de programas e as demais informações que o Midview mostra, transmite ou guarda durante o uso.
+
+
+2. LICENÇA
+
+2.1. O Titular concede ao Licenciado uma licença gratuita, não exclusiva, intransferível e por prazo indeterminado para instalar e usar o Midview nos computadores da Instituição, com finalidade educacional e de administração dos laboratórios de informática.
+
+2.2. Não há limite de computadores dentro da Instituição. O Licenciado pode guardar cópias do instalador para instalar, reinstalar e atualizar esses computadores.
+
+2.3. O Titular não cobra pela licença nem pelas atualizações distribuídas com ela. Serviços oferecidos à parte, como suporte ou treinamento, seguem condições próprias, combinadas por escrito.
+
+2.4. Esta licença não transfere ao Licenciado a propriedade do Midview nem dá acesso ao seu código-fonte.
+
+
+3. O QUE NÃO É PERMITIDO
+
+Sem autorização prévia e por escrito do Titular, o Licenciado não pode:
+
+a) vender, alugar, emprestar, sublicenciar ou ceder o Midview, nem cobrar de terceiros pelo seu uso;
+
+b) distribuir o Midview ou o seu instalador para fora da Instituição, inclusive publicá-lo na internet;
+
+c) copiar, modificar, adaptar, traduzir ou criar obras derivadas do Midview, exceto as cópias previstas na cláusula 2.2;
+
+d) descompilar, desmontar ou fazer engenharia reversa do Midview, salvo nos casos em que a lei permitir expressamente;
+
+e) remover ou alterar avisos de direitos autorais, marcas ou esta licença;
+
+f) contornar, desativar ou burlar os mecanismos de segurança e de pareamento do Midview;
+
+g) usar o Midview fora da finalidade prevista na cláusula 2.1, para vigiar pessoas sem o conhecimento delas ou para qualquer fim ilícito.
+
+
+4. PROPRIEDADE INTELECTUAL
+
+4.1. O Midview é protegido pela Lei nº 9.609/1998 (Lei do Software), pela Lei nº 9.610/1998 (Lei de Direitos Autorais) e pelos tratados internacionais de que o Brasil faz parte. Todos os direitos sobre o Midview, inclusive o código-fonte, a interface, o nome e a marca, pertencem ao Titular.
+
+4.2. O Midview é licenciado, não vendido. Todo direito que esta licença não concede expressamente fica reservado ao Titular.
+
+4.3. Sugestões e comentários enviados ao Titular sobre o Midview podem ser usados por ele livremente, sem obrigação de pagamento.
+
+
+5. ATUALIZAÇÕES E SUPORTE
+
+5.1. O Titular pode lançar novas versões e corrigir, alterar ou remover funções a qualquer momento, mas não é obrigado a fazê-lo.
+
+5.2. As atualizações, inclusive as que o programa do professor envia às máquinas pela rede, seguem esta licença, salvo se vierem acompanhadas de termos próprios.
+
+5.3. Esta licença não inclui suporte técnico, manutenção nem treinamento.
+
+
+6. PRIVACIDADE E PROTEÇÃO DE DADOS
+
+6.1. O Midview funciona dentro da rede local da Instituição. Ele não envia Dados ao Titular nem a servidores na internet, e o Titular não coleta, não recebe e não armazena os Dados tratados com ele. Algumas opções do Painel do laboratório configuram o Google Chrome, que pode então acessar serviços do Google por conta própria, por exemplo para baixar o bloqueador de anúncios.
+
+6.2. A Instituição é a controladora dos dados pessoais tratados com o Midview, nos termos da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais). Cabe a ela:
+
+a) definir a finalidade e a base legal do tratamento;
+
+b) informar professores, alunos e, no caso de crianças e adolescentes, seus pais ou responsáveis, de que a tela das máquinas do laboratório pode ser vista pelo professor a qualquer momento da aula, sem aviso na máquina do aluno, além de controlada e bloqueada, e de que mensagens e arquivos passam pelo Midview;
+
+c) usar as funções de acompanhamento e de controle só durante as atividades escolares e na medida necessária a elas, respeitando o melhor interesse das crianças e dos adolescentes;
+
+d) controlar quem tem acesso ao programa do professor e às máquinas pareadas com ele;
+
+e) proteger os arquivos recolhidos e os demais Dados e apagá-los quando não forem mais necessários.
+
+
+7. GARANTIA
+
+7.1. O Midview é fornecido gratuitamente, no estado em que se encontra. Na máxima extensão permitida pela lei, o Titular não dá garantia de nenhum tipo, expressa ou implícita, inclusive de adequação a uma finalidade específica, de funcionamento sem interrupções ou sem erros, ou de compatibilidade com todos os computadores e redes.
+
+7.2. Os bloqueios de tela, de programas, de sites e da internet ajudam na gestão da aula, mas não substituem outras medidas de segurança da rede e dos computadores, nem garantem que nenhum conteúdo indesejado seja acessado.
+
+7.3. O Licenciado deve testar o Midview antes de usá-lo em aula e manter cópias de segurança dos dados importantes.
+
+
+8. LIMITAÇÃO DE RESPONSABILIDADE
+
+8.1. Na máxima extensão permitida pela lei, o Titular não responde por danos indiretos, incidentais ou consequentes, lucros cessantes, perda de dados, de arquivos ou de tempo de aula, nem por interrupção de atividades, e também não responde por danos causados pelo uso indevido do Midview ou pelo descumprimento desta licença.
+
+8.2. O Licenciado responde pelo uso que faz do Midview e pelo cumprimento das leis aplicáveis, inclusive as de proteção de dados e as de proteção à criança e ao adolescente.
+
+
+9. COMPONENTES DE TERCEIROS
+
+O Midview inclui componentes de terceiros, como o runtime do .NET e bibliotecas da Microsoft, distribuídos sob suas próprias licenças e listados no arquivo THIRD-PARTY-NOTICES.txt, que acompanha o Midview. Esses componentes seguem as licenças deles, e esta licença não restringe os direitos que elas garantem.
+
+
+10. VIGÊNCIA E ENCERRAMENTO
+
+10.1. Esta licença vale a partir da instalação ou do primeiro uso, por prazo indeterminado.
+
+10.2. O Licenciado pode encerrá-la a qualquer momento, desinstalando o Midview de todos os computadores e apagando suas cópias.
+
+10.3. A licença termina automaticamente, sem necessidade de aviso, se o Licenciado descumprir qualquer um de seus termos. Nesse caso, o Licenciado deve parar de usar o Midview, desinstalá-lo e apagar todas as cópias.
+
+10.4. As cláusulas 4, 7, 8 e 11 continuam valendo depois do encerramento.
+
+
+11. DISPOSIÇÕES GERAIS
+
+11.1. Esta licença é o acordo completo entre o Titular e o Licenciado sobre o Midview e substitui entendimentos anteriores sobre o mesmo assunto.
+
+11.2. O Titular pode alterar esta licença. A versão nova vale para as versões do Midview distribuídas com ela; uma versão já instalada segue a licença com que foi recebida até ser atualizada.
+
+11.3. Se alguma cláusula for considerada inválida, as demais continuam valendo.
+
+11.4. A tolerância com o descumprimento de qualquer cláusula não significa renúncia ao direito de exigi-la.
+
+11.5. Esta licença é regida pelas leis da República Federativa do Brasil. Fica eleito o foro da comarca do domicílio do Titular para resolver qualquer controvérsia sobre ela, salvo competência legal diversa.

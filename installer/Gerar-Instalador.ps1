@@ -57,6 +57,14 @@ function Copy-Text([string]$Source, [string]$Destination, [bool]$WithBom) {
     [IO.File]::WriteAllText($Destination, $text, (New-Object Text.UTF8Encoding $WithBom))
 }
 
+# The license and the third-party notices go in each program's folder, so
+# both the setup and the network updates carry them. As .txt with a BOM:
+# Notepad and the setup's license page show the Portuguese right.
+function Copy-Licenses([string]$Destination) {
+    Copy-Text (Join-Path $repository 'LICENSE') (Join-Path $Destination 'LICENSE.txt') $true
+    Copy-Text (Join-Path $repository 'THIRD-PARTY-NOTICES.txt') (Join-Path $Destination 'THIRD-PARTY-NOTICES.txt') $true
+}
+
 # midview-build.json, next to the student program: what the MidviewMaster
 # needs to push it over the network (BuildManifest in Midview.Protocol) --
 # a label (build time and git commit), the update protocol, and exactly the
@@ -128,8 +136,10 @@ foreach ($earlier in 'MidviewSetup.exe', 'Midview-Instalador-*.exe') {
 # fine on those, while the Session would break on the Agent's stubs.
 Publish-Project 'Midview.Agent' (Join-Path $programs 'aluno')
 Publish-Project 'Midview.Session' (Join-Path $programs 'aluno')
+Copy-Licenses (Join-Path $programs 'aluno')
 Write-BuildManifest (Join-Path $programs 'aluno') $when
 Publish-Project 'Midview.Master' (Join-Path $programs 'professor')
+Copy-Licenses (Join-Path $programs 'professor')
 
 $scripts = New-Item -ItemType Directory -Path (Join-Path $programs 'instalador') -Force
 foreach ($script in Get-ChildItem -Path (Join-Path $PSScriptRoot 'scripts') -Filter '*.ps1') {
