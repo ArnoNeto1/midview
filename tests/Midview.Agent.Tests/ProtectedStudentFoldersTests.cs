@@ -175,6 +175,7 @@ public class ProtectedStudentFoldersTests : IDisposable
     public void NeedsProtecting_NotForALinkedFolder()
     {
         Directory.CreateDirectory(Path.Combine(_desktop, StudentFolderNames.Inbox));
+        Directory.CreateDirectory(Path.Combine(_desktop, StudentFolderNames.ClassFolder));
         var elsewhere = _desktop + "-alvo";
         Directory.CreateDirectory(elsewhere);
         var link = Path.Combine(_desktop, StudentFolderNames.Delivery);
