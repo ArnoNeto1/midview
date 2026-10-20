@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="O Midview coloca a tela de cada aluno no computador do professor: acompanhe a aula, ajude quem travou, envie e recolha arquivos, bloqueie o que tira o foco e ligue ou desligue o laboratório. Gratuito para escolas.">
+<meta property="og:title" content="Midview para professores">
+<meta property="og:description" content="Controle total do seu laboratório de informática. Sem complicação. Gratuito para escolas.">
+<meta property="og:image" content="capa.jpg">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#090d16">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='32' y2='32'%3E%3Cstop stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Crect x='9' y='10' width='14' height='10' rx='2.5' fill='none' stroke='%2304121a' stroke-width='2'/%3E%3Cpath d='M13 24h6M16 20v4' stroke='%2304121a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>Midview para professores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: uma coluna larga sobre o fundo escuro do vídeo; cada grupo da barra de ferramentas vira uma faixa com as funções em linhas "o que faz / como simplifica". */
+:root {
+  --bg: #090d16;
+  --surface: #0f1522;
+  --surface-2: #141c2c;
+  --line: #22304a;
+  --fg: #e6edf7;
+  --muted: #94a3b8;
+  --cyan: #22d3ee;
+  --cyan-deep: #06b6d4;
+  --indigo: #6366f1;
+  --on-accent: #04121a;
+  --font-display: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 16px/1.6 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--cyan); }
+a:focus-visible, button:focus-visible, video:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.03em; }
+p { margin: 0; }
+.eyebrow {
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+
+/* Topo */
+.top {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 10;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.top .wrap { display: flex; align-items: center; gap: 24px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font: 700 20px/1 var(--font-display); letter-spacing: -0.02em; }
+.nav { display: flex; gap: 20px; margin-left: auto; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
+.nav a:hover { color: var(--fg); }
+@media (max-width: 760px) { .nav { display: none; } .top .btn { margin-left: auto; } }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-radius: 999px;
+  font: 600 15px/1 var(--font-body); text-decoration: none; white-space: nowrap;
+}
+.btn-primary { background: linear-gradient(135deg, var(--cyan), var(--cyan-deep)); color: var(--on-accent); box-shadow: 0 10px 30px -12px var(--cyan-deep); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { color: var(--fg); border: 1px solid var(--line); background: var(--surface); }
+.btn-ghost:hover { border-color: var(--cyan-deep); }
+.btn-sm { padding: 9px 16px; font-size: 14px; }
+
+/* Abertura */
+.hero { position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: -40% -10% auto;
+  height: 720px;
+  background:
+    radial-gradient(closest-side at 30% 50%, color-mix(in srgb, var(--cyan-deep) 22%, transparent), transparent),
+    radial-gradient(closest-side at 75% 40%, color-mix(in srgb, var(--indigo) 22%, transparent), transparent);
+  pointer-events: none;
+}
+.hero .wrap { position: relative; padding-block: 72px 40px; display: grid; gap: 22px; justify-items: start; }
+.hero h1 { font-size: clamp(36px, 6vw, 68px); font-weight: 800; line-height: 1.04; max-width: 15ch; }
+.hero h1 span { background: linear-gradient(90deg, var(--cyan), var(--indigo)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Plus Jakarta Sans com tracking negativo deixa o ponto solto da palavra. */
+.hero h1 .dot { font-style: normal; margin-left: -0.1em; }
+.hero .lead { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 60ch; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; list-style: none; padding: 0; margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.facts li { display: flex; align-items: center; gap: 8px; }
+.facts svg { color: var(--cyan); flex: none; }
+
+/* Vídeo */
+.video { padding-block: 8px 72px; }
+.frame {
+  border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 40px 80px -40px color-mix(in srgb, var(--cyan-deep) 45%, transparent);
+}
+.frame video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #000; }
+.caption { color: var(--muted); font-size: 14px; margin-top: 12px; }
+
+section.block { padding-block: 72px; border-top: 1px solid var(--line); }
+.head { display: grid; gap: 14px; margin-bottom: 36px; max-width: 70ch; }
+.head h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 800; line-height: 1.1; }
+.head p { color: var(--muted); font-size: 17px; }
+
+/* Antes e depois */
+.compare { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.compare .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+.compare .cell { background: var(--surface); padding: 18px 22px; min-width: 0; }
+.compare .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); padding-block: 14px; background: var(--surface-2); }
+.compare .label.after { color: var(--cyan); }
+.compare .after-text { color: var(--fg); }
+.compare .before-text { color: var(--muted); }
+@media (max-width: 640px) {
+  .compare .row { grid-template-columns: 1fr; }
+  .compare .row.titles { display: none; }
+  .compare .cell.before-text::before { content: "Antes: "; font-weight: 600; }
+  .compare .cell.after-text::before { content: "Com o Midview: "; font-weight: 600; color: var(--cyan); }
+}
+
+/* Grupos de funções */
+.group { display: grid; grid-template-columns: 260px 1fr; gap: 32px; padding-block: 36px; border-top: 1px solid var(--line); }
+.group:first-of-type { border-top: 0; padding-top: 0; }
+.group-head { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.group-icon {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+  color: var(--cyan);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cyan-deep) 22%, var(--surface)), var(--surface));
+  border: 1px solid color-mix(in srgb, var(--cyan-deep) 40%, var(--line));
+}
+.group-head h3 { font-size: 26px; font-weight: 800; }
+.group-head p { color: var(--muted); font-size: 15px; }
+.features { display: grid; gap: 12px; min-width: 0; }
+.feature {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px;
+  padding: 18px 20px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.feature h4 { margin: 0; font: 700 17px/1.3 var(--font-display); letter-spacing: -0.01em; grid-column: 1 / -1; }
+.feature .does { color: var(--muted); font-size: 15px; min-width: 0; }
+.feature .eases { font-size: 15px; min-width: 0; padding-left: 14px; border-left: 2px solid var(--cyan-deep); }
+.feature .eases strong { color: var(--cyan); font-weight: 600; }
+@media (max-width: 860px) {
+  .group { grid-template-columns: 1fr; gap: 20px; }
+  .feature { grid-template-columns: 1fr; }
+}
+
+/* Mais */
+.extras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.extra { padding: 22px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.extra h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+.extra p { color: var(--muted); font-size: 15px; }
+@media (max-width: 860px) { .extras { grid-template-columns: 1fr; } }
+
+/* Como começar */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: passo; }
+.steps li { counter-increment: passo; padding: 22px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.steps li::before { content: counter(passo); font: 800 15px/1 var(--font-display); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); background: var(--cyan); }
+.steps h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.steps p { color: var(--muted); font-size: 15px; }
+.steps code, .note code { font: 500 13px/1.4 var(--font-mono); color: var(--fg); background: var(--surface-2); padding: 2px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+@media (max-width: 960px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+.note { margin-top: 20px; color: var(--muted); font-size: 15px; max-width: 75ch; }
+
+/* Privacidade e requisitos */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.panel { padding: 24px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+.panel h3 { font-size: 20px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.01em; }
+.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--muted); font-size: 15px; }
+.panel li strong { color: var(--fg); font-weight: 600; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+
+/* Chamada final */
+.cta { padding-block: 80px; border-top: 1px solid var(--line); text-align: center; }
+.cta .wrap { display: grid; gap: 18px; justify-items: center; }
+.cta h2 { font-size: clamp(30px, 5vw, 50px); font-weight: 800; line-height: 1.08; max-width: 18ch; }
+.cta p { color: var(--muted); max-width: 58ch; }
+footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#inicio" aria-label="Midview, início">
+      <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#g)" />
+        <rect x="9" y="10" width="14" height="10" rx="2.5" stroke="#04121a" stroke-width="2" />
+        <path d="M13 24h6M16 20v4" stroke="#04121a" stroke-width="2" stroke-linecap="round" />
+        <defs><linearGradient id="g" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#22d3ee" /><stop offset="1" stop-color="#6366f1" /></linearGradient></defs>
+      </svg>
+      midview
+    </a>
+    <nav class="nav" aria-label="Seções">
+      <a href="#funcoes">Funções</a>
+      <a href="#comecar">Como começar</a>
+      <a href="#privacidade">Privacidade</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">Baixar</a>
+  </div>
+</header>
+
+<main id="inicio">
+  <section class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Para o laboratório de informática</span>
+      <h1>Controle total do seu laboratório<i class="dot">.</i> <span>Sem complicação<i class="dot">.</i></span></h1>
+      <p class="lead">O Midview coloca a tela de cada aluno no seu computador. Daí você acompanha a aula, ajuda quem travou, manda e recolhe arquivos, bloqueia o que tira o foco e liga ou desliga o laboratório, tudo sem sair da sua mesa.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+          Baixar o instalador
+        </a>
+        <a class="btn btn-ghost" href="#video">Ver o Midview funcionando</a>
+      </div>
+      <ul class="facts">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Gratuito para escolas</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Funciona só na rede da escola</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Um instalador para professor e alunos</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="video" id="video" aria-label="Vídeo do Midview">
+    <div class="wrap">
+      <div class="frame">
+        <video controls preload="none" poster="capa.jpg" playsinline>
+          <source src="midview.mp4" type="video/mp4">
+          Seu navegador não toca vídeos MP4.
+        </video>
+      </div>
+      <p class="caption">Um tour de 1m30s pela janela "Midview - Sala de aula", com narração. Ative o som. As máquinas e telas do vídeo são fictícias.</p>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="antes">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">O dia a dia</span>
+        <h2 id="antes">Menos voltas pela sala, mais tempo de aula</h2>
+        <p>Muito do que hoje pede uma volta pelo laboratório vira um clique na sua mesa.</p>
+      </div>
+      <div class="compare" role="table" aria-label="Antes e com o Midview">
+        <div class="row titles" role="row">
+          <div class="cell label" role="columnheader">Antes</div>
+          <div class="cell label after" role="columnheader">Com o Midview</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Passar atrás de cada aluno para ver se está na atividade.</div>
+          <div class="cell after-text" role="cell">Todas as telas ao vivo numa grade, no seu computador.</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Pedir silêncio e esperar todos tirarem a mão do mouse.</div>
+          <div class="cell after-text" role="cell">Bloquear telas: um cadeado em todas as máquinas, na hora.</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Passar material por pendrive ou e-mail, máquina por máquina.</div>
+          <div class="cell after-text" role="cell">Enviar arquivo: chega na Área de Trabalho de todos de uma vez.</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Recolher os trabalhos no fim da aula, um a um.</div>
+          <div class="cell after-text" role="cell">Recolher arquivos: tudo o que os alunos entregaram vem para a sua pasta.</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Ditar o endereço do site e conferir quem digitou errado.</div>
+          <div class="cell after-text" role="cell">Abrir site: o mesmo endereço abre em todas as máquinas.</div>
+        </div>
+        <div class="row" role="row">
+          <div class="cell before-text" role="cell">Ligar e desligar o laboratório inteiro à mão.</div>
+          <div class="cell after-text" role="cell">Ligar, Desligar e Agendar: o laboratório liga e desliga sozinho.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="funcoes" aria-labelledby="funcoes-titulo">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Funções</span>
+        <h2 id="funcoes-titulo">Tudo na barra de ferramentas, do jeito que aparece no programa</h2>
+        <p>Os botões da barra agem na turma toda. Com o botão direito sobre uma máquina, a mesma ação vale só para ela.</p>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg></div>
+          <h3>Tela</h3>
+          <p>Veja e assuma a tela de qualquer aluno.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h4>Ver a tela</h4>
+            <p class="does">Abre a tela de um aluno em tamanho grande, ao vivo.</p>
+            <p class="eases"><strong>Simplifica:</strong> você acompanha a atividade sem sair da mesa nem ficar atrás do aluno.</p>
+          </article>
+          <article class="feature">
+            <h4>Controlar</h4>
+            <p class="does">Você usa o teclado e o mouse da máquina do aluno; o dele fica travado e a tela avisa que o professor está no controle.</p>
+            <p class="eases"><strong>Simplifica:</strong> resolve a dúvida ou o programa travado de longe, enquanto o resto da turma segue.</p>
+          </article>
+          <article class="feature">
+            <h4>Bloquear telas</h4>
+            <p class="does">Cobre todas as telas com um cadeado e trava teclado e mouse até você desbloquear.</p>
+            <p class="eases"><strong>Simplifica:</strong> a atenção da turma volta para você num clique, na hora de explicar.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1" /><circle cx="10" cy="8" r="3.5" /><path d="M21 20v-1a4 4 0 0 0-3-3.9M16 4.3a3.5 3.5 0 0 1 0 6.9" /></svg></div>
+          <h3>Turma</h3>
+          <p>Fale com a turma e troque arquivos.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h4>Mensagem</h4>
+            <p class="does">Mostra um recado na tela de todos os alunos.</p>
+            <p class="eases"><strong>Simplifica:</strong> avisos como "faltam 5 minutos" chegam a todos, sem levantar a voz.</p>
+          </article>
+          <article class="feature">
+            <h4>Bate-papo</h4>
+            <p class="does">Conversa com a turma; a resposta de cada aluno chega só para você.</p>
+            <p class="eases"><strong>Simplifica:</strong> o aluno tímido pergunta sem expor a dúvida para a sala.</p>
+          </article>
+          <article class="feature">
+            <h4>Enviar arquivo</h4>
+            <p class="does">Coloca o arquivo na pasta "Arquivos do professor", na Área de Trabalho de cada aluno.</p>
+            <p class="eases"><strong>Simplifica:</strong> sem pendrive e sem e-mail: todos recebem o mesmo material ao mesmo tempo.</p>
+          </article>
+          <article class="feature">
+            <h4>Recolher arquivos</h4>
+            <p class="does">Copia o que cada aluno pôs na pasta "Entregar ao professor" para a sua pasta Documentos\Midview\Recolhidos.</p>
+            <p class="eases"><strong>Simplifica:</strong> os trabalhos da aula chegam todos num lugar só, prontos para corrigir.</p>
+          </article>
+          <article class="feature">
+            <h4>Abrir site e Abrir programa</h4>
+            <p class="does">Abre o mesmo site ou programa em todas as máquinas. Os que você mais usa ficam salvos no menu.</p>
+            <p class="eases"><strong>Simplifica:</strong> ninguém erra o endereço e a atividade começa junto para todos.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></svg></div>
+          <h3>Programas e sites</h3>
+          <p>Tire da frente o que distrai.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h4>Fechar programas</h4>
+            <p class="does">Fecha os programas abertos, com aviso e prazo de 30 segundos ou 1 minuto para o aluno salvar, ou na hora.</p>
+            <p class="eases"><strong>Simplifica:</strong> o fim da aula fica organizado e as máquinas ficam prontas para a próxima turma.</p>
+          </article>
+          <article class="feature">
+            <h4>Bloquear programas</h4>
+            <p class="does">Proíbe os programas de uma lista, ou deixa abrir só os que você permitir.</p>
+            <p class="eases"><strong>Simplifica:</strong> jogos e programas fora da aula ficam fechados sem você vigiar tela por tela.</p>
+          </article>
+          <article class="feature">
+            <h4>Bloquear sites</h4>
+            <p class="does">Bloqueia a internet inteira ou só os sites que você escolher. O bloqueio continua mesmo se a máquina reiniciar.</p>
+            <p class="eases"><strong>Simplifica:</strong> a turma fica na atividade, inclusive em dia de prova.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9" /><path d="M6.3 7.3a8 8 0 1 0 11.4 0" /></svg></div>
+          <h3>Energia</h3>
+          <p>Ligue e desligue o laboratório de longe.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h4>Ligar</h4>
+            <p class="does">Liga as máquinas pela rede (Wake-on-LAN).</p>
+            <p class="eases"><strong>Simplifica:</strong> o laboratório já está ligando enquanto a turma entra.</p>
+          </article>
+          <article class="feature">
+            <h4>Desligar e Reiniciar</h4>
+            <p class="does">Desliga ou reinicia as máquinas na hora ou com aviso de 1 ou 5 minutos, e dá para cancelar.</p>
+            <p class="eases"><strong>Simplifica:</strong> no fim do dia, ninguém precisa passar de máquina em máquina.</p>
+          </article>
+          <article class="feature">
+            <h4>Agendar</h4>
+            <p class="does">Escolha os dias da semana e os horários de ligar e de desligar.</p>
+            <p class="eases"><strong>Simplifica:</strong> o laboratório liga antes da primeira aula e desliga sozinho depois da última.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-head">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" /></svg></div>
+          <h3>Configurar</h3>
+          <p>Prepare as máquinas uma vez, para todas.</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <h4>Painel do laboratório</h4>
+            <p class="does">Aplica ajustes do Chrome e do Windows em todas as máquinas: bloqueador de anúncios, bloquear downloads, modo visitante, travar a barra de tarefas e outros. "RESET geral" desfaz tudo.</p>
+            <p class="eases"><strong>Simplifica:</strong> todas as máquinas ficam configuradas iguais, sem você ir em cada uma.</p>
+          </article>
+          <article class="feature">
+            <h4>Máquinas da sala</h4>
+            <p class="does">Procura as máquinas na rede, pareia cada uma com você e atualiza o Midview delas pela rede.</p>
+            <p class="eases"><strong>Simplifica:</strong> atualizar o laboratório não pede pendrive: uma máquina testa a versão nova primeiro e, se algo falhar, ela volta sozinha à anterior.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="mais">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">E mais</span>
+        <h2 id="mais">Os detalhes que fazem diferença na aula</h2>
+      </div>
+      <div class="extras">
+        <div class="extra">
+          <h3>Botão direito em uma máquina</h3>
+          <p>As ações da barra valem também para um aluno só. Ali ficam ainda Desinstalar programa, Editar a máquina e Remover da lista da sala.</p>
+        </div>
+        <div class="extra">
+          <h3>A grade do seu jeito</h3>
+          <p>"Visualizar todos" encaixa todas as telas sem rolar, "Só online" esconde as máquinas desligadas e o controle deslizante (ou Ctrl + roda do mouse) muda o tamanho das telas.</p>
+        </div>
+        <div class="extra">
+          <h3>Mais de um professor</h3>
+          <p>"Dar acesso a um colega..." gera um código que vale por 10 minutos. O colega digita o código e passa a ver as mesmas máquinas.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="comecar" aria-labelledby="comecar-titulo">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Como começar</span>
+        <h2 id="comecar-titulo">Em quatro passos, o laboratório está na sua tela</h2>
+      </div>
+      <ol class="steps">
+        <li>
+          <h3>Baixe o instalador</h3>
+          <p>O mesmo <code>MidviewSetup.exe</code> serve para o seu computador e para as máquinas. Não precisa instalar mais nada.</p>
+        </li>
+        <li>
+          <h3>Instale no seu computador</h3>
+          <p>Escolha <strong>Professor</strong>. O atalho "Midview - Sala de aula" aparece na Área de Trabalho.</p>
+        </li>
+        <li>
+          <h3>Instale nas máquinas</h3>
+          <p>Em cada máquina do laboratório, escolha <strong>Aluno</strong>.</p>
+        </li>
+        <li>
+          <h3>Traga as máquinas</h3>
+          <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno.</p>
+        </li>
+      </ol>
+      <p class="note">Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las. Quem cuida da informática pode instalar várias máquinas de uma vez com <code>MidviewSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /TIPO=aluno</code>.</p>
+    </div>
+  </section>
+
+  <section class="block" id="privacidade" aria-labelledby="privacidade-titulo">
+    <div class="wrap">
+      <div class="head">
+        <span class="eyebrow">Privacidade e requisitos</span>
+        <h2 id="privacidade-titulo">Tudo fica dentro da escola</h2>
+      </div>
+      <div class="two">
+        <div class="panel">
+          <h3>Privacidade</h3>
+          <ul>
+            <li><strong>Nada sai da rede da escola.</strong> O Midview não envia dados ao desenvolvedor nem à internet.</li>
+            <li><strong>Comunicação protegida.</strong> Telas, comandos e arquivos passam criptografados, e cada máquina só aceita os professores pareados com ela.</li>
+            <li><strong>Avise a turma.</strong> A tela do aluno pode ser vista sem aviso na máquina dele; só o controle mostra um aviso. A escola deve informar alunos e responsáveis, como pede a LGPD.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Requisitos</h3>
+          <ul>
+            <li><strong>Windows 10 ou 11 de 64 bits</strong> no seu computador e nas máquinas.</li>
+            <li><strong>Mesma rede local</strong> para o professor e o laboratório.</li>
+            <li><strong>Administrador do Windows</strong> só na hora de instalar.</li>
+            <li><strong>Para Ligar pela rede,</strong> o Wake-on-LAN ativo na BIOS e na placa de rede das máquinas.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" aria-labelledby="cta-titulo">
+    <div class="wrap">
+      <span class="eyebrow">Gratuito para escolas</span>
+      <h2 id="cta-titulo">Transforme a sua sala de aula</h2>
+      <p>Baixe o instalador, instale no seu computador e nas máquinas, e comece a próxima aula com o laboratório inteiro na sua tela.</p>
+      <a class="btn btn-primary" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
+        Baixar o instalador
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 MidView. Todos os direitos reservados.</span>
+    <span>Software proprietário, de uso gratuito para escolas, nos termos da Licença de Uso do Midview.</span>
+  </div>
+</footer>
+</body>
+</html>

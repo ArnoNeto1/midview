@@ -10,6 +10,7 @@
 
 > O botão acima baixa sempre a versão mais nova. O mesmo instalador serve
 > para o computador do professor e para as máquinas dos alunos.
+> Página para os professores: https://arnoneto1.github.io/midview/
 
 O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem internet e sem servidor externo.
 
@@ -111,6 +112,7 @@ Algumas opções do **Painel do laboratório** configuram o Google Chrome, que p
 | `tests/` | Testes com xUnit e o teste de ponta a ponta (`Midview.E2E`) |
 | `installer/` | Instalador (Inno Setup), scripts das máquinas e seus testes |
 | `docs/superpowers/` | Especificações e planos de cada função |
+| `site/` | Página para os professores, publicada no GitHub Pages pelo fluxo **Site** |
 | `promo/` | Vídeo de divulgação, feito com Remotion (o GIF e o MP4 de `docs/` saem dele) |
 
 Requisitos: Windows, SDK do .NET 8 e, para o instalador, Inno Setup 6.
