@@ -4,7 +4,20 @@
 
 # Midview
 
+[![Baixar o instalador](https://img.shields.io/badge/⬇%20Baixar-Instalador%20(.exe)-0e7490?style=for-the-badge)](https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe)
+
+> O botão acima baixa sempre a versão mais nova. O mesmo instalador serve
+> para o computador do professor e para as máquinas dos alunos. O
+> repositório é privado: para baixar, entre no GitHub com uma conta que
+> tenha acesso a ele.
+
 O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem internet e sem servidor externo.
+
+## Veja funcionando
+
+![Vídeo de 1m30s: a janela "Midview - Sala de aula" mostra a tela de cada aluno; o professor vê e controla uma máquina, bloqueia as telas, manda mensagem, conversa com a turma, envia e recolhe arquivos, abre um site, bloqueia programas e sites, fecha programas, liga e agenda o laboratório, prepara as máquinas e atualiza pela rede](docs/video-promocional.gif)
+
+Quer ouvir a explicação? [Assista ao vídeo com narração](docs/video-promocional.mp4) (MP4, 1m30s). As máquinas e telas que aparecem nele são fictícias.
 
 ## O que o professor pode fazer
 
@@ -48,7 +61,7 @@ Portas usadas na rede local:
 
 ## Instalação
 
-1. Baixe o `MidviewSetup.exe` da versão mais recente em **Releases**.
+1. Clique em **⬇ Baixar Instalador (.exe)**, lá em cima. Não precisa instalar o .NET nem mais nada.
 2. No computador do professor, abra o instalador e escolha **Professor**. Ele cria o atalho "Midview - Sala de aula" na Área de Trabalho.
 3. Em cada máquina do laboratório, abra o instalador e escolha **Aluno**.
 4. No Midview, clique em **Máquinas da sala** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código que aparece na tela de cada aluno.
@@ -98,7 +111,7 @@ Algumas opções do **Painel do laboratório** configuram o Google Chrome, que p
 | `tests/` | Testes com xUnit e o teste de ponta a ponta (`Midview.E2E`) |
 | `installer/` | Instalador (Inno Setup), scripts das máquinas e seus testes |
 | `docs/superpowers/` | Especificações e planos de cada função |
-| `promo/` | Vídeo de divulgação, feito com Remotion |
+| `promo/` | Vídeo de divulgação, feito com Remotion (o GIF e o MP4 de `docs/` saem dele) |
 
 Requisitos: Windows, SDK do .NET 8 e, para o instalador, Inno Setup 6.
 
