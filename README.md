@@ -28,6 +28,7 @@ A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os 
 | --- | --- |
 | **Tela** | **Ver a tela** de um aluno; **Controlar** a máquina (o teclado e o mouse do aluno ficam travados e ele vê o aviso "Este computador está sendo controlado pelo professor"); **Bloquear telas** com um cadeado. |
 | **Turma** | **Mensagem** na tela de todos; **Bate-papo** com a turma (as respostas chegam só ao professor); **Enviar arquivo** para a pasta "Arquivos do professor"; **Recolher arquivos** da pasta "Entregar ao professor"; **Abrir site** e **Abrir programa** nas máquinas. |
+| **Aula** | **Iniciar aula** (na barra de baixo): escolha a turma, e os arquivos dela vão para a "Pasta da turma" na Área de Trabalho de cada máquina; o que os alunos salvam nela é guardado sozinho, a cada minuto, em Documentos\Midview\Turmas no computador do professor, para o aluno sentar em qualquer máquina na próxima aula. **Encerrar aula**: salva uma última vez, mantém os arquivos, apaga só os de hoje ou apaga tudo (para a Lixeira) e esvazia a pasta das máquinas. |
 | **Programas e sites** | **Fechar programas**, com aviso e prazo para o aluno salvar; **Bloquear programas** (lista proibida ou só os permitidos); **Bloquear sites** (a internet inteira ou só alguns sites, valendo mesmo depois de reiniciar). |
 | **Energia** | **Desligar** e **Reiniciar**, com aviso de 1 ou 5 minutos; **Ligar** pela rede (Wake-on-LAN); **Agendar** os dias e horários para ligar e desligar. |
 | **Configurar** | **Painel do laboratório** (políticas do Chrome e do Windows, como bloqueador de anúncios, bloquear downloads e modo visitante); **Máquinas da sala** (procurar na rede, parear, atualizar pela rede e dar acesso a outro professor). |
@@ -95,7 +96,7 @@ As políticas do **Painel do laboratório** continuam aplicadas depois da desins
 
 ## Privacidade
 
-O Midview não envia nada ao desenvolvedor nem à internet. Entre o professor e as máquinas passam as imagens de tela, o texto copiado durante o controle, as mensagens, o bate-papo, os arquivos enviados e recolhidos, os nomes e os endereços MAC das máquinas e os nomes dos programas abertos ou instalados.
+O Midview não envia nada ao desenvolvedor nem à internet. Entre o professor e as máquinas passam as imagens de tela, o texto copiado durante o controle, as mensagens, o bate-papo, os arquivos enviados e recolhidos, os da "Pasta da turma", os nomes e os endereços MAC das máquinas e os nomes dos programas abertos ou instalados.
 
 A tela do aluno pode ser vista sem aviso na máquina dele; só o controle remoto mostra um aviso. Por isso, a escola deve informar alunos e responsáveis sobre o uso do Midview, como pede a cláusula 6 da [licença](LICENSE).
 

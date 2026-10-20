@@ -114,6 +114,7 @@ public partial class MainWindow : Window
             InsertTile(_tiles.Count, machine);
         }
         UpdateEmptyHint();
+        ResumeLesson();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -1397,6 +1398,9 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
+        // A lesson still going on stays in its file, for next time.
+        _lesson?.Dispose();
+
         // Closing the teacher's program unlocks every screen it locked.
         foreach (var keeper in _screenLocks.Values)
         {

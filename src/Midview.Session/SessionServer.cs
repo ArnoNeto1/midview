@@ -99,6 +99,7 @@ public sealed class SessionServer
     private readonly IWebsiteOpener? _websiteOpener;
     private readonly IProgramStarter? _programStarter;
     private readonly IClipboard? _clipboard;
+    private readonly ClassFolder? _classFolder;
     private readonly TimeSpan _frameAckTimeout;
 
     // One controlling Master served at a time: the input lock and the
@@ -118,8 +119,10 @@ public sealed class SessionServer
         IAppCloser? appCloser = null, DeliveryFolder? deliveryFolder = null, IOpenProgramsLister? openPrograms = null,
         IScreenLockDisplay? screenLock = null, IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null,
         ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-        IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, IClipboard? clipboard = null)
+        IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, IClipboard? clipboard = null,
+        ClassFolder? classFolder = null)
     {
+        _classFolder = classFolder;
         _frameAckTimeout = frameAckTimeout ?? DefaultFrameAckTimeout;
         _countdownNotice = countdownNotice;
         _websiteOpener = websiteOpener;
@@ -231,6 +234,27 @@ public sealed class SessionServer
         if (firstMessage.Type == MessageType.CollectFiles)
         {
             SendCollectedFiles(channel);
+            return;
+        }
+
+        // "Pasta da turma": each exchange is one connection, never the
+        // control slot.
+        if (firstMessage.Type == MessageType.LoadClassFolder)
+        {
+            LoadClassFolder(channel, firstMessage.Payload);
+            return;
+        }
+
+        if (firstMessage.Type == MessageType.CollectClassFolder)
+        {
+            SendClassFolderChanges(channel, firstMessage.Payload);
+            return;
+        }
+
+        if (firstMessage.Type == MessageType.ClearClassFolder)
+        {
+            var (cleared, detail) = ClearClassFolder();
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(cleared, detail)));
             return;
         }
 
@@ -748,6 +772,252 @@ public sealed class SessionServer
             notice += $"{Environment.NewLine}A pasta fica em: {_deliveryFolder.DirectoryPath}";
         }
         TryNotify(notice);
+    }
+
+    // Loads the lesson's files (see ClassFolderSync): first what's wanted,
+    // then the files as the Master sends them, until its own CommandAck; the
+    // answer is what the folder holds now, then how it went. The student is
+    // told when a new lesson arrives.
+    private void LoadClassFolder(SecureChannel channel, byte[] payload)
+    {
+        if (_classFolder is null)
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não tem a pasta da turma")));
+            return;
+        }
+        if (!ClassFolderSync.TryDecodeRequest(payload, out var lesson, out var className, out var manifest))
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "pedido inválido")));
+            return;
+        }
+
+        lock (_classFolder.Gate)
+        {
+            ClassFolderPreparation preparation;
+            try
+            {
+                preparation = _classFolder.Prepare(lesson, className, manifest, DateTime.UtcNow);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                channel.Send(new Midview.Protocol.Message(MessageType.CommandAck,
+                    CommandResult.Encode(false, $"a pasta da turma não pôde ser preparada: {ErrorText.Describe(ex)}")));
+                return;
+            }
+            if (preparation.Refusal is { } refusal)
+            {
+                channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(false, refusal)));
+                return;
+            }
+            var wanted = preparation.Wanted;
+            var problems = preparation.Problems.Select(name => $"{name} não saiu").ToList();
+            channel.Send(new Midview.Protocol.Message(MessageType.ClassFolderWanted, ClassFolderSync.EncodeWanted(wanted)));
+
+            var expected = wanted.Select(index => manifest[index]).ToDictionary(entry => entry.Path, StringComparer.OrdinalIgnoreCase);
+            var received = 0;
+            while (true)
+            {
+                var message = channel.Receive();
+                if (message.Type == MessageType.CommandAck)
+                {
+                    break;
+                }
+                if (message.Type != MessageType.SendFile
+                    || !FileTransfer.TryDecodeHeader(message.Payload, out var path, out var size)
+                    || !expected.Remove(path, out var entry))
+                {
+                    throw new InvalidDataException($"mensagem inesperada ao carregar a pasta da turma ({message.Type})");
+                }
+                var problem = ReceiveClassFile(channel, entry with { Size = size });
+                if (problem is null)
+                {
+                    received++;
+                }
+                else
+                {
+                    problems.Add(problem);
+                }
+            }
+
+            channel.Send(new Midview.Protocol.Message(MessageType.ClassFolderListing,
+                ClassFolderSync.EncodeListing(_classFolder.ListFiles().Select(file => file.Entry).Take(ClassFolderSync.MaxEntries).ToList())));
+            var detail = $"{received} arquivo(s) recebido(s)"
+                + (problems.Count > 0 ? $"; {problems.Count} problema(s): {string.Join(", ", problems.Take(3))}{(problems.Count > 3 ? $" e mais {problems.Count - 3}" : string.Empty)}" : string.Empty);
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(problems.Count == 0, detail)));
+
+            if (preparation.NewLesson)
+            {
+                TryNotify($"Aula da turma {className}.{Environment.NewLine}" +
+                          $"Os arquivos da turma estão em: {_classFolder.DirectoryPath}{Environment.NewLine}" +
+                          "Tudo o que você salvar nessa pasta é guardado sozinho no computador do professor.");
+            }
+        }
+    }
+
+    // Null once saved; otherwise why not. The bytes are always read off the
+    // connection, so the next file still arrives.
+    private string? ReceiveClassFile(SecureChannel channel, ClassFolderEntry entry)
+    {
+        IncomingClassFile? incoming = null;
+        string? problem = null;
+        try
+        {
+            incoming = _classFolder!.Begin(entry.Path, entry.LastWriteTicks);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            problem = $"{entry.Path} ({ErrorText.Describe(ex)})";
+        }
+
+        using (incoming)
+        {
+            long received = 0;
+            while (received < entry.Size)
+            {
+                var chunk = channel.Receive();
+                if (chunk.Type != MessageType.FileChunk || chunk.Payload.Length == 0 || received + chunk.Payload.Length > entry.Size)
+                {
+                    throw new InvalidDataException($"{entry.Path} chegou incompleto ou corrompido");
+                }
+                if (incoming is not null && problem is null)
+                {
+                    try
+                    {
+                        incoming.Write(chunk.Payload);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        problem = $"{entry.Path} ({ErrorText.Describe(ex)})";
+                    }
+                }
+                received += chunk.Payload.Length;
+            }
+            if (incoming is not null && problem is null)
+            {
+                try
+                {
+                    incoming.Complete();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    problem = $"{entry.Path} ({ErrorText.Describe(ex)})";
+                }
+            }
+        }
+        return problem;
+    }
+
+    // Saving (see ClassFolderSync): the listing, then every file the Master
+    // didn't name exactly. Nothing is shown to the student: this runs every
+    // minute or so for the whole lesson.
+    private void SendClassFolderChanges(SecureChannel channel, byte[] payload)
+    {
+        if (_classFolder is null)
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não tem a pasta da turma")));
+            return;
+        }
+        if (!ClassFolderSync.TryDecodeRequest(payload, out var lesson, out _, out var known))
+        {
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.CommandAck, CommandResult.Encode(false, "pedido inválido")));
+            return;
+        }
+
+        lock (_classFolder.Gate)
+        {
+            if (_classFolder.CurrentLesson()?.Id != lesson)
+            {
+                channel.Send(new Midview.Protocol.Message(
+                    MessageType.CommandAck, CommandResult.Encode(false, ClassFolderSync.NotLoaded)));
+                return;
+            }
+            _classFolder.Touch(DateTime.UtcNow);
+
+            var files = _classFolder.ListFiles();
+            if (files.Count > ClassFolderSync.MaxEntries)
+            {
+                channel.Send(new Midview.Protocol.Message(MessageType.CommandAck,
+                    CommandResult.Encode(false, $"a pasta da turma tem mais de {ClassFolderSync.MaxEntries} arquivos")));
+                return;
+            }
+            channel.Send(new Midview.Protocol.Message(
+                MessageType.ClassFolderListing, ClassFolderSync.EncodeListing(files.Select(file => file.Entry).ToList())));
+
+            var knownByPath = known.ToDictionary(entry => entry.Path, StringComparer.OrdinalIgnoreCase);
+            var notSent = new List<string>();
+            var buffer = new byte[FileTransfer.ChunkSize];
+            foreach (var file in files)
+            {
+                if (knownByPath.TryGetValue(file.Entry.Path, out var seen) && seen.SameVersionAs(file.Entry))
+                {
+                    continue;
+                }
+
+                FileStream stream;
+                try
+                {
+                    stream = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    notSent.Add($"{file.Entry.Path} (não pôde ser lido)");
+                    continue;
+                }
+
+                using (stream)
+                {
+                    var size = stream.Length;
+                    if (size > FileTransfer.MaxFileSize)
+                    {
+                        notSent.Add($"{file.Entry.Path} (passa de 1 GB)");
+                        continue;
+                    }
+                    channel.Send(new Midview.Protocol.Message(MessageType.SendFile, FileTransfer.EncodeHeader(file.Entry.Path, size)));
+                    for (var remaining = size; remaining > 0;)
+                    {
+                        var read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                        if (read == 0)
+                        {
+                            throw new IOException($"{file.Entry.Path} diminuiu durante o envio");
+                        }
+                        channel.Send(new Midview.Protocol.Message(MessageType.FileChunk, buffer.AsSpan(0, read).ToArray()));
+                        remaining -= read;
+                    }
+                }
+            }
+
+            var detail = notSent.Count == 0
+                ? string.Empty
+                : $"{notSent.Count} não enviado(s): {string.Join(", ", notSent.Take(3))}{(notSent.Count > 3 ? $" e mais {notSent.Count - 3}" : string.Empty)}";
+            channel.Send(new Midview.Protocol.Message(MessageType.CommandAck, CommandResult.Encode(true, detail)));
+        }
+    }
+
+    // The end of the lesson: the folder is emptied for the next class.
+    private (bool Cleared, string Detail) ClearClassFolder()
+    {
+        if (_classFolder is null)
+        {
+            return (false, "esta máquina não tem a pasta da turma");
+        }
+
+        lock (_classFolder.Gate)
+        {
+            var (recycled, problems) = _classFolder.Clear();
+            if (recycled > 0)
+            {
+                TryNotify("O professor encerrou a aula: o que estava na \"Pasta da turma\" foi para a Lixeira.");
+            }
+            var detail = recycled == 0 && problems.Count == 0
+                ? "a pasta já estava vazia"
+                : $"{recycled} item(ns) foram para a Lixeira do aluno"
+                  + (problems.Count > 0 ? $"; não saiu: {string.Join(", ", problems.Take(3))}{(problems.Count > 3 ? $" e mais {problems.Count - 3}" : string.Empty)}" : string.Empty);
+            return (problems.Count == 0, detail);
+        }
     }
 
     // The student is always told first. With a warning time, the answer goes

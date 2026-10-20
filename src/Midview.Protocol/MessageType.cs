@@ -206,6 +206,18 @@ public enum MessageType : byte
     InviteJoin = 62,
     InviteDone = 63,
     InviteRefused = 64,
+
+    // "Pasta da turma" (see ClassFolderSync for the three exchanges): the
+    // Master loads a class's folder onto a machine, saves what changed in it
+    // and empties it when the lesson ends. Session messages; a Session from
+    // before this takes LoadClassFolder or CollectClassFolder for a control
+    // connection and answers with its screen, which the Master shows as
+    // "Midview antigo".
+    LoadClassFolder = 65,
+    ClassFolderWanted = 66,
+    CollectClassFolder = 67,
+    ClassFolderListing = 68,
+    ClearClassFolder = 69,
 }
 
 public enum CloseAppsMode : byte

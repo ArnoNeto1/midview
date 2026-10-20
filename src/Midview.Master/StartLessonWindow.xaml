@@ -1,0 +1,24 @@
+<Window x:Class="Midview.Master.StartLessonWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Iniciar aula" Height="440" Width="440"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Loaded="OnWindowLoaded">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="Qual turma está no laboratório agora?" FontWeight="Bold" Margin="0,0,0,6" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Os arquivos da turma vão para a &quot;Pasta da turma&quot;, na Área de Trabalho de cada máquina, e tudo o que os alunos salvarem nela é guardado sozinho neste computador, a cada minuto. Assim cada aluno pode sentar em qualquer máquina." />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom">
+            <TextBlock Text="Ou uma turma nova:" Margin="0,10,0,4" />
+            <TextBox x:Name="NewClassTextBox" MaxLength="60" Padding="4,3" TextChanged="OnNewClassChanged" />
+            <TextBlock x:Name="ProblemTextBlock" TextWrapping="Wrap" Foreground="#B3261E" Margin="0,4,0,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button x:Name="StartButton" Content="Iniciar aula" Click="OnStartClicked" IsDefault="True" IsEnabled="False"
+                        Padding="14,4" />
+                <Button Content="Agora não" IsCancel="True" Padding="14,4" Margin="8,0,0,0" />
+            </StackPanel>
+        </StackPanel>
+        <ListBox x:Name="ClassesListBox" SelectionChanged="OnClassSelected" MouseDoubleClick="OnClassDoubleClicked" />
+    </DockPanel>
+</Window>

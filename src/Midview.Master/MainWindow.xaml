@@ -4,7 +4,8 @@
         xmlns:local="clr-namespace:Midview.Master"
         Title="Midview - Sala de aula" Height="760" Width="1440"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
-        Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
+        Closed="OnWindowClosed" Closing="OnWindowClosing" ContentRendered="OnWindowContentRendered"
+        KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
     <DockPanel>
         <!-- Grouped like the actions they hold; one row from about 1410 px wide,
              and whole groups move to a second row on a narrower window. -->
@@ -112,6 +113,16 @@
                             ToolTip="Telas maiores, para ver melhor cada máquina (Ctrl + roda do mouse ou Ctrl +).">
                         <TextBlock Text="&#xE8A3;" FontFamily="{StaticResource IconFont}" FontSize="12" />
                     </Button>
+                </StackPanel>
+                <!-- "Pasta da turma" (MainWindow.Lesson): which class is in the lab and when its
+                     files were last saved; the tooltip has each machine. -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <Button x:Name="LessonButton" Content="Iniciar aula" Click="OnLessonClicked" Padding="10,2" FontSize="12" />
+                    <Button x:Name="OpenClassFolderButton" Content="Abrir pasta" Click="OnOpenClassFolderClicked" Padding="10,2"
+                            FontSize="12" Margin="6,0,0,0" Visibility="Collapsed"
+                            ToolTip="Abre a pasta da turma neste computador. O que você colocar nela vai para as máquinas na próxima aula da turma." />
+                    <TextBlock x:Name="LessonTextBlock" Foreground="{StaticResource InkBrush}" FontSize="13" Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
                 </StackPanel>
                 <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource InkMutedBrush}" FontSize="13" TextWrapping="Wrap"
                            VerticalAlignment="Center" />
