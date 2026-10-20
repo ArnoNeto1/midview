@@ -35,7 +35,11 @@ teacher's program, by pairing over the network.
 Built with **Inno Setup 6** (free, a single `setup.exe`, the standard wizard
 and uninstaller).
 
-- **Choice of kind.** A page after the welcome page offers two options:
+- **License.** After the welcome page, the wizard shows the repository's
+  `LICENSE` and asks to accept it (added 2026-10-20, 0.0.22); a silent install
+  clicks through. `LICENSE.txt` and `THIRD-PARTY-NOTICES.txt` go in each
+  program's folder, so the network update carries them too.
+- **Choice of kind.** A page after the license page offers two options:
   - **Professor** — "o computador de onde você controla a sala". Installs the
     Master to `C:\Program Files\Midview Professor`, with a Desktop and Start
     menu shortcut for all users. It also installs a copy of the student
@@ -103,7 +107,7 @@ and uninstaller).
   - the output is `dist\MidviewSetup.exe`. The version Windows shows (the
     wizard, Installed apps, the properties of the setup and of the programs)
     is Midview's, set in `Directory.Build.props` (0.0.1 from 2026-10-07,
-    0.0.2 to 0.0.21 from 2026-10-08);
+    0.0.2 to 0.0.22 from 2026-10-08);
     until 2026-10-07 the setup was `Midview-Instalador-<yyyy.MM.dd-HHmm>.exe`
     and its version that date and time;
   - `midview-build.json`'s label stays as today (date and commit): network
