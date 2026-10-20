@@ -254,7 +254,7 @@ const BenefitCard: React.FC<Benefit & { index: number; frame: number }> = ({ tit
   );
 };
 
-/** Cena 8 (74–82 s): três benefícios entram em cascata. */
+/** Cena 8 (76–82 s): três benefícios entram em cascata. */
 export const Scene8Beneficios: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();

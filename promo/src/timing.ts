@@ -13,7 +13,7 @@ export const BOUNDARY = {
   programas: 1320,
   energia: 1680,
   configurar: 1980,
-  beneficios: 2220,
+  beneficios: 2290,
   cta: 2460,
   end: 2700,
 } as const;

@@ -33,5 +33,5 @@ export const Scene4Turma = tourScene("turma");
 export const Scene5Programas = tourScene("programas");
 /** Cena 6 (56–66 s): grupo Energia — ligar pela rede e agendar. */
 export const Scene6Energia = tourScene("energia");
-/** Cena 7 (66–74 s): grupo Configurar e o menu do botão direito. */
+/** Cena 7 (66–76 s): grupo Configurar e o menu do botão direito. */
 export const Scene7Configurar = tourScene("configurar");

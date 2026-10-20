@@ -7,11 +7,13 @@
     "dev": "remotion studio",
     "render": "remotion render MidviewPromo out/midview-promo.mp4",
     "render:escuro": "remotion render MidviewPromoEscuro out/midview-promo-escuro.mp4",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "narracao": "node scripts/narracao.mjs"
   },
   "dependencies": {
     "@remotion/cli": "4.0.537",
     "@remotion/google-fonts": "4.0.537",
+    "@remotion/media": "4.0.537",
     "@remotion/studio": "4.0.537",
     "@remotion/transitions": "4.0.537",
     "lucide-react": "1.59.0",

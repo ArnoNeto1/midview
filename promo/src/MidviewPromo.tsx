@@ -1,9 +1,11 @@
+import { Audio } from "@remotion/media";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import React from "react";
-import { AbsoluteFill } from "remotion";
+import { AbsoluteFill, staticFile } from "remotion";
 import { AppThemeProvider, type AppThemeName } from "./components/app/appTheme";
 import { Background } from "./components/Background";
 import { EASE } from "./lib/motion";
+import { NARRATION } from "./narration";
 import { Scene1Hook } from "./scenes/Scene1Hook";
 import { Scene8Beneficios } from "./scenes/Scene8Beneficios";
 import { Scene9Encerramento } from "./scenes/Scene9Encerramento";
@@ -18,6 +20,15 @@ export type MidviewPromoProps = {
   /** "real": as cores do app (fundo claro, barra cor de lousa). "escuro": o estilo escuro do vídeo. */
   theme: AppThemeName;
 };
+
+/** Narração: cada fala entra no seu frame (src/narration.ts). */
+const Narration: React.FC = () => (
+  <>
+    {NARRATION.map((line) => (
+      <Audio key={line.id} src={staticFile(`narracao/${line.id}.mp3`)} from={line.at} name={`Fala ${line.id}`} />
+    ))}
+  </>
+);
 
 /** Vídeo completo: 2700 frames (1m30s) a 30 fps, 1920×1080. O fundo fica fixo e as cenas passam sobre ele. */
 export const MidviewPromo: React.FC<MidviewPromoProps> = ({ theme }) => (
@@ -57,6 +68,7 @@ export const MidviewPromo: React.FC<MidviewPromoProps> = ({ theme }) => (
           <Scene9Encerramento />
         </TransitionSeries.Sequence>
       </TransitionSeries>
+      <Narration />
     </AbsoluteFill>
   </AppThemeProvider>
 );
