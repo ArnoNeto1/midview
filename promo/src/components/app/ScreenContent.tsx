@@ -446,14 +446,57 @@ const SCREENS: Record<ScreenKind, React.FC<ScreenProps>> = {
   paint: PaintScreen,
 };
 
-type ScreenContentProps = { kind: ScreenKind; frame: number; variant: number; wallpaper: number };
+type ScreenContentProps = {
+  kind: ScreenKind;
+  frame: number;
+  variant: number;
+  wallpaper: number;
+  /** Opacidade do programa aberto; 0 = só a área de trabalho. */
+  apps?: number;
+  /** Realce da pasta "Arquivos do professor" (arquivo recém-chegado). */
+  inbox?: number;
+};
 
-/** Área de trabalho do aluno: papel de parede + app aberto, animado pelo frame absoluto. */
-export const ScreenContent: React.FC<ScreenContentProps> = ({ kind, frame, variant, wallpaper }) => {
+/** As duas pastas que o Midview cria na Área de Trabalho do aluno. */
+const DesktopFolders: React.FC<{ inbox: number }> = ({ inbox }) => (
+  <>
+    {[
+      { label: "Arquivos do professor", y: 18, glow: inbox },
+      { label: "Entregar ao professor", y: 66, glow: 0 },
+    ].map(({ label, y, glow }) => (
+      <div key={label} style={{ position: "absolute", left: 10, top: y, width: 54, textAlign: "center" }}>
+        <div
+          style={{
+            margin: "0 auto",
+            width: 26,
+            height: 20,
+            borderRadius: 3,
+            background: "linear-gradient(180deg, #FCD34D, #F59E0B)",
+            boxShadow: glow > 0 ? `0 0 ${10 * glow}px ${4 * glow}px rgba(252,211,77,${0.8 * glow})` : undefined,
+          }}
+        />
+        <div style={{ marginTop: 3, fontSize: 7.5, lineHeight: 1.15, color: "#F8FAFC", textShadow: "0 1px 2px rgba(0,0,0,0.9)" }}>{label}</div>
+      </div>
+    ))}
+  </>
+);
+
+/** Área de trabalho do aluno: papel de parede, pastas e o programa aberto, animados pelo frame absoluto. */
+export const ScreenContent: React.FC<ScreenContentProps> = ({ kind, frame, variant, wallpaper, apps = 1, inbox = 0 }) => {
   const Screen = SCREENS[kind];
   return (
     <div style={{ position: "absolute", inset: 0, background: WALLPAPERS[wallpaper % WALLPAPERS.length] }}>
-      <Screen frame={frame} variant={variant} />
+      <DesktopFolders inbox={inbox} />
+      {apps > 0.01 ? (
+        <div style={{ position: "absolute", inset: 0, opacity: apps }}>
+          <Screen frame={frame} variant={variant} />
+        </div>
+      ) : null}
+      <Box x={0} y={176} w={320} h={14} r={0} c="rgba(15,23,42,0.92)" />
+      <Box x={6} y={179} w={10} h={8} r={2} c="#38BDF8" o={0.9} />
+      {[0, 1, 2].map((i) => (
+        <Box key={i} x={24 + i * 12} y={180} w={8} h={6} r={1.5} c="#94A3B8" o={0.7} />
+      ))}
     </div>
   );
 };

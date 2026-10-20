@@ -1,17 +1,16 @@
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { DashboardWindow } from "../components/dashboard/DashboardWindow";
-import { STAGE, WINDOW, WINDOW_HEIGHT } from "../components/dashboard/layout";
-import { LIVE_CARD } from "../components/dashboard/PcCard";
-import { PCS } from "../components/dashboard/pcs";
+import { AppWindow } from "../components/app/AppWindow";
+import { WIN } from "../components/app/geometry";
+import { idleApp } from "../components/app/tour";
 import { KineticText } from "../components/KineticText";
 import { MidviewLogo } from "../components/MidviewLogo";
 import { Wordmark } from "../components/Wordmark";
 import { CLAMP, SPRING, clamp01, mix, ramp, springAt } from "../lib/motion";
 import { SCENES } from "../timing";
 
-const LIVE_CARDS = PCS.map(() => LIVE_CARD);
+const IDLE = idleApp();
 const LOGO = { size: 160, x: 960, y: 290 };
 
 /** Marcos da cena, em frames locais. */
@@ -25,8 +24,8 @@ const T = {
   cta: 88,
 } as const;
 
-/** Cena 5 (25–30 s): o dashboard recua em perspectiva 3D e a logo volta ao centro com o CTA. */
-export const Scene5CTA: React.FC = () => {
+/** Cena 9 (82–90 s): a janela do midview recua em perspectiva 3D e a logo volta ao centro com o CTA. */
+export const Scene9Encerramento: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const abs = SCENES.cta.from + frame;
@@ -47,16 +46,16 @@ export const Scene5CTA: React.FC = () => {
         <div
           style={{
             position: "absolute",
-            left: (1920 - WINDOW.width) / 2,
-            top: STAGE.y,
-            width: WINDOW.width,
-            height: WINDOW_HEIGHT,
+            left: (1920 - WIN.w) / 2,
+            top: 150,
+            width: WIN.w,
+            height: WIN.h,
             opacity: mix(1, 0.6, recede),
             transformOrigin: "50% 100%",
-            transform: `perspective(1600px) translateY(${mix(0, 330, recede)}px) rotateX(${mix(0, 34, recede)}deg) scale(${mix(0.94, 0.8, recede)})`,
+            transform: `perspective(1600px) translateY(${mix(0, 330, recede)}px) rotateX(${mix(0, 34, recede)}deg) scale(${mix(0.86, 0.72, recede)})`,
           }}
         >
-          <DashboardWindow frame={abs} cards={LIVE_CARDS} onlineCount={12} />
+          <AppWindow frame={abs} tiles={IDLE.tiles} toolbar={IDLE.toolbar} bottom={IDLE.bottom} />
         </div>
       </AbsoluteFill>
 

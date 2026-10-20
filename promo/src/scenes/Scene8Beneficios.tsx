@@ -1,7 +1,7 @@
 import { GraduationCap, Lock, Monitor, Network, SquareTerminal, Zap, type LucideIcon } from "lucide-react";
 import React from "react";
 import { AbsoluteFill, interpolateColors, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { ClickRipple, Cursor } from "../components/dashboard/Cursor";
+import { ClickRipple, Cursor } from "../components/Cursor";
 import { Eyebrow } from "../components/Eyebrow";
 import { FONTS } from "../fonts";
 import { EASE, SPRING, clamp01, mix, pulse, ramp, springAt } from "../lib/motion";
@@ -254,8 +254,8 @@ const BenefitCard: React.FC<Benefit & { index: number; frame: number }> = ({ tit
   );
 };
 
-/** Cena 4 (20–25 s): três benefícios entram em cascata. */
-export const Scene4Benefits: React.FC = () => {
+/** Cena 8 (74–82 s): três benefícios entram em cascata. */
+export const Scene8Beneficios: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const eyebrow = springAt(frame, fps, 4, SPRING.soft);

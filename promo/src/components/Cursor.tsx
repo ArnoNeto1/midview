@@ -1,7 +1,7 @@
 import React from "react";
 import { spring } from "remotion";
-import { clamp01 } from "../../lib/motion";
-import type { Point } from "./layout";
+import { clamp01 } from "../lib/motion";
+import type { Point } from "./app/geometry";
 
 /** Ponteiro do mouse; (x, y) é a ponta da seta. */
 export const Cursor: React.FC<{ x: number; y: number; press: number; opacity: number }> = ({ x, y, press, opacity }) =>

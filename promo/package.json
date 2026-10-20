@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "remotion studio",
     "render": "remotion render MidviewPromo out/midview-promo.mp4",
+    "render:escuro": "remotion render MidviewPromoEscuro out/midview-promo-escuro.mp4",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
