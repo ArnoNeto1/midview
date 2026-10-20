@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* As famílias são carregadas por src/fonts.ts (@remotion/google-fonts). */
+@theme {
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-brand: "Quicksand", ui-rounded, sans-serif;
+
+  --color-ink: #090d16;
+  --color-brand-cyan: #06b6d4;
+  --color-brand-indigo: #6366f1;
+}

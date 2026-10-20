@@ -1,0 +1,28 @@
+{
+  "name": "midview-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vídeo promocional do midview (Remotion + React + TypeScript)",
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render MidviewPromo out/midview-promo.mp4",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.537",
+    "@remotion/google-fonts": "4.0.537",
+    "@remotion/studio": "4.0.537",
+    "@remotion/transitions": "4.0.537",
+    "lucide-react": "1.59.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.537"
+  },
+  "devDependencies": {
+    "@remotion/tailwind-v4": "4.0.537",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3"
+  }
+}
