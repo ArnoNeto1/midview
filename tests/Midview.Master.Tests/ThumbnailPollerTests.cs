@@ -350,7 +350,8 @@ public class ThumbnailPollerTests
             FileInbox? fileInbox = null,
             IAppCloser? appCloser = null,
             DeliveryFolder? deliveryFolder = null,
-            IScreenLockDisplay? screenLock = null)
+            IScreenLockDisplay? screenLock = null,
+            ClassFolder? classFolder = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, port);
             _sessionCertificate = sessionCertificate;
@@ -361,7 +362,8 @@ public class ThumbnailPollerTests
                 _listener, _sessionCertificate, new TrustStore(new[] { MasterCertificate.Thumbprint }),
                 new FixedSizeCapture(), new NoInput(),
                 new InputLockManager(new NoDevices(), new SystemClock(), TimeSpan.FromSeconds(5)),
-                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, screenLock: screenLock);
+                messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, screenLock: screenLock,
+                classFolder: classFolder);
             Task.Run(() =>
             {
                 try

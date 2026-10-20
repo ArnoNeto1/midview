@@ -67,6 +67,12 @@ if (masterTrustStore.Count == 0)
 var deliveryFolder = new DeliveryFolder(DeliveryFolder.DefaultDirectory);
 deliveryFolder.TryCreate();
 
+// The "Pasta da turma", created at login like the delivery folder; the
+// teacher's program fills it when the lesson starts.
+var recycleBin = new WindowsRecycleBin();
+var classFolder = new ClassFolder(ClassFolder.DefaultDirectory, ClassFolder.DefaultLessonFilePath, recycleBin);
+classFolder.TryCreate();
+
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
@@ -87,10 +93,11 @@ var server = new SessionServer(
     new WindowsOpenPrograms(),
     new WinFormsScreenLock(),
     new WindowsFileOpener(),
-    new WindowsRecycleBin(),
+    recycleBin,
     new WinFormsCountdownNotice(),
     new WindowsWebsiteOpener(),
     new WindowsProgramStarter(),
-    clipboard: new WindowsClipboard());
+    clipboard: new WindowsClipboard(),
+    classFolder: classFolder);
 
 server.Run(CancellationToken.None);

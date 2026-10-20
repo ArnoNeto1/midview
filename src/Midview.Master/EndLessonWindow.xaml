@@ -1,0 +1,33 @@
+<Window x:Class="Midview.Master.EndLessonWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Encerrar aula" Height="500" Width="540"
+        WindowStartupLocation="CenterOwner" Loaded="OnWindowLoaded" Closing="OnWindowClosing">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TitleTextBlock" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,6" />
+            <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" Margin="0,0,0,10" Text="Salvando os arquivos das máquinas..." />
+            <StackPanel x:Name="ChoicesPanel" IsEnabled="False">
+                <TextBlock Text="O que fazer com os arquivos da turma guardados neste computador?" Margin="0,0,0,6" />
+                <RadioButton x:Name="KeepRadioButton" IsChecked="True" Margin="0,2">
+                    <TextBlock TextWrapping="Wrap" Text="Manter tudo, para a próxima aula da turma" />
+                </RadioButton>
+                <RadioButton x:Name="TodayRadioButton" Margin="0,2">
+                    <TextBlock TextWrapping="Wrap" Text="Apagar só os de hoje: os arquivos que apareceram nesta aula (os que já existiam ficam, com as mudanças de hoje)" />
+                </RadioButton>
+                <RadioButton x:Name="AllRadioButton" Margin="0,2">
+                    <TextBlock TextWrapping="Wrap" Text="Apagar tudo da turma" />
+                </RadioButton>
+                <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,6,0,0"
+                           Text="O que for apagado vai para a Lixeira deste computador, de onde ainda pode ser recuperado. Em qualquer caso, a &quot;Pasta da turma&quot; das máquinas é esvaziada para a próxima turma." />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button x:Name="OpenFolderButton" Content="Abrir a pasta da turma" Click="OnOpenFolderClicked" Padding="10,4" />
+                <Button x:Name="EndButton" Content="Encerrar aula" Click="OnEndClicked" IsEnabled="False" Padding="14,4" Margin="8,0,0,0" />
+            </StackPanel>
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>
