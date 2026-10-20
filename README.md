@@ -4,12 +4,12 @@
 
 # Midview
 
+[![Versão mais recente](https://img.shields.io/github/v/release/ArnoNeto1/midview?label=vers%C3%A3o&color=0e7490)](https://github.com/ArnoNeto1/midview/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ArnoNeto1/midview/total?label=downloads&color=6b7684)](https://github.com/ArnoNeto1/midview/releases)
 [![Baixar o instalador](https://img.shields.io/badge/⬇%20Baixar-Instalador%20(.exe)-0e7490?style=for-the-badge)](https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe)
 
 > O botão acima baixa sempre a versão mais nova. O mesmo instalador serve
-> para o computador do professor e para as máquinas dos alunos. O
-> repositório é privado: para baixar, entre no GitHub com uma conta que
-> tenha acesso a ele.
+> para o computador do professor e para as máquinas dos alunos.
 
 O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem internet e sem servidor externo.
 
