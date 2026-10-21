@@ -33,15 +33,40 @@ public partial class ClassStoreTests
         Assert.False(File.Exists(LessonsFile));
     }
 
+    // That the defaults are both in MasterData.Folder is MasterDataTests' to say:
+    // it moves the folder for a moment, so no other class reads it.
     [Fact]
     public void LessonMap_ByDefault_LivesNextToTheIndexFolder_NotInIt()
     {
         MakeClass("lessons"); // a class with that name has its own index in the index folder
+        Write("lessons", "a.txt");
+        _store.RefreshTombstones("lessons");
         _store.RememberLesson(Guid.NewGuid(), "lessons");
 
         Assert.True(File.Exists(LessonsFile));
-        Assert.Equal(Path.Combine(MasterData.Folder, "class-lessons.json"), ClassStore.DefaultLessonsPath);
-        Assert.Equal(Path.GetDirectoryName(ClassStore.DefaultIndexRoot), Path.GetDirectoryName(ClassStore.DefaultLessonsPath));
+        Assert.Equal(new[] { "lessons.json" }, Directory.GetFiles(IndexRoot).Select(file => Path.GetFileName(file)));
+        Assert.NotNull(NewStore(_bin).ArrivedOn("lessons", "a.txt"));
+    }
+
+    [Fact]
+    public void LessonMap_KnownVersions_AreTheClassesFilesAndThePcsRecords_ComparedIgnoringCase()
+    {
+        MakeClass();
+        Write(Turma, "fica.txt", "a");
+        Commit(Turma, "apagado.txt", "bb");
+        _store.RecordSynced(Turma, "PC1", "apagado.txt", VersionOf("bb"));
+        File.Delete(Path.Combine(FolderOf(Turma), "apagado.txt"));
+        var lesson = Guid.NewGuid();
+
+        _store.RememberVersionsOf(lesson, Turma);
+        _store.RememberVersion(lesson, "novo.txt", VersionOf("ccc"));
+
+        var reopened = NewStore(_bin);
+        Assert.True(reopened.IsKnownVersion(lesson, "FICA.txt", VersionOf("a")));
+        Assert.True(reopened.IsKnownVersion(lesson, "apagado.txt", VersionOf("bb")));
+        Assert.True(reopened.IsKnownVersion(lesson, "novo.txt", VersionOf("ccc")));
+        Assert.False(reopened.IsKnownVersion(lesson, "fica.txt", VersionOf("a", DefaultWriteUtc.AddMinutes(1))));
+        Assert.False(reopened.IsKnownVersion(Guid.NewGuid(), "fica.txt", VersionOf("a")));
     }
 
     [Fact]

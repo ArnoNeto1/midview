@@ -183,6 +183,68 @@ public sealed partial class ClassFolderSyncTests
     }
 
     [Fact]
+    public async Task APushPlannedBeforeTheWait_DoesNotOverwriteWhatTheStudentSavedMeanwhile()
+    {
+        using var rig = new ClassSyncRig();
+        rig.WriteInStore("nova.txt", Bytes(10, 1), Utc(1));
+        var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        var pc1 = rig.Pcs[0];
+        var saved = false;
+        // The round plans to push nova.txt; while it waits for its turn, the student saves a file of that name.
+        sync.WaitingForCopySlot = machine =>
+        {
+            if (machine == pc1.Machine && !saved)
+            {
+                saved = true;
+                pc1.Write("nova.txt", Bytes(30, 2), Utc(5));
+            }
+        };
+
+        await sync.RunRoundAsync(pc1.Machine, CancellationToken.None);
+
+        Assert.True(saved);
+        Assert.Equal(Bytes(30, 2), pc1.Read("nova.txt"));
+        Assert.Equal(Bytes(10, 1), File.ReadAllBytes(rig.StorePath("nova.txt")));
+
+        // Once it held still it is the student's own file of that name, kept next to the class's.
+        for (var round = 0; round < 3; round++)
+        {
+            await sync.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        }
+
+        Assert.Equal(new[] { "nova (2).txt", "nova.txt" }, rig.StoreFiles());
+        Assert.Equal(Bytes(30, 2), File.ReadAllBytes(rig.StorePath("nova (2).txt")));
+        Assert.Equal(Bytes(10, 1), pc1.Read("nova.txt"));
+        Assert.Equal(Bytes(30, 2), pc1.Read("nova (2).txt"));
+    }
+
+    [Fact]
+    public async Task APlanOverTheLimit_FinishesOverSeveralRounds()
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        var count = ClassFolderSync.MaxActionsPerRound + 5;
+        for (var file = 0; file < count; file++)
+        {
+            rig.WriteInStore($"arquivo {file:00}.txt", Bytes(5, (byte)file), Utc(1));
+        }
+        var sync = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(sync);
+        await sync.StartAsync(Turma);
+        var pc1 = rig.Pcs[0];
+
+        await rig.Rounds(sync, 1);
+
+        Assert.Equal(ClassFolderSync.MaxActionsPerRound, pc1.Files().Length);
+        Assert.Equal(new PcStatus(pc1.Machine, PcSyncState.Copying, "copiando 5 arquivos"), statuses[pc1.Name]);
+
+        await rig.Rounds(sync, 1);
+
+        Assert.Equal(count, pc1.Files().Length);
+        Assert.Equal(PcSyncState.InSync, statuses[pc1.Name].State);
+    }
+
+    [Fact]
     public async Task AStalePc_IsNotSynced_UntilItFollowsTheLesson()
     {
         using var rig = new ClassSyncRig();

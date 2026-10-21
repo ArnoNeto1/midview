@@ -87,6 +87,71 @@ public sealed partial class ClassFolderSyncTests
     }
 
     [Fact]
+    public async Task SetAsideFiles_OfALessonNobodyEnded_BringBackOnlyWhatIsNew()
+    {
+        using var rig = new ClassSyncRig();
+        rig.WriteInStore("apagado.txt", Bytes(10, 1), Utc(1));
+        rig.WriteInStore("fica.txt", Bytes(10, 2), Utc(1));
+        var yesterday = rig.NewSync();
+        await yesterday.StartAsync(Turma);
+        var lessonA = yesterday.Lesson;
+        var pc1 = rig.Pcs[0];
+        await yesterday.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        pc1.Follow();
+        Assert.True(pc1.Has("apagado.txt"));
+
+        // The teacher deletes a file and PC1 never hears of it; its student saves a new one.
+        File.Delete(rig.StorePath("apagado.txt"));
+        pc1.Write("novo.txt", Bytes(10, 3), Utc(2));
+        yesterday.Dispose();
+
+        rig.Now = rig.Now.AddDays(1).Date.AddHours(8);
+        pc1.Agent.Reconcile();
+        pc1.Follow();
+        var today = rig.NewSync();
+        await today.StartAsync("3º B");
+        await today.RunRoundAsync(pc1.Machine, CancellationToken.None);
+
+        Assert.Equal(new[] { "fica.txt", "novo.txt" }, rig.StoreFiles(Turma));
+        Assert.Equal(Bytes(10, 3), File.ReadAllBytes(rig.StorePath("novo.txt")));
+        Assert.DoesNotContain(pc1.Folder.List().Entries, entry => entry.LessonId == lessonA.LessonId);
+        Assert.False(rig.Store.IsCollected(lessonA.LessonId));
+    }
+
+    [Fact]
+    public async Task SetAsideFiles_TheSameOnEveryPc_ComeInOnce()
+    {
+        using var rig = new ClassSyncRig();
+        var yesterday = rig.NewSync();
+        await yesterday.StartAsync(Turma);
+        var lessonA = yesterday.Lesson;
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+            pc.Write("igual.txt", Bytes(10, 1), Utc(1)); // the same file everywhere, never copied
+        }
+        yesterday.Dispose();
+        // The class has another file of that name by now.
+        rig.WriteInStore("igual.txt", Bytes(20, 2), Utc(2));
+
+        rig.Now = rig.Now.AddDays(1).Date.AddHours(8);
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Agent.Reconcile();
+            pc.Follow();
+        }
+        var today = rig.NewSync();
+        await today.StartAsync("3º B");
+        await Task.WhenAll(rig.Pcs.Select(pc => today.RunRoundAsync(pc.Machine, CancellationToken.None)));
+        await rig.Rounds(today, 1);
+
+        Assert.Equal(new[] { "igual (2).txt", "igual.txt" }, rig.StoreFiles(Turma));
+        Assert.Equal(Bytes(10, 1), File.ReadAllBytes(rig.StorePath("igual (2).txt")));
+        Assert.Equal(Bytes(20, 2), File.ReadAllBytes(rig.StorePath("igual.txt")));
+        Assert.All(rig.Pcs, pc => Assert.DoesNotContain(pc.Folder.List().Entries, entry => entry.LessonId == lessonA.LessonId));
+    }
+
+    [Fact]
     public async Task SetAsideFiles_OfACollectedLesson_AreOnlyCleared()
     {
         using var rig = new ClassSyncRig();

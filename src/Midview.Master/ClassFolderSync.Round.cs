@@ -17,50 +17,164 @@ public sealed partial class ClassFolderSync
     private readonly ConcurrentDictionary<string, (Guid LessonId, Dictionary<string, FileVersion> Files)> _listings =
         new(StringComparer.OrdinalIgnoreCase);
 
-    // Files set aside on a PC that are in their class now, while clearing them on the PC
-    // hasn't worked yet: not pulled again (that would make a "(2)" of each).
-    private readonly ConcurrentDictionary<(string Key, Guid LessonId, string Path, FileVersion Version), byte> _pulledAside = new();
-
-    // List the PC; deal with what it set aside for lessons that are over; then,
-    // if its Session is on this lesson, plan the class's files against the store
-    // and carry the plan out. A file that fails (held open, refused, its
-    // connection dropped) is only that file: the rest goes on and it is tried
-    // again at the next round. A PC that can't be reached any more ends the round.
-    // collectOnly: a lesson's last rounds, which only bring files in.
+    // List the PC and plan its files against the store. Nothing to copy (most
+    // rounds): done. Otherwise wait for a copy turn, list it again and plan again,
+    // and carry out at most MaxActionsPerRound of that plan, stopping if the
+    // lesson changes; the rest is for the next round. What the PC set aside for
+    // lessons that are over is dealt with in the same turn. A file that fails
+    // (held open, refused, its connection dropped) is only that file: the rest
+    // goes on and it is tried again at the next round. A PC that can't be reached
+    // any more ends the round. collectOnly: a lesson's last rounds, which only
+    // bring files in, with no limit.
     private async Task RoundAsync(KnownMachine machine, ClassLesson lesson, bool collectOnly, CancellationToken token)
     {
-        var listing = await Task.Run(() => ClassFolderClient.List(machine, _masterCertificate, _sessionPort), token)
-            .ConfigureAwait(false);
-        if (listing.OldSession)
+        var listing = await ListAsync(machine, token).ConfigureAwait(false);
+        if (!Usable(machine, listing))
         {
-            Report(machine, PcSyncState.Failed, OldMidview);
-            return;
-        }
-        if (listing.Problem is { } problem)
-        {
-            Report(machine, PcSyncState.Failed, problem);
             return;
         }
 
         var key = Key(machine);
         var failures = new List<string>();
-        var setAside = listing.Entries
-            .Where(entry => entry.LessonId != listing.CurrentLessonId && entry.LessonId != lesson.LessonId && entry.LessonId != Guid.Empty)
-            .GroupBy(entry => entry.LessonId)
-            .ToList();
-
+        var allowance = new Allowance(this, lesson, collectOnly, token);
         if (listing.CurrentLessonId != lesson.LessonId)
         {
             // Its Session isn't on this lesson (yet): the files in its folder wait.
             _listings.TryRemove(key, out _);
-            if (setAside.Count > 0)
+            var aside = SetAsideOf(listing, lesson);
+            if (aside.Count > 0)
             {
-                await CopyingAsync(() => CollectSetAside(machine, key, setAside, failures), token).ConfigureAwait(false);
+                await CopyingAsync(() => CollectSetAside(machine, aside, failures, allowance), token).ConfigureAwait(false);
             }
             await UpdateLessonAsync(machine, lesson, token).ConfigureAwait(false);
             return;
         }
 
+        var before = _listings.TryGetValue(key, out var last) && last.LessonId == lesson.LessonId ? last.Files : null;
+        var first = PlanFor(machine, lesson, key, listing, before, collectOnly);
+        if (first is null)
+        {
+            return;
+        }
+        _listings[key] = (lesson.LessonId, first.OnPc);
+        if (first.Work.Count == 0 && SetAsideOf(listing, lesson).Count == 0)
+        {
+            Record(lesson.Turma, key, first.InSync);
+            SaveIndex(lesson.Turma);
+            Report(machine, PcSyncState.InSync, string.Empty);
+            return;
+        }
+
+        // What is copied goes by a plan made with the turn in hand: the Session
+        // replaces a file without a Recycle Bin, and a push planned while 30 other
+        // PCs went first could land on what the student saved meanwhile. A file
+        // counts as holding still only if it already did at the first look and
+        // still does now (a turn that comes at once leaves too short a gap).
+        Report(machine, PcSyncState.Copying, first.Work.Count > 0 ? CopyingText(first.Work.Count) : CollectingText);
+        WaitingForCopySlot?.Invoke(machine);
+        await _copying.WaitAsync(token).ConfigureAwait(false);
+        var left = 0;
+        try
+        {
+            if (allowance.Stopped)
+            {
+                return;
+            }
+
+            var fresh = await ListAsync(machine, token).ConfigureAwait(false);
+            if (!Usable(machine, fresh))
+            {
+                return;
+            }
+            if (fresh.CurrentLessonId != lesson.LessonId)
+            {
+                _listings.TryRemove(key, out _);
+                Report(machine, PcSyncState.Copying, UpdatingLesson);
+                return;
+            }
+
+            var second = PlanFor(machine, lesson, key, fresh, Settled(before, first.OnPc), collectOnly);
+            if (second is null)
+            {
+                return;
+            }
+            _listings[key] = (lesson.LessonId, second.OnPc);
+            Record(lesson.Turma, key, second.InSync);
+            var aside = SetAsideOf(fresh, lesson);
+            left = await Task.Run(() =>
+            {
+                var done = 0;
+                foreach (var action in second.Work)
+                {
+                    if (!allowance.Take())
+                    {
+                        break;
+                    }
+                    Execute(machine, lesson, key, action, second.OnPc, failures);
+                    done++;
+                }
+                CollectSetAside(machine, aside, failures, allowance);
+                return second.Work.Count - done;
+            }, token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _copying.Release();
+            SaveIndex(lesson.Turma);
+        }
+
+        // A file that failed shows, with why ("a.docx (o arquivo está em uso por
+        // outro programa)", a full disk), until a round gets it across.
+        if (failures.Count > 0)
+        {
+            var more = failures.Count > 1 ? $" e mais {failures.Count - 1}" : string.Empty;
+            Report(machine, PcSyncState.Failed, failures[0] + more);
+        }
+        else if (left > 0 || allowance.More)
+        {
+            Report(machine, PcSyncState.Copying, left > 0 ? CopyingText(left) : CollectingText);
+        }
+        else
+        {
+            Report(machine, PcSyncState.InSync, string.Empty);
+        }
+    }
+
+    private static string CopyingText(int files) => files == 1 ? "copiando 1 arquivo" : $"copiando {files} arquivos";
+
+    private Task<ClassFolderClient.ListResult> ListAsync(KnownMachine machine, CancellationToken token) =>
+        Task.Run(() => ClassFolderClient.List(machine, _masterCertificate, _sessionPort), token);
+
+    // A listing the round can go by; otherwise the PC's status says why not.
+    private bool Usable(KnownMachine machine, ClassFolderClient.ListResult listing)
+    {
+        if (listing.OldSession)
+        {
+            Report(machine, PcSyncState.Failed, OldMidview);
+            return false;
+        }
+        if (listing.Problem is { } problem)
+        {
+            Report(machine, PcSyncState.Failed, problem);
+            return false;
+        }
+        return true;
+    }
+
+    // The files of a listing that the PC set aside for lessons that are over, by lesson.
+    private static List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(ClassFolderClient.ListResult listing, ClassLesson lesson) =>
+        listing.Entries
+            .Where(entry => entry.LessonId != listing.CurrentLessonId && entry.LessonId != lesson.LessonId && entry.LessonId != Guid.Empty)
+            .GroupBy(entry => entry.LessonId)
+            .ToList();
+
+    // What one listing of the PC needs: files already in sync, to record, and the
+    // rest. Null, with the PC's status saying so, when the class's folder on this
+    // PC can't be read (the round is skipped rather than planned on part of it).
+    private PcPlan? PlanFor(
+        KnownMachine machine, ClassLesson lesson, string key, ClassFolderClient.ListResult listing,
+        IReadOnlyDictionary<string, FileVersion>? before, bool collectOnly)
+    {
         var turma = lesson.Turma;
         IReadOnlyDictionary<string, FileVersion> stored;
         try
@@ -71,7 +185,7 @@ public sealed partial class ClassFolderSync
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Report(machine, PcSyncState.Failed, $"a pasta da turma neste computador não pôde ser lida: {ErrorText.Describe(ex)}");
-            return;
+            return null;
         }
 
         var onPc = new Dictionary<string, FileVersion>(StringComparer.OrdinalIgnoreCase);
@@ -79,59 +193,52 @@ public sealed partial class ClassFolderSync
         {
             onPc[entry.Path] = new FileVersion(entry.Size, entry.LastWriteTicks);
         }
-        var before = _listings.TryGetValue(key, out var last) && last.LessonId == lesson.LessonId ? last.Files : null;
-        _listings[key] = (lesson.LessonId, onPc);
 
-        var plan = ClassSyncPlanner.Plan(
+        var plan = new PcPlan(onPc, new List<SyncAction.RecordInSync>(), new List<SyncAction>());
+        var actions = ClassSyncPlanner.Plan(
             stored, path => _store.IsDeleted(turma, path), path => _store.LastSynced(turma, key, path), onPc, before);
-        var work = new List<SyncAction>();
-        foreach (var action in plan)
+        foreach (var action in actions)
         {
             if (action is SyncAction.RecordInSync inSync)
             {
-                _store.RecordSynced(turma, key, inSync.Path, inSync.Version);
+                plan.InSync.Add(inSync);
             }
             else if (!collectOnly || action is SyncAction.Pull or SyncAction.PullAsNew)
             {
-                work.Add(action);
+                plan.Work.Add(action);
             }
         }
-
-        try
-        {
-            if (work.Count > 0 || setAside.Count > 0)
-            {
-                Report(machine, PcSyncState.Copying, work.Count > 0 ? CopyingText(work.Count) : CollectingText);
-                await CopyingAsync(() =>
-                {
-                    CollectSetAside(machine, key, setAside, failures);
-                    foreach (var action in work)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        Execute(machine, lesson, key, action, onPc, failures);
-                    }
-                }, token).ConfigureAwait(false);
-            }
-        }
-        finally
-        {
-            SaveIndex(turma);
-        }
-
-        // A file that failed shows, with why ("a.docx (o arquivo está em uso por
-        // outro programa)", a full disk), until a round gets it across.
-        if (failures.Count == 0)
-        {
-            Report(machine, PcSyncState.InSync, string.Empty);
-        }
-        else
-        {
-            var more = failures.Count > 1 ? $" e mais {failures.Count - 1}" : string.Empty;
-            Report(machine, PcSyncState.Failed, failures[0] + more);
-        }
+        return plan;
     }
 
-    private static string CopyingText(int files) => files == 1 ? "copiando 1 arquivo" : $"copiando {files} arquivos";
+    // The files of the first look that had held still since the round before:
+    // only they may count as holding still at the second look.
+    private static Dictionary<string, FileVersion>? Settled(
+        IReadOnlyDictionary<string, FileVersion>? before, Dictionary<string, FileVersion> first)
+    {
+        if (before is null)
+        {
+            return null;
+        }
+
+        var settled = new Dictionary<string, FileVersion>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, version) in first)
+        {
+            if (before.TryGetValue(path, out var earlier) && earlier == version)
+            {
+                settled[path] = version;
+            }
+        }
+        return settled;
+    }
+
+    private void Record(string turma, string key, IEnumerable<SyncAction.RecordInSync> inSync)
+    {
+        foreach (var file in inSync)
+        {
+            _store.RecordSynced(turma, key, file.Path, file.Version);
+        }
+    }
 
     // At most MaxCopyingPcs PCs copying at once. The copying blocks a thread of
     // its own (ClassFolderClient is synchronous); waiting for a turn doesn't.
@@ -328,87 +435,49 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // --- Files set aside for lessons that are over ---
+    // What one listing of a PC needs (PlanFor).
+    private sealed record PcPlan(
+        Dictionary<string, FileVersion> OnPc, List<SyncAction.RecordInSync> InSync, List<SyncAction> Work);
 
-    // A lesson "Encerrar a aula" collected: what the PC set aside afterwards is
-    // its own (it was offline at the end), so it is only cleared, to the
-    // student's Recycle Bin. A lesson whose class is unknown or gone: the same.
-    // Any other (it ended with the day, or the class was changed): each file the
-    // class hasn't got (the same path at the same version) comes in as a new file,
-    // and once all have, the PC clears them.
-    private void CollectSetAside(
-        KnownMachine machine, string key, IReadOnlyList<IGrouping<Guid, ClassFolderEntry>> lessons, List<string> failures)
+    // What a round may still do: MaxActionsPerRound copies (a lesson's last
+    // rounds have no limit), and nothing once Dispose came or the lesson changed,
+    // or is changing, under it.
+    private sealed class Allowance
     {
-        foreach (var files in lessons)
-        {
-            var lessonId = files.Key;
-            if (!_store.IsCollected(lessonId) && _store.TurmaOfLesson(lessonId) is { } turma && _store.Exists(turma)
-                && !PullSetAside(machine, key, lessonId, turma, files, failures))
-            {
-                continue; // what is missing is tried again at the next round; nothing is cleared before
-            }
+        private readonly ClassFolderSync _sync;
+        private readonly ClassLesson _lesson;
+        private readonly bool _collectOnly;
+        private readonly CancellationToken _token;
+        private int _left;
 
-            var (cleared, why) = ClassFolderClient.ClearSetAside(machine, _masterCertificate, lessonId, _sessionPort);
-            if (cleared)
-            {
-                foreach (var pulled in _pulledAside.Keys.Where(pulled => pulled.Key == key && pulled.LessonId == lessonId))
-                {
-                    _pulledAside.TryRemove(pulled, out _);
-                }
-            }
-            else
-            {
-                failures.Add($"arquivos de uma aula anterior ({why})");
-            }
-        }
-    }
-
-    // True when every file is in the class now.
-    private bool PullSetAside(
-        KnownMachine machine, string key, Guid lessonId, string turma, IEnumerable<ClassFolderEntry> files, List<string> failures)
-    {
-        IReadOnlyDictionary<string, FileVersion> stored;
-        try
+        public Allowance(ClassFolderSync sync, ClassLesson lesson, bool collectOnly, CancellationToken token)
         {
-            stored = _store.Files(turma);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            failures.Add($"turma {turma} ({ErrorText.Describe(ex)})");
-            return false;
+            _sync = sync;
+            _lesson = lesson;
+            _collectOnly = collectOnly;
+            _token = token;
+            _left = collectOnly ? int.MaxValue : MaxActionsPerRound;
         }
 
-        var complete = true;
-        foreach (var file in files)
+        // Something was left for the next round.
+        public bool More { get; private set; }
+
+        public bool Stopped =>
+            _token.IsCancellationRequested
+            || _sync.Lesson.LessonId != _lesson.LessonId
+            || (!_collectOnly && _sync._changingLesson);
+
+        // Whether one more copy may go now. Throws when Dispose came.
+        public bool Take()
         {
-            var version = new FileVersion(file.Size, file.LastWriteTicks);
-            var pulled = (key, lessonId, file.Path, version);
-            if ((stored.TryGetValue(file.Path, out var have) && have == version) || _pulledAside.ContainsKey(pulled))
+            _token.ThrowIfCancellationRequested();
+            if (Stopped || _left == 0)
             {
-                continue; // the class has it: synced during the lesson, or brought in by an earlier round
+                More = true;
+                return false;
             }
-
-            string? why;
-            try
-            {
-                var (at, reason) = PullInto(machine, turma, lessonId, file.Path, version, replace: false);
-                why = at is null ? reason : null;
-            }
-            catch (Exception ex) when (ex is not (SocketException or OperationCanceledException))
-            {
-                why = FailureText.Describe(ex);
-            }
-
-            if (why is null)
-            {
-                _pulledAside.TryAdd(pulled, 0);
-            }
-            else
-            {
-                complete = false;
-                failures.Add($"{file.Path} ({why})");
-            }
+            _left--;
+            return true;
         }
-        return complete;
     }
 }

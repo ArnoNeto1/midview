@@ -45,14 +45,19 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // raised on them. Nothing a PC does (failing, going away, answering nonsense)
 // escapes as an exception: it becomes that PC's status.
 //
-// In three files: this one (the lesson), ClassFolderSync.Loop.cs (the loop
-// and its rounds) and ClassFolderSync.Round.cs (one PC's round).
+// In four files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
+// its rounds), ClassFolderSync.Round.cs (one PC's round) and
+// ClassFolderSync.SetAside.cs (what PCs set aside for lessons that are over).
 public sealed partial class ClassFolderSync : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
 
     // As Enviar and Recolher.
     private const int MaxCopyingPcs = 4;
+
+    // Copies, deletions and renames in one PC's round; the rest waits for the
+    // next, re-planned from a fresh listing (a lesson's last rounds have no limit).
+    internal const int MaxActionsPerRound = 25;
 
     // How long Dispose waits for rounds in the middle of a copy (a network wait is up to 30 s).
     private static readonly TimeSpan DisposeWait = TimeSpan.FromSeconds(10);
@@ -78,7 +83,11 @@ public sealed partial class ClassFolderSync : IDisposable
 
     // By machine key (the Session's thumbprint, as the store's per-PC records).
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _pcGates = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, Task> _running = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Task> _loopRounds = new(StringComparer.OrdinalIgnoreCase);
+
+    // Every round but a lesson end's own last ones, from before it starts until it is over (TrackedAsync).
+    private readonly ConcurrentDictionary<long, Task> _rounds = new();
+    private long _lastRoundId;
     private readonly ConcurrentDictionary<string, PcStatus> _statuses = new(StringComparer.OrdinalIgnoreCase);
 
     // The SavedAt of the lesson each Agent took.
@@ -145,6 +154,9 @@ public sealed partial class ClassFolderSync : IDisposable
     // What the last EndAsync couldn't do with the class's files (one line each, for the teacher).
     public IReadOnlyList<string> LastEndProblems { get; private set; } = Array.Empty<string>();
 
+    // For the tests: called as a round with copying to do starts waiting for its turn.
+    internal Action<KnownMachine>? WaitingForCopySlot { get; set; }
+
     // A new lesson of that class: saved, then sent to every PC's Agent at once,
     // with what each answered. A lesson already on is replaced ("Trocar de
     // turma"): another class keeps its files, as at an end with "Manter", and
@@ -166,7 +178,7 @@ public sealed partial class ClassFolderSync : IDisposable
             var previous = Lesson;
             if (previous.IsOn && !string.Equals(previous.Turma, turma, StringComparison.OrdinalIgnoreCase))
             {
-                EndInStore(previous.Turma, EndChoice.Keep);
+                EndUncollected(previous);
             }
 
             var lesson = new ClassLesson(NextSavedAt(), Guid.NewGuid(), turma, UnixNow(), Ended: false);
@@ -229,7 +241,8 @@ public sealed partial class ClassFolderSync : IDisposable
     public async Task RunRoundAsync(KnownMachine machine, CancellationToken cancellationToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
-        await GatedRoundAsync(machine, Lesson, collectOnly: false, linked.Token).ConfigureAwait(false);
+        var lesson = Lesson;
+        await TrackedAsync(() => GatedRoundAsync(machine, lesson, collectOnly: false, linked.Token)).ConfigureAwait(false);
     }
 
     // Stops the loop and waits a while for the rounds in progress.
@@ -293,8 +306,28 @@ public sealed partial class ClassFolderSync : IDisposable
     // by themselves; the pollers hand them this ended one too.
     private void EndNobodyEnded(ClassLesson lesson)
     {
-        EndInStore(lesson.Turma, EndChoice.Keep);
+        EndUncollected(lesson);
         Adopt(lesson with { SavedAt = NextSavedAt(), Ended = true });
+    }
+
+    // A lesson that ends without its last rounds, keeping the files: what its
+    // class held and what each PC was known to have are remembered first (the
+    // end clears them), so of what the PCs then set aside only versions never
+    // seen come in, and a file the teacher deleted doesn't come back.
+    private void EndUncollected(ClassLesson lesson)
+    {
+        if (ClassStore.IsValidName(lesson.Turma))
+        {
+            try
+            {
+                _store.RememberVersionsOf(lesson.LessonId, lesson.Turma);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log($"The versions of {lesson.Turma} could not be remembered: {ex.Message}");
+            }
+        }
+        EndInStore(lesson.Turma, EndChoice.Keep);
     }
 
     private IReadOnlyList<string> EndInStore(string turma, EndChoice choice)

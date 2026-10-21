@@ -46,7 +46,7 @@ public enum EndChoice
 //
 // In four files, to stay readable: this one (the classes and their files),
 // ClassStore.Incoming.cs (what the index knows, receiving a file, the teacher's
-// changes in Explorer), ClassStore.Lesson.cs (ending a lesson) and
+// changes in Explorer, arrival days), ClassStore.Lesson.cs (ending a lesson) and
 // ClassStore.LessonMap.cs (which class each lesson was of).
 public sealed partial class ClassStore
 {
@@ -445,59 +445,5 @@ public sealed partial class ClassStore
         {
             // It only holds what Midview knew about the files of a class that is gone.
         }
-    }
-
-    // The day a file the index hasn't seen yet arrived: the day of its own last
-    // write time, in the teacher's local time. That is a file the teacher added in
-    // Explorer, or any file once the index was lost; one the sync committed
-    // arrived today (CommitIncoming), whatever its time.
-    private static DateOnly ArrivalOf(FileVersion version) =>
-        DateOnly.FromDateTime(new DateTime(version.LastWriteTicks, DateTimeKind.Utc).ToLocalTime());
-
-    // The day the newest of the class's files arrived (null for a class with
-    // none), as the index has it, or as it will be once indexed.
-    private DateOnly? LastArrival(string turma, IReadOnlyDictionary<string, FileVersion> files)
-    {
-        DateOnly? last = null;
-        lock (_gate)
-        {
-            ClassIndex? index = null;
-            try
-            {
-                index = IndexOf(turma);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // An index that can't be read right now: all that is known is what is on the disk.
-            }
-
-            foreach (var (path, version) in files)
-            {
-                var day = index is not null && index.ArrivedOn.TryGetValue(path, out var arrived) ? arrived : ArrivalOf(version);
-                if (last is null || day > last)
-                {
-                    last = day;
-                }
-            }
-        }
-        return last;
-    }
-
-    // Adds the files the index hasn't seen, as arrived on the day of their own
-    // time (ArrivalOf), and takes the ones that are back off the tombstones.
-    // True if anything changed.
-    private bool IndexNewFiles(ClassIndex index, IReadOnlyDictionary<string, FileVersion> present)
-    {
-        var changed = false;
-        foreach (var (path, version) in present)
-        {
-            if (!index.ArrivedOn.ContainsKey(path))
-            {
-                index.ArrivedOn[path] = ArrivalOf(version);
-                changed = true;
-            }
-            changed |= index.Deleted.Remove(path);
-        }
-        return changed;
     }
 }

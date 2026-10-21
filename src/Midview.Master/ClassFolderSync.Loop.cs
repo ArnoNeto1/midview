@@ -68,11 +68,11 @@ public sealed partial class ClassFolderSync
             }
 
             var key = Key(machine);
-            if (_running.TryGetValue(key, out var running) && !running.IsCompleted)
+            if (_loopRounds.TryGetValue(key, out var running) && !running.IsCompleted)
             {
                 continue;
             }
-            _running[key] = GatedRoundAsync(machine, lesson, collectOnly: false, token);
+            _loopRounds[key] = TrackedAsync(() => GatedRoundAsync(machine, lesson, collectOnly: false, token));
         }
     }
 
@@ -90,16 +90,27 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // Waits for the loop's rounds in progress; each says its own trouble.
-    private async Task RunningRounds()
+    // Waits for the rounds in progress. A start or an end sets _changingLesson
+    // first: a round tracked after this looks has not got past its check yet, and
+    // will see the flag and do nothing.
+    private async Task RunningRounds() =>
+        await Task.WhenAll(_rounds.Values.ToArray()).ConfigureAwait(false);
+
+    // Tracked from before it begins until it is over, whatever becomes of it
+    // (each round says its own trouble; a cancelled one is Dispose's).
+    private async Task TrackedAsync(Func<Task> round)
     {
+        var id = Interlocked.Increment(ref _lastRoundId);
+        var over = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _rounds[id] = over.Task;
         try
         {
-            await Task.WhenAll(_running.Values.ToArray()).ConfigureAwait(false);
+            await round().ConfigureAwait(false);
         }
-        catch (Exception)
+        finally
         {
-            // Cancelled by Dispose, or reported already.
+            _rounds.TryRemove(id, out _);
+            over.TrySetResult();
         }
     }
 

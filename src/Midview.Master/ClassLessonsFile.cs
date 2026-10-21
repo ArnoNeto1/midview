@@ -4,24 +4,27 @@ using System.Text.Json;
 namespace Midview.Master;
 
 // The lessons map behind ClassStore.RememberLesson and the methods next to it:
-// the class each lesson this Master started was of, and whether its end was
+// the class each lesson this Master started was of, whether its end was
 // collected (the last round of "Encerrar a aula" ran, so what a PC set aside
-// for it afterwards is not wanted back). A PC can come back days later with
-// files set aside for a lesson; this is how the Master knows which class they
-// belong to. One JSON file, MasterData.Folder\class-lessons.json by default:
-// not in the index folder, where a class named "lessons" would have its index.
+// for it afterwards is not wanted back), and, for a lesson that ended without
+// those last rounds, the versions of files the class already had or gave out
+// then, so what a PC set aside that is one of them is not brought back. A PC
+// can come back days later with files set aside for a lesson; this is how the
+// Master knows which class they belong to and which are new. One JSON file,
+// MasterData.Folder\class-lessons.json by default: not in the index folder,
+// where a class named "lessons" would have its index.
 //
 // Never throws: a file that can't be read is set aside (corrupt) or taken as
 // empty (unreadable), and one that can't be written is kept in memory and
 // written again with the next change; both are logged. The worst that comes
-// of it is a PC's leftovers cleared instead of collected, and they go to that
-// student's Recycle Bin.
+// of it is a PC's leftovers cleared instead of collected (they go to that
+// student's Recycle Bin), or collected as a "(2)" of what the class has.
 internal sealed class ClassLessonsFile
 {
     private readonly string _path;
     private readonly Action<string> _log;
     private readonly object _gate = new();
-    private Dictionary<Guid, Entry>? _lessons; // loaded on first use
+    private Dictionary<Guid, Lesson>? _lessons; // loaded on first use
 
     public ClassLessonsFile(string path, Action<string> log)
     {
@@ -33,7 +36,7 @@ internal sealed class ClassLessonsFile
     {
         lock (_gate)
         {
-            return Lessons().TryGetValue(lessonId, out var entry) ? entry.Turma : null;
+            return Lessons().TryGetValue(lessonId, out var lesson) ? lesson.Turma : null;
         }
     }
 
@@ -41,7 +44,16 @@ internal sealed class ClassLessonsFile
     {
         lock (_gate)
         {
-            return Lessons().TryGetValue(lessonId, out var entry) && entry.Collected;
+            return Lessons().TryGetValue(lessonId, out var lesson) && lesson.Collected;
+        }
+    }
+
+    // Paths compare ignoring case.
+    public bool IsKnown(Guid lessonId, string path, FileVersion version)
+    {
+        lock (_gate)
+        {
+            return Lessons().TryGetValue(lessonId, out var lesson) && lesson.Known.Contains(KnownOf(path, version));
         }
     }
 
@@ -49,9 +61,12 @@ internal sealed class ClassLessonsFile
     {
         lock (_gate)
         {
-            var lessons = Lessons();
-            var collected = lessons.TryGetValue(lessonId, out var known) && known.Collected;
-            Change(lessons, lessonId, new Entry(turma, collected));
+            var lesson = LessonOf(lessonId);
+            if (lesson.Turma != turma)
+            {
+                lesson.Turma = turma;
+                Save();
+            }
         }
     }
 
@@ -60,9 +75,29 @@ internal sealed class ClassLessonsFile
     {
         lock (_gate)
         {
-            var lessons = Lessons();
-            var turma = lessons.TryGetValue(lessonId, out var known) ? known.Turma : null;
-            Change(lessons, lessonId, new Entry(turma, Collected: true));
+            var lesson = LessonOf(lessonId);
+            if (!lesson.Collected)
+            {
+                lesson.Collected = true;
+                Save();
+            }
+        }
+    }
+
+    public void AddKnown(Guid lessonId, IEnumerable<(string Path, FileVersion Version)> versions)
+    {
+        lock (_gate)
+        {
+            var known = LessonOf(lessonId).Known;
+            var added = false;
+            foreach (var (path, version) in versions)
+            {
+                added |= known.Add(KnownOf(path, version));
+            }
+            if (added)
+            {
+                Save();
+            }
         }
     }
 
@@ -71,19 +106,15 @@ internal sealed class ClassLessonsFile
     {
         lock (_gate)
         {
-            var lessons = Lessons();
             var changed = false;
-            foreach (var (lessonId, entry) in lessons.ToList())
+            foreach (var lesson in Lessons().Values.Where(lesson => SameClass(lesson.Turma, turma)))
             {
-                if (string.Equals(entry.Turma, turma, StringComparison.OrdinalIgnoreCase))
-                {
-                    lessons[lessonId] = entry with { Turma = newName };
-                    changed = true;
-                }
+                lesson.Turma = newName;
+                changed = true;
             }
             if (changed)
             {
-                Save(lessons);
+                Save();
             }
         }
     }
@@ -94,35 +125,41 @@ internal sealed class ClassLessonsFile
         lock (_gate)
         {
             var lessons = Lessons();
-            var gone = lessons.Where(pair => string.Equals(pair.Value.Turma, turma, StringComparison.OrdinalIgnoreCase))
-                .Select(pair => pair.Key).ToList();
+            var gone = lessons.Where(pair => SameClass(pair.Value.Turma, turma)).Select(pair => pair.Key).ToList();
             foreach (var lessonId in gone)
             {
                 lessons.Remove(lessonId);
             }
             if (gone.Count > 0)
             {
-                Save(lessons);
+                Save();
             }
         }
     }
 
-    private void Change(Dictionary<Guid, Entry> lessons, Guid lessonId, Entry entry)
+    private static bool SameClass(string? a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static (string Path, long Size, long LastWriteTicks) KnownOf(string path, FileVersion version) =>
+        (path.ToUpperInvariant(), version.Size, version.LastWriteTicks);
+
+    // With _gate held.
+    private Lesson LessonOf(Guid lessonId)
     {
-        if (lessons.TryGetValue(lessonId, out var known) && known == entry)
+        var lessons = Lessons();
+        if (!lessons.TryGetValue(lessonId, out var lesson))
         {
-            return;
+            lesson = new Lesson();
+            lessons[lessonId] = lesson;
         }
-        lessons[lessonId] = entry;
-        Save(lessons);
+        return lesson;
     }
 
     // With _gate held.
-    private Dictionary<Guid, Entry> Lessons() => _lessons ??= Load();
+    private Dictionary<Guid, Lesson> Lessons() => _lessons ??= Load();
 
-    private Dictionary<Guid, Entry> Load()
+    private Dictionary<Guid, Lesson> Load()
     {
-        var lessons = new Dictionary<Guid, Entry>();
+        var lessons = new Dictionary<Guid, Lesson>();
         if (!File.Exists(_path))
         {
             return lessons;
@@ -132,12 +169,22 @@ internal sealed class ClassLessonsFile
         {
             var stored = JsonSerializer.Deserialize<List<StoredLesson?>>(File.ReadAllBytes(_path))
                 ?? throw new JsonException("The lessons map is not a list.");
-            foreach (var lesson in stored)
+            foreach (var entry in stored)
             {
-                if (lesson is not null && lesson.LessonId != Guid.Empty)
+                if (entry is null || entry.LessonId == Guid.Empty)
                 {
-                    lessons[lesson.LessonId] = new Entry(lesson.Turma, lesson.Collected);
+                    continue;
                 }
+
+                var lesson = new Lesson { Turma = entry.Turma, Collected = entry.Collected };
+                foreach (var known in entry.Known ?? new())
+                {
+                    if (known?.Path is { } path)
+                    {
+                        lesson.Known.Add(KnownOf(path, new FileVersion(known.Size, known.LastWriteTicks)));
+                    }
+                }
+                lessons[entry.LessonId] = lesson;
             }
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
@@ -161,8 +208,8 @@ internal sealed class ClassLessonsFile
         return lessons;
     }
 
-    // A temp file swapped in, so a crash mid-save never leaves half a map.
-    private void Save(Dictionary<Guid, Entry> lessons)
+    // With _gate held. A temp file swapped in, so a crash mid-save never leaves half a map.
+    private void Save()
     {
         try
         {
@@ -172,7 +219,12 @@ internal sealed class ClassLessonsFile
                 Directory.CreateDirectory(directory);
             }
 
-            var stored = lessons.Select(pair => new StoredLesson(pair.Key, pair.Value.Turma, pair.Value.Collected)).ToList();
+            var stored = Lessons().Select(pair => new StoredLesson(
+                pair.Key, pair.Value.Turma, pair.Value.Collected,
+                pair.Value.Known.Count == 0
+                    ? null
+                    : pair.Value.Known.Select(known => (StoredVersion?)new StoredVersion(known.Path, known.Size, known.LastWriteTicks)).ToList()))
+                .ToList();
             var tempPath = _path + ".tmp";
             File.WriteAllBytes(tempPath, JsonSerializer.SerializeToUtf8Bytes(stored));
             File.Move(tempPath, _path, overwrite: true);
@@ -183,7 +235,17 @@ internal sealed class ClassLessonsFile
         }
     }
 
-    private sealed record Entry(string? Turma, bool Collected);
+    private sealed class Lesson
+    {
+        public string? Turma { get; set; }
 
-    private sealed record StoredLesson(Guid LessonId, string? Turma, bool Collected);
+        public bool Collected { get; set; }
+
+        // Paths upper-cased (invariant), so they compare ignoring case.
+        public HashSet<(string Path, long Size, long LastWriteTicks)> Known { get; } = new();
+    }
+
+    private sealed record StoredLesson(Guid LessonId, string? Turma, bool Collected, List<StoredVersion?>? Known);
+
+    private sealed record StoredVersion(string? Path, long Size, long LastWriteTicks);
 }

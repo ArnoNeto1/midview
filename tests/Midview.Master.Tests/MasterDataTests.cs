@@ -27,6 +27,7 @@ public class MasterDataTests
                 KnownMachinesFile.DefaultPath, PowerScheduleFile.DefaultPath, AppBlockFile.DefaultPath,
                 MasterIdentity.DefaultCertificatePath, SavedMenu.WebsitesPath, SavedMenu.ProgramsPath,
                 WakeTask.LogPath, GridViewFile.DefaultPath, ClassLessonFileMaster.Path, ClassStore.DefaultLessonsPath,
+                ClassStore.DefaultIndexRoot,
             };
 
             Assert.All(paths, path => Assert.Equal(elsewhere, Path.GetDirectoryName(path)));
