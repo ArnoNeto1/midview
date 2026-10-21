@@ -304,6 +304,45 @@ public class ThumbnailPollerTests
         Assert.True(status!.OldAgent);
     }
 
+    [Fact]
+    public async Task ResendsTheClassLesson_WhenTheAgentComesBack()
+    {
+        using var session = new LoopbackSession();
+        using var agentCertificate = SelfSignedCertificate.Create("agent-under-test");
+        var agentPort = FreePort();
+        var lesson = new ClassLesson(1000, Guid.NewGuid(), "3º A", 1, Ended: false);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agentCertificate.Thumbprint }, session.MasterCertificate, session.Port,
+            agentPort, agentRetryInterval: TimeSpan.Zero, classLesson: () => lesson);
+
+        // The Agent isn't running when the lesson starts: the poller tries, and goes on polling.
+        var thumbnails = 0;
+        poller.ThumbnailReceived += _ => Interlocked.Increment(ref thumbnails);
+        poller.Start();
+        await WaitUntil(() => Volatile.Read(ref thumbnails) >= 2);
+
+        using var agent = new FakeAgent(
+            session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "aula do 3º A")),
+            agentPort, agentCertificate);
+        await WaitUntil(() => agent.LessonsReceived.Length > 0);
+        Assert.Equal(new[] { 1000L }, agent.LessonsReceived);
+
+        // Delivered once; a change (the end of the lesson) goes too.
+        lesson = lesson with { SavedAt = 1001, Ended = true };
+        await WaitUntil(() => agent.LessonsReceived.Length > 1);
+        Assert.Equal(new[] { 1000L, 1001L }, agent.LessonsReceived);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + 6 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, "timed out");
+            await Task.Delay(50);
+        }
+    }
+
     private static async Task ThreeThumbnails(ThumbnailPoller poller)
     {
         var count = 0;
@@ -351,9 +390,10 @@ public class ThumbnailPollerTests
             IAppCloser? appCloser = null,
             DeliveryFolder? deliveryFolder = null,
             IScreenLockDisplay? screenLock = null,
-            ClassFolder? classFolder = null)
+            ClassFolder? classFolder = null,
+            IPAddress? address = null)
         {
-            _listener = new TcpListener(IPAddress.Loopback, port);
+            _listener = new TcpListener(address ?? IPAddress.Loopback, port);
             _sessionCertificate = sessionCertificate;
             MasterCertificate = masterCertificate;
             _listener.Start();
@@ -397,15 +437,22 @@ public class ThumbnailPollerTests
     // keeps track of the GetWakeAddress and SetPowerSchedule ones.
     private sealed class FakeAgent : IDisposable
     {
-        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate =
-            SelfSignedCertificate.Create("agent-under-test");
+        private readonly TcpListener _listener;
+        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate;
         private readonly List<long> _schedulesReceived = new();
         private readonly List<long> _blocksReceived = new();
+        private readonly List<long> _lessonsReceived = new();
+        private readonly bool _ownsCertificate;
         private int _questions;
 
-        public FakeAgent(System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, Message reply)
+        // port and certificate: to stand in for an Agent that comes back where it was.
+        public FakeAgent(
+            System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, Message reply, int port = 0,
+            System.Security.Cryptography.X509Certificates.X509Certificate2? certificate = null)
         {
+            _listener = new TcpListener(IPAddress.Loopback, port);
+            _ownsCertificate = certificate is null;
+            _certificate = certificate ?? SelfSignedCertificate.Create("agent-under-test");
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
             var masters = new TrustStore(new[] { masterCertificate.Thumbprint });
@@ -447,6 +494,14 @@ public class ThumbnailPollerTests
                                 lock (_schedulesReceived)
                                 {
                                     _schedulesReceived.Add(schedule.SavedAt);
+                                }
+                            }
+                            else if (message.Type == MessageType.SetClassLesson
+                                     && ClassLesson.TryDecode(message.Payload, out var lesson))
+                            {
+                                lock (_lessonsReceived)
+                                {
+                                    _lessonsReceived.Add(lesson.SavedAt);
                                 }
                             }
                             channel.Send(message.Type == MessageType.GetAppBlock && StatusReply is { } status ? status : reply);
@@ -493,10 +548,25 @@ public class ThumbnailPollerTests
             }
         }
 
+        // The SavedAt of each SetClassLesson received, in order.
+        public long[] LessonsReceived
+        {
+            get
+            {
+                lock (_lessonsReceived)
+                {
+                    return _lessonsReceived.ToArray();
+                }
+            }
+        }
+
         public void Dispose()
         {
             _listener.Stop();
-            _certificate.Dispose();
+            if (_ownsCertificate)
+            {
+                _certificate.Dispose();
+            }
         }
     }
 

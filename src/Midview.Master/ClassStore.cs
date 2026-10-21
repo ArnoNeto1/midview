@@ -44,9 +44,10 @@ public enum EndChoice
 // filesRoot. Paths inside a class are '/'-separated, compare ignoring case,
 // and each of their segments must be a name FileNames.Safe leaves alone.
 //
-// In three files, to stay readable: this one (the classes and their files),
-// ClassStore.Incoming.cs (what the index knows, receiving a file, the
-// teacher's changes in Explorer) and ClassStore.Lesson.cs (ending a lesson).
+// In four files, to stay readable: this one (the classes and their files),
+// ClassStore.Incoming.cs (what the index knows, receiving a file, the teacher's
+// changes in Explorer), ClassStore.Lesson.cs (ending a lesson) and
+// ClassStore.LessonMap.cs (which class each lesson was of).
 public sealed partial class ClassStore
 {
     // Under this much free space the Master warns the teacher.
@@ -72,15 +73,17 @@ public sealed partial class ClassStore
     private readonly List<string> _asides = new();
 
     // log gets what went wrong that the caller isn't told, in English (for a developer):
-    // by default it goes to System.Diagnostics.Trace.
+    // by default it goes to System.Diagnostics.Trace. lessonsPath: see LessonsMap.
     public ClassStore(
-        string filesRoot, string indexRoot, IRecycleBin recycleBin, Func<DateTime> localNow, Action<string>? log = null)
+        string filesRoot, string indexRoot, IRecycleBin recycleBin, Func<DateTime> localNow, Action<string>? log = null,
+        string? lessonsPath = null)
     {
         _filesRoot = Path.GetFullPath(filesRoot);
         _indexRoot = Path.GetFullPath(indexRoot);
         _recycleBin = recycleBin;
         _localNow = localNow;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassStore: " + message));
+        _lessons = LessonsMap(_indexRoot, lessonsPath, _log);
     }
 
     public static string DefaultFilesRoot => Path.Combine(
@@ -213,6 +216,8 @@ public sealed partial class ClassStore
             {
                 return (false, "Não foi possível renomear a turma: " + ErrorText.Describe(ex));
             }
+
+            _lessons.RenameClass(turma, name);
 
             // The folder has moved; the index follows it. Not worth undoing the
             // rename if that fails: the index only holds what Midview knows
@@ -427,9 +432,10 @@ public sealed partial class ClassStore
         }
     }
 
-    // With _gate held.
+    // With _gate held. The class's lessons go too: a class made later under the name is another.
     private void DiscardIndex(string turma)
     {
+        _lessons.ForgetClass(turma);
         _indexes.Remove(turma);
         try
         {

@@ -36,6 +36,7 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly Func<PowerSchedule?>? _powerSchedule;
     private readonly Func<AppBlockPolicy?>? _appBlockPolicy;
     private readonly Func<(int Width, int Height)>? _thumbnailSize;
+    private readonly Func<ClassLesson?>? _classLesson;
     private readonly TimeSpan _agentRetryInterval;
     private long? _sentAppBlockSavedAt;
     private DateTime _nextAppBlockAttempt = DateTime.MinValue;
@@ -44,16 +45,21 @@ public sealed class ThumbnailPoller : IDisposable
     private DateTime _nextMacAddressAttempt = DateTime.MinValue;
     private long? _sentScheduleSavedAt;
     private DateTime _nextScheduleAttempt = DateTime.MinValue;
+    private long? _sentClassLessonSavedAt;
+    private DateTime _nextClassLessonAttempt = DateTime.MinValue;
 
     // powerSchedule: the teacher's current timetable (read on the poller's
     // thread), which this machine's Agent is given whenever it changes.
     // thumbnailSize: how big the grid's tiles are now (TileSize.Request),
     // read before each request; without it, the size tiles always had.
+    // classLesson: the class folder's lesson (ClassFolderSync.Lesson), handed
+    // to the Agent like the program block.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
         Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
-        TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null)
+        TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null,
+        Func<ClassLesson?>? classLesson = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
@@ -62,6 +68,7 @@ public sealed class ThumbnailPoller : IDisposable
         _powerSchedule = powerSchedule;
         _appBlockPolicy = appBlockPolicy;
         _thumbnailSize = thumbnailSize;
+        _classLesson = classLesson;
         _agentRetryInterval = agentRetryInterval ?? DefaultAgentRetryInterval;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
@@ -123,6 +130,7 @@ public sealed class ThumbnailPoller : IDisposable
                 AskForMacAddressOnce();
                 SendPowerScheduleIfChanged();
                 SendAppBlockIfChanged();
+                SendClassLessonIfChanged();
                 ObserveAppBlock();
             }
             catch (Exception ex)
@@ -233,6 +241,39 @@ public sealed class ThumbnailPoller : IDisposable
         catch (Exception)
         {
             _nextAppBlockAttempt = DateTime.UtcNow + _agentRetryInterval;
+        }
+    }
+
+    // The same for the class folder's lesson: a machine that was off when the
+    // teacher started or ended it gets it the next time it's on, and the Agent
+    // keeps an older one out by SavedAt. A lesson never saved (SavedAt 0: the
+    // Master hasn't had one yet) is nothing to hand over.
+    private void SendClassLessonIfChanged()
+    {
+        if (_classLesson?.Invoke() is not { SavedAt: > 0 } lesson || lesson.SavedAt == _sentClassLessonSavedAt
+            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
+            || DateTime.UtcNow < _nextClassLessonAttempt || _stop.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            var (succeeded, _) = CommandClient.SendCommandForResult(
+                _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
+                MessageType.SetClassLesson, lesson.Encode());
+            if (succeeded)
+            {
+                _sentClassLessonSavedAt = lesson.SavedAt;
+            }
+            else
+            {
+                _nextClassLessonAttempt = DateTime.UtcNow + _agentRetryInterval;
+            }
+        }
+        catch (Exception)
+        {
+            _nextClassLessonAttempt = DateTime.UtcNow + _agentRetryInterval;
         }
     }
 
