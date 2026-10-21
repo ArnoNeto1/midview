@@ -45,9 +45,10 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // raised on them. Nothing a PC does (failing, going away, answering nonsense)
 // escapes as an exception: it becomes that PC's status.
 //
-// In four files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
-// its rounds), ClassFolderSync.Round.cs (one PC's round) and
-// ClassFolderSync.SetAside.cs (what PCs set aside for lessons that are over).
+// In five files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
+// its rounds), ClassFolderSync.Round.cs (one PC's round), ClassFolderSync.Copy.cs
+// (each file's pull, push, rename or deletion) and ClassFolderSync.SetAside.cs
+// (what PCs set aside for lessons that are over).
 public sealed partial class ClassFolderSync : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
