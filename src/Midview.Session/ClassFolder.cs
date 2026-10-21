@@ -40,7 +40,6 @@ public sealed partial class ClassFolder
     private readonly string _setAsideRoot;
     private readonly Func<ClassLesson?> _agentLesson;
     private readonly IRecycleBin _recycleBin;
-    private readonly int _maxEntries;
 
     // desktopDirectory: the student's Desktop ("" when unknown). setAsideRoot:
     // where a finished lesson's files wait, one folder per lesson id.
@@ -55,22 +54,27 @@ public sealed partial class ClassFolder
         Func<ClassLesson?> agentLesson,
         IRecycleBin recycleBin,
         string sessionStatePath,
-        int maxEntries = ClassFolderWire.MaxEntries)
+        int listingPartSize = ClassFolderWire.MaxEntries)
     {
         _desktopDirectory = desktopDirectory;
         _setAsideRoot = setAsideRoot;
         _agentLesson = agentLesson;
         _recycleBin = recycleBin;
         SessionStatePath = sessionStatePath;
-        _maxEntries = maxEntries;
+        ListingPartSize = listingPartSize;
     }
 
     public string SessionStatePath { get; }
 
+    // How many entries one ClassFolderListing message carries
+    // (ClassFolderWire.MaxEntries; fewer only in tests): a listing with more
+    // goes in several (ClassFolderWire.EncodeListingParts).
+    public int ListingPartSize { get; }
+
     // The files of the current lesson's Desktop folder (LessonId = the current
-    // lesson) and of every set-aside lesson (LessonId = that lesson), at most
-    // ClassFolderWire.MaxEntries, files before subfolders and in name order,
-    // the current lesson first. Left out: hidden or system attributes and links,
+    // lesson) and of every set-aside lesson (LessonId = that lesson), all of
+    // them however many (they go in parts of ListingPartSize), files before
+    // subfolders and in name order, the current lesson first. Left out: hidden or system attributes and links,
     // and what ClassFolderRules says (the same rules the Master's store applies):
     // lock files, Midview's own and still-being-written ones, anything deeper
     // than FileCollection.MaxDepth, and anything the wire format or the other
@@ -100,11 +104,6 @@ public sealed partial class ClassFolder
 
         foreach (var (lessonId, directory) in SetAsideFolders())
         {
-            if (entries.Count >= _maxEntries)
-            {
-                break;
-            }
-
             // LessonId equal to the current lesson means "in the Desktop folder".
             if (lessonId != lesson?.LessonId)
             {
@@ -433,10 +432,6 @@ public sealed partial class ClassFolder
     {
         foreach (var (file, path) in ListedFiles(directory, string.Empty, depth: 1))
         {
-            if (entries.Count >= _maxEntries)
-            {
-                return;
-            }
             entries.Add(new ClassFolderEntry(lessonId, path, file.Length, file.LastWriteTimeUtc.Ticks));
         }
     }

@@ -44,16 +44,31 @@ public static class ClassFolderClient
     public sealed record ListResult(
         Guid CurrentLessonId, string? Problem, IReadOnlyList<ClassFolderEntry> Entries, bool OldSession);
 
-    public static ListResult List(KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort)
+    // No class has this many files: a Session that keeps sending listing parts
+    // past it is not followed for ever.
+    public const int MaxListedFiles = 1_000_000;
+
+    // The whole listing, however many parts it comes in (see MessageType.
+    // ListClassFolder), or an exception: never part of it, which a round would
+    // take for files gone from the PC. A listing that breaks off, mixes in
+    // another lesson's part or has more than maxFiles files throws
+    // InvalidDataException, saying so in the teacher's words.
+    public static ListResult List(
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort,
+        int maxFiles = MaxListedFiles)
     {
-        var reply = CommandClient.Ask(
-            machine.HostAddress, port, machine.SessionThumbprint, masterCertificate, MessageType.ListClassFolder, Array.Empty<byte>());
+        using var tcpClient = TcpConnect.WithTimeout(machine.HostAddress, port, ConnectTimeout);
+        tcpClient.ReceiveTimeout = TimeoutMs;
+        tcpClient.SendTimeout = TimeoutMs;
+        using var channel = SecureChannel.AuthenticateAsClient(
+            tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
+
+        channel.Send(new Message(MessageType.ListClassFolder, Array.Empty<byte>()));
+        var reply = channel.Receive();
         switch (reply.Type)
         {
             case MessageType.ClassFolderListing:
-                return ClassFolderWire.TryDecodeListing(reply.Payload, out var current, out var problem, out var entries)
-                    ? new ListResult(current, problem, entries, OldSession: false)
-                    : throw new InvalidDataException("lista da pasta da turma inválida");
+                return WholeListing(channel, reply, maxFiles);
 
             case MessageType.FrameTile:
                 return new ListResult(Guid.Empty, null, Array.Empty<ClassFolderEntry>(), OldSession: true);
@@ -65,6 +80,46 @@ public static class ClassFolderClient
 
             default:
                 throw new InvalidDataException($"resposta inesperada ({reply.Type})");
+        }
+    }
+
+    private static ListResult WholeListing(SecureChannel channel, Message first, int maxFiles)
+    {
+        const string incomplete = "a lista da pasta da turma chegou incompleta";
+        if (!ClassFolderWire.TryDecodeListing(first.Payload, out var current, out var problem, out var entries, out var more))
+        {
+            throw new InvalidDataException("lista da pasta da turma inválida");
+        }
+
+        var all = new List<ClassFolderEntry>(entries);
+        while (true)
+        {
+            if (all.Count > maxFiles)
+            {
+                throw new InvalidDataException($"a pasta da turma tem arquivos demais (mais de {maxFiles})");
+            }
+            if (!more)
+            {
+                return new ListResult(current, problem, all, OldSession: false);
+            }
+
+            Message part;
+            try
+            {
+                part = channel.Receive();
+            }
+            catch (IOException ex)
+            {
+                throw new InvalidDataException(incomplete, ex);
+            }
+
+            if (part.Type != MessageType.ClassFolderListing
+                || !ClassFolderWire.TryDecodeListing(part.Payload, out var partLesson, out var partProblem, out entries, out more)
+                || partLesson != current || partProblem is not null)
+            {
+                throw new InvalidDataException(incomplete);
+            }
+            all.AddRange(entries);
         }
     }
 

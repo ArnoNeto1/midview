@@ -36,12 +36,14 @@ public class ClassFolderWireTests
         PutInt64(bytes, ticks);
     }
 
-    // A listing with no problem: version, current lesson, no problem, count, entries.
-    private static byte[] ListingPayload(uint count, Action<List<byte>>? entries = null)
+    // A listing with no problem: version, current lesson, no problem, whether more
+    // listings follow, count, entries.
+    private static byte[] ListingPayload(uint count, Action<List<byte>>? entries = null, byte more = 0)
     {
         var bytes = new List<byte> { 1 };
         bytes.AddRange(Lesson.ToByteArray());
         bytes.Add(0);
+        bytes.Add(more);
         var countBytes = new byte[4];
         BinaryPrimitives.WriteUInt32BigEndian(countBytes, count);
         bytes.AddRange(countBytes);
@@ -64,7 +66,7 @@ public class ClassFolderWireTests
     {
         var payload = ClassFolderWire.EncodeListing(Lesson, null, Entries);
 
-        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries));
+        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries, out _));
         Assert.Equal(Lesson, current);
         Assert.Null(problem);
         Assert.Equal(Entries, entries);
@@ -75,7 +77,7 @@ public class ClassFolderWireTests
     {
         var payload = ClassFolderWire.EncodeListing(Lesson, "sem pasta", Array.Empty<ClassFolderEntry>());
 
-        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries));
+        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries, out _));
         Assert.Equal(Lesson, current);
         Assert.Equal("sem pasta", problem);
         Assert.Empty(entries);
@@ -86,7 +88,7 @@ public class ClassFolderWireTests
     {
         var payload = ClassFolderWire.EncodeListing(Guid.Empty, null, Array.Empty<ClassFolderEntry>());
 
-        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries));
+        Assert.True(ClassFolderWire.TryDecodeListing(payload, out var current, out var problem, out var entries, out _));
         Assert.Equal(Guid.Empty, current);
         Assert.Null(problem);
         Assert.Empty(entries);
@@ -109,10 +111,11 @@ public class ClassFolderWireTests
         bytes.AddRange(Lesson.ToByteArray());
         bytes.Add(1);
         PutString(bytes, "sem pasta");
+        bytes.Add(0);
         bytes.AddRange(new byte[] { 0, 0, 0, 1 });
         PutEntry(bytes, Lesson, MapPath, 1, 1);
 
-        Assert.False(ClassFolderWire.TryDecodeListing(bytes.ToArray(), out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(bytes.ToArray(), out _, out _, out _, out _));
         Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeListing(Lesson, "sem pasta", Entries));
     }
 
@@ -127,7 +130,7 @@ public class ClassFolderWireTests
             }
         });
 
-        Assert.True(ClassFolderWire.TryDecodeListing(payload, out _, out _, out var entries));
+        Assert.True(ClassFolderWire.TryDecodeListing(payload, out _, out _, out var entries, out _));
         Assert.Equal(ClassFolderWire.MaxEntries, entries.Count);
     }
 
@@ -142,15 +145,15 @@ public class ClassFolderWireTests
             }
         });
 
-        Assert.False(ClassFolderWire.TryDecodeListing(payload, out _, out _, out var entries));
+        Assert.False(ClassFolderWire.TryDecodeListing(payload, out _, out _, out var entries, out _));
         Assert.Empty(entries);
     }
 
     [Fact]
     public void TryDecodeListing_ACountBiggerThanThePayload_IsRejected()
     {
-        Assert.False(ClassFolderWire.TryDecodeListing(ListingPayload(uint.MaxValue), out _, out _, out _));
-        Assert.False(ClassFolderWire.TryDecodeListing(ListingPayload(2, bytes => PutEntry(bytes, Lesson, "a", 1, 1)), out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(ListingPayload(uint.MaxValue), out _, out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(ListingPayload(2, bytes => PutEntry(bytes, Lesson, "a", 1, 1)), out _, out _, out _, out _));
     }
 
     [Fact]
@@ -166,7 +169,7 @@ public class ClassFolderWireTests
     [InlineData(FileTransfer.MaxFileSize + 1)]
     public void TryDecodeListing_RejectsASizeOutOfRange(long size)
     {
-        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing("a.txt", size, 1), out _, out _, out var entries));
+        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing("a.txt", size, 1), out _, out _, out var entries, out _));
         Assert.Empty(entries);
     }
 
@@ -175,7 +178,7 @@ public class ClassFolderWireTests
     [InlineData(long.MaxValue)]
     public void TryDecodeListing_RejectsLastWriteTicksThatAreNotADate(long ticks)
     {
-        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing("a.txt", 1, ticks), out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing("a.txt", 1, ticks), out _, out _, out _, out _));
     }
 
     [Theory]
@@ -183,14 +186,14 @@ public class ClassFolderWireTests
     [InlineData("   ")]
     public void TryDecodeListing_RejectsAnEmptyPath(string path)
     {
-        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing(path, 1, 1), out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing(path, 1, 1), out _, out _, out _, out _));
     }
 
     [Fact]
     public void TryDecodeListing_RejectsAPathOverMaxNameBytes()
     {
-        Assert.True(ClassFolderWire.TryDecodeListing(OneEntryListing(new string('a', FileTransfer.MaxNameBytes), 1, 1), out _, out _, out _));
-        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing(new string('a', FileTransfer.MaxNameBytes + 1), 1, 1), out _, out _, out _));
+        Assert.True(ClassFolderWire.TryDecodeListing(OneEntryListing(new string('a', FileTransfer.MaxNameBytes), 1, 1), out _, out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(OneEntryListing(new string('a', FileTransfer.MaxNameBytes + 1), 1, 1), out _, out _, out _, out _));
     }
 
     [Fact]
@@ -198,6 +201,7 @@ public class ClassFolderWireTests
     {
         var path = new List<byte> { 1 };
         path.AddRange(Lesson.ToByteArray());
+        path.Add(0);
         path.Add(0);
         path.AddRange(new byte[] { 0, 0, 0, 1 });
         path.AddRange(Lesson.ToByteArray());
@@ -209,10 +213,11 @@ public class ClassFolderWireTests
         problem.AddRange(Lesson.ToByteArray());
         problem.Add(1);
         PutString(problem, new byte[] { 0x4F, 0xC3, 0x28 });
+        problem.Add(0);
         problem.AddRange(new byte[] { 0, 0, 0, 0 });
 
-        Assert.False(ClassFolderWire.TryDecodeListing(path.ToArray(), out _, out _, out _));
-        Assert.False(ClassFolderWire.TryDecodeListing(problem.ToArray(), out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(path.ToArray(), out _, out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(problem.ToArray(), out _, out _, out _, out _));
     }
 
     [Fact]
@@ -221,7 +226,86 @@ public class ClassFolderWireTests
         var payload = ListingPayload(0);
         payload[17] = 2;
 
-        Assert.False(ClassFolderWire.TryDecodeListing(payload, out _, out _, out _));
+        Assert.False(ClassFolderWire.TryDecodeListing(payload, out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void Listing_SaysWhetherMoreListingsFollow()
+    {
+        var first = ClassFolderWire.EncodeListing(Lesson, null, Entries, more: true);
+        var last = ClassFolderWire.EncodeListing(Lesson, null, Entries);
+
+        Assert.True(ClassFolderWire.TryDecodeListing(first, out _, out _, out var entries, out var more));
+        Assert.True(more);
+        Assert.Equal(Entries, entries);
+        Assert.True(ClassFolderWire.TryDecodeListing(last, out _, out _, out _, out var lastMore));
+        Assert.False(lastMore);
+        Assert.Equal(ListingPayload(0, more: 1), ClassFolderWire.EncodeListing(Lesson, null, Array.Empty<ClassFolderEntry>(), more: true));
+    }
+
+    [Fact]
+    public void Listing_AProblemWithMoreToFollow_IsRejected()
+    {
+        var bytes = new List<byte> { 1 };
+        bytes.AddRange(Lesson.ToByteArray());
+        bytes.Add(1);
+        PutString(bytes, "sem pasta");
+        bytes.Add(1);
+        bytes.AddRange(new byte[] { 0, 0, 0, 0 });
+
+        Assert.False(ClassFolderWire.TryDecodeListing(bytes.ToArray(), out _, out _, out _, out _));
+        Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeListing(Lesson, "sem pasta", Array.Empty<ClassFolderEntry>(), more: true));
+    }
+
+    [Fact]
+    public void TryDecodeListing_RejectsAMoreFlagThatIsNotABool()
+    {
+        Assert.False(ClassFolderWire.TryDecodeListing(ListingPayload(0, more: 2), out _, out _, out _, out _));
+    }
+
+    [Fact]
+    public void EncodeListingParts_CarriesAnyNumberOfEntries_InPartsOfAtMostTheGivenSize()
+    {
+        var all = Enumerable.Range(0, 7).Select(i => new ClassFolderEntry(i % 2 == 0 ? Lesson : Earlier, $"f{i}.txt", i, i)).ToArray();
+
+        var parts = ClassFolderWire.EncodeListingParts(Lesson, null, all, partSize: 3).ToList();
+
+        var decoded = parts.Select(part =>
+        {
+            Assert.True(ClassFolderWire.TryDecodeListing(part, out var current, out var problem, out var entries, out var more));
+            Assert.Equal(Lesson, current);
+            Assert.Null(problem);
+            return (Entries: entries, More: more);
+        }).ToList();
+        Assert.Equal(new[] { 3, 3, 1 }, decoded.Select(part => part.Entries.Count));
+        Assert.Equal(new[] { true, true, false }, decoded.Select(part => part.More));
+        Assert.Equal(all, decoded.SelectMany(part => part.Entries));
+    }
+
+    [Fact]
+    public void EncodeListingParts_ByDefault_SplitsAtMaxEntries()
+    {
+        var all = Enumerable.Repeat(new ClassFolderEntry(Lesson, "a", 1, 1), ClassFolderWire.MaxEntries + 1).ToArray();
+
+        var parts = ClassFolderWire.EncodeListingParts(Lesson, null, all).ToList();
+
+        Assert.Equal(2, parts.Count);
+        Assert.True(ClassFolderWire.TryDecodeListing(parts[1], out _, out _, out var rest, out var more));
+        Assert.Single(rest);
+        Assert.False(more);
+    }
+
+    [Fact]
+    public void EncodeListingParts_NothingToList_OrAProblem_IsOneLastPart()
+    {
+        var empty = ClassFolderWire.EncodeListingParts(Lesson, null, Array.Empty<ClassFolderEntry>()).ToList();
+        var problem = ClassFolderWire.EncodeListingParts(Lesson, "sem pasta", Array.Empty<ClassFolderEntry>()).ToList();
+
+        Assert.Equal(new[] { ClassFolderWire.EncodeListing(Lesson, null, Array.Empty<ClassFolderEntry>()) }, empty);
+        Assert.Equal(new[] { ClassFolderWire.EncodeListing(Lesson, "sem pasta", Array.Empty<ClassFolderEntry>()) }, problem);
+        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodeListingParts(Lesson, null, Entries, partSize: 0).ToList());
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            ClassFolderWire.EncodeListingParts(Lesson, null, Entries, partSize: ClassFolderWire.MaxEntries + 1).ToList());
     }
 
     [Fact]
@@ -336,10 +420,10 @@ public class ClassFolderWireTests
     {
         yield return ("listing",
             ClassFolderWire.EncodeListing(Lesson, null, Entries),
-            p => ClassFolderWire.TryDecodeListing(p, out _, out _, out _));
+            p => ClassFolderWire.TryDecodeListing(p, out _, out _, out _, out _));
         yield return ("listing with a problem",
             ClassFolderWire.EncodeListing(Lesson, "sem pasta", Array.Empty<ClassFolderEntry>()),
-            p => ClassFolderWire.TryDecodeListing(p, out _, out _, out _));
+            p => ClassFolderWire.TryDecodeListing(p, out _, out _, out _, out _));
         yield return ("file ref",
             ClassFolderWire.EncodeFileRef(Lesson, MapPath),
             p => ClassFolderWire.TryDecodeFileRef(p, out _, out _));

@@ -1557,6 +1557,29 @@ public class SessionServerTests
     }
 
     [Fact]
+    public async Task ListClassFolder_MoreFilesThanOnePartHolds_SendsThemAllInParts()
+    {
+        using var rig = new ClassFolderRig(listingPartSize: 2);
+        for (var i = 0; i < 5; i++)
+        {
+            WriteFile(rig.LessonFolder, $"f{i}.txt", new[] { (byte)i });
+        }
+        var finished = Guid.NewGuid();
+        WriteFile(rig.SetAsideFolder(finished), "velho.txt", new byte[] { 9 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var parts = await Task.Run(teacher.ListClassFolderInParts).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(new[] { 2, 2, 2 }, parts.Select(part => part.Entries.Count));
+        Assert.Equal(new[] { true, true, false }, parts.Select(part => part.More));
+        Assert.All(parts, part => Assert.Equal(rig.LessonId, part.CurrentLessonId));
+        Assert.Equal(
+            new[] { "f0.txt", "f1.txt", "f2.txt", "f3.txt", "f4.txt", "velho.txt" },
+            parts.SelectMany(part => part.Entries).Select(entry => entry.Path));
+    }
+
+    [Fact]
     public async Task ListClassFolder_WhenTheLessonsFolderIsntThere_SaysSo()
     {
         using var rig = new ClassFolderRig(lessonFolder: false);
@@ -2012,7 +2035,7 @@ public class SessionServerTests
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), $"midview-classserver-{Guid.NewGuid():N}");
 
-        public ClassFolderRig(bool lessonFolder = true)
+        public ClassFolderRig(bool lessonFolder = true, int listingPartSize = ClassFolderWire.MaxEntries)
         {
             Lesson = new ClassLesson(1, Guid.NewGuid(), "3º A", 1, false);
             Desktop = Path.Combine(_root, "Desktop");
@@ -2023,7 +2046,8 @@ public class SessionServerTests
             {
                 Directory.CreateDirectory(LessonFolder);
             }
-            Folder = new ClassFolder(Desktop, SetAside, () => Lesson, Bin, Path.Combine(_root, "session.json"));
+            Folder = new ClassFolder(
+                Desktop, SetAside, () => Lesson, Bin, Path.Combine(_root, "session.json"), listingPartSize: listingPartSize);
         }
 
         public ClassLesson Lesson { get; }
@@ -2214,11 +2238,25 @@ public class SessionServerTests
 
         public (Guid CurrentLessonId, string? Problem, IReadOnlyList<ClassFolderEntry> Entries) ListClassFolder()
         {
+            var parts = ListClassFolderInParts();
+            return (parts[0].CurrentLessonId, parts[0].Problem, parts.SelectMany(part => part.Entries).ToList());
+        }
+
+        // Every ClassFolderListing message, up to the one that says it is the last.
+        public List<(Guid CurrentLessonId, string? Problem, IReadOnlyList<ClassFolderEntry> Entries, bool More)> ListClassFolderInParts()
+        {
             Channel.Send(new Message(MessageType.ListClassFolder, Array.Empty<byte>()));
-            var reply = Channel.Receive();
-            Assert.Equal(MessageType.ClassFolderListing, reply.Type);
-            Assert.True(ClassFolderWire.TryDecodeListing(reply.Payload, out var current, out var problem, out var entries));
-            return (current, problem, entries);
+            var parts = new List<(Guid, string?, IReadOnlyList<ClassFolderEntry>, bool)>();
+            bool more;
+            do
+            {
+                var reply = Channel.Receive();
+                Assert.Equal(MessageType.ClassFolderListing, reply.Type);
+                Assert.True(ClassFolderWire.TryDecodeListing(reply.Payload, out var current, out var problem, out var entries, out more));
+                parts.Add((current, problem, entries, more));
+            }
+            while (more);
+            return parts;
         }
 
         // The file the Session sent for a PullClassFile (its name as the header

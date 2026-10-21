@@ -218,8 +218,11 @@ public enum MessageType : byte
     ClassLessonStatus = 67,
 
     // Session messages, each the first message of a short-lived connection.
-    // ListClassFolder, no payload, is answered with one ClassFolderListing
-    // (ClassFolderWire.EncodeListing). PullClassFile (a file reference) is
+    // ListClassFolder, no payload, is answered with ClassFolderListing
+    // messages (ClassFolderWire.EncodeListingParts): the whole listing, in
+    // parts of at most ClassFolderWire.MaxEntries files, each saying whether
+    // more follow, so any number of files is listed; the Master reads up to
+    // the last and goes by nothing less. PullClassFile (a file reference) is
     // answered with SendFile and FileChunk messages and then one CommandAck,
     // as CollectFiles, or with one CommandAck alone saying why not.
     // PushClassFile (a push header) is answered with one CommandAck accepting

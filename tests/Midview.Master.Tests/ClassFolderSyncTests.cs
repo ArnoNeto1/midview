@@ -270,7 +270,7 @@ public sealed partial class ClassFolderSyncTests
     public async Task AnOldSession_IsFailedWithMidviewAntigo()
     {
         using var rig = new ClassSyncRig(pcs: 1);
-        using var old = new OldSession(rig.Master);
+        using var old = new ScriptedSession(rig.Master);
         var machine = new KnownMachine("PC-antigo", "127.0.0.1", old.Thumbprint, null);
         using var sync = new ClassFolderSync(
             rig.Store, rig.Master, () => new[] { machine }, _ => true, () => rig.Now, rig.AgentPort, old.Port,
@@ -283,6 +283,33 @@ public sealed partial class ClassFolderSyncTests
         Assert.False(started.Single().Ok); // no Agent identity to send the lesson to
         Assert.True(sync.Lesson.IsOn);
         Assert.Equal(new PcStatus(machine, PcSyncState.Failed, "Midview antigo"), statuses[machine.Name]);
+    }
+
+    // A listing that stops before its last part: the PC's round fails, saying why, and nothing is
+    // planned on the part that came (the store's file would be pushed as "missing" on the PC).
+    [Fact]
+    public async Task APcWhoseListingStopsHalfway_IsFailedSayingWhy_AndNothingIsPlanned()
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        rig.WriteInStore("mapa.png", Bytes(10, 1), Utc(1));
+        var lessonId = Guid.Empty;
+        using var cut = new ScriptedSession(rig.Master, channel => channel.Send(new Message(
+            MessageType.ClassFolderListing, ClassFolderWire.EncodeListing(lessonId, null, Array.Empty<ClassFolderEntry>(), more: true))));
+        var machine = new KnownMachine("PC-cortado", "127.0.0.1", cut.Thumbprint, null);
+        using var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => new[] { machine }, _ => true, () => rig.Now, rig.AgentPort, cut.Port,
+            TimeSpan.FromHours(1), rig.LessonPath);
+        var seen = new System.Collections.Concurrent.ConcurrentQueue<PcStatus>();
+        sync.StatusChanged += seen.Enqueue;
+
+        await sync.StartAsync(Turma);
+        lessonId = sync.Lesson.LessonId;
+        await sync.RunRoundAsync(machine, CancellationToken.None);
+
+        var last = seen.Last();
+        Assert.Equal(PcSyncState.Failed, last.State);
+        Assert.Contains("incompleta", last.Detail);
+        Assert.DoesNotContain(seen, status => status.State == PcSyncState.Copying);
     }
 
     [Fact]

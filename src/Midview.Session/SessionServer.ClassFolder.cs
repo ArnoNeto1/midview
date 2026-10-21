@@ -21,9 +21,13 @@ public sealed partial class SessionServer
         switch (message.Type)
         {
             case MessageType.ListClassFolder:
+                // All of it, in as many messages as it takes, the last saying so.
                 var (currentLessonId, problem, entries) = _classFolder.List();
-                channel.Send(new Midview.Protocol.Message(
-                    MessageType.ClassFolderListing, ClassFolderWire.EncodeListing(currentLessonId, problem, entries)));
+                foreach (var part in ClassFolderWire.EncodeListingParts(
+                    currentLessonId, problem, entries, _classFolder.ListingPartSize))
+                {
+                    channel.Send(new Midview.Protocol.Message(MessageType.ClassFolderListing, part));
+                }
                 break;
 
             case MessageType.PullClassFile:

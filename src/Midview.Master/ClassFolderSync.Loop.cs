@@ -145,7 +145,8 @@ public sealed partial class ClassFolderSync
                 _log($"The round with {machine.Name} failed: {ex}");
             }
             var state = ex is SocketException or OperationCanceledException ? PcSyncState.Offline : PcSyncState.Failed;
-            Report(machine, state, FailureText.Describe(ex));
+            // What the PC answered that can't be gone by (a listing cut short, say) says so in the teacher's words.
+            Report(machine, state, ex is InvalidDataException ? ex.Message : FailureText.Describe(ex));
         }
         finally
         {

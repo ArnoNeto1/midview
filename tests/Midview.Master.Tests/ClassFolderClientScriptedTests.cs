@@ -64,6 +64,78 @@ public sealed class ClassFolderClientScriptedTests
             Run(() => ClassFolderClient.List(other.Machine, other.MasterCertificate, other.Port)));
     }
 
+    private static readonly Guid PartsLesson = Guid.NewGuid();
+
+    private static Message ListingPart(Guid lessonId, bool more, params string[] paths) =>
+        new(MessageType.ClassFolderListing, ClassFolderWire.EncodeListing(
+            lessonId, null, paths.Select(path => new ClassFolderEntry(lessonId, path, 1, 1)).ToArray(), more));
+
+    [Fact]
+    public async Task List_InParts_IsReadToTheLast()
+    {
+        using var session = new Scripted(channel =>
+        {
+            channel.Send(ListingPart(PartsLesson, more: true, "a.txt", "b.txt"));
+            channel.Send(ListingPart(PartsLesson, more: true));
+            channel.Send(ListingPart(PartsLesson, more: false, "c.txt"));
+        });
+
+        var listing = await Run(() => ClassFolderClient.List(session.Machine, session.MasterCertificate, session.Port));
+
+        Assert.Equal(PartsLesson, listing.CurrentLessonId);
+        Assert.Equal(new[] { "a.txt", "b.txt", "c.txt" }, listing.Entries.Select(entry => entry.Path));
+    }
+
+    // A listing that stops before its last part is never taken for the whole: the round would plan on it.
+    [Fact]
+    public async Task List_ThatStopsBeforeItsLastPart_IsRefused()
+    {
+        using var session = new Scripted(channel => channel.Send(ListingPart(PartsLesson, more: true, "a.txt")));
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            Run(() => ClassFolderClient.List(session.Machine, session.MasterCertificate, session.Port)));
+        Assert.Contains("incompleta", refused.Message);
+    }
+
+    [Fact]
+    public async Task List_APartThatDoesNotBelong_IsRefused()
+    {
+        var parts = new Func<Message>[]
+        {
+            () => ListingPart(Guid.NewGuid(), more: false, "b.txt"),
+            () => new Message(MessageType.ClassFolderListing, ClassFolderWire.EncodeListing(PartsLesson, "sem pasta", Array.Empty<ClassFolderEntry>())),
+            () => new Message(MessageType.CommandAck, CommandResult.Encode(false, "não")),
+            () => new Message(MessageType.ClassFolderListing, new byte[] { 9 }),
+        };
+
+        foreach (var second in parts)
+        {
+            using var session = new Scripted(channel =>
+            {
+                channel.Send(ListingPart(PartsLesson, more: true, "a.txt"));
+                channel.Send(second());
+            });
+
+            await Assert.ThrowsAsync<InvalidDataException>(() =>
+                Run(() => ClassFolderClient.List(session.Machine, session.MasterCertificate, session.Port)));
+        }
+    }
+
+    // A Session that never stops sending parts is not followed for ever: no class has that many files.
+    [Fact]
+    public async Task List_MoreFilesThanAnyClassHas_IsRefused()
+    {
+        using var session = new Scripted(channel =>
+        {
+            channel.Send(ListingPart(PartsLesson, more: true, "a.txt", "b.txt", "c.txt"));
+            channel.Send(ListingPart(PartsLesson, more: false, "d.txt", "e.txt", "f.txt"));
+        });
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            Run(() => ClassFolderClient.List(session.Machine, session.MasterCertificate, session.Port, maxFiles: 5)));
+        Assert.Contains("arquivos demais", refused.Message);
+    }
+
     [Fact]
     public async Task List_ARefusalWithoutADetail_StillHasAProblem()
     {

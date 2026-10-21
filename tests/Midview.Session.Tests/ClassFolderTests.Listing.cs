@@ -260,8 +260,9 @@ public partial class ClassFolderTests
         Assert.Equal(new[] { deepest }, entries.Select(e => e.Path));
     }
 
+    // No limit on the files: a listing bigger than one message holds goes in parts (ListingPartSize).
     [Fact]
-    public void List_StopsAtTheEntryLimit()
+    public void List_HasNoLimitOnTheFiles()
     {
         var folder = MakeLessonFolder();
         for (var i = 0; i < 10; i++)
@@ -269,10 +270,12 @@ public partial class ClassFolderTests
             Write(folder, $"f{i}.txt");
         }
         Write(SetAsideFolder(Guid.NewGuid()), "guardado.txt");
+        var classFolder = NewClassFolder(listingPartSize: 3);
 
-        var (_, _, entries) = NewClassFolder(maxEntries: 3).List();
+        var (_, _, entries) = classFolder.List();
 
-        Assert.Equal(new[] { "f0.txt", "f1.txt", "f2.txt" }, entries.Select(e => e.Path));
+        Assert.Equal(3, classFolder.ListingPartSize);
+        Assert.Equal(Enumerable.Range(0, 10).Select(i => $"f{i}.txt").Append("guardado.txt"), entries.Select(e => e.Path));
     }
 
     // The listing's wire format refuses a file over FileTransfer.MaxFileSize; one big video must not take the rest down.

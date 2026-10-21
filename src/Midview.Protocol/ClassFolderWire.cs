@@ -22,7 +22,8 @@ public static class ClassFolderWire
 {
     public const byte FormatVersion = 1;
 
-    // Entries in one listing: a class's files, not a disk.
+    // Entries in one ClassFolderListing message. A folder with more is listed
+    // in several (EncodeListingParts), so there is no limit on the files.
     public const int MaxEntries = 10_000;
 
     // A problem is a sentence for the teacher; only the length prefix limits it.
@@ -32,14 +33,22 @@ public static class ClassFolderWire
 
     // ClassFolderListing payload: version, the current lesson (16 bytes), one
     // byte that is 1 when a problem follows (a string: the Session couldn't
-    // list, e.g. "sem pasta", and there are then no entries), the number of
-    // entries (uint32), then each entry: lesson (16 bytes), path (a string),
-    // size (int64), last write time in DateTime ticks (int64).
-    public static byte[] EncodeListing(Guid currentLessonId, string? problem, IReadOnlyList<ClassFolderEntry> entries)
+    // list, e.g. "sem pasta", and there are then no entries), one byte that is
+    // 1 when more ClassFolderListing messages follow with the rest of the
+    // entries (never with a problem), the number of entries (uint32, at most
+    // MaxEntries), then each entry: lesson (16 bytes), path (a string), size
+    // (int64), last write time in DateTime ticks (int64).
+    public static byte[] EncodeListing(
+        Guid currentLessonId, string? problem, IReadOnlyList<ClassFolderEntry> entries, bool more = false)
     {
         if (problem is not null && entries.Count > 0)
         {
             throw new ArgumentException("A listing with a problem has no entries.", nameof(entries));
+        }
+
+        if (problem is not null && more)
+        {
+            throw new ArgumentException("A listing with a problem is the whole listing.", nameof(more));
         }
 
         if (entries.Count > MaxEntries)
@@ -60,6 +69,7 @@ public static class ClassFolderWire
             writer.PutText(problem, MaxProblemBytes);
         }
 
+        writer.PutByte(more ? (byte)1 : (byte)0);
         writer.PutUInt32((uint)entries.Count);
         foreach (var entry in entries)
         {
@@ -71,12 +81,46 @@ public static class ClassFolderWire
         return writer.ToArray();
     }
 
+    // A whole listing, however many files, as the ClassFolderListing messages
+    // to send one after the other: entries in order, at most partSize in each,
+    // every one but the last saying more follow. Nothing to list, or a
+    // problem, is one message.
+    public static IEnumerable<byte[]> EncodeListingParts(
+        Guid currentLessonId, string? problem, IReadOnlyList<ClassFolderEntry> entries, int partSize = MaxEntries)
+    {
+        if (partSize < 1 || partSize > MaxEntries)
+        {
+            throw new ArgumentOutOfRangeException(nameof(partSize), partSize, $"A part has 1 to {MaxEntries} entries.");
+        }
+
+        return Parts();
+
+        IEnumerable<byte[]> Parts()
+        {
+            var start = 0;
+            do
+            {
+                var count = Math.Min(partSize, entries.Count - start);
+                var part = new ClassFolderEntry[count];
+                for (var i = 0; i < count; i++)
+                {
+                    part[i] = entries[start + i];
+                }
+                start += count;
+                yield return EncodeListing(currentLessonId, problem, part, more: start < entries.Count);
+            }
+            while (start < entries.Count);
+        }
+    }
+
     public static bool TryDecodeListing(
-        byte[] payload, out Guid currentLessonId, out string? problem, out IReadOnlyList<ClassFolderEntry> entries)
+        byte[] payload, out Guid currentLessonId, out string? problem, out IReadOnlyList<ClassFolderEntry> entries,
+        out bool more)
     {
         currentLessonId = Guid.Empty;
         problem = null;
         entries = Array.Empty<ClassFolderEntry>();
+        more = false;
 
         var reader = new Reader(payload);
         if (!reader.TryVersion() || !reader.TryGuid(out var current) || !reader.TryByte(out var hasProblem) || hasProblem > 1)
@@ -94,7 +138,8 @@ public static class ClassFolderWire
             decodedProblem = text;
         }
 
-        if (!reader.TryUInt32(out var count) || count > MaxEntries || (decodedProblem is not null && count > 0))
+        if (!reader.TryByte(out var moreFollow) || moreFollow > 1 || (decodedProblem is not null && moreFollow == 1)
+            || !reader.TryUInt32(out var count) || count > MaxEntries || (decodedProblem is not null && count > 0))
         {
             return false;
         }
@@ -119,6 +164,7 @@ public static class ClassFolderWire
         currentLessonId = current;
         problem = decodedProblem;
         entries = decoded;
+        more = moreFollow == 1;
         return true;
     }
 

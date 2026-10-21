@@ -304,15 +304,17 @@ public sealed partial class ClassFolderSyncTests
         Assert.False(sync.Lesson.IsOn);
     }
 
-    // A Session from before the class folder: it takes any request for a control
+    // A Session that answers every request with what answer sends; by default one
+    // from before the class folder, which takes any request for a control
     // connection and answers with a screen tile.
-    private sealed class OldSession : IDisposable
+    private sealed class ScriptedSession : IDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
         private readonly X509Certificate2 _certificate = SelfSignedCertificate.Create("old-session");
 
-        public OldSession(X509Certificate2 master)
+        public ScriptedSession(X509Certificate2 master, Action<SecureChannel>? answer = null)
         {
+            answer ??= channel => channel.Send(new Message(MessageType.FrameTile, new byte[] { 1, 2, 3 }));
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
             var masters = new TrustStore(new[] { master.Thumbprint });
@@ -336,7 +338,7 @@ public sealed partial class ClassFolderSyncTests
                         {
                             using var channel = SecureChannel.AuthenticateAsServer(client, _certificate, masters);
                             channel.Receive();
-                            channel.Send(new Message(MessageType.FrameTile, new byte[] { 1, 2, 3 }));
+                            answer(channel);
                         }
                         catch (Exception)
                         {

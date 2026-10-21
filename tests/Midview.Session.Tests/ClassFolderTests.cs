@@ -60,8 +60,8 @@ public partial class ClassFolderTests : IDisposable
         return LessonFolder;
     }
 
-    private ClassFolder NewClassFolder(string? desktop = null, int maxEntries = ClassFolderWire.MaxEntries) =>
-        new(desktop ?? _desktop, _setAside, () => _lesson, _bin, Path.Combine(_root, "session.json"), maxEntries);
+    private ClassFolder NewClassFolder(string? desktop = null, int listingPartSize = ClassFolderWire.MaxEntries) =>
+        new(desktop ?? _desktop, _setAside, () => _lesson, _bin, Path.Combine(_root, "session.json"), listingPartSize);
 
     private string SetAsideFolder(Guid lessonId) => Path.Combine(_setAside, lessonId.ToString("N"));
 

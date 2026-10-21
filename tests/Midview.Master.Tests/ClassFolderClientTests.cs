@@ -216,6 +216,28 @@ public sealed class ClassFolderClientTests : IDisposable
         Assert.Equal((false, "esta máquina não tem pasta da turma"), delete);
     }
 
+    // No limit on the files: a folder bigger than one listing message holds arrives whole, in parts.
+    [Fact]
+    public async Task List_MoreFilesThanOneListingHolds_ArriveWhole()
+    {
+        using var rig = new ClassRig(_masterCert, listingPartSize: 3);
+        for (var i = 0; i < 7; i++)
+        {
+            rig.WriteLessonFile($"f{i}.txt", new[] { (byte)i });
+        }
+        var finished = Guid.NewGuid();
+        rig.WriteSetAsideFile(finished, "velho.docx", new byte[] { 9, 9 });
+
+        var listing = await Run(() => ClassFolderClient.List(rig.Machine, _masterCert, rig.Port));
+
+        Assert.Null(listing.Problem);
+        Assert.Equal(rig.LessonId, listing.CurrentLessonId);
+        Assert.Equal(
+            Enumerable.Range(0, 7).Select(i => $"f{i}.txt").Append("velho.docx"),
+            listing.Entries.Select(entry => entry.Path));
+        Assert.Equal(finished, listing.Entries[^1].LessonId);
+    }
+
     [Fact]
     public async Task List_AListingWithAProblem_IsReturnedAsIs()
     {
@@ -274,7 +296,9 @@ public sealed class ClassFolderClientTests : IDisposable
         private readonly ThumbnailPollerTests.LoopbackSession _session;
         private readonly ClassLesson _lesson = new(1, Guid.NewGuid(), "3º A", 1, false);
 
-        public ClassRig(X509Certificate2 master, bool lessonFolder = true, bool withClassFolder = true)
+        public ClassRig(
+            X509Certificate2 master, bool lessonFolder = true, bool withClassFolder = true,
+            int listingPartSize = ClassFolderWire.MaxEntries)
         {
             Master = master;
             Root = Path.Combine(Path.GetTempPath(), $"midview-classclient-{Guid.NewGuid():N}");
@@ -288,7 +312,7 @@ public sealed class ClassFolderClientTests : IDisposable
             var folder = withClassFolder
                 ? new ClassFolder(
                     Path.Combine(Root, "Desktop"), Path.Combine(Root, "guardada"), () => _lesson,
-                    new MovingBin(BinFolder), Path.Combine(Root, "session.json"))
+                    new MovingBin(BinFolder), Path.Combine(Root, "session.json"), listingPartSize)
                 : null;
             _session = new ThumbnailPollerTests.LoopbackSession(0, _sessionCert, master, classFolder: folder);
         }
