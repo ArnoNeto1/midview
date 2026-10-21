@@ -158,11 +158,12 @@ public sealed partial class ClassFolderSync : IDisposable
     internal Action<KnownMachine>? WaitingForCopySlot { get; set; }
 
     // A new lesson of that class: saved, then sent to every PC's Agent at once,
-    // with what each answered. A lesson already on is replaced ("Trocar de
-    // turma"): another class keeps its files, as at an end with "Manter", and
-    // what its PCs set aside comes in over the next rounds; the same class goes
-    // on from where it was (each PC keeps its folder, and the store what each
-    // PC last had). Throws ArgumentException for a class that isn't there.
+    // with what each answered. The window only starts one with no lesson on
+    // ("Trocar de turma…" ends the lesson first, with EndAsync). A lesson still
+    // on is ended first, whatever its class, as a lesson nobody ended (keeping
+    // the files, without its last rounds, every version known of them
+    // remembered): what its PCs set aside comes in over the next rounds, only
+    // what was never seen. Throws ArgumentException for a class that isn't there.
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> StartAsync(string turma)
     {
         if (!_store.Exists(turma))
@@ -176,7 +177,7 @@ public sealed partial class ClassFolderSync : IDisposable
             _changingLesson = true;
             await RunningRounds().ConfigureAwait(false);
             var previous = Lesson;
-            if (previous.IsOn && !string.Equals(previous.Turma, turma, StringComparison.OrdinalIgnoreCase))
+            if (previous.IsOn)
             {
                 EndUncollected(previous);
             }

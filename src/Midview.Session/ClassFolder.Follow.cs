@@ -46,6 +46,10 @@ public sealed partial class ClassFolder
     //    (access denied), and so is a file a program holds open, or a folder
     //    that can't be read: the lesson stays in the list for the next call,
     //    and holds nothing else back.
+    //  - when the lesson on now is of the same turma, its folder is that very
+    //    folder: the listed files are set aside all the same (the teacher's
+    //    Master decides what of them the class gets, so a file deleted at the
+    //    end of the lesson doesn't come back), once, and the folder stays.
     //  - a settled lesson leaves the list.
     // An agentLesson of null is not known (the lesson file couldn't be read,
     // say), never "the lesson is over" (that is an ended lesson): nothing
@@ -174,12 +178,6 @@ public sealed partial class ClassFolder
             return true; // no Desktop, or the folder is gone already
         }
 
-        // The next lesson is of the same turma: the folder is the new lesson's now, with the same class's files.
-        if (current is not null && string.Equals(DesktopFolder(current), folder, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
         var destination = SetAsideFolder(finished.LessonId);
         if (destination is null || IsLink(folder) || IsLink(destination))
         {
@@ -190,6 +188,20 @@ public sealed partial class ClassFolder
 
         var moved = MoveListedFiles(new DirectoryInfo(folder), destination);
         RemoveEmptyFolders(destination);
+
+        // The lesson on now is of the same turma, in this very folder: it stays, as the new lesson's.
+        // Its files are set aside once, now: a later try would take what the new lesson put in
+        // meanwhile for the old one's. A file that couldn't go (held open) is the new lesson's.
+        if (current is not null && string.Equals(DesktopFolder(current), folder, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!moved)
+            {
+                Problem($"Some files of the last lesson stay in {folder}, as the new lesson's.");
+            }
+            RemoveEmptySubfolders(folder);
+            return true;
+        }
+
         if (!moved)
         {
             return false;
@@ -333,6 +345,22 @@ public sealed partial class ClassFolder
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // not empty, or not ours to remove: it stays
+        }
+    }
+
+    // The folders in folder left with nothing in them, not folder itself.
+    private static void RemoveEmptySubfolders(string folder)
+    {
+        try
+        {
+            foreach (var subfolder in Directory.EnumerateDirectories(folder))
+            {
+                RemoveEmptyFolders(subfolder);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Left as they are.
         }
     }
 

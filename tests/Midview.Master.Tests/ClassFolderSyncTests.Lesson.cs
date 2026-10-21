@@ -212,29 +212,78 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(lesson, sync.Lesson);
     }
 
+    // A PC that was off when the teacher chose "Apagar tudo" goes straight from that lesson to the next
+    // one of the same class, in the same Desktop folder: what it still holds is the ended lesson's, set
+    // aside and cleared (that lesson was collected), never the new lesson's new files.
     [Fact]
-    public async Task StartAsync_WhileALessonIsOn_TheSameClassGoesOn_AnotherTakesOver()
+    public async Task APcOfflineAtTheEnd_TheNextLessonOfTheSameClass_BringsNothingDeletedBack()
     {
         using var rig = new ClassSyncRig();
         rig.WriteInStore("mapa.png", Bytes(10, 1), Utc(1));
         var sync = rig.NewSync();
         await sync.StartAsync(Turma);
         var first = sync.Lesson;
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+        }
+        await rig.Rounds(sync, 1);
+        var pc3 = rig.Pcs[2];
+        Assert.True(pc3.Has("mapa.png"));
+        rig.Offline[pc3.Name] = true;
+        pc3.Write("offline.txt", Bytes(10, 2), Utc(2));
+
+        // The other PCs see the end; PC3's Session sees nothing until the next lesson is on.
+        await sync.EndAsync(EndChoice.DeleteAll);
+        rig.Pcs[0].Follow();
+        rig.Pcs[1].Follow();
+        await sync.StartAsync(Turma);
+        rig.Offline.TryRemove(pc3.Name, out _);
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+        }
+        await rig.Rounds(sync, 3);
+
+        Assert.True(rig.Store.IsCollected(first.LessonId));
+        Assert.Empty(rig.StoreFiles());
+        Assert.Empty(pc3.Files());
+        Assert.DoesNotContain(pc3.Folder.List().Entries, entry => entry.LessonId == first.LessonId);
+        Assert.Equal(new[] { "mapa.png", "offline.txt" }, pc3.Bin.FileNames()); // its own Recycle Bin, never the class
+    }
+
+    // Not something the window does (it ends a lesson before showing the classes), but a start while a
+    // lesson is on ends that lesson first, keeping the files and remembering every version known of
+    // them, whatever the class: what the PCs then set aside of it brings in only what was never seen.
+    [Fact]
+    public async Task StartAsync_WhileALessonIsOn_EndsItFirst_KeepingTheFiles()
+    {
+        using var rig = new ClassSyncRig();
+        rig.WriteInStore("mapa.png", Bytes(10, 1), Utc(1));
+        var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        var first = sync.Lesson;
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+        }
         await rig.Rounds(sync, 1);
         var pc1 = rig.Pcs[0];
-        pc1.Follow();
-        pc1.Write("mapa.png", Bytes(20, 2), Utc(3)); // an edit, not copied yet
+        pc1.Write("novo.txt", Bytes(10, 2), Utc(2)); // never copied
 
-        // The same class once more: the PCs keep their folder, and the edit is still an edit, not a "(2)".
         var again = await sync.StartAsync(Turma);
-        pc1.Follow();
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+        }
         await rig.Rounds(sync, 2);
 
         Assert.All(again, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
         Assert.NotEqual(first.LessonId, sync.Lesson.LessonId);
-        Assert.Equal(new[] { "mapa.png" }, rig.StoreFiles());
-        Assert.Equal(Bytes(20, 2), File.ReadAllBytes(rig.StorePath("mapa.png")));
-        Assert.All(rig.Pcs, pc => Assert.Equal(Bytes(20, 2), pc.Read("mapa.png")));
+        Assert.False(rig.Store.IsCollected(first.LessonId));
+        Assert.True(rig.Store.IsKnownVersion(first.LessonId, "mapa.png", new FileVersion(10, Utc(1).Ticks)));
+        Assert.Equal(new[] { "mapa.png", "novo.txt" }, rig.StoreFiles()); // no "(2)" of what the class had
+        Assert.All(rig.Pcs, pc => Assert.Equal(new[] { "mapa.png", "novo.txt" }, pc.Files()));
 
         // Another class: every Agent follows it, and the first class keeps its files.
         var changed = await sync.StartAsync("3º B");
@@ -242,8 +291,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(changed, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
         Assert.All(rig.Pcs, pc => Assert.Equal(sync.Lesson, pc.Agent.Current));
         Assert.Equal("3º B", sync.Lesson.Turma);
-        Assert.Equal(new[] { "mapa.png" }, rig.StoreFiles());
-        Assert.False(rig.Store.IsCollected(first.LessonId));
+        Assert.Equal(new[] { "mapa.png", "novo.txt" }, rig.StoreFiles());
     }
 
     [Fact]

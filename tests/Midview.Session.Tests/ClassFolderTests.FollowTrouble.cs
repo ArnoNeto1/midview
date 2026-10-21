@@ -119,23 +119,60 @@ public partial class ClassFolderTests
         Assert.Equal((LessonId, "3º B"), Remembered());
     }
 
-    // A new lesson of the same turma uses the very folder the last one had: it is the new lesson's now.
+    // A new lesson of the same turma uses the very folder the last one had, which stays: it is the new
+    // lesson's now. What the last lesson left in it is set aside under that lesson all the same, so the
+    // teacher's Master decides what of it the class gets (nothing, if that lesson was collected).
     [Fact]
-    public void Follow_NewLessonOfTheSameTurma_LeavesTheFolderAlone()
+    public void Follow_NewLessonOfTheSameTurma_SetsTheOldFilesAside_AndKeepsTheFolder()
     {
         var folder = MakeLessonFolder();
         var display = new RecordingDisplay();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
-        Write(folder, "a.png");
+        var oldId = LessonId;
+        Write(folder, "a.png", "A");
+        Write(folder, "fotos/b.png", "B");
+        Write(folder, "baixando.crdownload");
         _lesson = new ClassLesson(2, Guid.NewGuid(), "3º A", 1, false);
 
         classFolder.Follow(display);
 
-        Assert.True(File.Exists(Path.Combine(folder, "a.png")));
-        Assert.False(Directory.Exists(_setAside));
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(oldId), "a.png")));
+        Assert.Equal("B", File.ReadAllText(Path.Combine(SetAsideFolder(oldId), "fotos", "b.png")));
+        Assert.Equal(new[] { "baixando.crdownload" }, Directory.GetFileSystemEntries(folder).Select(Path.GetFileName));
+        Assert.Empty(_bin.Recycled);
+        Assert.Empty(Pending());
         Assert.Equal(2, display.Shown.Count);
         Assert.Equal((LessonId, "3º A"), Remembered());
+        var (current, _, entries) = classFolder.List();
+        Assert.Equal(LessonId, current);
+        Assert.Equal(new[] { (oldId, "a.png"), (oldId, "fotos/b.png") }, entries.Select(entry => (entry.LessonId, entry.Path)));
+    }
+
+    // Set aside once, when the change is seen: a file held open stays, as the new lesson's, rather than
+    // a later try sweeping up what the new lesson has put in the folder meanwhile.
+    [Fact]
+    public void Follow_NewLessonOfTheSameTurma_WithAFileHeldOpen_SetsAsideTheRestOnce()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var oldId = LessonId;
+        Write(folder, "a.png", "A");
+        var held = Write(folder, "aberto.docx", "D");
+        _lesson = new ClassLesson(2, Guid.NewGuid(), "3º A", 1, false);
+
+        using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            classFolder.Follow(null);
+        }
+        Write(folder, "novo.png", "N"); // the new lesson's
+        classFolder.Follow(null);
+
+        Assert.Empty(Pending());
+        Assert.True(File.Exists(Path.Combine(SetAsideFolder(oldId), "a.png")));
+        Assert.Equal(new[] { "aberto.docx", "novo.png" }, Directory.GetFiles(folder).Select(Path.GetFileName).Order());
     }
 
     [Fact]
