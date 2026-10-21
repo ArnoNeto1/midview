@@ -242,6 +242,38 @@ public enum MessageType : byte
     DeleteClassFile = 72,
     RenameClassFile = 73,
     ClearSetAside = 74,
+
+    // Two teacher PCs in one lab (see ClassHome, ClassFolderRemote and
+    // docs/superpowers/specs/2026-10-20-class-folder-design.md): the first PC to
+    // start a lesson is the home of the class folders, and the Agents record it.
+    // Agent messages. ClaimClassHome is a command carrying a ClassHomeClaim, sent
+    // before SetClassLesson (answered with one CommandAck and a CommandResult;
+    // refused, with ClassHomeClaim.OtherHomeText and the home's name as the
+    // detail, when another PC is the home and the claim isn't a take-over).
+    // GetClassHome, no payload, is answered with one ClassHomeStatus carrying the
+    // ClassHome the Agent keeps (empty when it has none). IsTeacherTrusted asks
+    // an Agent whether it trusts a teacher, so that the home can serve a
+    // colleague's PC. An Agent from before this answers CommandAck [0] to each
+    // of them.
+    ClaimClassHome = 75,
+    GetClassHome = 76,
+    ClassHomeStatus = 77,
+    IsTeacherTrusted = 78,
+
+    // Teacher to teacher, on ClassFolderRemote.Port, never to a student machine:
+    // a colleague's PC works the home's "Pasta da turma" window. Payloads are
+    // JSON (ClassFolderRemote.EncodeJson). RemoteClassFolderState, no payload,
+    // is answered with RemoteClassFolderStateReply (a RemoteState);
+    // RemoteClassFolderCommand (a RemoteCommand), with
+    // RemoteClassFolderCommandReply (a RemoteReply); RemoteHandOver, a PC asking
+    // the home for the class folders to take them over, with RemoteHandOverDone
+    // once the home has sent all of them.
+    RemoteClassFolderState = 79,
+    RemoteClassFolderStateReply = 80,
+    RemoteClassFolderCommand = 81,
+    RemoteClassFolderCommandReply = 82,
+    RemoteHandOver = 83,
+    RemoteHandOverDone = 84,
 }
 
 public enum CloseAppsMode : byte
