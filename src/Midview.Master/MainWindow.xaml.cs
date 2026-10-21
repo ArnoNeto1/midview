@@ -93,12 +93,14 @@ public partial class MainWindow : Window
         OnlineOnlyButton.IsChecked = _onlineOnly;
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
+        _classSync = StartClassFolder();
 
         foreach (var machine in LoadRoster())
         {
             InsertTile(_tiles.Count, machine);
         }
         UpdateEmptyHint();
+        ShowClassLesson();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -939,6 +941,7 @@ public partial class MainWindow : Window
         }
 
         tile.RememberMacAddress(macAddress);
+        PublishRoster();
         try
         {
             SaveRoster();
@@ -1188,10 +1191,13 @@ public partial class MainWindow : Window
         {
             if (e.PropertyName == nameof(MachineTile.Presence))
             {
+                PublishPresence(tile);
                 UpdateEmptyHint();
             }
         };
         _tiles.Insert(index, tile);
+        PublishPresence(tile);
+        PublishRoster();
         // A machine new to a room the teacher organized: the first free cell.
         if (_arranged && RowWidth() > 0)
         {
@@ -1202,7 +1208,8 @@ public partial class MainWindow : Window
             machine, _masterCertificate,
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
             appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
-            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)));
+            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
+            classLesson: () => _classSync.Lesson);
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>
@@ -1234,6 +1241,17 @@ public partial class MainWindow : Window
         var wasSelected = tile.IsSelected;
         UnlockScreen(tile);
         _tiles.RemoveAt(index);
+        PublishRoster();
+        // Another entry for the same machine (a hand-edited list) keeps it known.
+        if (_tiles.FirstOrDefault(other => string.Equals(
+                other.Machine.SessionThumbprint, tile.Machine.SessionThumbprint, StringComparison.OrdinalIgnoreCase)) is { } same)
+        {
+            PublishPresence(same);
+        }
+        else
+        {
+            _online.TryRemove(tile.Machine.SessionThumbprint, out _);
+        }
         // Out of the selection too; the buttons and status bar only change if
         // it was in it (a replaced or moved machine is a new tile).
         _selection.Prune();
@@ -1306,5 +1324,8 @@ public partial class MainWindow : Window
             poller.Dispose();
         }
         _pollers.Clear();
+
+        // The lesson goes on: the next Master to open carries on with it.
+        _classSync.Dispose();
     }
 }

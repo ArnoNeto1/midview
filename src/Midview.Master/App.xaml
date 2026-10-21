@@ -57,14 +57,27 @@
                                                Margin="0,0,-17,0" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Visibility="Collapsed" />
                                 </Grid>
-                                <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12"
-                                           TextWrapping="Wrap" TextAlignment="Center" Margin="0,5,0,0"
-                                           LineHeight="14" LineStackingStrategy="BlockLineHeight" Height="28" />
+                                <!-- Two lines of label. The caption pill (Caption) takes the second one,
+                                     so a captioned button keeps the others' height. -->
+                                <StackPanel Margin="0,5,0,0" Height="28">
+                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12"
+                                               TextWrapping="Wrap" TextAlignment="Center"
+                                               LineHeight="14" LineStackingStrategy="BlockLineHeight" />
+                                    <Border x:Name="CaptionPill" CornerRadius="6" Padding="6,0" Margin="0,1,0,0" HorizontalAlignment="Center"
+                                            Background="{StaticResource ChalkYellowBrush}">
+                                        <TextBlock Text="{TemplateBinding Caption}" FontSize="10.5" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource SlateBrush}" TextTrimming="CharacterEllipsis"
+                                                   LineHeight="12" LineStackingStrategy="BlockLineHeight" />
+                                    </Border>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="Badge" Value="">
                                 <Setter TargetName="BadgeDisc" Property="Visibility" Value="Collapsed" />
+                            </Trigger>
+                            <Trigger Property="Caption" Value="">
+                                <Setter TargetName="CaptionPill" Property="Visibility" Value="Collapsed" />
                             </Trigger>
                             <Trigger Property="OpensOptions" Value="True">
                                 <Setter TargetName="OptionsArrow" Property="Visibility" Value="Visible" />

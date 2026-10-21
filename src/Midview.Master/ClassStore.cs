@@ -86,7 +86,9 @@ public sealed partial class ClassStore
         _lessons = LessonsMap(_indexRoot, lessonsPath, _log);
     }
 
-    public static string DefaultFilesRoot => Path.Combine(
+    // As MasterData.Folder: only a tool that runs Master against made-up
+    // machines points it elsewhere, so the teacher's real classes are never touched.
+    public static string DefaultFilesRoot { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Midview", "Turmas");
 
     public static string DefaultIndexRoot => Path.Combine(MasterData.Folder, "turmas");
