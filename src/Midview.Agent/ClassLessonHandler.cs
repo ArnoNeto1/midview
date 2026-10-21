@@ -31,7 +31,7 @@ public sealed class ClassLessonHandler
     internal const string FolderPrefix = "Pasta da turma – ";
 
     private readonly string _statePath;
-    private readonly Func<(string Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
+    private readonly Func<(string? Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
     private readonly Func<SecurityIdentifier, RegistryKey?> _openUserSoftware;
     private readonly AppBlockEnforcer _enforcer;
     private readonly SecurityIdentifier _folderOwner;
@@ -58,13 +58,14 @@ public sealed class ClassLessonHandler
     private bool _lookedOnce;
     private string? _lastOutcome;
 
-    // loggedOnStudent: the student at the console and their Desktop, or null
-    // (UserSessionProcessLauncher.LoggedOnStudent). openUserSoftware: their
+    // loggedOnStudent: the student at the console and their Desktop (null
+    // when there is none the Agent may work on), or null when nobody is
+    // logged on (UserSessionProcessLauncher.LoggedOnStudent). openUserSoftware: their
     // writable HKEY_USERS\<SID>\Software, null when not loaded
     // (DownloadFolderPolicy.OpenUserSoftware). folderOwner: SYSTEM outside
     // the tests. localNow: the local time, for a lesson from an earlier day.
     public ClassLessonHandler(
-        string statePath, Func<(string Desktop, SecurityIdentifier Student)?> loggedOnStudent,
+        string statePath, Func<(string? Desktop, SecurityIdentifier Student)?> loggedOnStudent,
         Func<SecurityIdentifier, RegistryKey?> openUserSoftware, AppBlockEnforcer enforcer,
         SecurityIdentifier folderOwner, Func<DateTime> localNow, Action<string>? log = null)
     {
@@ -219,39 +220,44 @@ public sealed class ClassLessonHandler
     }
 
     // The logged-on student's Desktop and download folder made to match the
-    // lesson. True when the folder Chrome saves into changed.
+    // lesson. True when the folder Chrome saves into changed. desktop: null
+    // when there is none the Agent may work on (UserSessionProcessLauncher.
+    // LoggedOnStudent): then only the download folder Midview set is removed,
+    // with no lesson on, as that needs no Desktop.
     private bool FollowLesson(
-        ClassLesson lesson, string desktop, SecurityIdentifier student, List<string> done, List<string> problems)
+        ClassLesson lesson, string? desktop, SecurityIdentifier student, List<string> done, List<string> problems)
     {
         // Opened as itself: a Desktop that is missing or a link (redirected
         // elsewhere) gets nothing, not even the download folder. With no
         // lesson on there was nothing to put there either.
-        var desktopUsable = ProtectedStudentFolders.IsRealDirectory(desktop);
+        var desktopUsable = desktop is not null && ProtectedStudentFolders.IsRealDirectory(desktop);
         if (!desktopUsable)
         {
             if (lesson.IsOn)
             {
-                problems.Add($"Área de Trabalho não encontrada ou não é uma pasta comum ({desktop})");
+                problems.Add(desktop is null
+                    ? "Área de Trabalho do aluno não encontrada, ou fora da pasta do aluno e não é dele"
+                    : $"Área de Trabalho não encontrada ou não é uma pasta comum ({desktop})");
             }
         }
         else
         {
             if (lesson.IsOn)
             {
-                ProtectClassFolder(lesson, desktop, student, done, problems);
+                ProtectClassFolder(lesson, desktop!, student, done, problems);
             }
             else
             {
                 _protectedFor = null;
             }
-            ReleaseOtherClassFolders(lesson, desktop, student, done, problems);
+            ReleaseOtherClassFolders(lesson, desktop!, student, done, problems);
         }
 
         if (!lesson.IsOn)
         {
             return PointDownloads(student, null, done, problems);
         }
-        return desktopUsable && PointDownloads(student, Path.Combine(desktop, lesson.FolderName), done, problems);
+        return desktopUsable && PointDownloads(student, Path.Combine(desktop!, lesson.FolderName), done, problems);
     }
 
     private void ProtectClassFolder(

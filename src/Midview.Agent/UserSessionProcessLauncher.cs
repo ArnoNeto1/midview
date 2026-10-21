@@ -204,7 +204,7 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
     {
         try
         {
-            if (StudentDesktop(token, out var result) is not { } student)
+            if (StudentDesktop(token, out var result) is not { Desktop: { } desktop } student)
             {
                 if (result != 0)
                 {
@@ -214,7 +214,7 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
             }
 
             var problems = ProtectedStudentFolders.Protect(
-                student.Desktop, student.Student, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null));
+                desktop, student.Student, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null));
             foreach (var problem in problems)
             {
                 AgentLog.Warn($"A student folder couldn't be protected: {problem}");
@@ -226,10 +226,14 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         }
     }
 
-    // The student logged on at the console and their Desktop, or null when
-    // nobody is or it can't be found (StudentFolderGuard, between Session's
-    // starts). The same token as for starting Session.
-    public static (string Desktop, SecurityIdentifier Student)? LoggedOnStudent()
+    // The student logged on at the console, or null when nobody is, and their
+    // Desktop where it really is: null when Windows has none for them, or it is
+    // one the Agent may not work on (StudentDesktopCheck, logged once). Only
+    // the Desktop work (the protected folders, the class folder, pointing the
+    // browsers at it) needs the Desktop; the student is there either way, for
+    // what doesn't (their own programs, the removals left pending for them).
+    // The same token as for starting Session.
+    public static (string? Desktop, SecurityIdentifier Student)? LoggedOnStudent()
     {
         var sessionId = WTSGetActiveConsoleSessionId();
         if (sessionId == 0xFFFFFFFF || !WTSQueryUserToken(sessionId, out var userToken))
@@ -259,12 +263,10 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         }
     }
 
-    // The Desktop as the student's own registry says it is (User Shell
-    // Folders, which the student can change), so only where it really is,
-    // and only if that is in their profile or their own folder
-    // (StudentDesktopCheck, Ruling 12): never another account's Desktop.
-    // Null otherwise, with result 0 for a Desktop refused that way.
-    private static (string Desktop, SecurityIdentifier Student)? StudentDesktop(IntPtr token, out int result)
+    // The student of the token and their Desktop (StudentAndDesktop); null
+    // only without a student. result: SHGetKnownFolderPath's, 0 for a Desktop
+    // Windows found, refused or not.
+    private static (string? Desktop, SecurityIdentifier Student)? StudentDesktop(IntPtr token, out int result)
     {
         using var identity = new WindowsIdentity(token);
         var desktopFolderId = new Guid("B4BFCC3A-DB2C-424C-B029-7FE99A87C641"); // FOLDERID_Desktop
@@ -278,15 +280,38 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         {
             Marshal.FreeCoTaskMem(desktopPointer);
         }
-        if (identity.User is not { } student || string.IsNullOrEmpty(desktop))
+        if (identity.User is not { } student)
         {
             return null;
         }
 
-        if (StudentDesktopCheck.Verify(desktop, student, StudentDesktopCheck.ProfileImagePathOf, out var refusal) is not { } verified)
+        var resolved = StudentAndDesktop(student, desktop, StudentDesktopCheck.ProfileImagePathOf, out var refusal);
+        if (refusal is not null)
         {
             StudentDesktopCheck.ReportOnce(refusal);
-            return null;
+        }
+        return resolved;
+    }
+
+    // The student, and their Desktop as their own registry says it is (User
+    // Shell Folders, which the student can change) only where it really is,
+    // and only if that is in their profile or their own folder
+    // (StudentDesktopCheck, Ruling 12): never another account's Desktop.
+    // Desktop null when there is none (refusal null) or it is refused
+    // (refusal says why); the student is kept either way.
+    internal static (string? Desktop, SecurityIdentifier Student) StudentAndDesktop(
+        SecurityIdentifier student, string? shellDesktop, Func<SecurityIdentifier, string?> profilePathOf, out string? refusal)
+    {
+        refusal = null;
+        if (string.IsNullOrEmpty(shellDesktop))
+        {
+            return (null, student);
+        }
+
+        var verified = StudentDesktopCheck.Verify(shellDesktop, student, profilePathOf, out var why);
+        if (verified is null)
+        {
+            refusal = why;
         }
         return (verified, student);
     }

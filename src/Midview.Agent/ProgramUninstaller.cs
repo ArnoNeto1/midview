@@ -105,15 +105,24 @@ public sealed class ProgramUninstaller
     // does exactly when they're logged in -- null between classes, at the
     // lock screen, or if nobody's at the console, and HKCU entries are simply
     // skipped for that read rather than treated as an error.
-    private static RegistryKey? UserSoftwareBase()
+    private static RegistryKey? UserSoftwareBase() =>
+        UserSoftwareOf(
+            UserSessionProcessLauncher.LoggedOnStudent(), sid => Registry.Users.OpenSubKey($@"{sid}\SOFTWARE", writable: false));
+
+    // That student's SOFTWARE hive (openUsersSoftware, by SID), whatever became
+    // of their Desktop: a Desktop the Agent may not work on
+    // (StudentDesktopCheck) has nothing to do with their programs. Null with
+    // nobody logged on, or a hive that can't be opened.
+    internal static RegistryKey? UserSoftwareOf(
+        (string? Desktop, System.Security.Principal.SecurityIdentifier Student)? student, Func<string, RegistryKey?> openUsersSoftware)
     {
-        if (UserSessionProcessLauncher.LoggedOnStudent() is not { } student)
+        if (student is not { } loggedOn)
         {
             return null;
         }
         try
         {
-            return Registry.Users.OpenSubKey($@"{student.Student.Value}\SOFTWARE", writable: false);
+            return openUsersSoftware(loggedOn.Student.Value);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
@@ -121,6 +130,7 @@ public sealed class ProgramUninstaller
             return null;
         }
     }
+
 
     // The display names a teacher can choose from, each once, in order.
     public IReadOnlyList<string> ListInstalled()

@@ -59,7 +59,7 @@ public sealed class ClassLessonHandlerTests : IDisposable
     }
 
     private ClassLessonHandler Create(
-        Func<(string Desktop, SecurityIdentifier Student)?>? loggedOnStudent = null,
+        Func<(string? Desktop, SecurityIdentifier Student)?>? loggedOnStudent = null,
         Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null) =>
         new(_statePath, loggedOnStudent ?? (() => (_desktop, Me)),
             openUserSoftware ?? (_ => Registry.CurrentUser.CreateSubKey(_rootPath, writable: true)),
@@ -312,6 +312,38 @@ public sealed class ClassLessonHandlerTests : IDisposable
         Assert.False(Directory.Exists(missing));
         Assert.Null(Policy(DownloadFolderPolicy.ChromeKey));
         Assert.Contains(missing, Assert.Single(_log));
+    }
+
+    // A Desktop the Agent may not work on (StudentDesktopCheck): the student is still there, but
+    // nothing is made or pointed at on that Desktop, and the teacher hears why.
+    [Fact]
+    public void WithARefusedDesktop_ALessonPreparesNothingThere_AndSaysSo()
+    {
+        var handler = Create(() => (null, Me));
+        _inspector.Start("chrome.exe");
+
+        var (ok, detail) = handler.Handle(Lesson("3º A", 100).Encode());
+        handler.Reconcile();
+
+        Assert.True(ok);
+        Assert.StartsWith("aula do 3º A; não foi possível preparar a pasta agora: ", detail);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_desktop));
+        Assert.Null(Policy(DownloadFolderPolicy.ChromeKey));
+        Assert.Empty(_inspector.Ended);
+    }
+
+    // What isn't Desktop work still goes on: with no lesson on, Midview's own download folder goes
+    // from the student's registry, Desktop or not.
+    [Fact]
+    public void WithARefusedDesktop_NoLesson_StillRemovesMidviewsDownloadFolder()
+    {
+        DownloadFolderPolicy.Apply(_software, FolderOf("3º A"));
+        var handler = Create(() => (null, Me));
+
+        handler.Reconcile();
+
+        Assert.Null(Policy(DownloadFolderPolicy.ChromeKey));
+        Assert.Null(Policy(DownloadFolderPolicy.EdgeKey));
     }
 
     [Fact]

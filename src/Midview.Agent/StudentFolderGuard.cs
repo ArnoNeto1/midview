@@ -11,16 +11,17 @@ namespace Midview.Agent;
 // once, so a problem that lasts doesn't fill the log on every poll.
 public sealed class StudentFolderGuard
 {
-    private readonly Func<(string Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
+    private readonly Func<(string? Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
     private readonly SecurityIdentifier _owner;
     private readonly Action<string> _log;
     private string? _lastOutcome;
 
-    // loggedOnStudent: the student at the console and their Desktop, or null
-    // (UserSessionProcessLauncher.LoggedOnStudent). owner: who Protect makes
+    // loggedOnStudent: the student at the console and their Desktop (null
+    // when there is none the Agent may work on), or null when nobody is
+    // logged on (UserSessionProcessLauncher.LoggedOnStudent). owner: who Protect makes
     // the folders' owner, SYSTEM outside the tests.
     public StudentFolderGuard(
-        Func<(string Desktop, SecurityIdentifier Student)?> loggedOnStudent, SecurityIdentifier owner,
+        Func<(string? Desktop, SecurityIdentifier Student)?> loggedOnStudent, SecurityIdentifier owner,
         Action<string>? log = null)
     {
         _loggedOnStudent = loggedOnStudent;
@@ -33,16 +34,17 @@ public sealed class StudentFolderGuard
     {
         try
         {
-            if (_loggedOnStudent() is not { } student || !ProtectedStudentFolders.NeedsProtecting(student.Desktop, _owner))
+            // No Desktop to work on (none, or refused: StudentDesktopCheck logs that once): nothing to put back.
+            if (_loggedOnStudent() is not { Desktop: { } desktop } student || !ProtectedStudentFolders.NeedsProtecting(desktop, _owner))
             {
                 _lastOutcome = null;
                 return;
             }
 
-            var problems = ProtectedStudentFolders.Protect(student.Desktop, student.Student, _owner);
+            var problems = ProtectedStudentFolders.Protect(desktop, student.Student, _owner);
             Report(problems.Count == 0
-                ? $"The student's folders on {student.Desktop} were missing or not protected: put back and protected."
-                : $"The student's folders on {student.Desktop} couldn't be put back: {string.Join("; ", problems)}");
+                ? $"The student's folders on {desktop} were missing or not protected: put back and protected."
+                : $"The student's folders on {desktop} couldn't be put back: {string.Join("; ", problems)}");
         }
         catch (Exception ex)
         {

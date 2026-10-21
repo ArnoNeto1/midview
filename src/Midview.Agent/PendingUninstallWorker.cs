@@ -17,9 +17,16 @@ public sealed class PendingUninstallWorker : BackgroundService
     private string? _handledStudent;
 
     public PendingUninstallWorker(ProgramUninstaller uninstaller, PendingUninstalls pending)
-        : this(() => UserSessionProcessLauncher.LoggedOnStudent()?.Student.Value, pending, uninstaller.UninstallStudentsOwn)
+        : this(StudentSidOf(UserSessionProcessLauncher.LoggedOnStudent), pending, uninstaller.UninstallStudentsOwn)
     {
     }
+
+    // The SID of the student at the console, whatever became of their Desktop:
+    // one the Agent may not work on (StudentDesktopCheck) doesn't spare them
+    // the removals the teacher left pending.
+    internal static Func<string?> StudentSidOf(
+        Func<(string? Desktop, System.Security.Principal.SecurityIdentifier Student)?> loggedOnStudent) =>
+        () => loggedOnStudent()?.Student.Value;
 
     // loggedOnStudent: the SID of the student at the console, or null.
     internal PendingUninstallWorker(

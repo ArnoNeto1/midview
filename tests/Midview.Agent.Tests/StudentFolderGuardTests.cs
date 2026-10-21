@@ -44,6 +44,17 @@ public class StudentFolderGuardTests : IDisposable
         Assert.Empty(_log);
     }
 
+    // A Desktop the Agent may not work on (StudentDesktopCheck): the student is logged on, but
+    // nothing is put on that Desktop (StudentDesktopCheck logs the refusal once).
+    [Fact]
+    public void Check_WithARefusedDesktop_DoesNothing()
+    {
+        new StudentFolderGuard(() => (null, Me), Me, _log.Add).Check();
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_desktop));
+        Assert.Empty(_log);
+    }
+
     [Fact]
     public void Check_PutsTheFoldersBack_Protected()
     {
