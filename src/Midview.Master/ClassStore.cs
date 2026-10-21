@@ -65,6 +65,7 @@ public sealed partial class ClassStore
     private readonly IRecycleBin _recycleBin;
     private readonly Func<DateTime> _localNow;
     private readonly Action<string> _log;
+    private readonly Func<long> _freeBytes;
     private readonly object _gate = new();
     private readonly Dictionary<string, ClassIndex> _indexes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -74,9 +75,10 @@ public sealed partial class ClassStore
 
     // log gets what went wrong that the caller isn't told, in English (for a developer):
     // by default it goes to System.Diagnostics.Trace. lessonsPath: see LessonsMap.
+    // freeBytes: what FreeBytes says, for a test; by default the disk's own.
     public ClassStore(
         string filesRoot, string indexRoot, IRecycleBin recycleBin, Func<DateTime> localNow, Action<string>? log = null,
-        string? lessonsPath = null)
+        string? lessonsPath = null, Func<long>? freeBytes = null)
     {
         _filesRoot = Path.GetFullPath(filesRoot);
         _indexRoot = Path.GetFullPath(indexRoot);
@@ -84,6 +86,7 @@ public sealed partial class ClassStore
         _localNow = localNow;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassStore: " + message));
         _lessons = LessonsMap(_indexRoot, lessonsPath, _log);
+        _freeBytes = freeBytes ?? DiskFreeBytes;
     }
 
     // As MasterData.Folder: only a tool that runs Master against made-up
@@ -98,7 +101,9 @@ public sealed partial class ClassStore
 
     // What is left on the disk that holds the classes; long.MaxValue when that
     // can't be told (a network folder), so that nothing warns.
-    public long FreeBytes()
+    public long FreeBytes() => _freeBytes();
+
+    private long DiskFreeBytes()
     {
         try
         {

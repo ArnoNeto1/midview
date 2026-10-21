@@ -285,6 +285,61 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(new PcStatus(machine, PcSyncState.Failed, "Midview antigo"), statuses[machine.Name]);
     }
 
+    // A file is pulled only while the teacher's disk keeps about 1 GB to spare after it.
+    [Fact]
+    public async Task APull_ThatWouldFillTheTeachersDisk_IsRefused_WithWhy()
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        rig.FreeSpace = 10 + ClassStore.LowSpaceBytes / 5 - 1;
+        var sync = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(sync);
+        await sync.StartAsync(Turma);
+        var pc1 = rig.Pcs[0];
+        pc1.Follow();
+        pc1.Write("mapa.png", Bytes(10, 1), Utc(1));
+
+        await rig.Rounds(sync, 2);
+
+        Assert.Empty(rig.StoreFiles());
+        Assert.Equal(PcSyncState.Failed, statuses[pc1.Name].State);
+        Assert.Equal("mapa.png (não há espaço livre suficiente neste computador)", statuses[pc1.Name].Detail);
+
+        rig.FreeSpace = 10 + ClassStore.LowSpaceBytes / 5;
+        await rig.Rounds(sync, 1);
+
+        Assert.Equal(new[] { "mapa.png" }, rig.StoreFiles());
+        Assert.Equal(PcSyncState.InSync, statuses[pc1.Name].State);
+    }
+
+    // The same for a file a PC set aside for a lesson that is over: it waits on the PC, not cleared.
+    [Fact]
+    public async Task ASetAsidePull_ThatWouldFillTheTeachersDisk_IsRefused_AndNothingIsCleared()
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        var yesterday = rig.NewSync();
+        await yesterday.StartAsync(Turma);
+        var lessonA = yesterday.Lesson;
+        var pc1 = rig.Pcs[0];
+        pc1.Follow();
+        pc1.Write("novo.txt", Bytes(10, 2), Utc(2));
+        yesterday.Dispose();
+        rig.Now = rig.Now.AddDays(1).Date.AddHours(8);
+        pc1.Agent.Reconcile();
+        pc1.Follow();
+        rig.FreeSpace = 0;
+
+        var today = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(today);
+        await today.StartAsync("3º B");
+        pc1.Follow();
+        await today.RunRoundAsync(pc1.Machine, CancellationToken.None);
+
+        Assert.Empty(rig.StoreFiles(Turma));
+        Assert.Contains(pc1.Folder.List().Entries, entry => entry.LessonId == lessonA.LessonId && entry.Path == "novo.txt");
+        Assert.Equal(PcSyncState.Failed, statuses[pc1.Name].State);
+        Assert.Contains("não há espaço livre suficiente neste computador", statuses[pc1.Name].Detail);
+    }
+
     // A listing that stops before its last part: the PC's round fails, saying why, and nothing is
     // planned on the part that came (the store's file would be pushed as "missing" on the PC).
     [Fact]

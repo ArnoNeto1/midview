@@ -30,7 +30,7 @@ internal sealed class ClassSyncRig : IDisposable
         TeacherBin = new FolderBin(Path.Combine(Root, "lixeira-professor"));
         Store = new ClassStore(
             Path.Combine(Root, "Turmas"), Path.Combine(Root, "dados", "turmas"), TeacherBin, () => Now,
-            lessonsPath: Path.Combine(Root, "dados", "class-lessons.json"));
+            lessonsPath: Path.Combine(Root, "dados", "class-lessons.json"), freeBytes: () => FreeSpace);
         Assert.True(Store.Create(Turma).Ok);
         Assert.True(Store.Create("3º B").Ok);
 
@@ -45,6 +45,9 @@ internal sealed class ClassSyncRig : IDisposable
 
     // The teacher's clock, and the Agents': the day a lesson started, the day files arrived.
     public DateTime Now { get; set; } = new(2026, 10, 20, 13, 30, 0);
+
+    // What the teacher's disk has left, as the store sees it (never the real disk's).
+    public long FreeSpace { get; set; } = long.MaxValue;
 
     public string Root { get; }
 

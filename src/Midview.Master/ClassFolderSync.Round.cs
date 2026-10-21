@@ -13,6 +13,10 @@ public sealed partial class ClassFolderSync
     private const string CollectingText = "recolhendo arquivos de uma aula anterior";
     private const string NotFound = "arquivo não encontrado"; // the Session's words
 
+    // What a pull leaves free on the teacher's disk, at the least (about 1 GB):
+    // the students' files must not fill the disk the teacher works on.
+    private const long PullReserveBytes = ClassStore.LowSpaceBytes / 5;
+
     // Each PC's last listing of the lesson: a file is only pulled once it held still between two.
     private readonly ConcurrentDictionary<string, (Guid LessonId, Dictionary<string, FileVersion> Files)> _listings =
         new(StringComparer.OrdinalIgnoreCase);
@@ -377,9 +381,15 @@ public sealed partial class ClassFolderSync
 
     // The PC's file into the class's store, through a temp file in it: the path
     // it was stored at, or null and why not. Nothing is left behind on failure.
+    // Only while the teacher's disk keeps PullReserveBytes to spare after it.
     private (string? Stored, string Why) PullInto(
         KnownMachine machine, string turma, Guid lessonId, string path, FileVersion version, bool replace)
     {
+        if (_store.FreeBytes() < version.Size + PullReserveBytes)
+        {
+            return (null, FileCollector.NoSpaceText);
+        }
+
         FileStream incoming;
         try
         {

@@ -23,6 +23,9 @@ public static class FileCollector
     // Per read or write, like FileSender.
     private const int TimeoutMs = 30_000;
 
+    // A file that won't fit on this PC's disk; the class folder's pulls say it the same way.
+    internal const string NoSpaceText = "não há espaço livre suficiente neste computador";
+
     public static CollectResult Collect(
         KnownMachine machine, X509Certificate2 masterCertificate, string destinationDirectory,
         int port = ConnectionClient.SessionPort, int maxFiles = FileCollection.MaxFiles,
@@ -107,7 +110,7 @@ public static class FileCollector
         var free = OnDisk(relativePath, () => new DriveInfo(Path.GetPathRoot(root)!).AvailableFreeSpace);
         if (free < size)
         {
-            throw new InvalidDataException("não há espaço livre suficiente neste computador");
+            throw new InvalidDataException(NoSpaceText);
         }
 
         var tempPath = Path.Combine(directory, $".midview-{Guid.NewGuid():N}.parcial");
