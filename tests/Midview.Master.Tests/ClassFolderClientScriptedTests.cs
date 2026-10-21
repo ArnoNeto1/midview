@@ -39,8 +39,8 @@ public sealed class ClassFolderClientScriptedTests
             s => ClassFolderClient.Pull(s.Machine, s.MasterCertificate, Guid.NewGuid(), "a.txt", new MemoryStream(), s.Port),
             s => ClassFolderClient.Delete(s.Machine, s.MasterCertificate, Guid.NewGuid(), "a.txt", s.Port),
             s => ClassFolderClient.Rename(s.Machine, s.MasterCertificate, Guid.NewGuid(), "a.txt", "b.txt", s.Port),
-            s => ClassFolderClient.ClearSetAside(s.Machine, s.MasterCertificate, Guid.NewGuid(), s.Port),
-            s => ClassFolderClient.Push(s.Machine, s.MasterCertificate, Guid.NewGuid(), "a.txt", s.TempFile(1), DateTime.UtcNow.Ticks, s.Port),
+            s => ClassFolderClient.ClearSetAside(s.Machine, s.MasterCertificate, Guid.NewGuid(), Array.Empty<ClassFolderEntry>(), s.Port),
+            s => ClassFolderClient.Push(s.Machine, s.MasterCertificate, Guid.NewGuid(), "a.txt", s.TempFile(1), DateTime.UtcNow.Ticks, null, s.Port),
         };
 
         foreach (var call in calls)
@@ -332,14 +332,46 @@ public sealed class ClassFolderClientScriptedTests
         var time = new DateTime(2026, 5, 6, 7, 8, 9, DateTimeKind.Utc).Ticks;
 
         var result = await Run(() => ClassFolderClient.Push(
-            session.Machine, session.MasterCertificate, lesson, "x/y.bin", source, time, session.Port));
+            session.Machine, session.MasterCertificate, lesson, "x/y.bin", source, time, new FileVersion(5, 6), session.Port));
 
         Assert.Equal((true, string.Empty), result);
         Assert.Equal(content, received);
         Assert.Equal(2, chunks);
         Assert.Equal(MessageType.PushClassFile, session.Request!.Type);
-        Assert.True(ClassFolderWire.TryDecodePushHeader(session.Request.Payload, out var l, out var p, out var size, out var ticks));
+        Assert.True(ClassFolderWire.TryDecodePushHeader(
+            session.Request.Payload, out var l, out var p, out var size, out var ticks, out var replacing));
         Assert.Equal((lesson, "x/y.bin", (long)content.Length, time), (l, p, size, ticks));
+        Assert.Equal((5L, 6L), replacing);
+    }
+
+    // Where the PC had no such file, the push says it may replace nothing.
+    [Fact]
+    public async Task Push_OntoNothing_SaysSo()
+    {
+        using var session = new Scripted(channel => SendAck(channel, false, "mudou neste PC"));
+
+        var result = await Run(() => ClassFolderClient.Push(
+            session.Machine, session.MasterCertificate, Guid.NewGuid(), "a.txt", session.TempFile(1), DateTime.UtcNow.Ticks, null, session.Port));
+
+        Assert.Equal((false, "mudou neste PC"), result);
+        Assert.True(ClassFolderWire.TryDecodePushHeader(session.Request!.Payload, out _, out _, out _, out _, out var replacing));
+        Assert.Null(replacing);
+    }
+
+    [Fact]
+    public async Task ClearSetAside_SendsTheFilesDealtWith()
+    {
+        var lesson = Guid.NewGuid();
+        var files = new[] { new ClassFolderEntry(lesson, "a.txt", 1, 2), new ClassFolderEntry(lesson, "sub/b.txt", 3, 4) };
+        using var session = new Scripted(channel => SendAck(channel, true, string.Empty));
+
+        var result = await Run(() => ClassFolderClient.ClearSetAside(session.Machine, session.MasterCertificate, lesson, files, session.Port));
+
+        Assert.Equal((true, string.Empty), result);
+        Assert.Equal(MessageType.ClearSetAside, session.Request!.Type);
+        Assert.True(ClassFolderWire.TryDecodeClearSetAside(session.Request.Payload, out var sentLesson, out var sent));
+        Assert.Equal(lesson, sentLesson);
+        Assert.Equal(files, sent);
     }
 
     [Fact]
@@ -361,7 +393,7 @@ public sealed class ClassFolderClientScriptedTests
         });
 
         var result = await Run(() => ClassFolderClient.Push(
-            session.Machine, session.MasterCertificate, Guid.NewGuid(), "a.txt", session.TempFile(10), DateTime.UtcNow.Ticks, session.Port));
+            session.Machine, session.MasterCertificate, Guid.NewGuid(), "a.txt", session.TempFile(10), DateTime.UtcNow.Ticks, null, session.Port));
 
         Assert.Equal((false, "aula diferente"), result);
         Assert.False(chunkArrived);
@@ -378,7 +410,7 @@ public sealed class ClassFolderClientScriptedTests
         });
 
         var result = await Run(() => ClassFolderClient.Push(
-            session.Machine, session.MasterCertificate, Guid.NewGuid(), "a.txt", session.TempFile(1), DateTime.UtcNow.Ticks, session.Port));
+            session.Machine, session.MasterCertificate, Guid.NewGuid(), "a.txt", session.TempFile(1), DateTime.UtcNow.Ticks, null, session.Port));
 
         Assert.Equal((false, "disco cheio"), result);
     }

@@ -149,7 +149,7 @@ public partial class ClassFolderTests
 
         Assert.Equal("sem pasta", problem);
         Assert.Empty(entries);
-        Assert.Equal("sem pasta", Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(LessonId, "x.txt")).Message);
+        Assert.Equal("sem pasta", Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(LessonId, "x.txt", null)).Message);
     }
 
     [Fact]

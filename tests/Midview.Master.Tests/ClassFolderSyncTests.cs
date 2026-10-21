@@ -285,6 +285,44 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(new PcStatus(machine, PcSyncState.Failed, "Midview antigo"), statuses[machine.Name]);
     }
 
+    // A student saving the file between the listing a push was planned on and the push: the
+    // push is refused ("mudou neste PC") and the student's version wins at the next round.
+    [Fact]
+    public async Task APush_NeverOverwritesAFileSavedAfterItsListing()
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        rig.WriteInStore("mapa.png", Bytes(10, 1), Utc(1));
+        var sync = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(sync);
+        await sync.StartAsync(Turma);
+        var pc1 = rig.Pcs[0];
+        pc1.Follow();
+        await rig.Rounds(sync, 1);
+        Assert.Equal(Bytes(10, 1), pc1.Read("mapa.png"));
+
+        rig.WriteInStore("mapa.png", Bytes(20, 2), Utc(2)); // the teacher's edit, to be pushed
+        var saved = 0;
+        sync.CopyingStarts = _ =>
+        {
+            if (Interlocked.Exchange(ref saved, 1) == 0)
+            {
+                pc1.Write("mapa.png", Bytes(30, 3), Utc(3)); // the student's, after that listing
+            }
+        };
+        await rig.Rounds(sync, 1);
+
+        Assert.Equal(Bytes(30, 3), pc1.Read("mapa.png"));
+        Assert.Equal("mapa.png (mudou neste PC)", statuses[pc1.Name].Detail);
+
+        sync.CopyingStarts = null;
+        await rig.Rounds(sync, 2);
+
+        Assert.Equal(Bytes(30, 3), File.ReadAllBytes(rig.StorePath("mapa.png")));
+        Assert.Equal(Bytes(30, 3), pc1.Read("mapa.png"));
+        var binned = Assert.Single(rig.TeacherBin.FileNames()); // the teacher's edit, recoverable
+        Assert.Equal(Bytes(20, 2), rig.TeacherBin.Read(binned));
+    }
+
     // A file is pulled only while the teacher's disk keeps about 1 GB to spare after it.
     [Fact]
     public async Task APull_ThatWouldFillTheTeachersDisk_IsRefused_WithWhy()

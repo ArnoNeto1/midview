@@ -210,9 +210,12 @@ public static class ClassFolderClient
     // transfer) and sends it, as lastWriteTicks (UTC ticks) old, to the
     // current lesson's folder on the machine. The Session says whether it
     // takes the file before a byte is sent, and whether it saved it after.
+    // replacing: the version of the file at that path on the machine, as the
+    // listing the push was planned on showed it, or null when it showed none;
+    // the Session refuses to replace anything else ("mudou neste PC").
     public static (bool Succeeded, string Detail) Push(
         KnownMachine machine, X509Certificate2 masterCertificate, Guid lessonId, string path, string sourceFile,
-        long lastWriteTicks, int port = ConnectionClient.SessionPort)
+        long lastWriteTicks, FileVersion? replacing, int port = ConnectionClient.SessionPort)
     {
         FileStream file;
         try
@@ -235,7 +238,9 @@ public static class ClassFolderClient
             byte[] header;
             try
             {
-                header = ClassFolderWire.EncodePushHeader(lessonId, path, size, lastWriteTicks);
+                header = ClassFolderWire.EncodePushHeader(
+                    lessonId, path, size, lastWriteTicks,
+                    replacing is { } version ? (version.Size, version.LastWriteTicks) : null);
             }
             catch (ArgumentException)
             {
@@ -287,17 +292,25 @@ public static class ClassFolderClient
         int port = ConnectionClient.SessionPort) =>
         Command(machine, masterCertificate, MessageType.RenameClassFile, () => ClassFolderWire.EncodeRename(lessonId, path, newPath), port);
 
-    // The finished lesson's files were set aside on that machine and the
-    // Master has them now: the Session may drop them.
+    // These files of a finished lesson were set aside on that machine and the
+    // Master has dealt with them (they are in the class, or not the class's):
+    // the Session sends each to the student's Recycle Bin while it is still
+    // that version. At most ClassFolderWire.MaxEntries files in one call; the
+    // Session takes its time over them, one Recycle Bin move each.
     public static (bool Succeeded, string Detail) ClearSetAside(
-        KnownMachine machine, X509Certificate2 masterCertificate, Guid lessonId, int port = ConnectionClient.SessionPort) =>
-        Command(machine, masterCertificate, MessageType.ClearSetAside, () => ClassFolderWire.EncodeLessonId(lessonId), port);
+        KnownMachine machine, X509Certificate2 masterCertificate, Guid lessonId, IReadOnlyList<ClassFolderEntry> files,
+        int port = ConnectionClient.SessionPort) =>
+        Command(machine, masterCertificate, MessageType.ClearSetAside, () => ClassFolderWire.EncodeClearSetAside(lessonId, files),
+            port, ClearingTimeout);
+
+    private static readonly TimeSpan ClearingTimeout = TimeSpan.FromMinutes(2);
 
     // One request, one CommandResult; a Session from before the class folder
     // answers FrameTile, which SendCommandForResult words. A name the wire
     // can't carry never reaches the network.
     private static (bool Succeeded, string Detail) Command(
-        KnownMachine machine, X509Certificate2 masterCertificate, MessageType type, Func<byte[]> payload, int port)
+        KnownMachine machine, X509Certificate2 masterCertificate, MessageType type, Func<byte[]> payload, int port,
+        TimeSpan? timeout = null)
     {
         byte[] encoded;
         try
@@ -310,7 +323,7 @@ public static class ClassFolderClient
         }
 
         return CommandClient.SendCommandForResult(
-            machine.HostAddress, port, machine.SessionThumbprint, masterCertificate, type, encoded);
+            machine.HostAddress, port, machine.SessionThumbprint, masterCertificate, type, encoded, timeout);
     }
 
     // A CommandAck that has to say yes or no: anything else, or a no without

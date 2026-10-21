@@ -18,7 +18,8 @@ public sealed partial class ClassFolderSync
     // student's Recycle Bin. A lesson whose class is unknown or gone: the same.
     // Any other (it ended with the day, or the class was changed): each file the
     // class hasn't got comes in as a new file, and once all have, the PC clears
-    // them. "Hasn't got": not the same path at the same version in the class, nor
+    // them (those of this listing only: what it set aside since is for the next
+    // round). "Hasn't got": not the same path at the same version in the class, nor
     // a version remembered for the lesson (what the class and its PCs had when it
     // ended, ClassStore.RememberVersionsOf, and what any PC's set-aside files
     // brought in since), so the same file on 30 PCs comes in once, and one the
@@ -40,10 +41,25 @@ public sealed partial class ClassFolderSync
                 continue; // what is missing comes at a later round; nothing is cleared before
             }
 
-            var (cleared, why) = ClassFolderClient.ClearSetAside(machine, _masterCertificate, lessonId, _sessionPort);
+            ClearSetAside(machine, lessonId, files.ToList(), failures);
+        }
+    }
+
+    // How many set-aside files one ClearSetAside carries: the Session moves each to the
+    // Recycle Bin, which can take a moment per file on a lab PC's disk.
+    private const int ClearPartSize = 1_000;
+
+    // Exactly the files of the listing, so one the PC set aside after it waits for the next round.
+    private void ClearSetAside(KnownMachine machine, Guid lessonId, List<ClassFolderEntry> files, List<string> failures)
+    {
+        for (var start = 0; start < files.Count; start += ClearPartSize)
+        {
+            var part = files.GetRange(start, Math.Min(ClearPartSize, files.Count - start));
+            var (cleared, why) = ClassFolderClient.ClearSetAside(machine, _masterCertificate, lessonId, part, _sessionPort);
             if (!cleared)
             {
                 failures.Add($"arquivos de uma aula anterior ({why})");
+                return;
             }
         }
     }

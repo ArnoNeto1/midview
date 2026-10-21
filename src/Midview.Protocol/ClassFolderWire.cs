@@ -229,8 +229,14 @@ public static partial class ClassFolderWire
 
     // PushClassFile payload, ahead of the file's FileChunk messages: version,
     // lesson (16 bytes), path (a string), size (int64), last write time in
-    // DateTime ticks (int64), which the Session gives the file it writes.
-    public static byte[] EncodePushHeader(Guid lessonId, string path, long size, long lastWriteTicks)
+    // DateTime ticks (int64), which the Session gives the file it writes; then
+    // what the file may replace on the PC (replacing): one byte, 0 when the PC
+    // must have no file at that path, or 1 followed by the size (int64) and the
+    // last write time (int64) the PC's file must have. The Session refuses a
+    // push whose target isn't that any more (a student saved it meanwhile)
+    // rather than overwrite it, as it has no Recycle Bin for that.
+    public static byte[] EncodePushHeader(
+        Guid lessonId, string path, long size, long lastWriteTicks, (long Size, long LastWriteTicks)? replacing)
     {
         var writer = new Writer();
         writer.PutByte(FormatVersion);
@@ -238,22 +244,50 @@ public static partial class ClassFolderWire
         writer.PutPath(path);
         writer.PutInt64(CheckSize(size, nameof(size)));
         writer.PutInt64(CheckTicks(lastWriteTicks, nameof(lastWriteTicks)));
+        if (replacing is { } version)
+        {
+            writer.PutByte(1);
+            writer.PutInt64(CheckSize(version.Size, nameof(replacing)));
+            writer.PutInt64(CheckTicks(version.LastWriteTicks, nameof(replacing)));
+        }
+        else
+        {
+            writer.PutByte(0);
+        }
         return writer.ToArray();
     }
 
     public static bool TryDecodePushHeader(
-        byte[] payload, out Guid lessonId, out string path, out long size, out long lastWriteTicks)
+        byte[] payload, out Guid lessonId, out string path, out long size, out long lastWriteTicks,
+        out (long Size, long LastWriteTicks)? replacing)
     {
         lessonId = Guid.Empty;
         path = "";
         size = 0;
         lastWriteTicks = 0;
+        replacing = null;
 
         var reader = new Reader(payload);
         if (!reader.TryVersion() || !reader.TryGuid(out var decodedLesson) || !reader.TryPath(out var decodedPath)
             || !reader.TryInt64(out var decodedSize) || !IsSize(decodedSize)
             || !reader.TryInt64(out var decodedTicks) || !IsTicks(decodedTicks)
-            || !reader.AtEnd)
+            || !reader.TryByte(out var hasVersion) || hasVersion > 1)
+        {
+            return false;
+        }
+
+        (long, long)? decodedReplacing = null;
+        if (hasVersion == 1)
+        {
+            if (!reader.TryInt64(out var replacedSize) || !IsSize(replacedSize)
+                || !reader.TryInt64(out var replacedTicks) || !IsTicks(replacedTicks))
+            {
+                return false;
+            }
+            decodedReplacing = (replacedSize, replacedTicks);
+        }
+
+        if (!reader.AtEnd)
         {
             return false;
         }
@@ -262,29 +296,70 @@ public static partial class ClassFolderWire
         path = decodedPath;
         size = decodedSize;
         lastWriteTicks = decodedTicks;
+        replacing = decodedReplacing;
         return true;
     }
 
-    // ClearSetAside payload: version, lesson (16 bytes).
-    public static byte[] EncodeLessonId(Guid lessonId)
+    // ClearSetAside payload: version, lesson (16 bytes), the number of files
+    // (uint32, at most MaxEntries), then each file the Master has dealt with,
+    // as the listing showed it: path (a string), size (int64), last write time
+    // (int64). The Session recycles those files only, and only while they are
+    // still that version; files are the lesson's (ArgumentException otherwise).
+    public static byte[] EncodeClearSetAside(Guid lessonId, IReadOnlyList<ClassFolderEntry> files)
     {
+        if (files.Count > MaxEntries)
+        {
+            throw new ArgumentException($"A set-aside clearing has at most {MaxEntries} files.", nameof(files));
+        }
+
         var writer = new Writer();
         writer.PutByte(FormatVersion);
         writer.PutGuid(lessonId);
+        writer.PutUInt32((uint)files.Count);
+        foreach (var file in files)
+        {
+            if (file.LessonId != lessonId)
+            {
+                throw new ArgumentException("A file of another lesson can't be cleared with this one.", nameof(files));
+            }
+            writer.PutPath(file.Path);
+            writer.PutInt64(CheckSize(file.Size, nameof(files)));
+            writer.PutInt64(CheckTicks(file.LastWriteTicks, nameof(files)));
+        }
         return writer.ToArray();
     }
 
-    public static bool TryDecodeLessonId(byte[] payload, out Guid lessonId)
+    public static bool TryDecodeClearSetAside(byte[] payload, out Guid lessonId, out IReadOnlyList<ClassFolderEntry> files)
     {
         lessonId = Guid.Empty;
+        files = Array.Empty<ClassFolderEntry>();
 
         var reader = new Reader(payload);
-        if (!reader.TryVersion() || !reader.TryGuid(out var decodedLesson) || !reader.AtEnd)
+        if (!reader.TryVersion() || !reader.TryGuid(out var decodedLesson)
+            || !reader.TryUInt32(out var count) || count > MaxEntries)
+        {
+            return false;
+        }
+
+        var decoded = new List<ClassFolderEntry>((int)count);
+        for (var i = 0; i < count; i++)
+        {
+            if (!reader.TryPath(out var path)
+                || !reader.TryInt64(out var size) || !IsSize(size)
+                || !reader.TryInt64(out var ticks) || !IsTicks(ticks))
+            {
+                return false;
+            }
+            decoded.Add(new ClassFolderEntry(decodedLesson, path, size, ticks));
+        }
+
+        if (!reader.AtEnd)
         {
             return false;
         }
 
         lessonId = decodedLesson;
+        files = decoded;
         return true;
     }
 

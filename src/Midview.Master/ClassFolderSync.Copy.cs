@@ -24,7 +24,7 @@ public sealed partial class ClassFolderSync
         {
             why = action switch
             {
-                SyncAction.Push => Push(machine, lesson, key, action.Path),
+                SyncAction.Push => Push(machine, lesson, key, action.Path, onPc.TryGetValue(action.Path, out var there) ? there : null),
                 SyncAction.Pull pull => Pull(machine, lesson, key, action.Path, onPc[action.Path], pull.Replace),
                 SyncAction.PullAsNew => Pull(machine, lesson, key, action.Path, onPc[action.Path], replace: false),
                 SyncAction.DeleteOnPc => DeleteOnPc(machine, lesson, action.Path),
@@ -43,7 +43,10 @@ public sealed partial class ClassFolderSync
     }
 
     // The store's file as it is on the disk now, which is the version the PC ends up with.
-    private string? Push(KnownMachine machine, ClassLesson lesson, string key, string path)
+    // replacing: what the listing the plan was made on had at that path (null: nothing),
+    // the only thing the Session may replace: a student who saved the file since is
+    // refused the push ("mudou neste PC") and keeps their file, for the next round.
+    private string? Push(KnownMachine machine, ClassLesson lesson, string key, string path, FileVersion? replacing)
     {
         string full;
         FileVersion version;
@@ -63,7 +66,7 @@ public sealed partial class ClassFolderSync
         }
 
         var (pushed, why) = ClassFolderClient.Push(
-            machine, _masterCertificate, lesson.LessonId, path, full, version.LastWriteTicks, _sessionPort);
+            machine, _masterCertificate, lesson.LessonId, path, full, version.LastWriteTicks, replacing, _sessionPort);
         if (!pushed)
         {
             return why;

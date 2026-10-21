@@ -158,6 +158,10 @@ public sealed partial class ClassFolderSync : IDisposable
     // For the tests: called as a round with copying to do starts waiting for its turn.
     internal Action<KnownMachine>? WaitingForCopySlot { get; set; }
 
+    // For the tests: called once a round has its copy turn and its plan from a
+    // fresh listing, just before it copies anything.
+    internal Action<KnownMachine>? CopyingStarts { get; set; }
+
     // A new lesson of that class: saved, then sent to every PC's Agent at once,
     // with what each answered. The window only starts one with no lesson on
     // ("Trocar de turma…" ends the lesson first, with EndAsync). A lesson still

@@ -225,13 +225,15 @@ public enum MessageType : byte
     // the last and goes by nothing less. PullClassFile (a file reference) is
     // answered with SendFile and FileChunk messages and then one CommandAck,
     // as CollectFiles, or with one CommandAck alone saying why not.
-    // PushClassFile (a push header) is answered with one CommandAck accepting
+    // PushClassFile (a push header, with the state of the file it may
+    // replace: none, or a version) is answered with one CommandAck accepting
     // or refusing, then takes FileChunk messages until that many bytes have
     // arrived and ends with one CommandAck saying whether it was saved, as
-    // SendFile. DeleteClassFile (a file reference), RenameClassFile (a
-    // rename) and ClearSetAside (a lesson id: empty what was set aside for
-    // that lesson) are each answered with one CommandAck carrying a
-    // CommandResult. A Session from before this answers FrameTile, which the
+    // SendFile; the file on the PC no longer in that state is refused ("mudou
+    // neste PC"). DeleteClassFile (a file reference), RenameClassFile (a
+    // rename) and ClearSetAside (a lesson and the set-aside files of it the
+    // Master has dealt with: those go to the Recycle Bin) are each answered
+    // with one CommandAck carrying a CommandResult. A Session from before this answers FrameTile, which the
     // Master shows as "Midview antigo".
     ListClassFolder = 68,
     ClassFolderListing = 69,

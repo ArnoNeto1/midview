@@ -15,7 +15,7 @@ public partial class ClassFolderTests
         var target = Path.Combine(folder, "notas.txt");
         var ticks = new DateTime(2025, 3, 14, 9, 26, 53, DateTimeKind.Utc).AddTicks(1234567).Ticks;
 
-        using (var incoming = NewClassFolder().BeginPush(LessonId, "notas.txt"))
+        using (var incoming = NewClassFolder().BeginPush(LessonId, "notas.txt", null))
         {
             incoming.Write("olá "u8);
             incoming.Write("mundo"u8);
@@ -39,7 +39,7 @@ public partial class ClassFolderTests
     {
         var folder = MakeLessonFolder();
 
-        using (var incoming = NewClassFolder().BeginPush(LessonId, "site/imagens/logo.png"))
+        using (var incoming = NewClassFolder().BeginPush(LessonId, "site/imagens/logo.png", null))
         {
             incoming.Write(new byte[] { 1, 2, 3 });
             incoming.Complete(DateTime.UtcNow.Ticks);
@@ -58,7 +58,7 @@ public partial class ClassFolderTests
 
         foreach (var other in new[] { Guid.NewGuid(), aside, Guid.Empty })
         {
-            var refusal = Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(other, "x.txt"));
+            var refusal = Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(other, "x.txt", null));
             Assert.Equal("aula diferente", refusal.Message);
         }
         Assert.Empty(Directory.GetFileSystemEntries(folder));
@@ -72,14 +72,14 @@ public partial class ClassFolderTests
         var id = LessonId;
         _lesson = _lesson! with { Ended = true };
 
-        Assert.Equal("aula diferente", Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(id, "x.txt")).Message);
+        Assert.Equal("aula diferente", Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(id, "x.txt", null)).Message);
     }
 
     // The Agent makes and protects the folder; the Session doesn't make one the student owns.
     [Fact]
     public void BeginPush_WithoutTheLessonFolder_Throws()
     {
-        var refusal = Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "x.txt"));
+        var refusal = Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "x.txt", null));
 
         Assert.Equal("sem pasta", refusal.Message);
         Assert.False(Directory.Exists(LessonFolder));
@@ -90,7 +90,7 @@ public partial class ClassFolderTests
     {
         var folder = MakeLessonFolder();
 
-        using (var incoming = NewClassFolder().BeginPush(LessonId, "../../x.txt"))
+        using (var incoming = NewClassFolder().BeginPush(LessonId, "../../x.txt", null))
         {
             incoming.Write(new byte[] { 7 });
             incoming.Complete(DateTime.UtcNow.Ticks);
@@ -107,7 +107,7 @@ public partial class ClassFolderTests
         var folder = MakeLessonFolder();
         MakeJunction(Path.Combine(folder, "atalho"), _outside);
 
-        Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "atalho/novo.txt"));
+        Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "atalho/novo.txt", null));
 
         Assert.Empty(Directory.GetFileSystemEntries(_outside));
     }
@@ -118,19 +118,26 @@ public partial class ClassFolderTests
         var folder = MakeLessonFolder();
         Directory.CreateDirectory(Path.Combine(folder, "trabalhos"));
 
-        Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "trabalhos"));
+        Assert.Throws<InvalidOperationException>(() => NewClassFolder().BeginPush(LessonId, "trabalhos", null));
 
         Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(folder, "trabalhos")));
     }
 
+    // The version of a file as a listing shows it.
+    private static (long Size, long LastWriteTicks) VersionOf(string path)
+    {
+        var file = new FileInfo(path);
+        return (file.Length, file.LastWriteTimeUtc.Ticks);
+    }
+
     [Fact]
-    public void Complete_ReplacesAFileThatIsThere()
+    public void Complete_ReplacesTheVersionTheMasterSaw()
     {
         var folder = MakeLessonFolder();
         var target = Write(folder, "trabalho.docx", "antigo");
         var ticks = new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc).Ticks;
 
-        using (var incoming = NewClassFolder().BeginPush(LessonId, "trabalho.docx"))
+        using (var incoming = NewClassFolder().BeginPush(LessonId, "trabalho.docx", VersionOf(target)))
         {
             incoming.Write("novo"u8);
             incoming.Complete(ticks);
@@ -138,6 +145,62 @@ public partial class ClassFolderTests
 
         Assert.Equal("novo", File.ReadAllText(target));
         Assert.Equal(ticks, File.GetLastWriteTimeUtc(target).Ticks);
+        Assert.Equal(new[] { target }, Directory.GetFiles(folder));
+    }
+
+    // A push never overwrites what the Master didn't see: the Session has no Recycle Bin for it.
+    [Fact]
+    public void BeginPush_WhenTheFileIsNotWhatTheMasterSaw_IsRefused()
+    {
+        var folder = MakeLessonFolder();
+        var target = Write(folder, "trabalho.docx", "do aluno");
+        var seen = VersionOf(target);
+        var classFolder = NewClassFolder();
+
+        foreach (var replacing in new (long, long)?[] { null, (seen.Size + 1, seen.LastWriteTicks), (seen.Size, seen.LastWriteTicks + 1) })
+        {
+            var refusal = Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(LessonId, "trabalho.docx", replacing));
+            Assert.Equal("mudou neste PC", refusal.Message);
+        }
+        var gone = Assert.Throws<InvalidOperationException>(() => classFolder.BeginPush(LessonId, "sumiu.docx", seen));
+        Assert.Equal("mudou neste PC", gone.Message);
+
+        Assert.Equal(new[] { target }, Directory.GetFiles(folder));
+        Assert.Equal("do aluno", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public void Complete_OntoAFileSavedSinceTheListing_IsRefused_AndKeepsTheStudentsFile()
+    {
+        var folder = MakeLessonFolder();
+        var target = Path.Combine(folder, "novo.docx");
+        var incoming = NewClassFolder().BeginPush(LessonId, "novo.docx", null);
+        incoming.Write("do professor"u8);
+
+        File.WriteAllText(target, "do aluno"); // saved while the push came in
+        var refusal = Assert.Throws<InvalidOperationException>(() => incoming.Complete(DateTime.UtcNow.Ticks));
+        incoming.Dispose();
+
+        Assert.Equal("mudou neste PC", refusal.Message);
+        Assert.Equal("do aluno", File.ReadAllText(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(folder));
+    }
+
+    [Fact]
+    public void Complete_OntoAFileChangedSinceTheListing_IsRefused_AndKeepsTheStudentsFile()
+    {
+        var folder = MakeLessonFolder();
+        var target = Write(folder, "trabalho.docx", "antigo");
+        File.SetLastWriteTimeUtc(target, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var incoming = NewClassFolder().BeginPush(LessonId, "trabalho.docx", VersionOf(target));
+        incoming.Write("do professor"u8);
+
+        File.WriteAllText(target, "editado pelo aluno");
+        var refusal = Assert.Throws<InvalidOperationException>(() => incoming.Complete(DateTime.UtcNow.Ticks));
+        incoming.Dispose();
+
+        Assert.Equal("mudou neste PC", refusal.Message);
+        Assert.Equal("editado pelo aluno", File.ReadAllText(target));
         Assert.Equal(new[] { target }, Directory.GetFiles(folder));
     }
 
@@ -159,7 +222,7 @@ public partial class ClassFolderTests
     {
         var folder = MakeLessonFolder();
         var target = Write(folder, "aberto.docx", "antigo");
-        var incoming = NewClassFolder().BeginPush(LessonId, "aberto.docx");
+        var incoming = NewClassFolder().BeginPush(LessonId, "aberto.docx", VersionOf(target));
         incoming.Write("novo"u8);
 
         using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -178,7 +241,7 @@ public partial class ClassFolderTests
     {
         var folder = MakeLessonFolder();
 
-        using (var incoming = NewClassFolder().BeginPush(LessonId, "pela-metade.zip"))
+        using (var incoming = NewClassFolder().BeginPush(LessonId, "pela-metade.zip", null))
         {
             incoming.Write(new byte[] { 1, 2, 3 });
         }
@@ -296,29 +359,61 @@ public partial class ClassFolderTests
         Assert.True(File.Exists(Path.Combine(folder, "a.txt")));
     }
 
+    // The set-aside files the Master has dealt with, as its listing showed them.
+    private ClassFolderEntry[] Handled(Guid lessonId, params string[] files) =>
+        files.Select(file =>
+        {
+            var (size, ticks) = VersionOf(file);
+            var path = Path.GetRelativePath(SetAsideFolder(lessonId), file).Replace('\\', '/');
+            return new ClassFolderEntry(lessonId, path, size, ticks);
+        }).ToArray();
+
     [Fact]
-    public void ClearSetAside_RecyclesThatLessonOnly()
+    public void ClearSetAside_RecyclesThatLessonOnly_AndTheFolderOnceEmpty()
     {
         var folder = MakeLessonFolder();
         Write(folder, "agora.txt");
         var gone = Guid.NewGuid();
         var kept = Guid.NewGuid();
-        Write(SetAsideFolder(gone), "sub/a.txt");
+        var a = Write(SetAsideFolder(gone), "sub/a.txt");
+        var c = Write(SetAsideFolder(gone), "c.txt");
         Write(SetAsideFolder(kept), "b.txt");
 
-        var (ok, detail) = NewClassFolder().ClearSetAside(gone);
+        var (ok, detail) = NewClassFolder().ClearSetAside(gone, Handled(gone, a, c));
 
         Assert.True(ok, detail);
-        Assert.Equal(new[] { SetAsideFolder(gone) }, _bin.Recycled);
+        Assert.Equal(new[] { a, c }.Order(), _bin.Recycled.Order());
         Assert.False(Directory.Exists(SetAsideFolder(gone)));
         Assert.True(File.Exists(Path.Combine(SetAsideFolder(kept), "b.txt")));
         Assert.True(File.Exists(Path.Combine(folder, "agora.txt")));
     }
 
+    // Only what the Master dealt with: a file set aside after its listing, or changed since, stays for the next round.
+    [Fact]
+    public void ClearSetAside_LeavesWhatTheMasterDidNotDealWith()
+    {
+        MakeLessonFolder();
+        var aside = Guid.NewGuid();
+        var dealt = Write(SetAsideFolder(aside), "a.txt", "A");
+        var changed = Write(SetAsideFolder(aside), "b.txt", "B");
+        var handled = Handled(aside, dealt, changed);
+        File.WriteAllText(changed, "B, de novo");
+        var later = Write(SetAsideFolder(aside), "sub/depois.txt", "D");
+
+        var (ok, detail) = NewClassFolder().ClearSetAside(aside, handled);
+
+        Assert.True(ok, detail);
+        Assert.Equal(new[] { dealt }, _bin.Recycled);
+        Assert.Equal("B, de novo", File.ReadAllText(changed));
+        Assert.Equal("D", File.ReadAllText(later));
+        var (_, _, entries) = NewClassFolder().List();
+        Assert.Equal(new[] { "b.txt", "sub/depois.txt" }, entries.Where(entry => entry.LessonId == aside).Select(entry => entry.Path));
+    }
+
     [Fact]
     public void ClearSetAside_WithNothingSetAside_IsOk()
     {
-        var (ok, detail) = NewClassFolder().ClearSetAside(Guid.NewGuid());
+        var (ok, detail) = NewClassFolder().ClearSetAside(Guid.NewGuid(), Array.Empty<ClassFolderEntry>());
 
         Assert.True(ok, detail);
         Assert.Empty(_bin.Recycled);
@@ -328,29 +423,51 @@ public partial class ClassFolderTests
     public void ClearSetAside_WhenTheBinRefuses_ReportsWhy()
     {
         var aside = Guid.NewGuid();
-        Write(SetAsideFolder(aside), "a.txt");
+        var a = Write(SetAsideFolder(aside), "a.txt");
+        var b = Write(SetAsideFolder(aside), "b.txt");
         _bin.Refuse = new UnauthorizedAccessException();
 
-        var (ok, detail) = NewClassFolder().ClearSetAside(aside);
+        var (ok, detail) = NewClassFolder().ClearSetAside(aside, Handled(aside, a, b));
 
         Assert.False(ok);
-        Assert.Equal("acesso negado", detail);
-        Assert.True(Directory.Exists(SetAsideFolder(aside)));
+        Assert.Equal("a.txt (acesso negado) e mais 1", detail);
+        Assert.True(File.Exists(a));
+        Assert.True(File.Exists(b));
     }
 
     [Fact]
     public void ClearSetAside_OfALinkedFolder_LeavesItAlone()
     {
         var aside = Guid.NewGuid();
-        Write(_outside, "segredo.txt");
+        var secret = Write(_outside, "segredo.txt");
         Directory.CreateDirectory(_setAside);
         MakeJunction(SetAsideFolder(aside), _outside);
 
-        var (ok, _) = NewClassFolder().ClearSetAside(aside);
+        var (ok, _) = NewClassFolder().ClearSetAside(aside, new[] { new ClassFolderEntry(aside, "segredo.txt", 1, File.GetLastWriteTimeUtc(secret).Ticks) });
 
         Assert.False(ok);
         Assert.Empty(_bin.Recycled);
-        Assert.True(File.Exists(Path.Combine(_outside, "segredo.txt")));
+        Assert.True(File.Exists(secret));
+    }
+
+    [Fact]
+    public void ClearSetAside_NeverGoesThroughALinkInsideTheFolder()
+    {
+        var aside = Guid.NewGuid();
+        var secret = Write(_outside, "segredo.txt");
+        Directory.CreateDirectory(SetAsideFolder(aside));
+        MakeJunction(Path.Combine(SetAsideFolder(aside), "atalho"), _outside);
+        var (size, ticks) = VersionOf(secret);
+
+        var (ok, detail) = NewClassFolder().ClearSetAside(aside, new[]
+        {
+            new ClassFolderEntry(aside, "atalho/segredo.txt", size, ticks),
+            new ClassFolderEntry(aside, "../../fora/segredo.txt", size, ticks),
+        });
+
+        Assert.True(ok, detail);
+        Assert.Empty(_bin.Recycled);
+        Assert.True(File.Exists(secret));
     }
 
     // Follow: the Session noticing that the lesson changed.

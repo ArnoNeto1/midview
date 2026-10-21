@@ -102,6 +102,7 @@ public sealed partial class ClassFolderSync
             var aside = SetAsideOf(fresh, lesson);
             left = await Task.Run(() =>
             {
+                CopyingStarts?.Invoke(machine);
                 var done = 0;
                 foreach (var action in second.Work)
                 {

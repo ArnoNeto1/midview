@@ -62,8 +62,8 @@ public sealed partial class SessionServer
                     : (false, invalid);
 
             default:
-                return ClassFolderWire.TryDecodeLessonId(message.Payload, out var finishedLesson)
-                    ? _classFolder!.ClearSetAside(finishedLesson)
+                return ClassFolderWire.TryDecodeClearSetAside(message.Payload, out var finishedLesson, out var handled)
+                    ? _classFolder!.ClearSetAside(finishedLesson, handled)
                     : (false, invalid);
         }
     }
@@ -135,7 +135,8 @@ public sealed partial class SessionServer
     // saving it ended. Only the lesson that is on takes files (BeginPush).
     private void ReceiveClassFile(SecureChannel channel, byte[] header)
     {
-        if (!ClassFolderWire.TryDecodePushHeader(header, out var lessonId, out var path, out var size, out var lastWriteTicks))
+        if (!ClassFolderWire.TryDecodePushHeader(header, out var lessonId, out var path, out var size, out var lastWriteTicks,
+            out var replacing))
         {
             SendResult(channel, false, "pedido de envio inválido");
             return;
@@ -145,7 +146,7 @@ public sealed partial class SessionServer
         string? refusal;
         try
         {
-            incoming = _classFolder!.BeginPush(lessonId, path);
+            incoming = _classFolder!.BeginPush(lessonId, path, replacing);
             refusal = _classFolder.RefusalFor(size);
             if (refusal is not null)
             {
@@ -204,6 +205,11 @@ public sealed partial class SessionServer
             {
                 // A time the wire format can say and Windows can't store (before 1601).
                 return (false, "não foi possível salvar o arquivo: a data do arquivo não pode ser guardada");
+            }
+            catch (InvalidOperationException ex)
+            {
+                // The file there isn't what the Master expected to replace ("mudou neste PC").
+                return (false, ex.Message);
             }
             return (true, string.Empty);
         }

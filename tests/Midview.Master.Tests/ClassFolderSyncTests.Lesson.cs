@@ -179,6 +179,42 @@ public sealed partial class ClassFolderSyncTests
         Assert.Contains("offline.txt", pc3.Bin.FileNames()); // its own Recycle Bin, never the class
     }
 
+    // What the PC sets aside after the listing the Master went by is not cleared with the rest:
+    // the Master hasn't seen it. It is dealt with at the next round.
+    [Fact]
+    public async Task ClearingSetAsideFiles_LeavesOneSetAsideAfterTheListing()
+    {
+        using var rig = new ClassSyncRig();
+        var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        var lessonA = sync.Lesson;
+        foreach (var pc in rig.Pcs)
+        {
+            pc.Follow();
+        }
+        var pc3 = rig.Pcs[2];
+        rig.Offline[pc3.Name] = true;
+        pc3.Write("offline.txt", Bytes(10, 1), Utc(1));
+        await sync.EndAsync(EndChoice.Keep);
+        pc3.Follow();
+        await sync.StartAsync("3º B");
+        rig.Offline.TryRemove(pc3.Name, out _);
+        var late = Path.Combine(pc3.Root, "guardada", lessonA.LessonId.ToString("N"), "tarde.txt");
+        sync.CopyingStarts = _ => ClassSyncRig.WriteFile(late, Bytes(10, 2), Utc(2));
+
+        await sync.RunRoundAsync(pc3.Machine, CancellationToken.None);
+
+        Assert.Equal(new[] { "tarde.txt" }, pc3.Folder.List().Entries.Where(entry => entry.LessonId == lessonA.LessonId).Select(entry => entry.Path));
+        Assert.Contains("offline.txt", pc3.Bin.FileNames());
+
+        sync.CopyingStarts = null;
+        await sync.RunRoundAsync(pc3.Machine, CancellationToken.None);
+
+        Assert.DoesNotContain(pc3.Folder.List().Entries, entry => entry.LessonId == lessonA.LessonId);
+        Assert.Contains("tarde.txt", pc3.Bin.FileNames());
+        Assert.Empty(rig.StoreFiles(Turma));
+    }
+
     [Fact]
     public void ALessonFromYesterday_IsEndedKeepingFilesOnStart()
     {

@@ -3,7 +3,7 @@ using System.Text;
 using Midview.Protocol;
 using Xunit;
 
-public class ClassFolderWireTests
+public partial class ClassFolderWireTests
 {
     private static readonly Guid Lesson = Guid.Parse("6f9619ff-8b86-d011-b42d-00c04fc964ff");
     private static readonly Guid Earlier = Guid.Parse("a1b2c3d4-0000-4000-8000-0123456789ab");
@@ -340,69 +340,6 @@ public class ClassFolderWireTests
     }
 
     [Fact]
-    public void PushHeader_RoundTrips()
-    {
-        var payload = ClassFolderWire.EncodePushHeader(Lesson, MapPath, 123_456_789, 638_000_000_000_000_000);
-
-        Assert.True(ClassFolderWire.TryDecodePushHeader(payload, out var lessonId, out var path, out var size, out var ticks));
-        Assert.Equal(Lesson, lessonId);
-        Assert.Equal(MapPath, path);
-        Assert.Equal(123_456_789, size);
-        Assert.Equal(638_000_000_000_000_000, ticks);
-    }
-
-    [Fact]
-    public void PushHeader_EmptyFileIsAllowed()
-    {
-        var payload = ClassFolderWire.EncodePushHeader(Lesson, "vazio.txt", 0, 0);
-
-        Assert.True(ClassFolderWire.TryDecodePushHeader(payload, out _, out _, out var size, out _));
-        Assert.Equal(0, size);
-    }
-
-    [Theory]
-    [InlineData(-1L)]
-    [InlineData(FileTransfer.MaxFileSize + 1)]
-    public void TryDecodePushHeader_RejectsSizeOverMaxFileSize(long size)
-    {
-        var payload = ClassFolderWire.EncodePushHeader(Lesson, MapPath, 10, 10);
-        var sizeOffset = 1 + 16 + 2 + Encoding.UTF8.GetByteCount(MapPath);
-        BinaryPrimitives.WriteInt64BigEndian(payload.AsSpan(sizeOffset), size);
-
-        Assert.False(ClassFolderWire.TryDecodePushHeader(payload, out _, out _, out _, out _));
-    }
-
-    [Fact]
-    public void TryDecodePushHeader_AcceptsExactlyMaxFileSize()
-    {
-        var payload = ClassFolderWire.EncodePushHeader(Lesson, MapPath, FileTransfer.MaxFileSize, 10);
-
-        Assert.True(ClassFolderWire.TryDecodePushHeader(payload, out _, out _, out var size, out _));
-        Assert.Equal(FileTransfer.MaxFileSize, size);
-    }
-
-    [Theory]
-    [InlineData(-1L)]
-    [InlineData(long.MaxValue)]
-    public void TryDecodePushHeader_RejectsLastWriteTicksThatAreNotADate(long ticks)
-    {
-        var payload = ClassFolderWire.EncodePushHeader(Lesson, MapPath, 10, 10);
-        BinaryPrimitives.WriteInt64BigEndian(payload.AsSpan(payload.Length - 8), ticks);
-
-        Assert.False(ClassFolderWire.TryDecodePushHeader(payload, out _, out _, out _, out _));
-    }
-
-    [Fact]
-    public void LessonId_RoundTrips()
-    {
-        var payload = ClassFolderWire.EncodeLessonId(Lesson);
-
-        Assert.Equal(17, payload.Length);
-        Assert.True(ClassFolderWire.TryDecodeLessonId(payload, out var lessonId));
-        Assert.Equal(Lesson, lessonId);
-    }
-
-    [Fact]
     public void TryDecodeFileRef_RejectsTruncatedPayload()
     {
         var payload = ClassFolderWire.EncodeFileRef(Lesson, MapPath);
@@ -430,12 +367,18 @@ public class ClassFolderWireTests
         yield return ("rename",
             ClassFolderWire.EncodeRename(Lesson, MapPath, "novo.png"),
             p => ClassFolderWire.TryDecodeRename(p, out _, out _, out _));
-        yield return ("push header",
-            ClassFolderWire.EncodePushHeader(Lesson, MapPath, 10, 10),
-            p => ClassFolderWire.TryDecodePushHeader(p, out _, out _, out _, out _));
-        yield return ("lesson id",
-            ClassFolderWire.EncodeLessonId(Lesson),
-            p => ClassFolderWire.TryDecodeLessonId(p, out _));
+        yield return ("push header onto nothing",
+            ClassFolderWire.EncodePushHeader(Lesson, MapPath, 10, 10, replacing: null),
+            p => ClassFolderWire.TryDecodePushHeader(p, out _, out _, out _, out _, out _));
+        yield return ("push header onto a version",
+            ClassFolderWire.EncodePushHeader(Lesson, MapPath, 10, 10, replacing: (5, 6)),
+            p => ClassFolderWire.TryDecodePushHeader(p, out _, out _, out _, out _, out _));
+        yield return ("clear set-aside",
+            ClassFolderWire.EncodeClearSetAside(Lesson, Entries.Where(entry => entry.LessonId == Lesson).ToArray()),
+            p => ClassFolderWire.TryDecodeClearSetAside(p, out _, out _));
+        yield return ("clear set-aside, nothing",
+            ClassFolderWire.EncodeClearSetAside(Lesson, Array.Empty<ClassFolderEntry>()),
+            p => ClassFolderWire.TryDecodeClearSetAside(p, out _, out _));
     }
 
     [Fact]
@@ -495,7 +438,7 @@ public class ClassFolderWireTests
         Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeFileRef(Lesson, ""));
         Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeRename(Lesson, MapPath, tooLong));
         Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeRename(Lesson, "  ", "novo.png"));
-        Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodePushHeader(Lesson, tooLong, 1, 1));
+        Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodePushHeader(Lesson, tooLong, 1, 1, null));
         Assert.Throws<ArgumentException>(() => ClassFolderWire.EncodeListing(
             Lesson, null, new[] { new ClassFolderEntry(Lesson, tooLong, 1, 1) }));
     }
@@ -503,9 +446,9 @@ public class ClassFolderWireTests
     [Fact]
     public void Encoders_RefuseASizeOrDateTheDecodersWouldRefuse()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, -1, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, FileTransfer.MaxFileSize + 1, 1));
-        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, 1, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, -1, 1, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, FileTransfer.MaxFileSize + 1, 1, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodePushHeader(Lesson, MapPath, 1, -1, null));
         Assert.Throws<ArgumentOutOfRangeException>(() => ClassFolderWire.EncodeListing(
             Lesson, null, new[] { new ClassFolderEntry(Lesson, MapPath, FileTransfer.MaxFileSize + 1, 1) }));
     }

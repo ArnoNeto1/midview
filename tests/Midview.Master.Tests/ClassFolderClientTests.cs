@@ -119,7 +119,7 @@ public sealed class ClassFolderClientTests : IDisposable
         File.WriteAllBytes(source, big);
         var time = new DateTime(2026, 3, 4, 10, 20, 30, DateTimeKind.Utc).Ticks;
         var pushed = await Run(() => ClassFolderClient.Push(
-            rig.Machine, _masterCert, rig.LessonId, "novas/copia.bin", source, time, rig.Port));
+            rig.Machine, _masterCert, rig.LessonId, "novas/copia.bin", source, time, null, rig.Port));
         Assert.Equal((true, string.Empty), pushed);
         Assert.Equal(big, File.ReadAllBytes(rig.LessonPath("novas/copia.bin")));
         Assert.Equal(time, File.GetLastWriteTimeUtc(rig.LessonPath("novas/copia.bin")).Ticks);
@@ -136,7 +136,8 @@ public sealed class ClassFolderClientTests : IDisposable
         Assert.Single(Directory.GetFileSystemEntries(rig.BinFolder));
 
         // ClearSetAside: the finished lesson's files are gone from the next listing.
-        var cleared = await Run(() => ClassFolderClient.ClearSetAside(rig.Machine, _masterCert, finished, rig.Port));
+        var setAside = listing.Entries.Where(e => e.LessonId == finished).ToArray();
+        var cleared = await Run(() => ClassFolderClient.ClearSetAside(rig.Machine, _masterCert, finished, setAside, rig.Port));
         Assert.Equal((true, string.Empty), cleared);
         var after = await Run(() => ClassFolderClient.List(rig.Machine, _masterCert, rig.Port));
         Assert.DoesNotContain(after.Entries, e => e.LessonId == finished);
@@ -154,7 +155,7 @@ public sealed class ClassFolderClientTests : IDisposable
         var other = Guid.NewGuid();
 
         // Only the lesson that is on takes files.
-        var push = await Run(() => ClassFolderClient.Push(rig.Machine, _masterCert, other, "x.txt", source, DateTime.UtcNow.Ticks, rig.Port));
+        var push = await Run(() => ClassFolderClient.Push(rig.Machine, _masterCert, other, "x.txt", source, DateTime.UtcNow.Ticks, null, rig.Port));
         Assert.Equal((false, "aula diferente"), push);
         Assert.False(File.Exists(rig.LessonPath("x.txt")));
 
@@ -179,7 +180,7 @@ public sealed class ClassFolderClientTests : IDisposable
         var missing = Path.Combine(Path.GetTempPath(), $"midview-nada-{Guid.NewGuid():N}.txt");
 
         var (succeeded, detail) = await Run(() => ClassFolderClient.Push(
-            machine, _masterCert, Guid.NewGuid(), "a.txt", missing, DateTime.UtcNow.Ticks, 1));
+            machine, _masterCert, Guid.NewGuid(), "a.txt", missing, DateTime.UtcNow.Ticks, null, 1));
 
         Assert.False(succeeded);
         Assert.NotEmpty(detail);

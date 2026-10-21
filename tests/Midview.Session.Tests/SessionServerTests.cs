@@ -1778,7 +1778,7 @@ public class SessionServerTests
 
         using (var teacher = harness.ConnectMaster())
         {
-            var (_, result) = await Task.Run(() => teacher.PushClassFile(rig.LessonId, "trabalho.txt", new byte[] { 2 }, when))
+            var (_, result) = await Task.Run(() => teacher.PushClassFile(rig.LessonId, "trabalho.txt", new byte[] { 2 }, when, VersionOf(older)))
                 .WaitAsync(TimeSpan.FromSeconds(10));
             Assert.True(result.Succeeded);
         }
@@ -1792,6 +1792,29 @@ public class SessionServerTests
         Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(older));
         Assert.Equal(when, File.GetLastWriteTimeUtc(older).Ticks);
         Assert.Empty(File.ReadAllBytes(rig.PathIn("vazio.txt")));
+    }
+
+    // A push never lands on a file the Master didn't see there: the student may have just saved it.
+    [Fact]
+    public async Task PushClassFile_OntoAFileTheMasterDidNotSee_IsRefused_AndLeavesIt()
+    {
+        using var rig = new ClassFolderRig();
+        var target = WriteAndReturn(rig, "trabalho.txt", "do aluno"u8.ToArray());
+        var (size, ticks) = VersionOf(target);
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+
+        foreach (var replacing in new (long, long)?[] { null, (size + 1, ticks) })
+        {
+            using var teacher = harness.ConnectMaster();
+            var (accepted, _) = await Task.Run(
+                () => teacher.PushClassFile(rig.LessonId, "trabalho.txt", new byte[] { 1 }, DateTime.UtcNow.Ticks, replacing))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal((false, "mudou neste PC"), accepted);
+        }
+
+        Assert.Equal("do aluno", File.ReadAllText(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(rig.LessonFolder));
     }
 
     [Fact]
@@ -1841,7 +1864,7 @@ public class SessionServerTests
         using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
         {
             var (accepted, result) = await Task.Run(
-                () => teacher.PushClassFile(rig.LessonId, "aberto.docx", "novo"u8.ToArray(), DateTime.UtcNow.Ticks))
+                () => teacher.PushClassFile(rig.LessonId, "aberto.docx", "novo"u8.ToArray(), DateTime.UtcNow.Ticks, VersionOf(target)))
                 .WaitAsync(TimeSpan.FromSeconds(10));
 
             Assert.True(accepted.Succeeded);
@@ -1860,7 +1883,7 @@ public class SessionServerTests
         using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
         using var teacher = harness.ConnectMaster();
         teacher.Channel.Send(new Message(
-            MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(rig.LessonId, "a.txt", 10, DateTime.UtcNow.Ticks)));
+            MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(rig.LessonId, "a.txt", 10, DateTime.UtcNow.Ticks, null)));
         Assert.True(CommandResult.Decode(teacher.Channel.Receive().Payload).Succeeded);
 
         teacher.Channel.Send(new Message(MessageType.FileChunk, new byte[20])); // more than it said
@@ -1896,6 +1919,8 @@ public class SessionServerTests
         WriteFile(rig.LessonFolder, "ocupado.txt", new byte[] { 3 });
         var finished = Guid.NewGuid();
         WriteFile(rig.SetAsideFolder(finished), "guardado.txt", new byte[] { 4 });
+        var (size, ticks) = VersionOf(Path.Combine(rig.SetAsideFolder(finished), "guardado.txt"));
+        var handled = new[] { new ClassFolderEntry(finished, "guardado.txt", size, ticks) };
         using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
 
         (bool Succeeded, string Detail) Ask(MessageType type, byte[] payload)
@@ -1913,9 +1938,9 @@ public class SessionServerTests
             .WaitAsync(TimeSpan.FromSeconds(10));
         var taken = await Task.Run(() => Ask(MessageType.RenameClassFile, ClassFolderWire.EncodeRename(rig.LessonId, "ocupado.txt", "novo.txt")))
             .WaitAsync(TimeSpan.FromSeconds(10));
-        var cleared = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(finished)))
+        var cleared = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeClearSetAside(finished, handled)))
             .WaitAsync(TimeSpan.FromSeconds(10));
-        var clearedAgain = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(finished)))
+        var clearedAgain = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeClearSetAside(finished, handled)))
             .WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal((true, string.Empty), deleted);
@@ -1980,10 +2005,10 @@ public class SessionServerTests
         {
             (MessageType.ListClassFolder, Array.Empty<byte>()),
             (MessageType.PullClassFile, ClassFolderWire.EncodeFileRef(lessonId, "a.txt")),
-            (MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, "a.txt", 1, DateTime.UtcNow.Ticks)),
+            (MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, "a.txt", 1, DateTime.UtcNow.Ticks, null)),
             (MessageType.DeleteClassFile, ClassFolderWire.EncodeFileRef(lessonId, "a.txt")),
             (MessageType.RenameClassFile, ClassFolderWire.EncodeRename(lessonId, "a.txt", "b.txt")),
-            (MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(lessonId)),
+            (MessageType.ClearSetAside, ClassFolderWire.EncodeClearSetAside(lessonId, Array.Empty<ClassFolderEntry>())),
         };
 
         foreach (var (type, payload) in requests)
@@ -1993,6 +2018,12 @@ public class SessionServerTests
 
             Assert.Equal((false, "esta máquina não tem pasta da turma"), result);
         }
+    }
+
+    private static (long Size, long LastWriteTicks) VersionOf(string path)
+    {
+        var file = new FileInfo(path);
+        return (file.Length, file.LastWriteTimeUtc.Ticks);
     }
 
     private static string WriteAndReturn(ClassFolderRig rig, string relativePath, byte[] content)
@@ -2285,12 +2316,13 @@ public class SessionServerTests
         }
 
         // Accepted or refused first, then (if accepted) how saving it ended; a
-        // refusal has no second answer (Result is default).
+        // refusal has no second answer (Result is default). replacing: the
+        // version of the file at that path the push may replace (none: null).
         public ((bool Succeeded, string Detail) Accepted, (bool Succeeded, string Detail) Result) PushClassFile(
-            Guid lessonId, string path, byte[] content, long lastWriteTicks)
+            Guid lessonId, string path, byte[] content, long lastWriteTicks, (long Size, long LastWriteTicks)? replacing = null)
         {
             Channel.Send(new Message(
-                MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, path, content.Length, lastWriteTicks)));
+                MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, path, content.Length, lastWriteTicks, replacing)));
             var accepted = CommandResult.Decode(Channel.Receive().Payload);
             if (!accepted.Succeeded)
             {

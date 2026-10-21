@@ -129,7 +129,14 @@ public sealed partial class ClassFolder
     // teacher ("aula diferente" for a lesson that isn't the current one,
     // "sem pasta" when the Agent hasn't made the folder, a link on the way, a
     // folder where the file would go); IO errors come as IOException.
-    public ClassFolderIncoming BeginPush(Guid lessonId, string relativePath)
+    //
+    // replacing: the version of the file at that path the push may replace, as
+    // the Master's listing showed it, or null when the listing had none there.
+    // A push can't send the student's file to the Recycle Bin, so a file that
+    // isn't that any more (the student saved it since) is refused, "mudou neste
+    // PC", here and again just before the new one goes into place (Complete);
+    // the Master's next round plans with what is there then.
+    public ClassFolderIncoming BeginPush(Guid lessonId, string relativePath, (long Size, long LastWriteTicks)? replacing)
     {
         var (folder, reason) = FindFolder(CurrentLesson(), lessonId, onlyCurrent: true);
         if (folder is null)
@@ -143,11 +150,15 @@ public sealed partial class ClassFolder
         {
             throw new InvalidOperationException("já existe uma pasta com esse nome");
         }
+        if (!ClassFolderIncoming.IsAsExpected(target, replacing))
+        {
+            throw new InvalidOperationException(ClassFolderIncoming.Changed);
+        }
 
         var directory = Path.GetDirectoryName(target)!;
         Directory.CreateDirectory(directory);
         var tempPath = Path.Combine(directory, ClassFolderRules.NewTempName());
-        return new ClassFolderIncoming(target, tempPath);
+        return new ClassFolderIncoming(target, tempPath, replacing);
     }
 
     // Null when a file of that size fits on the Desktop's disk, otherwise why
@@ -219,9 +230,13 @@ public sealed partial class ClassFolder
         }
     }
 
-    // The teacher's Master has that lesson's set-aside files: the folder goes
-    // to the Recycle Bin. Nothing set aside is nothing to clear, so it's Ok.
-    public (bool Ok, string Detail) ClearSetAside(Guid lessonId)
+    // The teacher's Master has dealt with these files set aside for that
+    // lesson (as its listing showed them): each goes to the Recycle Bin, if it
+    // is still that version, inside the folder, with no link on the way; and
+    // the folder goes once nothing is left in it. A file set aside after that
+    // listing, or changed since, stays for the Master's next round. Nothing set
+    // aside is nothing to clear, so it's Ok.
+    public (bool Ok, string Detail) ClearSetAside(Guid lessonId, IReadOnlyList<ClassFolderEntry> files)
     {
         var folder = SetAsideFolder(lessonId);
         if (folder is null || !Directory.Exists(folder))
@@ -234,15 +249,29 @@ public sealed partial class ClassFolder
             return (false, "pasta vinculada, não removida");
         }
 
-        try
+        var failures = new List<string>();
+        foreach (var entry in files)
         {
-            _recycleBin.Recycle(folder);
-            return (true, string.Empty);
+            var file = ExistingFile(folder, entry.Path);
+            if (file is null || !ClassFolderIncoming.HasVersion(file, (entry.Size, entry.LastWriteTicks)))
+            {
+                continue;
+            }
+
+            try
+            {
+                _recycleBin.Recycle(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failures.Add($"{entry.Path} ({ErrorText.Describe(ex)})");
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return (false, ErrorText.Describe(ex));
-        }
+
+        RemoveEmptyFolders(folder);
+        return failures.Count == 0
+            ? (true, string.Empty)
+            : (false, failures[0] + (failures.Count > 1 ? $" e mais {failures.Count - 1}" : string.Empty));
     }
 
     // The lesson the Agent says is on; null when none is.
