@@ -97,7 +97,7 @@ public sealed class ClassLessonHandler
         {
             if (lesson.SavedAt < _lesson.SavedAt)
             {
-                return (true, $"mantida a aula mais nova: {Describe(_lesson)}");
+                return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
             }
             if (lesson.SavedAt == _lesson.SavedAt && lesson != _lesson)
             {

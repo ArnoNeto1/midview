@@ -285,6 +285,32 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(new PcStatus(machine, PcSyncState.Failed, "Midview antigo"), statuses[machine.Name]);
     }
 
+    // An Agent that keeps a newer lesson than the one sent (from another teacher's PC, say) did not
+    // take this one: the PC is not "atualizando a aula" for ever, it says what the Agent answered.
+    [Fact]
+    public async Task APcWhoseAgentKeepsANewerLesson_SaysSo_InsteadOfUpdatingForEver()
+    {
+        using var rig = new ClassSyncRig();
+        var pc1 = rig.Pcs[0];
+        var newer = new ClassLesson(
+            new DateTimeOffset(rig.Now).ToUnixTimeSeconds() + 1_000_000, Guid.NewGuid(), "3º B",
+            new DateTimeOffset(rig.Now).ToUnixTimeSeconds(), Ended: false);
+        Assert.True(pc1.Agent.Handle(newer.Encode()).Succeeded);
+        var sync = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(sync);
+
+        var started = await sync.StartAsync(Turma);
+        await rig.Rounds(sync, 2);
+
+        var answer = started.Single(result => result.Machine.Name == pc1.Name);
+        Assert.False(answer.Ok);
+        Assert.StartsWith(ClassLesson.KeptNewerText, answer.Detail);
+        Assert.Equal(newer, pc1.Agent.Current);
+        Assert.Equal(PcSyncState.Failed, statuses[pc1.Name].State);
+        Assert.Equal(answer.Detail, statuses[pc1.Name].Detail);
+        Assert.All(rig.Pcs.Skip(1), pc => Assert.True(started.Single(result => result.Machine.Name == pc.Name).Ok));
+    }
+
     // A student saving the file between the listing a push was planned on and the push: the
     // push is refused ("mudou neste PC") and the student's version wins at the next round.
     [Fact]

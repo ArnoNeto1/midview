@@ -360,6 +360,12 @@ public sealed partial class ClassFolderSync : IDisposable
         try
         {
             var (succeeded, detail) = ClassFolderClient.SetLesson(machine, _masterCertificate, lesson, _agentPort);
+            // An Agent that keeps a newer lesson answers yes, saying so: it didn't take
+            // this one, and the PC's status says why rather than "atualizando a aula".
+            if (succeeded && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal))
+            {
+                succeeded = false;
+            }
             if (succeeded)
             {
                 _delivered[Key(machine)] = lesson.SavedAt;

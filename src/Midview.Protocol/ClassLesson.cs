@@ -22,6 +22,11 @@ public sealed record ClassLesson(long SavedAt, Guid LessonId, string Turma, long
     // In characters: what fits in a folder name next to "Pasta da turma – ".
     public const int MaxTurmaLength = 60;
 
+    // How an Agent's answer to SetClassLesson starts when it keeps a newer
+    // lesson than the one sent (followed by ": " and that lesson): the lesson
+    // sent was not taken.
+    public const string KeptNewerText = "mantida a aula mais nova";
+
     // Everything before the Turma bytes.
     private const int FixedLength = 36;
 
