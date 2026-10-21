@@ -65,14 +65,17 @@ public static class ProtectedStudentFolders
 
     // Returns what couldn't be protected, for the Agent's log. names are the
     // folders to protect (default: the two Midview always keeps); a lesson's
-    // class folder is protected the same way by naming it too.
+    // class folder is protected the same way by naming it too. desktopPath is
+    // where the Desktop really is (StudentDesktopCheck.Verify): the Desktop and
+    // each folder are checked to be there still before anything is changed.
     public static IReadOnlyList<string> Protect(
         string desktopPath, SecurityIdentifier student, SecurityIdentifier owner, IReadOnlyList<string>? names = null)
     {
         var problems = new List<string>();
+        string desktopFinal;
         try
         {
-            using var desktop = OpenAsItself(desktopPath, ReadControl | WriteDac);
+            using var desktop = OpenDesktop(desktopPath, ReadControl | WriteDac, out desktopFinal);
             var security = ReadSecurity(desktop);
             if (!HasDenyDeleteChild(security, student))
             {
@@ -94,7 +97,7 @@ public static class ProtectedStudentFolders
                 problems.Add($"{name}: nome inválido, precisa ser só o nome de uma pasta");
                 continue;
             }
-            var path = Path.Combine(desktopPath, name);
+            var path = Path.Combine(desktopFinal, name);
             try
             {
                 if (!Directory.Exists(path) && !File.Exists(path))
@@ -117,6 +120,7 @@ public static class ProtectedStudentFolders
                 }
                 using (folder)
                 {
+                    CheckIsIn(folder, path);
                     WriteSecurity(folder, folderSecurity, information);
                 }
             }
@@ -164,16 +168,19 @@ public static class ProtectedStudentFolders
     // ordinary ones the student can delete or rename again (their content
     // is the student's, so nothing is deleted). With names given, only those
     // folders are given back (a lesson's class folder, when the lesson ends)
-    // and the Desktop's Deny stays: the other folders still need it.
+    // and the Desktop's Deny stays: the other folders still need it. As with
+    // Protect, nothing is given back through a Desktop that isn't (or is no
+    // longer) where desktopPath says.
     public static IReadOnlyList<string> Release(
         string desktopPath, SecurityIdentifier student, IReadOnlyList<string>? names = null)
     {
         var problems = new List<string>();
-        if (names is null)
+        string desktopFinal;
+        try
         {
-            try
+            using var desktop = OpenDesktop(desktopPath, names is null ? ReadControl | WriteDac : ReadControl, out desktopFinal);
+            if (names is null)
             {
-                using var desktop = OpenAsItself(desktopPath, ReadControl | WriteDac);
                 var security = ReadSecurity(desktop);
                 if (HasDenyDeleteChild(security, student))
                 {
@@ -181,10 +188,11 @@ public static class ProtectedStudentFolders
                     WriteSecurity(desktop, security, DaclSecurityInformation);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                problems.Add($"Área de Trabalho ({desktopPath}): {ErrorText.Describe(ex)}");
-            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            problems.Add($"Área de Trabalho ({desktopPath}): {ErrorText.Describe(ex)}");
+            return problems;
         }
 
         foreach (var name in names ?? StudentFolderNames.All)
@@ -193,7 +201,7 @@ public static class ProtectedStudentFolders
             {
                 continue;
             }
-            var path = Path.Combine(desktopPath, name);
+            var path = Path.Combine(desktopFinal, name);
             if (!Directory.Exists(path))
             {
                 continue;
@@ -209,6 +217,7 @@ public static class ProtectedStudentFolders
                         sid, FileSystemRights.FullControl, everywhere, PropagationFlags.None, AccessControlType.Allow));
                 }
                 using var folder = OpenAsItself(path, ReadControl | WriteDac);
+                CheckIsIn(folder, path);
                 WriteSecurity(folder, security, DaclSecurityInformation | UnprotectedDaclSecurityInformation);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -221,7 +230,8 @@ public static class ProtectedStudentFolders
 
     // Every user account's Desktop on this machine, for the uninstaller,
     // which runs with no student logged in: each profile in the registry
-    // (real accounts only, S-1-5-21-...) and its Desktop folder. A Desktop
+    // (real accounts only, S-1-5-21-...) and its Desktop folder, where it
+    // really is, if that is in the profile (StudentDesktopCheck). A Desktop
     // moved elsewhere (OneDrive, say) isn't found this way.
     public static IEnumerable<(string Desktop, SecurityIdentifier Student)> AllStudentDesktops()
     {
@@ -237,9 +247,11 @@ public static class ProtectedStudentFolders
             if (profile?.GetValue("ProfileImagePath") is string profilePath)
             {
                 var desktop = Path.Combine(Environment.ExpandEnvironmentVariables(profilePath), "Desktop");
-                if (Directory.Exists(desktop))
+                var student = new SecurityIdentifier(sid);
+                if (Directory.Exists(desktop)
+                    && StudentDesktopCheck.Verify(desktop, student, StudentDesktopCheck.ProfileImagePathOf, out _) is { } verified)
                 {
-                    yield return (desktop, new SecurityIdentifier(sid));
+                    yield return (verified, student);
                 }
             }
         }
@@ -283,9 +295,43 @@ public static class ProtectedStudentFolders
             && rule.InheritanceFlags == InheritanceFlags.None
             && rule.FileSystemRights.HasFlag(FileSystemRights.DeleteSubdirectoriesAndFiles));
 
+    // The Desktop as itself (OpenAsItself), and only where desktopPath says it is:
+    // a link put on the way since the path was checked leads somewhere else, and
+    // is refused. finalPath: where it is, for its folders to be checked against.
+    private static SafeFileHandle OpenDesktop(string desktopPath, uint access, out string finalPath)
+    {
+        var handle = OpenAsItself(desktopPath, access);
+        try
+        {
+            finalPath = StudentDesktopCheck.FinalPath(handle);
+            if (!StudentDesktopCheck.SamePath(finalPath, desktopPath))
+            {
+                throw new InvalidOperationException(NotWhereItWas);
+            }
+            return handle;
+        }
+        catch
+        {
+            handle.Dispose();
+            throw;
+        }
+    }
+
+    // An open folder is the one at path (in the Desktop OpenDesktop checked), not one a
+    // link swapped in on the way since.
+    private static void CheckIsIn(SafeFileHandle folder, string path)
+    {
+        if (!StudentDesktopCheck.SamePath(StudentDesktopCheck.FinalPath(folder), path))
+        {
+            throw new InvalidOperationException(NotWhereItWas);
+        }
+    }
+
+    private const string NotWhereItWas = "não está onde deveria (há um atalho ou vínculo no caminho); deixada como está";
+
     // The folder itself, never what a link points at: a reparse point
     // (junction, symbolic link, mount point) is refused.
-    private static SafeFileHandle OpenAsItself(string path, uint access)
+    internal static SafeFileHandle OpenAsItself(string path, uint access)
     {
         var handle = CreateFile(path, access, FileShareAll, IntPtr.Zero, OpenExisting,
             FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
@@ -306,6 +352,10 @@ public static class ProtectedStudentFolders
         }
         return handle;
     }
+
+    // The owner of an open folder (opened with ReadControl).
+    internal static SecurityIdentifier? OwnerOf(SafeFileHandle handle) =>
+        ReadSecurity(handle).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
 
     private static DirectorySecurity ReadSecurity(SafeFileHandle handle)
     {
@@ -331,7 +381,7 @@ public static class ProtectedStudentFolders
         }
     }
 
-    private const uint ReadControl = 0x00020000;
+    internal const uint ReadControl = 0x00020000;
     private const uint WriteDac = 0x00040000;
     private const uint WriteOwner = 0x00080000;
     private const uint FileShareAll = 0x7;

@@ -206,8 +206,11 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         {
             if (StudentDesktop(token, out var result) is not { } student)
             {
-                AgentLog.Warn($"The student's Desktop wasn't found (0x{result:X8}); their folders aren't protected.");
-                return;
+                if (result != 0)
+                {
+                    AgentLog.Warn($"The student's Desktop wasn't found (0x{result:X8}); their folders aren't protected.");
+                }
+                return; // a Desktop that may not be used was logged once (StudentDesktopCheck)
             }
 
             var problems = ProtectedStudentFolders.Protect(
@@ -256,6 +259,11 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         }
     }
 
+    // The Desktop as the student's own registry says it is (User Shell
+    // Folders, which the student can change), so only where it really is,
+    // and only if that is in their profile or their own folder
+    // (StudentDesktopCheck, Ruling 12): never another account's Desktop.
+    // Null otherwise, with result 0 for a Desktop refused that way.
     private static (string Desktop, SecurityIdentifier Student)? StudentDesktop(IntPtr token, out int result)
     {
         using var identity = new WindowsIdentity(token);
@@ -270,7 +278,17 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
         {
             Marshal.FreeCoTaskMem(desktopPointer);
         }
-        return identity.User is { } student && !string.IsNullOrEmpty(desktop) ? (desktop, student) : null;
+        if (identity.User is not { } student || string.IsNullOrEmpty(desktop))
+        {
+            return null;
+        }
+
+        if (StudentDesktopCheck.Verify(desktop, student, StudentDesktopCheck.ProfileImagePathOf, out var refusal) is not { } verified)
+        {
+            StudentDesktopCheck.ReportOnce(refusal);
+            return null;
+        }
+        return (verified, student);
     }
 
     public bool IsRunning(int processId)
