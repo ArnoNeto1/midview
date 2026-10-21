@@ -238,6 +238,28 @@ public partial class ClassStoreTests
         Assert.Empty(_store.Files(Turma));
     }
 
+    // A file stored in a folder the teacher hid would never be listed, and so pulled again every round
+    // ("(2)", "(3)"...): it is refused, saying why, and the temp file is the caller's to delete.
+    [Theory]
+    [InlineData(FileAttributes.Hidden)]
+    [InlineData(FileAttributes.System)]
+    public void CommitIncoming_RefusesAFolderThatIsHiddenOrSystem(FileAttributes attribute)
+    {
+        MakeClass();
+        var hidden = Directory.CreateDirectory(Path.Combine(FolderOf(Turma), "fotos", "privadas"));
+        hidden.Attributes |= attribute;
+        var (temp, version) = Incoming(Turma, "x");
+
+        var refusal = Assert.Throws<IOException>(
+            () => _store.CommitIncoming(Turma, temp, "fotos/privadas/mais/a.txt", version, replace: false));
+
+        Assert.Equal("O arquivo não pode ficar na turma: a pasta fotos/privadas está oculta.", refusal.Message);
+        Assert.True(File.Exists(temp));
+        Assert.False(Directory.Exists(Path.Combine(hidden.FullName, "mais")));
+        Assert.Null(_store.ArrivedOn(Turma, "fotos/privadas/mais/a.txt"));
+        Assert.Equal("fotos/a.txt", _store.CommitIncoming(Turma, temp, "fotos/a.txt", version, replace: false));
+    }
+
     [Fact]
     public void CommitIncoming_RefusesATempFileOutsideTheClassFolder()
     {

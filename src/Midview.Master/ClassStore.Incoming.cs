@@ -123,8 +123,9 @@ public sealed partial class ClassStore
     // path it ended up at ('/'-separated, subfolder included).
     //
     // The path has to be one a listing shows (ClassFolderRules.WhyNotListed:
-    // depth, names, size, the wire), or it is refused: a file stored where it
-    // isn't listed would be copied again, every round.
+    // depth, names, size, the wire; and no hidden or system folder on the
+    // way), or it is refused: a file stored where it isn't listed would be
+    // copied again, every round.
     //
     // replace: the path is the same file edited on a PC, and the arrival day
     // stays. The old copy is set aside in the class folder (under a short name that
@@ -168,6 +169,10 @@ public sealed partial class ClassStore
             {
                 throw new IOException($"O arquivo não pode ficar na turma: {reason}.");
             }
+            if (HiddenFolderOnTheWay(folder, relativePath) is { } hidden)
+            {
+                throw new IOException($"O arquivo não pode ficar na turma: a pasta {hidden} está oculta.");
+            }
             if (new FileInfo(temp).Length != version.Size)
             {
                 throw new IOException("O arquivo recebido não tem o tamanho anunciado.");
@@ -191,6 +196,30 @@ public sealed partial class ClassStore
             TrySave(turma, index);
             return stored;
         }
+    }
+
+    // The first folder on the way to relativePath that is there already and
+    // hidden or system ('/'-separated, from the class folder), or null. Files
+    // (Files) leaves such a folder out, so a file stored in it would never be
+    // listed and would be pulled again, every round.
+    private static string? HiddenFolderOnTheWay(string folder, string relativePath)
+    {
+        var segments = relativePath.Split('/');
+        var path = folder;
+        for (var depth = 0; depth < segments.Length - 1; depth++)
+        {
+            path = Path.Combine(path, segments[depth]);
+            var directory = new DirectoryInfo(path);
+            if (!directory.Exists)
+            {
+                return null; // made by the commit: an ordinary folder
+            }
+            if ((directory.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+            {
+                return string.Join('/', segments[..(depth + 1)]);
+            }
+        }
+        return null;
     }
 
     // The disk part of CommitIncoming. Returns the path stored.
