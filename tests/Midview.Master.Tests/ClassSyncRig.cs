@@ -17,14 +17,23 @@ using Xunit;
 // .4...) so they all answer on the same two ports, as lab PCs do. One clock
 // (Now) for the teacher's PC and the Agents. Never a lab machine, the real
 // Desktop, the real registry or the teacher's real data.
+//
+// homes: how many of the PCs (the first ones) have Agents that keep the class
+// folders' home, for two teacher PCs in one lab (ClassHomeState, in a temp
+// file); the others answer the home's messages as an Agent from before it.
+// Every Agent trusts two teachers: Master and OtherMaster.
 internal sealed class ClassSyncRig : IDisposable
 {
     public const string Turma = "3º A";
 
+    // The teacher PC's computer name that NewSync gives a sync by default.
+    public const string MachineName = "PROF-1";
+
     private readonly List<ClassFolderSync> _syncs = new();
 
-    public ClassSyncRig(int pcs = 3)
+    public ClassSyncRig(int pcs = 3, int homes = 0)
     {
+        Homes = homes;
         Root = Path.Combine(Path.GetTempPath(), $"midview-sync-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Root);
         TeacherBin = new FolderBin(Path.Combine(Root, "lixeira-professor"));
@@ -53,6 +62,11 @@ internal sealed class ClassSyncRig : IDisposable
 
     public X509Certificate2 Master { get; } = SelfSignedCertificate.Create("master-under-test");
 
+    // Another teacher, on another teacher PC of the lab.
+    public X509Certificate2 OtherMaster { get; } = SelfSignedCertificate.Create("other-master-under-test");
+
+    public int Homes { get; }
+
     public ClassStore Store { get; }
 
     public FolderBin TeacherBin { get; }
@@ -70,12 +84,16 @@ internal sealed class ClassSyncRig : IDisposable
 
     public IReadOnlyList<KnownMachine> Machines => Pcs.Select(pc => pc.Machine).ToList();
 
-    // An hour between rounds by default, so only the test runs them.
-    public ClassFolderSync NewSync(TimeSpan? interval = null)
+    // An hour between rounds by default, so only the test runs them. By default
+    // the teacher PC is Master, MachineName, with the lesson at LessonPath;
+    // another teacher PC of the lab has its own name and lesson file.
+    public ClassFolderSync NewSync(
+        TimeSpan? interval = null, string machineName = MachineName, X509Certificate2? master = null, string? lessonPath = null)
     {
         var sync = new ClassFolderSync(
-            Store, Master, () => Machines, machine => !Offline.ContainsKey(machine.Name), () => Now,
-            AgentPort, SessionPort, interval ?? TimeSpan.FromHours(1), LessonPath);
+            Store, master ?? Master, () => Machines, machine => !Offline.ContainsKey(machine.Name), () => Now, machineName,
+            agentPort: AgentPort, sessionPort: SessionPort, interval: interval ?? TimeSpan.FromHours(1),
+            lessonPath: lessonPath ?? LessonPath);
         _syncs.Add(sync);
         return sync;
     }
@@ -128,6 +146,7 @@ internal sealed class ClassSyncRig : IDisposable
             pc.Dispose();
         }
         Master.Dispose();
+        OtherMaster.Dispose();
         try
         {
             Directory.Delete(Root, recursive: true);
@@ -190,15 +209,17 @@ internal sealed class StudentPc : IDisposable
         Directory.CreateDirectory(Desktop);
         Bin = new FolderBin(Path.Combine(Root, "lixeira"));
 
+        var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }) : null;
         Agent = new ClassLessonHandler(
             Path.Combine(Root, "class-lesson.json"), () => null, _ => null, new AppBlockEnforcer(new NoProcesses()),
-            WindowsIdentity.GetCurrent().User!, () => rig.Now, _ => { });
+            WindowsIdentity.GetCurrent().User!, () => rig.Now, _ => { }, home);
         _agentListener = new TcpListener(address, rig.AgentPort);
         _agentListener.Start();
         var siteBlock = new SiteBlockCommandHandler(
             new SiteBlockState(), Path.Combine(Root, "sites.json"), Path.Combine(Root, "hosts"), new NoFirewall());
         var agent = new AgentServer(
-            _agentListener, _agentCertificate, new TrustStore(new[] { rig.Master.Thumbprint }), siteBlock, classLesson: Agent);
+            _agentListener, _agentCertificate, new TrustStore(new[] { rig.Master.Thumbprint, rig.OtherMaster.Thumbprint }),
+            siteBlock, classLesson: Agent);
         _agentRun = Task.Run(() => agent.Run(_stopAgent.Token));
 
         Folder = new ClassFolder(Desktop, Path.Combine(Root, "guardada"), SessionLesson, Bin, Path.Combine(Root, "session.json"));

@@ -1,14 +1,16 @@
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Midview.Protocol;
 
 namespace Midview.Master;
 
 // The Master's side of the class folder ("Pasta da turma", see ClassLesson,
 // ClassFolderWire and docs/superpowers/specs/2026-10-20-class-folder-design.md):
-// the lesson goes to a machine's Agent (port 28900), and a student's Session
-// (port 5901) lists, hands over, takes and changes the files of the folder.
-// One short-lived connection per call.
+// the lesson and the class folders' home (ClassHome, for two teacher PCs in one
+// lab) go to a machine's Agent (port 28900), and a student's Session (port
+// 5901) lists, hands over, takes and changes the files of the folder. One
+// short-lived connection per call.
 //
 // What a machine answers is hostile input: a file read from a Session is
 // checked against its own header (never more than FileTransfer.MaxFileSize,
@@ -35,6 +37,66 @@ public static class ClassFolderClient
         var (succeeded, detail) = CommandClient.SendCommandForResult(
             machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.SetClassLesson, lesson.Encode());
         return !succeeded && detail.Length == 0 ? (false, CommandClient.OlderSession) : (succeeded, detail);
+    }
+
+    // The lesson the machine's Agent follows (GetClassLesson); OldAgent, with
+    // no lesson, for an Agent from before the class folder.
+    public static (ClassLesson? Lesson, bool OldAgent) GetLesson(
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort)
+    {
+        var reply = CommandClient.Ask(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.GetClassLesson, Array.Empty<byte>());
+        return reply.Type switch
+        {
+            MessageType.ClassLessonStatus when ClassLesson.TryDecode(reply.Payload, out var lesson) => (lesson, false),
+            MessageType.ClassLessonStatus => throw new InvalidDataException("aula inválida"),
+            MessageType.CommandAck => (null, true),
+            _ => throw new InvalidDataException($"resposta inesperada ({reply.Type})"),
+        };
+    }
+
+    // "This PC is the class folders' home" (two teacher PCs in one lab,
+    // ClassHomeClaim), sent before a lesson starts. Not Ok, with the Agent's
+    // reason, when it keeps another PC as the home (the reason starts with
+    // ClassHomeClaim.OtherHomeText) or takes no take-over now. OldAgent: an
+    // Agent from before two teacher PCs, which keeps no home and takes any
+    // start (a bare no, which a newer Agent never answers).
+    public static (bool Ok, string Detail, bool OldAgent) ClaimHome(
+        KnownMachine machine, X509Certificate2 masterCertificate, ClassHomeClaim claim, int port = ConnectionClient.AgentPort)
+    {
+        var (succeeded, detail) = CommandClient.SendCommandForResult(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ClaimClassHome, claim.Encode());
+        return (succeeded, detail, !succeeded && detail.Length == 0);
+    }
+
+    // The home the machine's Agent keeps (GetClassHome): null when it has none
+    // yet, or when it is an Agent from before two teacher PCs (OldAgent).
+    public static (ClassHome? Home, bool OldAgent) GetHome(
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort)
+    {
+        var reply = CommandClient.Ask(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.GetClassHome, Array.Empty<byte>());
+        return reply.Type switch
+        {
+            MessageType.ClassHomeStatus when ClassHome.TryDecode(reply.Payload, out var home) => (home, false),
+            MessageType.ClassHomeStatus => throw new InvalidDataException("PC das pastas inválido"),
+            MessageType.CommandAck => (null, true),
+            _ => throw new InvalidDataException($"resposta inesperada ({reply.Type})"),
+        };
+    }
+
+    // Does the machine's Agent trust the teacher with that certificate
+    // thumbprint? True when it says so; false when it says no, which an Agent
+    // from before two teacher PCs answers too (the protocol can't tell them
+    // apart, and neither confirms the teacher); null when it gave no answer
+    // either way (it refused the question, or answered something else).
+    public static bool? IsTeacherTrusted(
+        KnownMachine machine, X509Certificate2 masterCertificate, string thumbprint, int port = ConnectionClient.AgentPort)
+    {
+        var (trusted, detail) = CommandClient.SendCommandForResult(
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.IsTeacherTrusted,
+            Encoding.ASCII.GetBytes(thumbprint));
+        return trusted ? true : detail.Length == 0 ? false : null;
     }
 
     // OldSession: a Session from before the class folder (it took the request

@@ -26,7 +26,8 @@ public partial class MainWindow
     private ClassFolderSync StartClassFolder()
     {
         var sync = new ClassFolderSync(
-            _classStore, _masterCertificate, () => Volatile.Read(ref _roster), IsOnline, () => DateTime.Now);
+            _classStore, _masterCertificate, () => Volatile.Read(ref _roster), IsOnline, () => DateTime.Now,
+            Environment.MachineName);
         // Raised on the sync's threads, sometimes while it holds its lesson lock: only queued here.
         sync.LessonChanged += _ => Dispatcher.BeginInvoke(ShowClassLesson);
         return sync;

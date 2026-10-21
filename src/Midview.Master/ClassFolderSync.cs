@@ -41,14 +41,19 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // newer than the last one (an Agent refuses a different lesson saved in the
 // same second).
 //
+// With two teacher PCs in one lab, a start first claims the class folders'
+// home on the Agents, and a lesson another PC ended on them is adopted
+// (ClassFolderSync.Home.cs). With one, nothing changes: its claims are taken.
+//
 // machines and isOnline are called from background threads, and the events are
 // raised on them. Nothing a PC does (failing, going away, answering nonsense)
 // escapes as an exception: it becomes that PC's status.
 //
-// In five files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
+// In six files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
 // its rounds), ClassFolderSync.Round.cs (one PC's round), ClassFolderSync.Copy.cs
-// (each file's pull, push, rename or deletion) and ClassFolderSync.SetAside.cs
-// (what PCs set aside for lessons that are over).
+// (each file's pull, push, rename or deletion), ClassFolderSync.SetAside.cs
+// (what PCs set aside for lessons that are over) and ClassFolderSync.Home.cs
+// (the class folders' home).
 public sealed partial class ClassFolderSync : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
@@ -72,8 +77,10 @@ public sealed partial class ClassFolderSync : IDisposable
     private readonly Func<IReadOnlyList<KnownMachine>> _machines;
     private readonly Func<KnownMachine, bool> _isOnline;
     private readonly Func<DateTime> _localNow;
+    private readonly string _machineName;
     private readonly int _agentPort;
     private readonly int _sessionPort;
+    private readonly int _homePort;
     private readonly TimeSpan _interval;
     private readonly string _lessonPath;
     private readonly Action<string> _log;
@@ -96,19 +103,29 @@ public sealed partial class ClassFolderSync : IDisposable
 
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _loop;
+    private readonly Task _adoptLoop;
     private ClassLesson _lesson;
     private volatile bool _changingLesson;
     private int _disposed;
 
-    // interval: between two listings of a PC (DefaultInterval). lessonPath: the
-    // lesson's file (ClassLessonFileMaster.Path). log: what went wrong that no
-    // status says, in English, by default to System.Diagnostics.Trace.
+    // machineName: this PC's computer name (Environment.MachineName), which its
+    // claim on the class folders' home carries, with homePort, where its Master
+    // listens for a colleague's PC (ClassFolderRemote.Port). interval: between
+    // two listings of a PC (DefaultInterval). lessonPath: the lesson's file
+    // (ClassLessonFileMaster.Path). log: what went wrong that no status says, in
+    // English, by default to System.Diagnostics.Trace.
     public ClassFolderSync(
         ClassStore store, X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> machines,
-        Func<KnownMachine, bool> isOnline, Func<DateTime> localNow, int agentPort = ConnectionClient.AgentPort,
-        int sessionPort = ConnectionClient.SessionPort, TimeSpan? interval = null, string? lessonPath = null,
+        Func<KnownMachine, bool> isOnline, Func<DateTime> localNow, string machineName,
+        int agentPort = ConnectionClient.AgentPort, int sessionPort = ConnectionClient.SessionPort,
+        int homePort = ClassFolderRemote.Port, TimeSpan? interval = null, string? lessonPath = null,
         Action<string>? log = null)
     {
+        ArgumentException.ThrowIfNullOrEmpty(machineName);
+        if (machineName.Length > ClassHome.MaxNameLength)
+        {
+            throw new ArgumentException($"A computer name is at most {ClassHome.MaxNameLength} characters.", nameof(machineName));
+        }
         if (interval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(interval));
@@ -119,8 +136,10 @@ public sealed partial class ClassFolderSync : IDisposable
         _machines = machines;
         _isOnline = isOnline;
         _localNow = localNow;
+        _machineName = machineName;
         _agentPort = agentPort;
         _sessionPort = sessionPort;
+        _homePort = homePort;
         _interval = interval ?? DefaultInterval;
         _lessonPath = lessonPath ?? ClassLessonFileMaster.Path;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderSync: " + message));
@@ -138,6 +157,7 @@ public sealed partial class ClassFolderSync : IDisposable
             }
         }
         _loop = Task.Run(LoopAsync);
+        _adoptLoop = Task.Run(AdoptLoopAsync);
     }
 
     // Raised (on a background thread) when a PC's state or its detail changes.
@@ -169,6 +189,11 @@ public sealed partial class ClassFolderSync : IDisposable
     // the files, without its last rounds, every version known of them
     // remembered): what its PCs set aside comes in over the next rounds, only
     // what was never seen. Throws ArgumentException for a class that isn't there.
+    //
+    // Before anything, this PC claims the class folders' home on every online
+    // Agent (ClaimHomeAsync). When most of the room keeps another PC as home,
+    // nothing starts: nothing is saved or sent, and the answer is those Agents'
+    // refusals, each naming that PC.
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> StartAsync(string turma)
     {
         if (!_store.Exists(turma))
@@ -179,6 +204,11 @@ public sealed partial class ClassFolderSync : IDisposable
         await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
         try
         {
+            if (await ClaimHomeAsync().ConfigureAwait(false) is { } otherHome)
+            {
+                return otherHome;
+            }
+
             _changingLesson = true;
             await RunningRounds().ConfigureAwait(false);
             var previous = Lesson;
@@ -251,7 +281,7 @@ public sealed partial class ClassFolderSync : IDisposable
         await TrackedAsync(() => GatedRoundAsync(machine, lesson, collectOnly: false, linked.Token)).ConfigureAwait(false);
     }
 
-    // Stops the loop and waits a while for the rounds in progress.
+    // Stops the loops and waits a while for the rounds in progress.
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
@@ -262,11 +292,11 @@ public sealed partial class ClassFolderSync : IDisposable
         _stop.Cancel();
         try
         {
-            _loop.Wait(DisposeWait);
+            Task.WaitAll(new[] { _loop, _adoptLoop }, DisposeWait);
         }
         catch (AggregateException)
         {
-            // The loop catches everything; nothing to report here.
+            // The loops catch everything; nothing to report here.
         }
     }
 
