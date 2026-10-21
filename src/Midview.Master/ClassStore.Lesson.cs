@@ -21,7 +21,8 @@ public sealed partial class ClassStore
     // in the folder, hidden files and the ones the sync leaves out included;
     // a link in it is left alone, and said. Folders left empty are tidied
     // away. Copies of replaced files that were set aside (CommitIncoming) and
-    // that the Recycle Bin refused then are sent again. A folder that can't be
+    // that are still there (the Recycle Bin refused them then) are sent again,
+    // wherever in the folder they are, whatever the choice. A folder that can't be
     // read is said in Problems (what is in it can't be known to have arrived
     // today); an index that can't be saved is kept for SaveIndex.
     public (int Recycled, IReadOnlyList<string> Problems) EndLesson(string turma, EndChoice choice)
@@ -42,7 +43,7 @@ public sealed partial class ClassStore
             if (IsRealDirectory(folder))
             {
                 DiscardLeftoverTemps(folder);
-                RecycleLeftoverAsides();
+                RecycleAsides(folder, problems);
                 if (choice == EndChoice.DeleteAll)
                 {
                     recycled = RecycleEverything(new DirectoryInfo(folder), string.Empty, problems);
@@ -137,12 +138,26 @@ public sealed partial class ClassStore
                 recycled += RecycleEverything(subdirectory, path + "/", problems);
                 TryDeleteIfEmpty(subdirectory.FullName);
             }
-            else if (!ClassFolderRules.IsTempName(entry.Name) && TryRecycle(entry.FullName, path, problems))
+            else if (!ClassFolderRules.IsTempName(entry.Name) && !ClassFolderRules.IsAsideName(entry.Name)
+                && TryRecycle(entry.FullName, path, problems))
             {
                 recycled++;
             }
         }
         return recycled;
+    }
+
+    // The copies of replaced files set aside by CommitIncoming that are still in the class
+    // folder, whatever the choice: they are not class files (not counted), but they are
+    // somebody's work, so they go to the Recycle Bin, and a refusal is said in Problems.
+    // DeleteAll leaves them to this (RecycleEverything skips them), so they are said once.
+    private void RecycleAsides(string folder, List<string> problems)
+    {
+        foreach (var aside in FindAsides(new DirectoryInfo(folder)))
+        {
+            TryRecycle(aside.FullName, Path.GetRelativePath(folder, aside.FullName).Replace('\\', '/'), problems);
+        }
+        _asides.RemoveAll(path => !File.Exists(path));
     }
 
     private bool TryRecycle(string fullPath, string path, List<string> problems)

@@ -237,6 +237,26 @@ public class ClassFolderTests : IDisposable
         Assert.Equal(expected, entries.Select(e => (e.LessonId, e.Path)));
     }
 
+    // A junction in the set-aside folder, named like a lesson, would list what is outside it, files nobody can fetch or clear.
+    [Fact]
+    public void List_SkipsASetAsideFolderThatIsAJunction()
+    {
+        var folder = MakeLessonFolder();
+        Write(folder, "agora.txt");
+        var real = Guid.NewGuid();
+        Write(SetAsideFolder(real), "x.txt");
+        var linked = Guid.NewGuid();
+        Write(_outside, "segredo.txt");
+        Write(_outside, "sub/mais.txt");
+        MakeJunction(SetAsideFolder(linked), _outside);
+
+        var (_, problem, entries) = NewClassFolder().List();
+
+        Assert.Null(problem);
+        Assert.Equal(new[] { (LessonId, "agora.txt"), (real, "x.txt") }, entries.Select(e => (e.LessonId, e.Path)));
+        Assert.Null(NewClassFolder().ResolveExisting(linked, "segredo.txt"));
+    }
+
     [Fact]
     public void List_WithNoLessonOn_ListsOnlyWhatWasSetAside()
     {

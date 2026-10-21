@@ -126,12 +126,12 @@ public sealed partial class ClassStore
     // isn't listed would be copied again, every round.
     //
     // replace: the path is the same file edited on a PC, and the arrival day
-    // stays. The old copy is set aside in the class folder (under a name that is
-    // never listed), the new one moved in, and the old one sent to the Recycle
-    // Bin. If the new one can't be moved in, the old one is put back; if the
-    // Recycle Bin refuses, the new copy stays and the old one stays aside, to be
-    // sent when the Bin takes it (at the next replace or the end of the lesson):
-    // nothing is lost either way.
+    // stays. The old copy is set aside in the class folder (under a short name that
+    // is never listed, ClassFolderRules.NewAsideName), the new one moved in, and the
+    // old one sent to the Recycle Bin. If the new one can't be moved in, the old one
+    // is put back; if the Recycle Bin refuses, the new copy stays and the old one
+    // stays aside, to be sent when the Bin takes it (at the next replace, and at the
+    // end of the lesson, which finds it wherever it is): nothing is lost either way.
     //
     // Otherwise it is a new file and never overwrites: a taken name gets a free
     // one in the same subfolder ("images.jpg" is "images (2).jpg", the name
@@ -214,7 +214,12 @@ public sealed partial class ClassStore
             return relativePath;
         }
 
-        var aside = Path.Combine(directory, ClassFolderRules.NewAsideName(segments[^1]));
+        string aside;
+        do
+        {
+            aside = Path.Combine(directory, ClassFolderRules.NewAsideName(segments[^1]));
+        }
+        while (File.Exists(aside) || Directory.Exists(aside)); // 8 hex digits are short, not unique
         File.Move(target, aside);
         try
         {

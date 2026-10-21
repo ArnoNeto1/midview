@@ -146,6 +146,45 @@ internal static class ClassFolderDisk
         }
     }
 
+    // The copies of replaced files that CommitIncoming set aside and that are still
+    // in the class folder, at any depth (the Recycle Bin refused them, or the Master
+    // was closed before they could go). Not through links; hidden folders are not
+    // looked into, as they aren't for a listing.
+    public static List<FileInfo> FindAsides(DirectoryInfo folder)
+    {
+        var found = new List<FileInfo>();
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(folder);
+        while (pending.Count > 0)
+        {
+            List<FileSystemInfo> entries;
+            try
+            {
+                entries = pending.Pop().EnumerateFileSystemInfos("*", ListedOptions).ToList();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue; // gone, or closed to us: a listing says so, this only looks
+            }
+
+            foreach (var entry in entries)
+            {
+                if (entry is DirectoryInfo directory)
+                {
+                    if (!ClassFolderRules.IsLink(directory))
+                    {
+                        pending.Push(directory);
+                    }
+                }
+                else if (entry is FileInfo file && ClassFolderRules.IsAsideName(file.Name) && !ClassFolderRules.IsLink(file))
+                {
+                    found.Add(file);
+                }
+            }
+        }
+        return found.OrderBy(file => file.FullName, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     // The temp files of transfers that never finished (the Master was closed
     // mid-copy). One that is still being written is in use and stays.
     public static void DiscardLeftoverTemps(string folder)

@@ -751,7 +751,10 @@ public sealed class ClassFolder
             foreach (var directory in new DirectoryInfo(_setAsideRoot).EnumerateDirectories("*", Options)
                 .OrderBy(directory => directory.Name, StringComparer.OrdinalIgnoreCase))
             {
-                if (Guid.TryParseExact(directory.Name, "N", out var lessonId) && lessonId != Guid.Empty)
+                // A junction or symbolic link named like a lesson is not one: Options no longer
+                // leaves out reparse points, and it would list what is outside.
+                if (Guid.TryParseExact(directory.Name, "N", out var lessonId) && lessonId != Guid.Empty
+                    && !ClassFolderRules.IsLink(directory))
                 {
                     folders.Add((lessonId, directory));
                 }

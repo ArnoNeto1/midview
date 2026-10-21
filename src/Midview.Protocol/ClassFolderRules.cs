@@ -75,10 +75,46 @@ public static class ClassFolderRules
     public static bool CanDescendFrom(int depth) => FitsTheDepth(depth + 1);
 
     // A file set aside inside the class folder while a newer copy takes its
-    // place: never listed (the Midview prefix), and not a temp name either,
-    // since what ends a lesson throws temps away and this is somebody's work.
-    // The name is kept at the end, so that the Recycle Bin shows what it is.
-    public static string NewAsideName(string name) => $"{TempPrefix}{Guid.NewGuid():N}-{name}";
+    // place: ".midview-" and 8 hex digits, and the extension of the name (so the
+    // Recycle Bin shows what kind of file it is), if it has a short one. Never
+    // listed (the Midview prefix), and not a temp name either, since what ends a
+    // lesson throws temps away and this is somebody's work. Short, so that the
+    // path stays within what the Recycle Bin handles.
+    public static string NewAsideName(string name)
+    {
+        var extension = Path.GetExtension(name);
+        if (extension.Length == name.Length || extension.Length > MaxAsideExtension)
+        {
+            extension = string.Empty; // ".gitignore" is a name, not an extension; and a very long one isn't kept
+        }
+        return $"{TempPrefix}{Guid.NewGuid().ToString("N")[..8]}{extension}";
+    }
+
+    private const int MaxAsideExtension = 16;
+
+    // Whether a name is one NewAsideName makes, wherever in the class folder:
+    // for ending a lesson to find the copies the Recycle Bin refused.
+    public static bool IsAsideName(string name)
+    {
+        if (!name.StartsWith(TempPrefix, StringComparison.OrdinalIgnoreCase) || IsTempName(name))
+        {
+            return false;
+        }
+
+        var rest = name.AsSpan(TempPrefix.Length);
+        if (rest.Length < 8)
+        {
+            return false;
+        }
+        foreach (var digit in rest[..8])
+        {
+            if (!Uri.IsHexDigit(digit))
+            {
+                return false;
+            }
+        }
+        return rest.Length == 8 || rest[8] == '.';
+    }
 
     // The name for the copy-th file of that name ("images (2).jpg"), the stem
     // shortened as much as it takes for the result to stay addressable (a name

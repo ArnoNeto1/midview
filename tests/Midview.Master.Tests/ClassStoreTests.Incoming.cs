@@ -150,11 +150,12 @@ public partial class ClassStoreTests
         Assert.Equal("novo e maior", File.ReadAllText(path));
         Assert.Equal(newer, File.GetLastWriteTimeUtc(path));
         // The old copy went to the Recycle Bin from where it was set aside: in the class folder, under a
-        // name that is never listed, which keeps the file's own name at the end.
+        // short name that is never listed, with the file's extension.
         var recycled = Assert.Single(_bin.Recycled);
         Assert.Equal(FolderOf(Turma), Path.GetDirectoryName(recycled));
         Assert.StartsWith(".midview-", Path.GetFileName(recycled));
-        Assert.EndsWith("-trabalho.docx", recycled);
+        Assert.True(ClassFolderRules.IsAsideName(Path.GetFileName(recycled)), recycled);
+        Assert.EndsWith(".docx", recycled);
         Assert.Equal("antigo", File.ReadAllText(_bin.InBin(recycled)));
         Assert.Equal(new[] { path }, Directory.GetFiles(FolderOf(Turma)));
         // The file is the same file, edited: it didn't arrive again.

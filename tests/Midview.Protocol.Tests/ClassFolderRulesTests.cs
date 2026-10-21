@@ -129,16 +129,56 @@ public class ClassFolderRulesTests
     }
 
     [Fact]
-    public void NewAsideName_KeepsTheNameForTheRecycleBin_ButIsNeverListedNorATemp()
+    public void NewAsideName_IsShort_KeepsOnlyTheExtension_AndIsNeverListedNorATemp()
     {
         var aside = ClassFolderRules.NewAsideName("trabalho final.docx");
 
-        Assert.EndsWith("-trabalho final.docx", aside);
+        Assert.Matches(@"^\.midview-[0-9a-f]{8}\.docx$", aside);
         Assert.NotEqual(aside, ClassFolderRules.NewAsideName("trabalho final.docx"));
         Assert.False(ClassFolderRules.IsListedFile(aside, 1));
         // Not a temp file: what ends a lesson throws temps away, and this is somebody's work.
         Assert.False(ClassFolderRules.IsTempName(aside));
-        Assert.True(aside.Length <= 255);
+        Assert.True(ClassFolderRules.IsAsideName(aside));
+    }
+
+    [Theory]
+    [InlineData("notas", "")]
+    [InlineData("a.b.c", ".c")]
+    [InlineData(".gitignore", "")]
+    public void NewAsideName_OfANameWithoutAnExtension_HasNone(string name, string extension)
+    {
+        // ".gitignore" is all extension to Path.GetExtension, but it is a name: no extension kept.
+        var aside = ClassFolderRules.NewAsideName(name);
+
+        Assert.StartsWith(".midview-", aside);
+        Assert.EndsWith(extension, aside);
+        Assert.Equal(".midview-".Length + 8 + extension.Length, aside.Length);
+        Assert.True(ClassFolderRules.IsAsideName(aside));
+    }
+
+    [Fact]
+    public void NewAsideName_NeverKeepsAVeryLongExtension()
+    {
+        var aside = ClassFolderRules.NewAsideName("a." + new string('e', 100));
+
+        Assert.Equal(".midview-".Length + 8, aside.Length);
+        Assert.True(ClassFolderRules.IsAsideName(aside));
+    }
+
+    [Theory]
+    [InlineData(".midview-1a2b3c4d", true)]
+    [InlineData(".midview-1A2B3C4D.docx", true)]
+    [InlineData(".MIDVIEW-1a2b3c4d.tar.gz", true)]
+    [InlineData(".midview-1a2b3c4.docx", false)] // seven digits
+    [InlineData(".midview-1a2b3c4dx", false)] // something other than an extension after them
+    [InlineData(".midview-1a2b3c4g.docx", false)] // not hex
+    [InlineData(".midview-0123456789abcdef0123456789abcdef.parcial", false)] // a temp file
+    [InlineData(".midview-notas.txt", false)]
+    [InlineData("1a2b3c4d.docx", false)]
+    [InlineData("mapa.png", false)]
+    public void IsAsideName_IsOnlyWhatNewAsideNameMakes(string name, bool aside)
+    {
+        Assert.Equal(aside, ClassFolderRules.IsAsideName(name));
     }
 
     [Fact]

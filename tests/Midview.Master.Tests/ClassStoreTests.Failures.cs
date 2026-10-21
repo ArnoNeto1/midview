@@ -114,7 +114,8 @@ public partial class ClassStoreTests
         // The old copy is still in the class folder, under a name that is never listed.
         var aside = Assert.Single(Directory.GetFiles(FolderOf(Turma)), file => file != old);
         Assert.StartsWith(".midview-", Path.GetFileName(aside));
-        Assert.EndsWith("-trabalho.docx", aside);
+        Assert.True(ClassFolderRules.IsAsideName(Path.GetFileName(aside)), aside);
+        Assert.EndsWith(".docx", aside);
         Assert.Equal("antigo", File.ReadAllText(aside));
         Assert.Equal(new[] { "trabalho.docx" }, _store.Files(Turma).Keys);
         Assert.Contains(_log, message => message.Contains(aside));
@@ -168,6 +169,80 @@ public partial class ClassStoreTests
         // And once it can be moved, the same commit goes through.
         Assert.Equal("trabalho.docx", _store.CommitIncoming(Turma, temp, "trabalho.docx", version, replace: true));
         Assert.Equal("novo", File.ReadAllText(old));
+    }
+
+    // Asides pile up if nothing sweeps them: the store's own list of them is in memory, and the Master can be closed.
+    [Theory]
+    [InlineData(EndChoice.Keep)]
+    [InlineData(EndChoice.DeleteToday)]
+    [InlineData(EndChoice.DeleteAll)]
+    public void EndLesson_RecyclesTheCopiesLeftAsideByAnEarlierRun_WhateverTheChoice(EndChoice choice)
+    {
+        MakeClass();
+        var kept = Write(Turma, "trabalho.docx", "novo");
+        // What a run that couldn't recycle the old copies left, at the top and deep down.
+        var top = Write(Turma, ".midview-1a2b3c4d.docx", "antigo 1");
+        var deep = Write(Turma, "sub/fundo/.midview-5e6f7a8b", "antigo 2");
+        // Not one of ours: a file that merely starts like one.
+        var theirs = Write(Turma, ".midview-notas.txt", "do professor");
+        var restarted = NewStore(_bin); // with no memory of them
+
+        var (recycled, problems) = restarted.EndLesson(Turma, choice);
+
+        Assert.Empty(problems);
+        Assert.False(File.Exists(top));
+        Assert.False(File.Exists(deep));
+        Assert.Contains(top, _bin.Recycled);
+        Assert.Contains(deep, _bin.Recycled);
+        Assert.Equal("antigo 1", File.ReadAllText(_bin.InBin(top)));
+        Assert.Equal("antigo 2", File.ReadAllText(_bin.InBin(deep)));
+        // They are not class files: not counted, and once (DeleteAll doesn't take them a second time).
+        Assert.Equal(choice == EndChoice.DeleteAll ? 2 : 0, recycled);
+        Assert.Equal(choice == EndChoice.DeleteAll ? 4 : 2, _bin.Recycled.Count);
+        Assert.Equal(choice != EndChoice.DeleteAll, File.Exists(kept));
+        Assert.Equal(choice != EndChoice.DeleteAll, File.Exists(theirs));
+    }
+
+    [Fact]
+    public void EndLesson_AnAsideLeftFromARefusedRecycle_IsGoneAfterwards()
+    {
+        MakeClass();
+        var old = Write(Turma, "trabalho.docx", "antigo");
+        _bin.RefuseEverything = true;
+        Commit(Turma, "trabalho.docx", "novo", replace: true);
+        var aside = Assert.Single(Directory.GetFiles(FolderOf(Turma)), file => file != old);
+        _bin.RefuseEverything = false;
+
+        NewStore(_bin).EndLesson(Turma, EndChoice.Keep); // as after the Master was closed and opened again
+
+        Assert.False(File.Exists(aside));
+        Assert.Equal(new[] { aside }, _bin.Recycled);
+        Assert.Equal("antigo", File.ReadAllText(_bin.InBin(aside)));
+        Assert.Equal("novo", File.ReadAllText(old));
+    }
+
+    [Theory]
+    [InlineData(EndChoice.Keep)]
+    [InlineData(EndChoice.DeleteToday)]
+    [InlineData(EndChoice.DeleteAll)]
+    public void EndLesson_WhenTheRecycleBinRefusesACopyLeftAside_SaysSoOnce_AndTriesAgainNextTime(EndChoice choice)
+    {
+        MakeClass();
+        var aside = Write(Turma, "sub/.midview-1a2b3c4d.docx", "antigo");
+        _bin.RefuseEverything = true;
+
+        var (_, problems) = _store.EndLesson(Turma, choice);
+
+        var problem = Assert.Single(problems);
+        Assert.StartsWith("sub/.midview-1a2b3c4d.docx (", problem);
+        Assert.True(File.Exists(aside));
+
+        _bin.RefuseEverything = false;
+        var (_, again) = _store.EndLesson(Turma, choice);
+
+        Assert.Empty(again);
+        Assert.False(File.Exists(aside));
+        Assert.Equal(new[] { aside }, _bin.Recycled);
     }
 
     // --- An index that can't be saved ---
