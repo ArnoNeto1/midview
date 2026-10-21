@@ -15,8 +15,8 @@ namespace Midview.Agent;
 //
 // The key is injected (the student's Software key; in tests a throwaway
 // subtree), so tests never touch the real policy keys. Only the
-// DownloadDirectory values are written or removed; anything else under those
-// keys is left alone.
+// DownloadDirectory values are written or removed, and only one pointing at a
+// class folder is removed; anything else under those keys is left alone.
 public static class DownloadFolderPolicy
 {
     public const string ChromeKey = @"Policies\Google\Chrome";
@@ -34,14 +34,27 @@ public static class DownloadFolderPolicy
         }
     }
 
+    // Only where the value is a class folder (IsClassFolder): a download folder
+    // set by someone else (a school's own policy, say) is not Midview's to
+    // remove, browser by browser.
     public static void Remove(RegistryKey userSoftware)
     {
         foreach (var path in Browsers)
         {
             using var key = userSoftware.OpenSubKey(path, writable: true);
-            key?.DeleteValue(ValueName, throwOnMissingValue: false);
+            if (key?.GetValue(ValueName) is string folder && IsClassFolder(folder))
+            {
+                key.DeleteValue(ValueName, throwOnMissingValue: false);
+            }
         }
     }
+
+    // Whether a download folder is one Apply writes: a full path to a class
+    // folder ("Pasta da turma – <turma>", as ClassLesson.FolderName makes it).
+    public static bool IsClassFolder(string folder) =>
+        Path.IsPathFullyQualified(folder)
+        && Path.GetFileName(Path.TrimEndingDirectorySeparator(folder))
+            .StartsWith(ClassLessonHandler.FolderPrefix, StringComparison.OrdinalIgnoreCase);
 
     // What Chrome is pointed at now, or null: Chrome's value stands for both,
     // as Apply writes them together.

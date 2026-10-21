@@ -15,9 +15,11 @@ namespace Midview.Agent;
 // Chrome and Edge download straight into it (DownloadFolderPolicy, in their
 // own registry hive). Every other "Pasta da turma – " folder on that Desktop
 // is given back to the student, and with no lesson on all of them are and
-// the policy goes. A lesson that started on an earlier day ends by itself.
-// An open Chrome keeps saving to the old folder until it is started again,
-// so it is closed whenever the folder it saves into changes.
+// the policy goes, if it is Midview's (a class folder: a download folder set
+// by someone else stays, DownloadFolderPolicy.Remove). A lesson that started
+// on an earlier day ends by itself. An open Chrome keeps saving to the old
+// folder until it is started again, so it is closed whenever the folder it
+// saves into changes, and only then.
 //
 // As SYSTEM on the student's folders: nothing inside a folder is ever
 // touched (the Session, as the student, moves the files), and a Desktop or
@@ -315,8 +317,8 @@ public sealed class ClassLessonHandler
         }
     }
 
-    // Chrome's and Edge's download folder set to folder (null: removed).
-    // True when Chrome's changed.
+    // Chrome's and Edge's download folder set to folder (null: removed, where
+    // it is a class folder). True when Chrome's changed.
     private bool PointDownloads(SecurityIdentifier student, string? folder, List<string> done, List<string> problems)
     {
         try

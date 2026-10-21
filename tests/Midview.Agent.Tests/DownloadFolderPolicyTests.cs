@@ -44,6 +44,38 @@ public sealed class DownloadFolderPolicyTests : IDisposable
         Assert.Equal(folder, DownloadFolderPolicy.Current(_software));
     }
 
+    // Only a class folder is Midview's: a download folder set by anyone else stays, browser by browser.
+    [Fact]
+    public void Remove_LeavesADownloadFolderThatIsNoClassFolder()
+    {
+        using (var chrome = _software.CreateSubKey(ChromePath, writable: true))
+        {
+            chrome.SetValue("DownloadDirectory", @"D:\Downloads da escola", RegistryValueKind.String);
+        }
+        using (var edge = _software.CreateSubKey(EdgePath, writable: true))
+        {
+            edge.SetValue("DownloadDirectory", @"C:\Users\aluno\Desktop\Pasta da turma – 7A", RegistryValueKind.String);
+        }
+
+        DownloadFolderPolicy.Remove(_software);
+
+        Assert.Equal(@"D:\Downloads da escola", Read(ChromePath, "DownloadDirectory"));
+        Assert.Null(Read(EdgePath, "DownloadDirectory"));
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\aluno\Desktop\Pasta da turma – 7A", true)]
+    [InlineData(@"C:\Users\aluno\Desktop\Pasta da turma – 7A\", true)]
+    [InlineData(@"D:\Downloads", false)]
+    [InlineData(@"C:\Users\aluno\Desktop\Pasta da turma - 7A", false)] // a hyphen, not the en dash
+    [InlineData(@"Pasta da turma – 7A", false)]
+    [InlineData(@"${user_home}\Pasta da turma – 7A", false)]
+    [InlineData("", false)]
+    public void IsClassFolder_IsWhatApplyWrites(string folder, bool expected)
+    {
+        Assert.Equal(expected, DownloadFolderPolicy.IsClassFolder(folder));
+    }
+
     [Fact]
     public void Remove_DeletesOnlyDownloadDirectory()
     {

@@ -22,7 +22,8 @@ public static class UninstallCleanup
         // The students' "Arquivos do professor" and "Entregar ao professor",
         // and a lesson's "Pasta da turma – <turma>", can be deleted and renamed
         // again (ProtectedStudentFolders); Chrome and Edge stop saving into the
-        // class folder (DownloadFolderPolicy) wherever the student's registry
+        // class folder (DownloadFolderPolicy; a download folder someone else
+        // set is left as it is) wherever the student's registry
         // is loaded (openUserSoftware; null skips it). A student who isn't
         // logged on keeps the value in their own hive.
         foreach (var (desktop, student) in studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>())

@@ -358,6 +358,29 @@ public sealed class ClassLessonHandlerTests : IDisposable
         Assert.Null(Policy(DownloadFolderPolicy.EdgeKey));
     }
 
+    // A download folder someone else set (a school's policy, say) is not Midview's to
+    // remove, nor a reason to close the student's browsers, poll after poll.
+    [Fact]
+    public void WithNoLesson_ADownloadFolderSetBySomeoneElse_StaysAndNoBrowserIsClosed()
+    {
+        const string schools = @"D:\Downloads da escola";
+        DownloadFolderPolicy.Apply(_software, schools);
+        var handler = Create();
+        _inspector.Start("chrome.exe");
+        _inspector.Start("msedge.exe");
+
+        handler.Reconcile();
+        handler.Reconcile();
+        var (ok, _) = handler.Handle(ClassLesson.None(5).Encode()); // the teacher's "no lesson"
+        handler.Reconcile();
+
+        Assert.True(ok);
+        Assert.Equal(schools, Policy(DownloadFolderPolicy.ChromeKey));
+        Assert.Equal(schools, Policy(DownloadFolderPolicy.EdgeKey));
+        Assert.Empty(_inspector.Ended);
+        Assert.Empty(_inspector.Notices);
+    }
+
     [Fact]
     public void ReconcileAtStartup_AppliesTheSavedLesson_WithoutClosingChrome()
     {
