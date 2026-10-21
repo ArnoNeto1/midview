@@ -12,7 +12,7 @@ public partial class ClassFolderTests
     public void Follow_NewLesson_ShowsTheNoticeOnce()
     {
         MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
 
         classFolder.Follow(display);
@@ -32,7 +32,7 @@ public partial class ClassFolderTests
     public void Follow_WithNoLessonOnAndNothingBefore_DoesNothing()
     {
         _lesson = ClassLesson.None(1);
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
 
         NewClassFolder().Follow(display);
 
@@ -47,7 +47,7 @@ public partial class ClassFolderTests
         var classFolder = NewClassFolder();
         classFolder.Follow(null);
 
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         classFolder.Follow(display);
 
         Assert.Empty(display.Shown);
@@ -58,7 +58,7 @@ public partial class ClassFolderTests
     public void Follow_LessonEnded_MovesFilesAsideAndRemovesTheFolder()
     {
         var folder = MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var id = LessonId;
@@ -156,7 +156,7 @@ public partial class ClassFolderTests
     public void Follow_WithAnUnknownLesson_DoesNothing()
     {
         var folder = MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var lesson = _lesson;
@@ -188,7 +188,7 @@ public partial class ClassFolderTests
     public void Follow_WithAnUnknownLesson_AndNothingBefore_DoesNothing()
     {
         MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         _lesson = null;
 
@@ -266,7 +266,7 @@ public partial class ClassFolderTests
     public void Follow_FolderStillProtected_StillAdoptsTheNextLesson()
     {
         var folder = MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var first = LessonId;
@@ -306,7 +306,7 @@ public partial class ClassFolderTests
     [Fact]
     public void Follow_TwoChangesWhileTheFirstFolderIsBlocked_SetsBothAsideUnderTheirOwnLesson()
     {
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         var folderA = MakeLessonFolder();
         classFolder.Follow(display);

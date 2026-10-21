@@ -99,7 +99,7 @@ public partial class ClassFolderTests
     public void Follow_ChangeOfClass_SetsTheOldFolderAside_AndLeavesTheNewOne()
     {
         var oldFolder = MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var oldId = LessonId;
@@ -126,7 +126,7 @@ public partial class ClassFolderTests
     public void Follow_NewLessonOfTheSameTurma_SetsTheOldFilesAside_AndKeepsTheFolder()
     {
         var folder = MakeLessonFolder();
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var oldId = LessonId;
@@ -336,7 +336,7 @@ public partial class ClassFolderTests
     [Fact]
     public void Follow_NoDesktop_DoesNotThrow()
     {
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
         var missing = Path.Combine(_root, "nao-existe");
         var classFolder = NewClassFolder(missing);
 
@@ -360,7 +360,7 @@ public partial class ClassFolderTests
         MakeLessonFolder();
         // A notice that can't be shown, and a state that can't be written (a folder where the file goes).
         Directory.CreateDirectory(StatePath);
-        var display = new RecordingDisplay { Throw = new InvalidOperationException("sem tela") };
+        var display = new RecordingNotice { Throw = new InvalidOperationException("sem tela") };
         var classFolder = NewClassFolder();
 
         classFolder.Follow(display);
@@ -374,7 +374,7 @@ public partial class ClassFolderTests
     public void Follow_WithACorruptState_TreatsItAsNothingBefore()
     {
         File.WriteAllText(StatePath, "{ not json");
-        var display = new RecordingDisplay();
+        var display = new RecordingNotice();
 
         NewClassFolder().Follow(display);
 

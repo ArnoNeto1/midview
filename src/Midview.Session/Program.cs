@@ -81,10 +81,13 @@ var classFolder = new ClassFolder(
     Path.Combine(localAppData, "Midview", "class-folder-session.json"));
 var messageDisplay = new WinFormsMessageDisplay();
 
-// `using`, so the timer is still referred to (and not collected) for as long
-// as the server runs below.
+// A new lesson's notice goes in a corner of the screen and away on its own,
+// never taking the focus (not the teacher's message window, which waits for
+// "OK, ENTENDI"). `using`, so the timer is still referred to (and not
+// collected) for as long as the server runs below.
+var lessonNotice = new WinFormsCornerNotice();
 using var classFolderTimer = new System.Threading.Timer(
-    _ => classFolder.Follow(messageDisplay), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+    _ => classFolder.Follow(lessonNotice), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),

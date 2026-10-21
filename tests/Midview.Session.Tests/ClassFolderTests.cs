@@ -165,7 +165,7 @@ public partial class ClassFolderTests : IDisposable
         _links.Add(link);
     }
 
-    private sealed class RecordingDisplay : IMessageDisplay
+    private sealed class RecordingNotice : IClassFolderNotice
     {
         public List<string> Shown { get; } = new();
 

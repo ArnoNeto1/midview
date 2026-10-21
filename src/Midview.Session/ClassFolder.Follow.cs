@@ -31,7 +31,8 @@ public sealed partial class ClassFolder
     // Called every few seconds. Compares the lesson the Agent says is on with
     // the one this Session last followed (remembered in SessionStatePath, so a
     // restart doesn't repeat itself). A lesson that is on and new gets its
-    // notice, if there is somewhere to show it, and is remembered at once.
+    // notice (in a corner, gone on its own: IClassFolderNotice), if there is
+    // somewhere to show it, and is remembered at once.
     // The one it replaces, if there was one, is kept in a list of finished
     // lessons not yet settled (in the state file too), and every one in the
     // list is tried on every call:
@@ -55,7 +56,7 @@ public sealed partial class ClassFolder
     // say), never "the lesson is over" (that is an ended lesson): nothing
     // happens then, so a failed read mid-lesson moves no file.
     // Never throws.
-    public void Follow(IMessageDisplay? notices)
+    public void Follow(IClassFolderNotice? notices)
     {
         if (!Monitor.TryEnter(_followLock))
         {
@@ -76,7 +77,7 @@ public sealed partial class ClassFolder
         }
     }
 
-    private void FollowLesson(IMessageDisplay? notices)
+    private void FollowLesson(IClassFolderNotice? notices)
     {
         var reported = _agentLesson();
         if (reported is null)
@@ -135,7 +136,7 @@ public sealed partial class ClassFolder
         }
     }
 
-    private static void ShowNotice(IMessageDisplay? notices, ClassLesson lesson)
+    private static void ShowNotice(IClassFolderNotice? notices, ClassLesson lesson)
     {
         if (notices is null)
         {
