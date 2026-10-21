@@ -37,6 +37,7 @@ public sealed class ClassLessonHandler
     private readonly SecurityIdentifier _folderOwner;
     private readonly Func<DateTime> _localNow;
     private readonly Action<string> _log;
+    private readonly ClassHomeState? _home;
     private readonly object _gate = new();
     private ClassLesson _lesson;
 
@@ -64,10 +65,13 @@ public sealed class ClassLessonHandler
     // writable HKEY_USERS\<SID>\Software, null when not loaded
     // (DownloadFolderPolicy.OpenUserSoftware). folderOwner: SYSTEM outside
     // the tests. localNow: the local time, for a lesson from an earlier day.
+    // home: the class folders' home PC, the only one that may start a lesson
+    // or change the class (null: anyone may, as before two teacher PCs).
     public ClassLessonHandler(
         string statePath, Func<(string? Desktop, SecurityIdentifier Student)?> loggedOnStudent,
         Func<SecurityIdentifier, RegistryKey?> openUserSoftware, AppBlockEnforcer enforcer,
-        SecurityIdentifier folderOwner, Func<DateTime> localNow, Action<string>? log = null)
+        SecurityIdentifier folderOwner, Func<DateTime> localNow, Action<string>? log = null,
+        ClassHomeState? home = null)
     {
         _statePath = statePath;
         _loggedOnStudent = loggedOnStudent;
@@ -76,6 +80,7 @@ public sealed class ClassLessonHandler
         _folderOwner = folderOwner;
         _localNow = localNow;
         _log = log ?? AgentLog.Warn;
+        _home = home;
         _lesson = Load(statePath);
     }
 
@@ -83,7 +88,15 @@ public sealed class ClassLessonHandler
     // when this PC's folder or policy couldn't be set up yet.
     public ClassLesson Current => Volatile.Read(ref _lesson);
 
-    public (bool Succeeded, string Detail) Handle(byte[] payload)
+    // For the tests from before two teacher PCs (the Master's too): a sender
+    // with no identity, which only a handler with no home lets start a lesson.
+    public (bool Succeeded, string Detail) Handle(byte[] payload) => Handle(payload, "", "");
+
+    // senderThumbprint: the TLS channel's; senderAddress: the connection's.
+    // A start or a class change from a PC that isn't the home is refused
+    // with nothing touched; an end is taken from any teacher. With no home,
+    // the PC that starts a lesson becomes it.
+    public (bool Succeeded, string Detail) Handle(byte[] payload, string senderThumbprint, string senderAddress)
     {
         if (!ClassLesson.TryDecode(payload, out var lesson))
         {
@@ -96,6 +109,10 @@ public sealed class ClassLessonHandler
 
         lock (_gate)
         {
+            if (lesson.IsOn && _home is not null && !_home.MayStart(senderThumbprint))
+            {
+                return (false, ClassHomeState.OtherHomeDetail(_home.Current!));
+            }
             if (lesson.SavedAt < _lesson.SavedAt)
             {
                 return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
@@ -117,6 +134,10 @@ public sealed class ClassLessonHandler
                     return (false, $"não foi possível gravar a aula: {ErrorText.Describe(ex)}");
                 }
                 Volatile.Write(ref _lesson, lesson);
+            }
+            if (lesson.IsOn)
+            {
+                _home?.RecordStarter(senderThumbprint, senderAddress);
             }
 
             // The teacher's own command: Chrome is closed if its folder changed.

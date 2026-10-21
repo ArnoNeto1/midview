@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Midview.Protocol;
 
 namespace Midview.Agent;
@@ -30,6 +31,7 @@ public sealed class AgentServer
     private readonly PendingUninstalls? _pendingUninstalls;
     private readonly PairingService? _pairing;
     private readonly ClassLessonHandler? _classLesson;
+    private readonly ClassHomeState? _classHome;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -39,9 +41,11 @@ public sealed class AgentServer
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
         LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
-        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null)
+        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null,
+        ClassHomeState? classHome = null)
     {
         _classLesson = classLesson;
+        _classHome = classHome;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -244,7 +248,7 @@ public sealed class AgentServer
         // folder answers and what the Master shows as "Midview antigo".
         if (message.Type == MessageType.SetClassLesson && _classLesson is not null)
         {
-            var (succeeded, detail) = _classLesson.Handle(message.Payload);
+            var (succeeded, detail) = _classLesson.Handle(message.Payload, channel.RemoteThumbprint, RemoteAddressText(client));
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
         }
@@ -252,6 +256,36 @@ public sealed class AgentServer
         if (message.Type == MessageType.GetClassLesson && _classLesson is not null)
         {
             channel.Send(new Message(MessageType.ClassLessonStatus, _classLesson.Current.Encode()));
+            return;
+        }
+
+        // The class folders' home, for two teacher PCs in one lab; likewise
+        // only with the state, so an Agent without it says "no home" the old
+        // way (CommandAck [0]).
+        if (message.Type == MessageType.ClaimClassHome && _classHome is not null)
+        {
+            var (succeeded, detail) = ClassHomeClaim.TryDecode(message.Payload, out var claim)
+                ? _classHome.Claim(channel.RemoteThumbprint, RemoteAddressText(client), claim!)
+                : (false, "pedido inválido");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.GetClassHome && _classHome is not null)
+        {
+            channel.Send(new Message(MessageType.ClassHomeStatus, ClassHome.Encode(_classHome.Current)));
+            return;
+        }
+
+        // The home PC asks whether a colleague's Master is a teacher this
+        // machine trusts, before serving it the class folder window.
+        if (message.Type == MessageType.IsTeacherTrusted)
+        {
+            var thumbprint = Encoding.ASCII.GetString(message.Payload);
+            var (succeeded, detail) = TeacherInvite.IsThumbprint(thumbprint)
+                ? (_masterTrustStore.IsTrusted(thumbprint), "")
+                : (false, "pedido inválido");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
         }
 
@@ -291,6 +325,14 @@ public sealed class AgentServer
     {
         _pendingUninstalls?.Add(names);
         return uninstaller.UninstallMany(names);
+    }
+
+    // Where the teacher's connection came from, as the class home keeps it:
+    // an IPv4 address in IPv6 form is written as plain IPv4.
+    private static string RemoteAddressText(TcpClient client)
+    {
+        var address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address;
+        return (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString();
     }
 
     // The MAC address of the card this connection came in on, as the

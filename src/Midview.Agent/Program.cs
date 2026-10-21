@@ -73,13 +73,16 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new LabConfigCommandHandler(
             LabConfigCommandHandler.DefaultStatePath, LabPolicyWriter.OpenMachine(),
             provider.GetRequiredService<AppBlockEnforcer>()));
+        // Which teacher PC keeps the class folders, when a lab has two: only
+        // it starts a lesson.
+        services.AddSingleton(_ => new ClassHomeState(ClassHomeState.DefaultStatePath));
         // The class folder's lesson: the protected "Pasta da turma" folder and
         // the download folder in the logged-on student's own registry hive
         // (the enforcer closes Chrome when it changes).
         services.AddSingleton(provider => new ClassLessonHandler(
             ClassLessonFile.DefaultPath, UserSessionProcessLauncher.LoggedOnStudent, DownloadFolderPolicy.OpenUserSoftware,
             provider.GetRequiredService<AppBlockEnforcer>(), new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
-            () => DateTime.Now));
+            () => DateTime.Now, home: provider.GetRequiredService<ClassHomeState>()));
         // Lists and silently uninstalls installed programs, for the console's
         // "Desinstalar programa".
         services.AddSingleton(_ => ProgramUninstaller.OpenMachine());

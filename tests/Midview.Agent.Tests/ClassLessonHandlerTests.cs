@@ -10,12 +10,13 @@ using Xunit;
 // ProtectedStudentFoldersTests and DownloadFolderPolicyTests do: whoever runs
 // the tests is both the student and the folders' owner, and the real Chrome
 // and Edge policy keys are never touched. Chrome is a fake process.
-public sealed class ClassLessonHandlerTests : IDisposable
+public sealed partial class ClassLessonHandlerTests : IDisposable
 {
     private static readonly SecurityIdentifier Me = WindowsIdentity.GetCurrent().User!;
 
     private readonly string _desktop = Path.Combine(Path.GetTempPath(), $"midview-desktop-{Guid.NewGuid():N}");
     private readonly string _statePath = Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json");
+    private readonly string _homePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
     private readonly string _rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
     private readonly RegistryKey _software;
     private readonly FakeInspector _inspector = new();
@@ -32,7 +33,7 @@ public sealed class ClassLessonHandlerTests : IDisposable
     {
         _software.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_rootPath, throwOnMissingSubKey: false); } catch { }
-        foreach (var path in new[] { _statePath, _statePath + ".tmp", _statePath + ".corrupt" })
+        foreach (var path in new[] { _statePath, _statePath + ".tmp", _statePath + ".corrupt", _homePath, _homePath + ".tmp" })
         {
             try { File.Delete(path); } catch { }
         }
@@ -60,10 +61,10 @@ public sealed class ClassLessonHandlerTests : IDisposable
 
     private ClassLessonHandler Create(
         Func<(string? Desktop, SecurityIdentifier Student)?>? loggedOnStudent = null,
-        Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null) =>
+        Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null, ClassHomeState? home = null) =>
         new(_statePath, loggedOnStudent ?? (() => (_desktop, Me)),
             openUserSoftware ?? (_ => Registry.CurrentUser.CreateSubKey(_rootPath, writable: true)),
-            new AppBlockEnforcer(_inspector), Me, () => _now, _log.Add);
+            new AppBlockEnforcer(_inspector), Me, () => _now, _log.Add, home);
 
     private ClassLesson Lesson(string turma, long savedAt) =>
         new(savedAt, Guid.NewGuid(), turma, new DateTimeOffset(_now).ToUnixTimeSeconds(), Ended: false);
