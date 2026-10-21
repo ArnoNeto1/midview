@@ -206,6 +206,37 @@ public enum MessageType : byte
     InviteJoin = 62,
     InviteDone = 63,
     InviteRefused = 64,
+
+    // The class folder ("Pasta da turma", see ClassLesson, ClassFolderWire and
+    // docs/superpowers/specs/2026-10-20-class-folder-design.md). Agent
+    // messages: SetClassLesson is a command carrying a ClassLesson (answered
+    // with one CommandAck and a CommandResult); GetClassLesson, no payload, is
+    // answered with one ClassLessonStatus carrying the ClassLesson the Agent
+    // follows. An Agent from before this answers CommandAck to GetClassLesson.
+    SetClassLesson = 65,
+    GetClassLesson = 66,
+    ClassLessonStatus = 67,
+
+    // Session messages, each the first message of a short-lived connection.
+    // ListClassFolder, no payload, is answered with one ClassFolderListing
+    // (ClassFolderWire.EncodeListing). PullClassFile (a file reference) is
+    // answered with SendFile and FileChunk messages and then one CommandAck,
+    // as CollectFiles, or with one CommandAck alone saying why not.
+    // PushClassFile (a push header) is answered with one CommandAck accepting
+    // or refusing, then takes FileChunk messages until that many bytes have
+    // arrived and ends with one CommandAck saying whether it was saved, as
+    // SendFile. DeleteClassFile (a file reference), RenameClassFile (a
+    // rename) and ClearSetAside (a lesson id: empty what was set aside for
+    // that lesson) are each answered with one CommandAck carrying a
+    // CommandResult. A Session from before this answers FrameTile, which the
+    // Master shows as "Midview antigo".
+    ListClassFolder = 68,
+    ClassFolderListing = 69,
+    PullClassFile = 70,
+    PushClassFile = 71,
+    DeleteClassFile = 72,
+    RenameClassFile = 73,
+    ClearSetAside = 74,
 }
 
 public enum CloseAppsMode : byte
