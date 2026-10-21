@@ -216,4 +216,111 @@ public class ProtectedStudentFoldersTests : IDisposable
                 rule => rule.AccessControlType == AccessControlType.Allow && rule.FileSystemRights.HasFlag(FileSystemRights.FullControl));
         }
     }
+
+    // The lesson's own folder ("Pasta da turma – <turma>", U+2013), protected
+    // like the other two while the lesson is on.
+    private const string ClassFolder = "Pasta da turma – Turma A";
+
+    private static IReadOnlyList<string> AllAndTheClassFolder => StudentFolderNames.All.Append(ClassFolder).ToList();
+
+    private static bool IsDenied(string desktop, SecurityIdentifier student) =>
+        RulesFor(new DirectoryInfo(desktop).GetAccessControl(), student).Any(rule => rule.AccessControlType == AccessControlType.Deny);
+
+    [NotAdministratorFact]
+    public void Protect_WithExtraName_CreatesAndProtectsIt()
+    {
+        var problems = ProtectedStudentFolders.Protect(_desktop, Student, Me, AllAndTheClassFolder);
+
+        Assert.Empty(problems);
+        var folder = Path.Combine(_desktop, ClassFolder);
+        Assert.True(Directory.Exists(folder));
+        Assert.True(new DirectoryInfo(folder).GetAccessControl().AreAccessRulesProtected);
+        Assert.True(Directory.Exists(Path.Combine(_desktop, StudentFolderNames.Inbox)));
+        Assert.True(Directory.Exists(Path.Combine(_desktop, StudentFolderNames.Delivery)));
+
+        // Like the others: the student can't delete or rename it...
+        Assert.True(Record.Exception(() => Directory.Delete(folder)) is IOException or UnauthorizedAccessException);
+        Assert.True(Record.Exception(() => Directory.Move(folder, Path.Combine(_desktop, "outro nome")))
+            is IOException or UnauthorizedAccessException);
+        Assert.True(Directory.Exists(folder));
+
+        // ...but what a browser saves into it is theirs.
+        var download = Path.Combine(folder, "baixado.pdf");
+        File.WriteAllText(download, "x");
+        File.Delete(download);
+    }
+
+    // Explicit names are the whole list, not an addition to the default two.
+    [Fact]
+    public void Protect_WithOnlyTheExtraName_LeavesTheDefaultFoldersOut()
+    {
+        var problems = ProtectedStudentFolders.Protect(_desktop, Student, Me, new[] { ClassFolder });
+
+        Assert.Empty(problems);
+        Assert.True(Directory.Exists(Path.Combine(_desktop, ClassFolder)));
+        Assert.False(Directory.Exists(Path.Combine(_desktop, StudentFolderNames.Inbox)));
+        Assert.False(Directory.Exists(Path.Combine(_desktop, StudentFolderNames.Delivery)));
+        Assert.True(IsDenied(_desktop, Student));
+    }
+
+    // The service joins a name onto the Desktop as SYSTEM: a name that is a
+    // path must not reach, or create, anything outside it.
+    [Theory]
+    [InlineData(@"..\midview-escape")]
+    [InlineData("a/b")]
+    [InlineData("..")]
+    [InlineData("")]
+    public void Protect_RefusesANameThatIsAPath(string name)
+    {
+        var target = Path.GetFullPath(Path.Combine(_desktop, name));
+        var existed = Directory.Exists(target);
+        try
+        {
+            var problems = ProtectedStudentFolders.Protect(_desktop, Student, Me, new[] { name });
+
+            Assert.Contains(problems, problem => problem.StartsWith(name + ":", StringComparison.Ordinal));
+            Assert.Equal(existed, Directory.Exists(target));
+            Assert.Empty(Directory.EnumerateDirectories(_desktop));
+            Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me, new[] { name }));
+        }
+        finally
+        {
+            if (!existed && Directory.Exists(target))
+            {
+                Directory.Delete(target, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void NeedsProtecting_WithExtraName_WhenItIsMissing()
+    {
+        ProtectedStudentFolders.Protect(_desktop, Student, Me);
+        Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me));
+
+        Assert.True(ProtectedStudentFolders.NeedsProtecting(_desktop, Me, AllAndTheClassFolder));
+
+        ProtectedStudentFolders.Protect(_desktop, Student, Me, AllAndTheClassFolder);
+
+        Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me, AllAndTheClassFolder));
+    }
+
+    // When the lesson ends only its folder is given back: the other two still
+    // need the Desktop's Deny.
+    [Fact]
+    public void Release_WithOneName_KeepsTheDesktopDeny()
+    {
+        ProtectedStudentFolders.Protect(_desktop, Student, Me, AllAndTheClassFolder);
+
+        var problems = ProtectedStudentFolders.Release(_desktop, Student, new[] { ClassFolder });
+
+        Assert.Empty(problems);
+        Assert.True(IsDenied(_desktop, Student));
+        var released = new DirectoryInfo(Path.Combine(_desktop, ClassFolder)).GetAccessControl();
+        Assert.False(released.AreAccessRulesProtected);
+        foreach (var name in StudentFolderNames.All)
+        {
+            Assert.True(new DirectoryInfo(Path.Combine(_desktop, name)).GetAccessControl().AreAccessRulesProtected);
+        }
+    }
 }

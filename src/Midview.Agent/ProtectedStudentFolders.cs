@@ -63,8 +63,11 @@ public static class ProtectedStudentFolders
         }
     }
 
-    // Returns what couldn't be protected, for the Agent's log.
-    public static IReadOnlyList<string> Protect(string desktopPath, SecurityIdentifier student, SecurityIdentifier owner)
+    // Returns what couldn't be protected, for the Agent's log. names are the
+    // folders to protect (default: the two Midview always keeps); a lesson's
+    // class folder is protected the same way by naming it too.
+    public static IReadOnlyList<string> Protect(
+        string desktopPath, SecurityIdentifier student, SecurityIdentifier owner, IReadOnlyList<string>? names = null)
     {
         var problems = new List<string>();
         try
@@ -84,8 +87,13 @@ public static class ProtectedStudentFolders
             return problems;
         }
 
-        foreach (var name in StudentFolderNames.All)
+        foreach (var name in names ?? StudentFolderNames.All)
         {
+            if (!IsPlainName(name))
+            {
+                problems.Add($"{name}: nome inválido, precisa ser só o nome de uma pasta");
+                continue;
+            }
             var path = Path.Combine(desktopPath, name);
             try
             {
@@ -123,11 +131,15 @@ public static class ProtectedStudentFolders
     // Whether Protect has something to do: a folder missing, or one not owned
     // by the owner Protect gives them (one the student's own programs made
     // again). A link, or a file by that name, is left alone, as Protect
-    // leaves it. Only reads.
-    public static bool NeedsProtecting(string desktopPath, SecurityIdentifier owner)
+    // leaves it, and so is a name Protect refuses. Only reads.
+    public static bool NeedsProtecting(string desktopPath, SecurityIdentifier owner, IReadOnlyList<string>? names = null)
     {
-        foreach (var name in StudentFolderNames.All)
+        foreach (var name in names ?? StudentFolderNames.All)
         {
+            if (!IsPlainName(name))
+            {
+                continue;
+            }
             var path = Path.Combine(desktopPath, name);
             if (!Directory.Exists(path) && !File.Exists(path))
             {
@@ -150,27 +162,37 @@ public static class ProtectedStudentFolders
 
     // For uninstalling: the Desktop's Deny goes, and the folders become
     // ordinary ones the student can delete or rename again (their content
-    // is the student's, so nothing is deleted).
-    public static IReadOnlyList<string> Release(string desktopPath, SecurityIdentifier student)
+    // is the student's, so nothing is deleted). With names given, only those
+    // folders are given back (a lesson's class folder, when the lesson ends)
+    // and the Desktop's Deny stays: the other folders still need it.
+    public static IReadOnlyList<string> Release(
+        string desktopPath, SecurityIdentifier student, IReadOnlyList<string>? names = null)
     {
         var problems = new List<string>();
-        try
+        if (names is null)
         {
-            using var desktop = OpenAsItself(desktopPath, ReadControl | WriteDac);
-            var security = ReadSecurity(desktop);
-            if (HasDenyDeleteChild(security, student))
+            try
             {
-                security.RemoveAccessRuleSpecific(DenyDeleteChildRule(student));
-                WriteSecurity(desktop, security, DaclSecurityInformation);
+                using var desktop = OpenAsItself(desktopPath, ReadControl | WriteDac);
+                var security = ReadSecurity(desktop);
+                if (HasDenyDeleteChild(security, student))
+                {
+                    security.RemoveAccessRuleSpecific(DenyDeleteChildRule(student));
+                    WriteSecurity(desktop, security, DaclSecurityInformation);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                problems.Add($"Área de Trabalho ({desktopPath}): {ErrorText.Describe(ex)}");
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-            problems.Add($"Área de Trabalho ({desktopPath}): {ErrorText.Describe(ex)}");
-        }
 
-        foreach (var name in StudentFolderNames.All)
+        foreach (var name in names ?? StudentFolderNames.All)
         {
+            if (!IsPlainName(name))
+            {
+                continue;
+            }
             var path = Path.Combine(desktopPath, name);
             if (!Directory.Exists(path))
             {
@@ -240,6 +262,12 @@ public static class ProtectedStudentFolders
             return false;
         }
     }
+
+    // A folder name is one path segment, never a path: it is joined onto the
+    // student's Desktop by a service running as SYSTEM, so a name carrying
+    // "..\" or a drive must not reach anywhere else.
+    private static bool IsPlainName(string name) =>
+        name is not ("" or "." or "..") && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
     private static FileSystemAccessRule DenyDeleteChildRule(SecurityIdentifier student) => new(
         student, FileSystemRights.DeleteSubdirectoriesAndFiles, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Deny);
