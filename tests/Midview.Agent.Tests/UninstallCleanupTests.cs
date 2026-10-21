@@ -65,6 +65,44 @@ public class UninstallCleanupTests : IDisposable
         }
     }
 
+    // A lesson's class folder is given back too, and Chrome and Edge stop
+    // saving into it where the student's registry is loaded. Against a
+    // throwaway HKCU subtree, never the real policy keys.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheClassFolder_IsGivenBack_AndTheDownloadFolderPolicyRemoved(bool hiveLoaded)
+    {
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var desktop = Path.Combine(Path.GetTempPath(), $"midview-desktop-{Guid.NewGuid():N}");
+        var classFolder = Path.Combine(desktop, "Pasta da turma – 3º A");
+        var rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
+        Directory.CreateDirectory(desktop);
+        try
+        {
+            using var software = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(rootPath, writable: true);
+            ProtectedStudentFolders.Protect(desktop, me, me);
+            ProtectedStudentFolders.Protect(desktop, me, me, new[] { Path.GetFileName(classFolder) });
+            DownloadFolderPolicy.Apply(software, classFolder);
+            File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");
+
+            var failures = UninstallCleanup.Run(_statePath, _hostsPath, new FakeFirewallController(),
+                new FakeInputDeviceController(), _netshCalls.Add, studentDesktops: new[] { (desktop, me) },
+                openUserSoftware: _ => hiveLoaded
+                    ? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(rootPath, writable: true)
+                    : null);
+
+            Assert.Empty(failures);
+            Assert.False(new DirectoryInfo(classFolder).GetAccessControl().AreAccessRulesProtected);
+            Assert.Equal(hiveLoaded ? null : classFolder, DownloadFolderPolicy.Current(software));
+        }
+        finally
+        {
+            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
+            Directory.Delete(desktop, recursive: true);
+        }
+    }
+
     [Fact]
     public void TheProgramBlock_IsLifted_SoAReinstallDoesNotBringItBack()
     {

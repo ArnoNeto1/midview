@@ -13,8 +13,9 @@ namespace Midview.Agent;
 public sealed class LabConfigCommandHandler
 {
     // The notice shown in the student's session when the browser config is
-    // applied and Chrome is closed so it takes effect.
-    private const string ChromeClosedNotice =
+    // applied and Chrome is closed so it takes effect. The class folder's
+    // download folder closes Chrome with it too (ClassLessonHandler).
+    internal const string ChromeClosedNotice =
         "O professor atualizou as configurações do navegador; o Chrome foi fechado para aplicar. Pode abri-lo de novo.";
 
     // The notice shown when the saved Chrome profiles are cleared.

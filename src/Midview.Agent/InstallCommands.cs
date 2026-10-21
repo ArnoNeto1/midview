@@ -48,7 +48,7 @@ public static class InstallCommands
             new NetshFirewallController(AgentServerWorker.AgentPort, AgentServerWorker.SessionPort),
             new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args),
             AppBlockCommandHandler.DefaultStatePath, ProtectedStudentFolders.AllStudentDesktops(),
-            PendingUninstalls.DefaultPath);
+            PendingUninstalls.DefaultPath, DownloadFolderPolicy.OpenUserSoftware);
         foreach (var failure in failures)
         {
             Console.Error.WriteLine(failure);

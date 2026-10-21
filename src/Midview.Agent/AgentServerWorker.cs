@@ -39,12 +39,15 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly PendingUninstalls _pendingUninstalls;
     private readonly TrustStore _masterTrustStore;
     private readonly PairingService _pairing;
+    private readonly ClassLessonHandler _classLesson;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
         AppBlockCommandHandler appBlock, LabConfigCommandHandler labConfig, ProgramUninstaller uninstaller,
-        PendingUninstalls pendingUninstalls, TrustStore masterTrustStore, PairingService pairing)
+        PendingUninstalls pendingUninstalls, TrustStore masterTrustStore, PairingService pairing,
+        ClassLessonHandler classLesson)
     {
+        _classLesson = classLesson;
         _masterTrustStore = masterTrustStore;
         _pairing = pairing;
         _appBlock = appBlock;
@@ -101,6 +104,17 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile lab configuration at startup: {ex.Message}");
             }
 
+            // And the class lesson (its own Reconcile never throws; isolated
+            // all the same).
+            try
+            {
+                _classLesson.ReconcileAtStartup();
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Failed to reconcile the class lesson at startup: {ex.Message}");
+            }
+
             return Task.Run(async () =>
             {
                 var failing = false;
@@ -112,7 +126,7 @@ public sealed class AgentServerWorker : BackgroundService
                             new TcpListener(IPAddress.Any, AgentPort), certificate, _masterTrustStore, commandHandler,
                             _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
                             appBlock: _appBlock, labConfig: _labConfig, uninstaller: _uninstaller, pairing: _pairing,
-                            pendingUninstalls: _pendingUninstalls);
+                            pendingUninstalls: _pendingUninstalls, classLesson: _classLesson);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");

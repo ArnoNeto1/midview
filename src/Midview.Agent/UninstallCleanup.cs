@@ -1,4 +1,5 @@
 using System.Security.Principal;
+using Microsoft.Win32;
 using Midview.Protocol;
 
 namespace Midview.Agent;
@@ -14,14 +15,37 @@ public static class UninstallCleanup
         string statePath, string hostsFilePath, IFirewallController firewall, IInputDeviceController devices,
         Action<string[]> runNetsh, string? appBlockStatePath = null,
         IEnumerable<(string Desktop, SecurityIdentifier Student)>? studentDesktops = null,
-        string? pendingUninstallsPath = null)
+        string? pendingUninstallsPath = null, Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null)
     {
         var failures = new List<string>();
 
-        // The students' "Arquivos do professor" and "Entregar ao professor"
-        // can be deleted and renamed again (ProtectedStudentFolders).
+        // The students' "Arquivos do professor" and "Entregar ao professor",
+        // and a lesson's "Pasta da turma – <turma>", can be deleted and renamed
+        // again (ProtectedStudentFolders); Chrome and Edge stop saving into the
+        // class folder (DownloadFolderPolicy) wherever the student's registry
+        // is loaded (openUserSoftware; null skips it). A student who isn't
+        // logged on keeps the value in their own hive.
         foreach (var (desktop, student) in studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>())
         {
+            Step(failures, $"devolver a pasta da turma ao aluno em {desktop}", () =>
+            {
+                var problems = ProtectedStudentFolders.Release(desktop, student, ClassFolderNames(desktop));
+                if (problems.Count > 0)
+                {
+                    throw new InvalidOperationException(string.Join("; ", problems));
+                }
+            });
+            if (openUserSoftware is not null)
+            {
+                Step(failures, $"remover a pasta de downloads do navegador do aluno de {desktop}", () =>
+                {
+                    using var software = openUserSoftware(student);
+                    if (software is not null)
+                    {
+                        DownloadFolderPolicy.Remove(software);
+                    }
+                });
+            }
             foreach (var problem in ProtectedStudentFolders.Release(desktop, student))
             {
                 failures.Add($"Não foi possível devolver a pasta ao aluno em {desktop}: {problem}");
@@ -68,6 +92,18 @@ public static class UninstallCleanup
 
         return failures;
     }
+
+    // Every "Pasta da turma – " folder on that Desktop, links left out, and
+    // none on a Desktop that is itself a link (as the Agent leaves them alone
+    // during lessons).
+    private static List<string> ClassFolderNames(string desktop) =>
+        !ProtectedStudentFolders.IsRealDirectory(desktop)
+            ? new List<string>()
+            : new DirectoryInfo(desktop).EnumerateDirectories()
+                .Where(folder => folder.Name.StartsWith(ClassLessonHandler.FolderPrefix, StringComparison.OrdinalIgnoreCase)
+                    && (folder.Attributes & FileAttributes.ReparsePoint) == 0)
+                .Select(folder => folder.Name)
+                .ToList();
 
     private static void Step(List<string> failures, string description, Action step)
     {

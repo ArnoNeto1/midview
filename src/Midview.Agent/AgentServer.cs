@@ -29,6 +29,7 @@ public sealed class AgentServer
     private readonly ProgramUninstaller? _uninstaller;
     private readonly PendingUninstalls? _pendingUninstalls;
     private readonly PairingService? _pairing;
+    private readonly ClassLessonHandler? _classLesson;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -38,8 +39,9 @@ public sealed class AgentServer
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
         LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
-        PendingUninstalls? pendingUninstalls = null)
+        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null)
     {
+        _classLesson = classLesson;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -234,6 +236,22 @@ public sealed class AgentServer
                     : _labConfig?.ClearDownloads((DownloadsScope)message.Payload[0])
                       ?? (false, "esta máquina não aceita o painel do laboratório");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(result.Succeeded, result.Detail)));
+            return;
+        }
+
+        // Only with the handler: without it both fall through to the default
+        // below, CommandAck [0], which is what an Agent from before the class
+        // folder answers and what the Master shows as "Midview antigo".
+        if (message.Type == MessageType.SetClassLesson && _classLesson is not null)
+        {
+            var (succeeded, detail) = _classLesson.Handle(message.Payload);
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        if (message.Type == MessageType.GetClassLesson && _classLesson is not null)
+        {
+            channel.Send(new Message(MessageType.ClassLessonStatus, _classLesson.Current.Encode()));
             return;
         }
 
