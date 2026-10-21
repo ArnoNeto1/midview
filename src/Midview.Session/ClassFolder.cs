@@ -35,9 +35,9 @@ public sealed class ClassFolder
         IgnoreInaccessible = true,
     };
 
-    // Moving a finished lesson's folder aside takes everything in it, hidden
-    // or not (it has to go empty); only links are left out, and not followed.
-    private static readonly EnumerationOptions EverythingButLinks = new()
+    // Every entry, hidden, system and links included: to find a link, which
+    // Options leaves out of sight.
+    private static readonly EnumerationOptions AllEntries = new()
     {
         RecurseSubdirectories = false,
         AttributesToSkip = FileAttributes.None,
@@ -60,7 +60,9 @@ public sealed class ClassFolder
 
     // desktopDirectory: the student's Desktop ("" when unknown). setAsideRoot:
     // where a finished lesson's files wait, one folder per lesson id.
-    // agentLesson: the lesson the Agent says is on. sessionStatePath: where
+    // agentLesson: the lesson the Agent says is on (an ended lesson says it
+    // has ended; null is "not known", such as a lesson file that couldn't be
+    // read just now, and Follow does nothing with it). sessionStatePath: where
     // the lesson this Session last followed is remembered.
     public ClassFolder(
         string desktopDirectory,
@@ -107,7 +109,7 @@ public sealed class ClassFolder
             {
                 return (lesson.LessonId, reason, Array.Empty<ClassFolderEntry>());
             }
-            Walk(new DirectoryInfo(folder), lesson.LessonId, prefix: string.Empty, depth: 1, entries);
+            Walk(new DirectoryInfo(folder), lesson.LessonId, entries);
         }
 
         foreach (var (lessonId, directory) in SetAsideFolders())
@@ -120,7 +122,7 @@ public sealed class ClassFolder
             // LessonId equal to the current lesson means "in the Desktop folder".
             if (lessonId != lesson?.LessonId)
             {
-                Walk(directory, lessonId, prefix: string.Empty, depth: 1, entries);
+                Walk(directory, lessonId, entries);
             }
         }
         return (lesson?.LessonId ?? Guid.Empty, null, entries);
@@ -262,15 +264,21 @@ public sealed class ClassFolder
     // the one this Session last followed (remembered in SessionStatePath, so a
     // restart doesn't repeat itself) and when they differ:
     //  1. the folder of the lesson that is over, if it is still on the Desktop,
-    //     has everything in it moved (relative paths kept) to
-    //     setAsideRoot\<lesson id, "N" format>, where the teacher's Master
-    //     collects what it hasn't got yet, and is then removed. The Agent
-    //     releases it so the student can delete it; until it does the removal
-    //     is refused (access denied), and so is a file a program holds open:
-    //     what is left is tried again on the next call, and the old lesson is
-    //     still the one remembered.
+    //     has the files a listing shows (List's own filters) moved, relative
+    //     paths kept, to setAsideRoot\<lesson id, "N" format>, where the
+    //     teacher's Master collects what it hasn't got yet. Whatever else is
+    //     left in it (a half-downloaded file, a lock file, a hidden one...)
+    //     goes with the folder itself to the student's Recycle Bin, so what is
+    //     set aside is always something the Master can see. The Agent releases
+    //     the folder so the student can delete it; until it does the Recycle
+    //     Bin is refused (access denied), and so is a file a program holds
+    //     open: what is left is tried again on the next call, and the old
+    //     lesson is still the one remembered.
     //  2. a lesson that is on gets its notice, if there is somewhere to show it.
     //  3. the new lesson is remembered.
+    // An agentLesson of null is not known (the lesson file couldn't be read,
+    // say), never "the lesson is over" (that is an ended lesson): nothing
+    // happens then, so a failed read mid-lesson moves no file.
     // Never throws.
     public void Follow(IMessageDisplay? notices)
     {
@@ -295,7 +303,13 @@ public sealed class ClassFolder
 
     private void FollowLesson(IMessageDisplay? notices)
     {
-        var lesson = CurrentLesson();
+        var reported = _agentLesson();
+        if (reported is null)
+        {
+            return;
+        }
+
+        var lesson = reported.IsOn ? reported : null;
         var now = lesson is null ? NoLesson : new FollowedLesson(lesson.LessonId, lesson.Turma);
         var before = _followed ??= ReadFollowed();
         if (now == before)
@@ -336,8 +350,9 @@ public sealed class ClassFolder
         }
     }
 
-    // Moves what the student has in the finished lesson's Desktop folder aside
-    // and removes the folder. False when that has to be tried again.
+    // Moves the files of the finished lesson's Desktop folder that a listing
+    // shows aside, then sends the folder, with whatever else is in it, to the
+    // Recycle Bin. False when that has to be tried again.
     private bool SetAside(FollowedLesson finished, ClassLesson? current)
     {
         // The turma comes from the student's own state file: it goes through the same check as the Agent's.
@@ -361,15 +376,15 @@ public sealed class ClassFolder
             return true;
         }
 
-        var left = new Leftovers();
-        MoveAll(new DirectoryInfo(folder), destination, left);
+        var moved = MoveListedFiles(new DirectoryInfo(folder), destination);
         RemoveEmptyFolders(destination);
-        if (left.Failed)
+        if (!moved)
         {
             return false;
         }
 
-        if (left.Linked)
+        // A folder with a link in it is not handed to the Recycle Bin: whether the shell would follow the link isn't ours to find out.
+        if (HasLinkInside(folder))
         {
             Problem($"Leaving {folder}: there is a link in it, which isn't followed or removed.");
             return true;
@@ -377,7 +392,7 @@ public sealed class ClassFolder
 
         try
         {
-            Directory.Delete(folder); // not recursive: only an empty folder goes
+            _recycleBin.Recycle(folder);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -387,62 +402,59 @@ public sealed class ClassFolder
         }
     }
 
-    // Everything under source goes to the same place under destination, a link
-    // is never followed (nor moved), and a name taken there is kept as it is:
-    // the file coming gets another one. The folders left empty go.
-    private void MoveAll(DirectoryInfo source, string destination, Leftovers left)
+    // The files ListedFiles finds under source go to the same place under
+    // destination (a name taken there is kept: the file coming gets another
+    // one). False when one couldn't be moved.
+    private bool MoveListedFiles(DirectoryInfo source, string destination)
     {
-        List<FileSystemInfo> entries;
-        try
+        var moved = true;
+        foreach (var (file, path) in ListedFiles(source, string.Empty, depth: 1).ToList())
         {
-            entries = source.EnumerateFileSystemInfos("*", EverythingButLinks).ToList();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            left.Failed = true;
-            Problem($"Could not look into {source.FullName}: {ex.Message}");
-            return;
-        }
-
-        foreach (var entry in entries)
-        {
-            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
-            {
-                left.Linked = true;
-                continue;
-            }
-
-            var target = Path.Combine(destination, entry.Name);
+            var target = Path.Combine(destination, path.Replace('/', Path.DirectorySeparatorChar));
             try
             {
-                if (entry is DirectoryInfo directory)
-                {
-                    MoveAll(directory, target, left);
-                    TryDeleteFolder(directory.FullName);
-                }
-                else
-                {
-                    Directory.CreateDirectory(destination);
-                    File.Move(entry.FullName, FreeName(target));
-                }
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Move(file.FullName, FreeName(target));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                left.Failed = true;
-                Problem($"Could not set {entry.FullName} aside: {ex.Message}");
+                moved = false;
+                Problem($"Could not set {file.FullName} aside: {ex.Message}");
             }
         }
+        return moved;
     }
 
-    // Empty by now, or it stays; then the folder above can't go either, which is what says "try again".
-    private static void TryDeleteFolder(string folder)
+    // Is there a link (junction or symbolic link) anywhere under folder, at
+    // any depth? None is entered. What can't be looked into is taken for one.
+    // Not recursive in code, because a student can nest folders as deep as
+    // a path allows.
+    private static bool HasLinkInside(string folder)
     {
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(new DirectoryInfo(folder));
         try
         {
-            Directory.Delete(folder);
+            while (pending.Count > 0)
+            {
+                foreach (var entry in pending.Pop().EnumerateFileSystemInfos("*", AllEntries))
+                {
+                    if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+                    {
+                        return true;
+                    }
+
+                    if (entry is DirectoryInfo directory)
+                    {
+                        pending.Push(directory);
+                    }
+                }
+            }
+            return false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            return true;
         }
     }
 
@@ -555,15 +567,6 @@ public sealed class ClassFolder
     private sealed record FollowedLesson(Guid LessonId, string Turma);
 
     private sealed record StoredFollowed(Guid LessonId, string Turma);
-
-    // What MoveAll couldn't empty: a file it couldn't move (to be tried again),
-    // a link (never to be).
-    private sealed class Leftovers
-    {
-        public bool Failed { get; set; }
-
-        public bool Linked { get; set; }
-    }
 
     // The lesson the Agent says is on; null when none is.
     private ClassLesson? CurrentLesson() => _agentLesson() is { IsOn: true } lesson ? lesson : null;
@@ -681,12 +684,46 @@ public sealed class ClassFolder
         return folders;
     }
 
+    // What a listing shows of that folder: the files, each with its path from
+    // the folder ('/' between the segments), files before subfolders and in name
+    // order, nothing Options, IsListed, FileCollection.MaxDepth or FitsTheWire
+    // leave out. One place for it, because what Follow sets aside has to be
+    // what the Master was shown, and no more.
+    //
     // Manual recursion, as DeliveryFolder.ListFiles does, to stop at MaxDepth
     // (the folder itself is depth 1).
-    private void Walk(DirectoryInfo directory, Guid lessonId, string prefix, int depth, List<ClassFolderEntry> entries)
+    private static IEnumerable<(FileInfo File, string Path)> ListedFiles(DirectoryInfo directory, string prefix, int depth)
     {
-        List<FileInfo> files;
-        List<DirectoryInfo> subdirectories;
+        if (!TryEnumerate(directory, out var files, out var subdirectories))
+        {
+            yield break; // gone or closed to the student while we looked: nothing from it this time
+        }
+
+        foreach (var file in files)
+        {
+            var path = prefix + file.Name;
+            if (FitsTheWire(path))
+            {
+                yield return (file, path);
+            }
+        }
+
+        if (depth >= FileCollection.MaxDepth)
+        {
+            yield break;
+        }
+
+        foreach (var subdirectory in subdirectories)
+        {
+            foreach (var listed in ListedFiles(subdirectory, prefix + subdirectory.Name + "/", depth + 1))
+            {
+                yield return listed;
+            }
+        }
+    }
+
+    private static bool TryEnumerate(DirectoryInfo directory, out List<FileInfo> files, out List<DirectoryInfo> subdirectories)
+    {
         try
         {
             files = directory.EnumerateFiles("*", Options)
@@ -697,38 +734,25 @@ public sealed class ClassFolder
                 .Where(subdirectory => IsAddressable(subdirectory.Name))
                 .OrderBy(subdirectory => subdirectory.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return; // gone or closed to the student while we looked: nothing from it this time
+            files = new List<FileInfo>();
+            subdirectories = new List<DirectoryInfo>();
+            return false;
         }
+    }
 
-        foreach (var file in files)
+    private void Walk(DirectoryInfo directory, Guid lessonId, List<ClassFolderEntry> entries)
+    {
+        foreach (var (file, path) in ListedFiles(directory, string.Empty, depth: 1))
         {
             if (entries.Count >= _maxEntries)
             {
                 return;
             }
-
-            var path = prefix + file.Name;
-            if (FitsTheWire(path))
-            {
-                entries.Add(new ClassFolderEntry(lessonId, path, file.Length, file.LastWriteTimeUtc.Ticks));
-            }
-        }
-
-        if (depth >= FileCollection.MaxDepth)
-        {
-            return;
-        }
-
-        foreach (var subdirectory in subdirectories)
-        {
-            if (entries.Count >= _maxEntries)
-            {
-                return;
-            }
-            Walk(subdirectory, lessonId, prefix + subdirectory.Name + "/", depth + 1, entries);
+            entries.Add(new ClassFolderEntry(lessonId, path, file.Length, file.LastWriteTimeUtc.Ticks));
         }
     }
 

@@ -729,7 +729,7 @@ public class ClassFolderTests : IDisposable
     [Fact]
     public void Follow_WithNoLessonOnAndNothingBefore_DoesNothing()
     {
-        _lesson = null;
+        _lesson = ClassLesson.None(1);
         var display = new RecordingDisplay();
 
         NewClassFolder().Follow(display);
@@ -783,24 +783,118 @@ public class ClassFolderTests : IDisposable
     }
 
     [Fact]
-    public void Follow_LessonEnded_SetsAsideWhatListLeavesOut()
+    public void Follow_LessonEnded_SetsAsideOnlyWhatTheListingShows_AndRecyclesTheRestWithTheFolder()
     {
-        // The student's files are never thrown away: what the listing skips goes aside too, so the folder can go.
         var folder = MakeLessonFolder();
         var classFolder = NewClassFolder();
         classFolder.Follow(null);
         var id = LessonId;
-        Write(folder, "baixando.crdownload");
-        File.SetAttributes(Write(folder, "oculto.txt"), FileAttributes.Hidden);
+        Write(folder, "a.png", "A");
+        Write(folder, "b.crdownload");
+        Write(folder, "~$c.docx");
         _lesson = _lesson! with { Ended = true };
 
         classFolder.Follow(null);
 
+        var aside = SetAsideFolder(id);
+        Assert.Equal(new[] { Path.Combine(aside, "a.png") }, Directory.GetFiles(aside, "*", SearchOption.AllDirectories));
+        Assert.Equal(new[] { folder }, _bin.Recycled);
+        Assert.Equal(new[] { "b.crdownload", "~$c.docx" }, _bin.Contents[folder]);
         Assert.False(Directory.Exists(folder));
-        Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "baixando.crdownload")));
-        Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "oculto.txt")));
+        Assert.Equal((Guid.Empty, ""), Remembered());
     }
 
+    // What is set aside is what the Master was shown: the very same filters, not a copy of them.
+    [Fact]
+    public void Follow_LessonEnded_SetsAsideExactlyWhatTheListingHadShown()
+    {
+        var folder = MakeLessonFolder();
+        var kept = new[] { "a.png", "sub/b.txt", "sub/fundo/c.txt" };
+        foreach (var path in kept)
+        {
+            Write(folder, path, path);
+        }
+        foreach (var path in new[] { "x.crdownload", "D.CRDOWNLOAD", "y.tmp", "z.part", "w.parcial", "~$doc.docx",
+                     ".midview-q.parcial", "sub/p.tmp" })
+        {
+            Write(folder, path);
+        }
+        File.SetAttributes(Write(folder, "oculto.txt"), FileAttributes.Hidden);
+        File.SetAttributes(Write(folder, "sistema.txt"), FileAttributes.System);
+        Write(folder, "escondida/dentro.txt");
+        File.SetAttributes(Path.Combine(folder, "escondida"), FileAttributes.Hidden);
+        // Over the limits the wire and the other messages have.
+        Write(folder, new string('a', FileNames.MaxNameLength) + ".txt");
+        Write(folder, string.Join("/", Enumerable.Repeat(new string('あ', 100), 4)) + "/fundo.txt");
+        Write(folder, string.Join("/", Enumerable.Range(1, FileCollection.MaxDepth + 2).Select(level => $"n{level}")) + "/fundo.txt");
+        using (var stream = File.Create(Path.Combine(folder, "enorme.mp4")))
+        {
+            stream.SetLength(FileTransfer.MaxFileSize + 1);
+        }
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var id = LessonId;
+        Assert.Equal(kept, classFolder.List().Entries.Select(e => e.Path));
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        var aside = SetAsideFolder(id);
+        var onDisk = Directory.GetFiles(aside, "*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(aside, file).Replace('\\', '/'))
+            .OrderBy(path => path, StringComparer.Ordinal);
+        Assert.Equal(kept.OrderBy(path => path, StringComparer.Ordinal), onDisk);
+        Assert.Equal(kept, classFolder.List().Entries.Select(e => e.Path));
+        Assert.Equal(new[] { folder }, _bin.Recycled);
+        Assert.False(Directory.Exists(folder));
+    }
+
+    // A failed read of the lesson file mid-lesson is not the end of the lesson: nothing leaves the Desktop folder.
+    [Fact]
+    public void Follow_WithAnUnknownLesson_DoesNothing()
+    {
+        var folder = MakeLessonFolder();
+        var display = new RecordingDisplay();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(display);
+        var lesson = _lesson;
+        Write(folder, "a.png", "A");
+        _lesson = null;
+
+        classFolder.Follow(display);
+
+        Assert.Equal("A", File.ReadAllText(Path.Combine(folder, "a.png")));
+        Assert.False(Directory.Exists(_setAside));
+        Assert.Empty(_bin.Recycled);
+        Assert.Single(display.Shown);
+        Assert.Equal((lesson!.LessonId, "3º A"), Remembered());
+
+        // The lesson is read again, as it was: still nothing to do, and no second notice.
+        _lesson = lesson;
+        classFolder.Follow(display);
+        Assert.True(File.Exists(Path.Combine(folder, "a.png")));
+        Assert.Single(display.Shown);
+
+        // A lesson that really ended is an ended lesson.
+        _lesson = lesson with { Ended = true };
+        classFolder.Follow(display);
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(lesson.LessonId), "a.png")));
+        Assert.False(Directory.Exists(folder));
+    }
+
+    [Fact]
+    public void Follow_WithAnUnknownLesson_AndNothingBefore_DoesNothing()
+    {
+        MakeLessonFolder();
+        var display = new RecordingDisplay();
+        var classFolder = NewClassFolder();
+        _lesson = null;
+
+        classFolder.Follow(display);
+
+        Assert.Empty(display.Shown);
+        Assert.False(File.Exists(StatePath));
+    }
     [Fact]
     public void Follow_LessonEnded_WithAnEmptyFolder_LeavesNoSetAsideFolder()
     {
@@ -1013,7 +1107,29 @@ public class ClassFolderTests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(folder, "atalho")));
         Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "meu.txt")));
         Assert.Equal(new[] { "meu.txt" }, Directory.GetFileSystemEntries(SetAsideFolder(id)).Select(Path.GetFileName));
-        Assert.Equal((Guid.Empty, ""), Remembered()); // the link can't be emptied out, so the folder stays: not worth holding the lessons back
+        Assert.Empty(_bin.Recycled); // a folder with a link in it isn't handed to the Recycle Bin
+        Assert.Equal((Guid.Empty, ""), Remembered()); // the folder stays: not worth holding the lessons back
+    }
+
+    [Fact]
+    public void Follow_LeavesALinkDeepInsideTheFolderAlone()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        Write(_outside, "segredo.txt");
+        Write(folder, "x.crdownload");
+        Write(folder, "a/b/c/d/e/f/g/h/i/j/k/fundo.txt"); // deeper than a listing goes
+        Directory.CreateDirectory(Path.Combine(folder, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"));
+        MakeJunction(Path.Combine(folder, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "atalho"), _outside);
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        Assert.True(File.Exists(Path.Combine(_outside, "segredo.txt")));
+        Assert.True(File.Exists(Path.Combine(folder, "x.crdownload")));
+        Assert.Empty(_bin.Recycled);
+        Assert.Equal((Guid.Empty, ""), Remembered());
     }
 
     [Fact]
@@ -1029,6 +1145,7 @@ public class ClassFolderTests : IDisposable
 
         Assert.True(File.Exists(Path.Combine(_outside, "segredo.txt")));
         Assert.False(Directory.Exists(_setAside));
+        Assert.Empty(_bin.Recycled);
         Assert.Equal((Guid.Empty, ""), Remembered());
     }
 
@@ -1055,7 +1172,7 @@ public class ClassFolderTests : IDisposable
     {
         // "Pasta da turma – x\..\..\Documentos" is, written out as a path, the Documentos folder next to the Desktop.
         Write(_root, "Documentos/meu.txt");
-        _lesson = null;
+        _lesson = ClassLesson.None(1);
         File.WriteAllText(StatePath, JsonSerializer.Serialize(new { LessonId = Guid.NewGuid(), Turma = @"x\..\..\Documentos" }));
 
         NewClassFolder().Follow(null);
@@ -1179,6 +1296,9 @@ public class ClassFolderTests : IDisposable
     {
         public List<string> Recycled { get; } = new();
 
+        // What was inside each folder when it went.
+        public Dictionary<string, string[]> Contents { get; } = new();
+
         public Exception? Refuse { get; set; }
 
         public void Recycle(string path)
@@ -1188,15 +1308,19 @@ public class ClassFolderTests : IDisposable
                 throw Refuse;
             }
 
-            Recycled.Add(path);
             if (Directory.Exists(path))
             {
+                Contents[path] = Directory.GetFileSystemEntries(path, "*", SearchOption.AllDirectories)
+                    .Select(entry => Path.GetRelativePath(path, entry).Replace('\\', '/'))
+                    .OrderBy(entry => entry, StringComparer.Ordinal)
+                    .ToArray();
                 Directory.Delete(path, recursive: true);
             }
             else
             {
                 File.Delete(path);
             }
+            Recycled.Add(path);
         }
     }
 }
