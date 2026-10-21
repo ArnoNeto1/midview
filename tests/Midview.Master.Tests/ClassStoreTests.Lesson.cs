@@ -420,12 +420,15 @@ public partial class ClassStoreTests
         // What was recycled, by the full path it had.
         public List<string> Recycled { get; } = new();
 
+        // Refuses whatever it is given, as when the Recycle Bin is unavailable.
+        public bool RefuseEverything { get; set; }
+
         // Where what was recycled from path is now.
         public string InBin(string path) => Path.Combine(_bin, Recycled.IndexOf(path).ToString(), Path.GetFileName(path));
 
         public void Recycle(string path)
         {
-            if (Path.GetFileName(path) == _refused)
+            if (RefuseEverything || Path.GetFileName(path) == _refused)
             {
                 throw new IOException("in use", unchecked((int)0x80070020));
             }

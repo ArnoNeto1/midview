@@ -63,15 +63,24 @@ public sealed partial class ClassStore
     private readonly string _indexRoot;
     private readonly IRecycleBin _recycleBin;
     private readonly Func<DateTime> _localNow;
+    private readonly Action<string> _log;
     private readonly object _gate = new();
     private readonly Dictionary<string, ClassIndex> _indexes = new(StringComparer.OrdinalIgnoreCase);
 
-    public ClassStore(string filesRoot, string indexRoot, IRecycleBin recycleBin, Func<DateTime> localNow)
+    // Copies of replaced files that were set aside (CommitIncoming) and that the Recycle Bin
+    // hasn't taken yet: tried again at the next replace and at the end of a lesson.
+    private readonly List<string> _asides = new();
+
+    // log gets what went wrong that the caller isn't told, in English (for a developer):
+    // by default it goes to System.Diagnostics.Trace.
+    public ClassStore(
+        string filesRoot, string indexRoot, IRecycleBin recycleBin, Func<DateTime> localNow, Action<string>? log = null)
     {
         _filesRoot = Path.GetFullPath(filesRoot);
         _indexRoot = Path.GetFullPath(indexRoot);
         _recycleBin = recycleBin;
         _localNow = localNow;
+        _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassStore: " + message));
     }
 
     public static string DefaultFilesRoot => Path.Combine(
@@ -115,7 +124,7 @@ public sealed partial class ClassStore
         {
             foreach (var directory in new DirectoryInfo(_filesRoot).EnumerateDirectories("*", ListedDirectories))
             {
-                if (IsValidName(directory.Name) && !IsLink(directory))
+                if (IsValidName(directory.Name) && !ClassFolderRules.IsLink(directory))
                 {
                     names.Add(directory.Name);
                 }
@@ -126,7 +135,8 @@ public sealed partial class ClassStore
         var summaries = new List<ClassSummary>();
         foreach (var name in names)
         {
-            var files = Files(name);
+            // What can be read of it: a summary for the window, not for the sync.
+            var files = Scan(new DirectoryInfo(FolderOf(name)), strict: false);
             summaries.Add(new ClassSummary(
                 name, files.Count, files.Values.Sum(version => version.Size), LastArrival(name, files)));
         }
@@ -263,11 +273,15 @@ public sealed partial class ClassStore
     // file name counted), so the sync never pushes a path the student's side
     // would rewrite or refuse, every round. Empty for a class whose folder
     // isn't there.
+    //
+    // Never a partial listing: a folder inside that can't be read throws
+    // IOException (naming it), for the caller to skip the round, instead of
+    // leaving out what is in it, which the sync would take for deleted or new.
     public IReadOnlyDictionary<string, FileVersion> Files(string turma)
     {
         var folder = FolderOf(turma);
         return IsRealDirectory(folder)
-            ? Scan(new DirectoryInfo(folder))
+            ? Scan(new DirectoryInfo(folder), strict: true)
             : new Dictionary<string, FileVersion>(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -391,10 +405,26 @@ public sealed partial class ClassStore
     }
 
     // With _gate held. Writes all of the index, so whatever was pending goes with it.
+    // It stays pending (Dirty) if the write fails, for SaveIndex to try again.
     private void Save(string turma, ClassIndex index)
     {
+        index.Dirty = true;
         ClassIndexFile.Save(IndexPath(turma), index);
         index.Dirty = false;
+    }
+
+    // For after something was done on the disk: a failed save is no reason to fail what is
+    // done (the caller would do it again), so the index stays pending and the failure is logged.
+    private void TrySave(string turma, ClassIndex index)
+    {
+        try
+        {
+            Save(turma, index);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"The index of {turma} could not be saved yet: {ex.Message}");
+        }
     }
 
     // With _gate held.

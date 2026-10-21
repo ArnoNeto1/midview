@@ -20,7 +20,10 @@ public sealed partial class ClassStore
     // the older files are not taken for today's). DeleteAll deletes everything
     // in the folder, hidden files and the ones the sync leaves out included;
     // a link in it is left alone, and said. Folders left empty are tidied
-    // away.
+    // away. Copies of replaced files that were set aside (CommitIncoming) and
+    // that the Recycle Bin refused then are sent again. A folder that can't be
+    // read is said in Problems (what is in it can't be known to have arrived
+    // today); an index that can't be saved is kept for SaveIndex.
     public (int Recycled, IReadOnlyList<string> Problems) EndLesson(string turma, EndChoice choice)
     {
         var folder = FolderOf(turma);
@@ -39,13 +42,24 @@ public sealed partial class ClassStore
             if (IsRealDirectory(folder))
             {
                 DiscardLeftoverTemps(folder);
+                RecycleLeftoverAsides();
                 if (choice == EndChoice.DeleteAll)
                 {
                     recycled = RecycleEverything(new DirectoryInfo(folder), string.Empty, problems);
                 }
                 else
                 {
-                    IndexNewFiles(index, Files(turma));
+                    try
+                    {
+                        IndexNewFiles(index, Files(turma));
+                    }
+                    catch (IOException ex)
+                    {
+                        // A folder that can't be read: what is in it is not known to be new, and
+                        // ending the lesson is not stopped by that. It is said, like a file that can't go.
+                        problems.Add(ex.Message);
+                    }
+
                     if (choice == EndChoice.DeleteToday)
                     {
                         recycled = RecycleArrivedOn(folder, index, Today, problems);
@@ -64,7 +78,7 @@ public sealed partial class ClassStore
 
             index.Deleted.Clear();
             index.Machines.Clear();
-            Save(turma, index);
+            TrySave(turma, index); // the files are dealt with: a failed save is kept for SaveIndex, not reported as a failed end
         }
         return (recycled, problems);
     }
@@ -114,7 +128,7 @@ public sealed partial class ClassStore
         foreach (var entry in entries)
         {
             var path = prefix + entry.Name;
-            if (IsLink(entry))
+            if (ClassFolderRules.IsLink(entry))
             {
                 problems.Add($"{path} (é um atalho; não foi apagado)");
             }

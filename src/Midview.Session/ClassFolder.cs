@@ -17,19 +17,14 @@ namespace Midview.Session;
 // InvalidOperationException (BeginPush) or a (false, reason) result.
 public sealed class ClassFolder
 {
-    // A file still being written, or one of Midview's own temp files, is never
-    // listed (and so never copied half-written): Chrome's ".crdownload", an
-    // Office or editor ".tmp", a ".part" and Midview's ".parcial". The rule is
-    // ClassFolderRules', shared with the Master's store.
-    public static IReadOnlyList<string> SkippedSuffixes => ClassFolderRules.SkippedSuffixes;
-
     private const string OtherLesson = "aula diferente";
     private const string NoFolder = "sem pasta";
     private const string Linked = "pasta vinculada";
 
-    // Hidden and system entries (Office's "~$" lock files, say) and links are
-    // skipped, and so is a folder the student can't look into: a listing makes
-    // do with what it can see.
+    // Hidden and system entries (Office's "~$" lock files, say) are skipped, and
+    // so is a folder the student can't look into: a listing makes do with what it
+    // can see. Links are skipped by Enumerate, ClassFolderRules saying what a link
+    // is (a junction or symbolic link, no other kind of reparse point).
     private static readonly EnumerationOptions Options = ListingOptions(ignoreInaccessible: true);
 
     // The same, except that a folder that can't be looked into is an error
@@ -37,8 +32,8 @@ public sealed class ClassFolder
     // read" for "nothing there".
     private static readonly EnumerationOptions StrictOptions = ListingOptions(ignoreInaccessible: false);
 
-    // Every entry, hidden, system and links included, an unreadable folder an
-    // error: to find a link, which Options leaves out of sight.
+    // Every entry, hidden and system ones included, an unreadable folder an
+    // error: to find a link, which a listing leaves out of sight.
     private static readonly EnumerationOptions AllEntries = new()
     {
         RecurseSubdirectories = false,
@@ -512,7 +507,7 @@ public sealed class ClassFolder
             {
                 foreach (var entry in pending.Pop().EnumerateFileSystemInfos("*", AllEntries))
                 {
-                    if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+                    if (ClassFolderRules.IsLink(entry))
                     {
                         return (LinkSearch.Found, string.Empty);
                     }
@@ -736,23 +731,10 @@ public sealed class ClassFolder
         return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase) ? path : null;
     }
 
-    // A junction or symbolic link (a reparse point). A path that isn't there
-    // isn't one; one whose attributes can't be read is taken for one.
-    private static bool IsLink(string path)
-    {
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return false;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return true;
-        }
-    }
+    // A junction or symbolic link (not any other reparse point: see
+    // ClassFolderRules.IsLink). A path that isn't there isn't one; one whose
+    // attributes can't be read is taken for one.
+    private static bool IsLink(string path) => ClassFolderRules.IsLink(path);
 
     // The set-aside folders that are a lesson's (named by its id, "N" format),
     // in name order.
@@ -835,11 +817,12 @@ public sealed class ClassFolder
         try
         {
             var files = directory.EnumerateFiles("*", options)
-                .Where(file => ClassFolderRules.IsListedFile(file.Name, file.Length))
+                .Where(file => ClassFolderRules.IsListedFile(file.Name, file.Length) && !ClassFolderRules.IsLink(file))
                 .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             var subdirectories = directory.EnumerateDirectories("*", options)
-                .Where(subdirectory => ClassFolderRules.IsAddressable(subdirectory.Name))
+                .Where(subdirectory => ClassFolderRules.IsAddressable(subdirectory.Name)
+                    && !ClassFolderRules.IsLink(subdirectory))
                 .OrderBy(subdirectory => subdirectory.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             return (files, subdirectories, null);
@@ -853,7 +836,7 @@ public sealed class ClassFolder
     private static EnumerationOptions ListingOptions(bool ignoreInaccessible) => new()
     {
         RecurseSubdirectories = false,
-        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
         IgnoreInaccessible = ignoreInaccessible,
     };
     private void Walk(DirectoryInfo directory, Guid lessonId, List<ClassFolderEntry> entries)

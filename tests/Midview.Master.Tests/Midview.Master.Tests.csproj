@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\src\Midview.Session\Midview.Session.csproj" />
     <ProjectReference Include="..\..\src\Midview.Agent\Midview.Agent.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- A reparse point that is no link, for the tests of what counts as one. -->
+    <Compile Include="..\Midview.Protocol.Tests\NonLinkReparsePoint.cs" Link="NonLinkReparsePoint.cs" />
+  </ItemGroup>
 </Project>

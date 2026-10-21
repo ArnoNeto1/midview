@@ -15,6 +15,14 @@ internal static class ClassFolderDisk
         IgnoreInaccessible = true,
     };
 
+    // The same, but a folder that can't be read is an error, not an empty one.
+    private static readonly EnumerationOptions StrictListedOptions = new()
+    {
+        RecurseSubdirectories = false,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+        IgnoreInaccessible = false,
+    };
+
     // Everything, hidden and system entries included; a folder that can't be
     // read is an error: for deleting a whole class.
     public static readonly EnumerationOptions EverythingOptions = new()
@@ -28,23 +36,40 @@ internal static class ClassFolderDisk
     // path, each with its version. Manual recursion to stop at
     // FileCollection.MaxDepth (the class folder is depth 1), as
     // ClassFolder.ListedFiles does.
-    public static Dictionary<string, FileVersion> Scan(DirectoryInfo folder)
+    //
+    // Strict: a folder or entry that can't be read (other than the kinds left
+    // out on purpose, which are never opened) throws IOException, rather than
+    // the listing silently missing what is in it: the sync would take those
+    // files for gone, or for new. Not strict: it is left out, for a summary
+    // that makes do with what it sees.
+    public static Dictionary<string, FileVersion> Scan(DirectoryInfo folder, bool strict)
     {
         var found = new Dictionary<string, FileVersion>(StringComparer.OrdinalIgnoreCase);
-        Scan(folder, string.Empty, 1, found);
+        Scan(folder, string.Empty, 1, found, strict);
         return found;
     }
 
-    private static void Scan(DirectoryInfo directory, string prefix, int depth, Dictionary<string, FileVersion> found)
+    private static void Scan(
+        DirectoryInfo directory, string prefix, int depth, Dictionary<string, FileVersion> found, bool strict)
     {
         List<FileSystemInfo> entries;
         try
         {
-            entries = directory.EnumerateFileSystemInfos("*", ListedOptions).ToList();
+            entries = directory.EnumerateFileSystemInfos("*", strict ? StrictListedOptions : ListedOptions).ToList();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return; // gone while we looked: nothing in it
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return; // gone, or closed to us, while we looked
+            if (!strict)
+            {
+                return;
+            }
+
+            var where = prefix.Length == 0 ? "a pasta da turma" : $"a pasta \"{prefix.TrimEnd('/')}\"";
+            throw new IOException($"Não foi possível ler {where}: {ErrorText.Describe(ex)}", ex);
         }
 
         foreach (var entry in entries)
@@ -52,13 +77,13 @@ internal static class ClassFolderDisk
             if (entry is DirectoryInfo subdirectory)
             {
                 if (ClassFolderRules.CanDescendFrom(depth) && ClassFolderRules.IsAddressable(subdirectory.Name)
-                    && !IsLink(subdirectory))
+                    && !ClassFolderRules.IsLink(subdirectory))
                 {
-                    Scan(subdirectory, prefix + subdirectory.Name + "/", depth + 1, found);
+                    Scan(subdirectory, prefix + subdirectory.Name + "/", depth + 1, found, strict);
                 }
             }
             else if (entry is FileInfo file && ClassFolderRules.IsListedFile(file.Name, file.Length)
-                && ClassFolderRules.FitsTheWire(prefix + file.Name) && !IsLink(file))
+                && ClassFolderRules.FitsTheWire(prefix + file.Name) && !ClassFolderRules.IsLink(file))
             {
                 found[prefix + file.Name] = new FileVersion(file.Length, file.LastWriteTimeUtc.Ticks);
             }
@@ -72,7 +97,7 @@ internal static class ClassFolderDisk
     // doesn't exist (yet) can't be a link.
     public static string? PathInside(string folder, string relativePath)
     {
-        if (string.IsNullOrEmpty(relativePath) || IsLink(folder))
+        if (string.IsNullOrEmpty(relativePath) || ClassFolderRules.IsLink(folder))
         {
             return null;
         }
@@ -86,7 +111,7 @@ internal static class ClassFolderDisk
             }
 
             path = Path.Combine(path, segment);
-            if (IsLink(path))
+            if (ClassFolderRules.IsLink(path))
             {
                 return null;
             }
@@ -101,49 +126,7 @@ internal static class ClassFolderDisk
         return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static bool IsRealDirectory(string path) => Directory.Exists(path) && !IsLink(path);
-
-    // A junction or symbolic link, which could point anywhere, or back at
-    // itself. Not any reparse point: OneDrive's placeholder files are
-    // reparse points too, and the teacher's Documents folder may well be in
-    // OneDrive; those have no link target.
-    public static bool IsLink(FileSystemInfo info)
-    {
-        try
-        {
-            return (info.Attributes & FileAttributes.ReparsePoint) != 0 && info.LinkTarget is not null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return true; // can't tell: don't go through it
-        }
-    }
-
-    // A path that isn't there isn't one; one whose attributes can't be read is taken for one.
-    public static bool IsLink(string path)
-    {
-        try
-        {
-            var attributes = File.GetAttributes(path);
-            if ((attributes & FileAttributes.ReparsePoint) == 0)
-            {
-                return false;
-            }
-
-            FileSystemInfo info = (attributes & FileAttributes.Directory) != 0
-                ? new DirectoryInfo(path)
-                : new FileInfo(path);
-            return IsLink(info);
-        }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return false;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return true;
-        }
-    }
+    public static bool IsRealDirectory(string path) => Directory.Exists(path) && !ClassFolderRules.IsLink(path);
 
     // Whether the file is really gone: not there, or a folder now. A path
     // that can't be looked at (access denied, a sharing error) isn't gone.

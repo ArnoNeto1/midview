@@ -124,6 +124,40 @@ public class ClassFolderTests : IDisposable
         Assert.Equal(new[] { "meu.txt" }, entries.Select(e => e.Path));
     }
 
+    // A cloud files placeholder (OneDrive) is a reparse point with no link target: an ordinary file.
+    [Fact]
+    public void List_ListsAFileWhoseReparsePointIsNoLink()
+    {
+        var folder = MakeLessonFolder();
+        Write(folder, "meu.txt");
+        NonLinkReparsePoint.Make(Write(folder, "nuvem.txt", "conteudo"));
+
+        var (_, problem, entries) = NewClassFolder().List();
+
+        Assert.Null(problem);
+        Assert.Equal(new[] { "meu.txt", "nuvem.txt" }, entries.Select(e => e.Path));
+        Assert.Equal(8, entries.Single(e => e.Path == "nuvem.txt").Size);
+    }
+
+    [Fact]
+    public void Follow_LessonEnded_AReparsePointThatIsNoLink_IsSetAsideLikeAnyFile_AndDoesNotKeepTheFolder()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var id = LessonId;
+        NonLinkReparsePoint.Make(Write(folder, "nuvem.txt", "conteudo"));
+        // One that is not listed, so that it is still in the folder when the search for links looks through it.
+        NonLinkReparsePoint.Make(Write(folder, "rascunho.tmp", "conteudo"));
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "nuvem.txt")));
+        Assert.Equal(new[] { folder }, _bin.Recycled);
+        Assert.Empty(Pending());
+    }
+
     [Fact]
     public void List_WhenTheFolderItselfIsAJunction_ReportsItAndListsNothing()
     {

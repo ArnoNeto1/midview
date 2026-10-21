@@ -10,6 +10,8 @@ public partial class ClassStoreTests : IDisposable
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"midview-turmas-{Guid.NewGuid():N}");
     private readonly List<string> _links = new();
+    private readonly List<string> _closed = new();
+    private readonly List<string> _log = new();
     private readonly MovingRecycleBin _bin;
     private readonly ClassStore _store;
     private DateTime _now = new(2026, 10, 20, 13, 30, 0);
@@ -23,6 +25,11 @@ public partial class ClassStoreTests : IDisposable
 
     public void Dispose()
     {
+        // A folder closed to us can't be deleted, nor can what it holds.
+        foreach (var folder in _closed.Where(Directory.Exists))
+        {
+            OpenToTheTeacher(folder);
+        }
         // Links first: deleting one removes the link, never what it points at.
         foreach (var link in _links.Where(Directory.Exists))
         {
@@ -50,7 +57,7 @@ public partial class ClassStoreTests : IDisposable
     // The day a file with that time arrived on the teacher's PC, when nothing else says (the teacher's own local date).
     private static DateOnly LocalDay(DateTime utc) => DateOnly.FromDateTime(utc.ToLocalTime());
 
-    private ClassStore NewStore(IRecycleBin bin) => new(FilesRoot, IndexRoot, bin, () => _now);
+    private ClassStore NewStore(IRecycleBin bin) => new(FilesRoot, IndexRoot, bin, () => _now, _log.Add);
 
     private string FolderOf(string turma) => Path.Combine(FilesRoot, turma);
 

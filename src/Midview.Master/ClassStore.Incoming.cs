@@ -121,18 +121,31 @@ public sealed partial class ClassStore
     // the last write time the PC had, and records the arrival. Returns the
     // path it ended up at ('/'-separated, subfolder included).
     //
-    // replace: the path is the same file edited on a PC, so the old copy goes
-    // to the Recycle Bin first and the arrival day stays. Otherwise it is a
-    // new file and never overwrites: a taken name gets a free one in the
-    // same subfolder ("images.jpg" is "images (2).jpg"), returned for the
-    // caller to tell the PC; it arrived today, and a teacher's deletion of
-    // that path no longer holds.
+    // The path has to be one a listing shows (ClassFolderRules.WhyNotListed:
+    // depth, names, size, the wire), or it is refused: a file stored where it
+    // isn't listed would be copied again, every round.
+    //
+    // replace: the path is the same file edited on a PC, and the arrival day
+    // stays. The old copy is set aside in the class folder (under a name that is
+    // never listed), the new one moved in, and the old one sent to the Recycle
+    // Bin. If the new one can't be moved in, the old one is put back; if the
+    // Recycle Bin refuses, the new copy stays and the old one stays aside, to be
+    // sent when the Bin takes it (at the next replace or the end of the lesson):
+    // nothing is lost either way.
+    //
+    // Otherwise it is a new file and never overwrites: a taken name gets a free
+    // one in the same subfolder ("images.jpg" is "images (2).jpg", the name
+    // shortened where there is no room for the " (2)"), returned for the caller
+    // to tell the PC; it arrived today, and a teacher's deletion of that path no
+    // longer holds.
     //
     // Throws ArgumentException for a path or temp file that isn't inside the
     // class folder, DirectoryNotFoundException for a class with no folder,
     // and IOException (the temp file is left for the caller to delete) for a
-    // file that isn't the announced size, a time Windows can't store, an old
-    // copy in use, or anything else the disk refuses.
+    // path no listing would show, a file that isn't the announced size, a time
+    // Windows can't store, an old copy in use, or anything else the disk refuses.
+    // Once the file is in place nothing fails any more: an index that can't be
+    // saved is kept for SaveIndex to retry.
     public string CommitIncoming(string turma, string tempPath, string relativePath, FileVersion version, bool replace)
     {
         var folder = RealFolderOf(turma);
@@ -148,41 +161,153 @@ public sealed partial class ClassStore
 
         lock (_gate)
         {
+            var index = IndexOf(turma); // before anything is done: a failure here changes nothing
             var target = PathOf(turma, relativePath);
+            if (ClassFolderRules.WhyNotListed(relativePath, version.Size) is { } reason)
+            {
+                throw new IOException($"O arquivo não pode ficar na turma: {reason}.");
+            }
             if (new FileInfo(temp).Length != version.Size)
             {
                 throw new IOException("O arquivo recebido não tem o tamanho anunciado.");
             }
 
-            var directory = Path.GetDirectoryName(target)!;
-            Directory.CreateDirectory(directory);
-            // Before the move, so the file never shows in the store with the wrong time.
-            File.SetLastWriteTimeUtc(temp, new DateTime(version.LastWriteTicks, DateTimeKind.Utc));
-
-            var segments = relativePath.Split('/');
-            var stored = relativePath;
-            if (replace)
+            string stored;
+            try
             {
-                if (File.Exists(target))
-                {
-                    _recycleBin.Recycle(target);
-                }
-                File.Move(temp, target);
+                stored = Place(temp, target, relativePath, version, replace);
             }
-            else
+            catch (UnauthorizedAccessException ex)
             {
-                var name = FileNames.MoveToUniqueName(temp, directory, segments[^1]);
-                stored = string.Join('/', segments[..^1].Append(name));
+                throw new IOException(ErrorText.Describe(ex), ex);
             }
 
-            var index = IndexOf(turma);
             if (!replace || !index.ArrivedOn.ContainsKey(stored))
             {
                 index.ArrivedOn[stored] = Today;
             }
             index.Deleted.Remove(stored);
-            Save(turma, index);
+            TrySave(turma, index);
             return stored;
+        }
+    }
+
+    // The disk part of CommitIncoming. Returns the path stored.
+    private string Place(string temp, string target, string relativePath, FileVersion version, bool replace)
+    {
+        var directory = Path.GetDirectoryName(target)!;
+        Directory.CreateDirectory(directory);
+        // Before the move, so the file never shows in the store with the wrong time.
+        File.SetLastWriteTimeUtc(temp, new DateTime(version.LastWriteTicks, DateTimeKind.Utc));
+
+        var segments = relativePath.Split('/');
+        if (!replace)
+        {
+            var folders = string.Concat(segments[..^1].Select(folder => folder + "/"));
+            return folders + MoveToFreeName(temp, directory, folders, segments[^1]);
+        }
+
+        RecycleLeftoverAsides();
+        if (!File.Exists(target))
+        {
+            File.Move(temp, target);
+            return relativePath;
+        }
+
+        var aside = Path.Combine(directory, ClassFolderRules.NewAsideName(segments[^1]));
+        File.Move(target, aside);
+        try
+        {
+            File.Move(temp, target);
+        }
+        catch (Exception)
+        {
+            PutBack(aside, target);
+            throw;
+        }
+
+        RecycleAside(aside);
+        return relativePath;
+    }
+
+    // Moves the temp file to name in the directory or, when that is taken, to the
+    // first free "name (2)", "name (3)"... that a listing would still show.
+    private static string MoveToFreeName(string temp, string directory, string folders, string name)
+    {
+        for (var copy = 1; copy <= MaxCopies; copy++)
+        {
+            var candidate = copy == 1 ? name : ClassFolderRules.CopyName(name, copy, folders);
+            if (candidate is null)
+            {
+                break;
+            }
+
+            var target = Path.Combine(directory, candidate);
+            if (File.Exists(target) || Directory.Exists(target))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Move(temp, target);
+                return candidate;
+            }
+            catch (IOException) when (File.Exists(target) || Directory.Exists(target))
+            {
+                // It appeared between the check and the move: the next name.
+            }
+        }
+        throw new IOException("Não há um nome livre para o arquivo nesta pasta.");
+    }
+
+    private const int MaxCopies = 9999;
+
+    private void PutBack(string aside, string target)
+    {
+        try
+        {
+            File.Move(aside, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"The old copy could not be put back at {target}; it is at {aside}: {ex.Message}");
+        }
+    }
+
+    private void RecycleAside(string aside)
+    {
+        try
+        {
+            _recycleBin.Recycle(aside);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _asides.Add(aside);
+            _log($"The old copy at {aside} could not go to the Recycle Bin yet: {ex.Message}");
+        }
+    }
+
+    // With _gate held: the copies set aside that the Recycle Bin refused, once more.
+    private void RecycleLeftoverAsides()
+    {
+        foreach (var aside in _asides.ToList())
+        {
+            if (!File.Exists(aside))
+            {
+                _asides.Remove(aside); // gone: recycled with the rest of the class, or by the teacher
+                continue;
+            }
+
+            try
+            {
+                _recycleBin.Recycle(aside);
+                _asides.Remove(aside);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still refused: the next time.
+            }
         }
     }
 

@@ -149,8 +149,14 @@ public partial class ClassStoreTests
         var path = Path.Combine(FolderOf(Turma), "trabalho.docx");
         Assert.Equal("novo e maior", File.ReadAllText(path));
         Assert.Equal(newer, File.GetLastWriteTimeUtc(path));
-        Assert.Equal(new[] { path }, _bin.Recycled);
-        Assert.Equal("antigo", File.ReadAllText(_bin.InBin(path)));
+        // The old copy went to the Recycle Bin from where it was set aside: in the class folder, under a
+        // name that is never listed, which keeps the file's own name at the end.
+        var recycled = Assert.Single(_bin.Recycled);
+        Assert.Equal(FolderOf(Turma), Path.GetDirectoryName(recycled));
+        Assert.StartsWith(".midview-", Path.GetFileName(recycled));
+        Assert.EndsWith("-trabalho.docx", recycled);
+        Assert.Equal("antigo", File.ReadAllText(_bin.InBin(recycled)));
+        Assert.Equal(new[] { path }, Directory.GetFiles(FolderOf(Turma)));
         // The file is the same file, edited: it didn't arrive again.
         Assert.Equal(new DateOnly(2026, 10, 20), _store.ArrivedOn(Turma, "trabalho.docx"));
         Assert.Single(_store.Files(Turma));
@@ -184,23 +190,22 @@ public partial class ClassStoreTests
     [Fact]
     public void CommitIncoming_Replace_WhenTheOldCopyIsInUse_ChangesNothing()
     {
-        var bin = new MovingRecycleBin(Path.Combine(_root, "lixeira2"), refused: "trabalho.docx");
-        var store = NewStore(bin);
-        store.Create(Turma);
+        MakeClass();
         var old = Write(Turma, "trabalho.docx", "antigo");
-        string temp;
-        using (var stream = store.BeginIncoming(Turma))
-        {
-            temp = stream.Name;
-            stream.Write("novo"u8);
-        }
+        var (temp, version) = Incoming(Turma, "novo");
+        // Open in a program that doesn't let it be moved (Word, say).
+        using var open = new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.Read);
 
         var failure = Assert.Throws<IOException>(
-            () => store.CommitIncoming(Turma, temp, "trabalho.docx", VersionOf("novo"), replace: true));
+            () => _store.CommitIncoming(Turma, temp, "trabalho.docx", version, replace: true));
 
         Assert.Contains("em uso", ErrorText.Describe(failure));
+        open.Dispose();
         Assert.Equal("antigo", File.ReadAllText(old));
         Assert.True(File.Exists(temp));
+        Assert.Equal(new[] { old, temp }.Order(), Directory.GetFiles(FolderOf(Turma)).Order()); // nothing set aside
+        Assert.Empty(_bin.Recycled);
+        Assert.Null(_store.ArrivedOn(Turma, "trabalho.docx"));
     }
 
     [Fact]
