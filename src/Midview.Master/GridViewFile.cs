@@ -4,9 +4,11 @@ using System.Text.Json;
 namespace Midview.Master;
 
 // How the teacher last left the classroom grid, so it opens the same way
-// next time: the size of its tiles (TileSize) and whether it shows only the
-// machines that are online (GridFilter).
-public sealed record GridView(int TileWidth, bool OnlineOnly);
+// next time: the size of its tiles (TileSize), whether it shows only the
+// machines that are online (GridFilter), whether "Visualizar todos" keeps
+// every machine in view, and whether the tiles are placed like the room
+// (TileArrangement).
+public sealed record GridView(int TileWidth, bool OnlineOnly, bool FitAll = false, bool Arranged = false);
 
 public static class GridViewFile
 {
@@ -14,7 +16,7 @@ public static class GridViewFile
 
     // Missing or unreadable is the default: nothing in it is worth keeping
     // aside, unlike the classroom list. A file from before the filter has
-    // only the size.
+    // only the size; one from before the rest, only the size and the filter.
     public static GridView Load(string path)
     {
         try
@@ -22,7 +24,7 @@ public static class GridViewFile
             var view = JsonSerializer.Deserialize<GridView>(File.ReadAllText(path));
             if (view is not null)
             {
-                return view with { TileWidth = view.TileWidth > 0 ? TileSize.Snap(view.TileWidth) : TileSize.Default };
+                return view with { TileWidth = view.TileWidth > 0 ? TileSize.Clamp(view.TileWidth) : TileSize.Default };
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)

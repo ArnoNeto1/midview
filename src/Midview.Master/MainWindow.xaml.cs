@@ -66,21 +66,12 @@ public partial class MainWindow : Window
     // isn't locked anymore got out (signed out, restarted, switched user).
     private readonly HashSet<MachineTile> _wereLocked = new();
 
-    // How wide the tiles' screens are drawn (TileSize) and Windows' scale
-    // on this window's monitor: the pollers read both on their own threads
-    // to ask each machine for a thumbnail that size.
-    private int _tileWidth = TileSize.Default;
-    private double _dpiScale = 1.0;
-
     // "Só online": the grid shows only the machines that answer (GridFilter).
     // _shownTiles is the grid's own list of _tiles (its default view),
     // filtered and kept up to date as machines answer or stop answering;
     // selecting only ever reaches the tiles it shows.
     private bool _onlineOnly;
     private readonly ListCollectionView _shownTiles;
-
-    // Wheel turns not yet worth a whole step (a touchpad sends small ones).
-    private int _wheelDelta;
 
     public MainWindow()
     {
@@ -96,14 +87,8 @@ public partial class MainWindow : Window
         ((INotifyCollectionChanged)_shownTiles).CollectionChanged += OnShownTilesChanged;
         _selection = new GridSelection<MachineTile>(new ShownTiles(_shownTiles));
         _dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        TileSizeSlider.Minimum = TileSize.Smallest;
-        TileSizeSlider.Maximum = TileSize.Largest;
-        TileSizeSlider.Ticks = new DoubleCollection(TileSize.Widths.Select(width => (double)width));
         var gridView = GridViewFile.Load(GridViewFile.DefaultPath);
-        ShowTilesAt(gridView.TileWidth);
-        // Only now: setting the slider's range above moved it, which isn't
-        // the teacher choosing a size.
-        TileSizeSlider.ValueChanged += OnTileSizeSliderChanged;
+        LoadTileLayout(gridView);
         _onlineOnly = gridView.OnlineOnly;
         OnlineOnlyButton.IsChecked = _onlineOnly;
         _powerSchedule = LoadPowerSchedule();
@@ -215,72 +200,6 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    // Ctrl +, Ctrl - and Ctrl 0, on the main keys or the number pad, as a
-    // browser zooms.
-    private int? TileWidthForKey(Key key) => key switch
-    {
-        Key.OemPlus or Key.Add => TileSize.Larger(_tileWidth),
-        Key.OemMinus or Key.Subtract => TileSize.Smaller(_tileWidth),
-        Key.D0 or Key.NumPad0 => TileSize.Default,
-        _ => null,
-    };
-
-    // Ctrl + the wheel resizes the tiles instead of scrolling the grid.
-    private void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-        {
-            return;
-        }
-        _wheelDelta += e.Delta;
-        var width = _tileWidth;
-        for (; _wheelDelta >= Mouse.MouseWheelDeltaForOneLine; _wheelDelta -= Mouse.MouseWheelDeltaForOneLine)
-        {
-            width = TileSize.Larger(width);
-        }
-        for (; _wheelDelta <= -Mouse.MouseWheelDeltaForOneLine; _wheelDelta += Mouse.MouseWheelDeltaForOneLine)
-        {
-            width = TileSize.Smaller(width);
-        }
-        ResizeTiles(width);
-        e.Handled = true;
-    }
-
-    private void OnTileSizeSliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) =>
-        ResizeTiles((int)e.NewValue);
-
-    private void OnSmallerTilesClicked(object sender, RoutedEventArgs e) => ResizeTiles(TileSize.Smaller(_tileWidth));
-
-    private void OnLargerTilesClicked(object sender, RoutedEventArgs e) => ResizeTiles(TileSize.Larger(_tileWidth));
-
-    // "Visualizar todos": once, for the machines shown and the window as they
-    // are now -- adding machines or resizing the window afterwards doesn't
-    // resize the tiles again.
-    private void OnFitAllClicked(object sender, RoutedEventArgs e)
-    {
-        var tiles = _shownTiles.Cast<MachineTile>()
-            .Select(tile => MachinesItemsControl.ItemContainerGenerator.ContainerFromItem(tile))
-            .OfType<FrameworkElement>()
-            .ToList();
-        if (tiles.Count == 0)
-        {
-            return;
-        }
-
-        // What a tile adds around its screen, as drawn now: the card, its
-        // margin, and the name and badges (the tallest, since a row is as
-        // tall as its tallest tile).
-        var chromeWidth = tiles.Max(tile => tile.ActualWidth) - _tileWidth;
-        var chromeHeight = tiles.Max(tile => tile.ActualHeight) - TileSize.HeightOf(_tileWidth);
-        // Inside the grid's margin, and a pixel short so rounding never
-        // wraps a last tile onto a row of its own.
-        var margin = MachinesItemsControl.Margin;
-        var availableWidth = MachinesScrollViewer.ActualWidth - margin.Left - margin.Right - 1;
-        var availableHeight = MachinesScrollViewer.ActualHeight - margin.Top - margin.Bottom - 1;
-
-        ResizeTiles(TileSize.ToFitAll(tiles.Count, availableWidth, availableHeight, chromeWidth, chromeHeight));
-    }
-
     private void OnOnlineOnlyClicked(object sender, RoutedEventArgs e) => ShowOnlineOnly(OnlineOnlyButton.IsChecked == true);
 
     // The button under "Nenhuma máquina online agora".
@@ -303,31 +222,9 @@ public partial class MainWindow : Window
         SaveGridView();
     }
 
-    // The teacher chose a size: shown now, and the next time Midview opens.
-    private void ResizeTiles(int width)
-    {
-        if (width == _tileWidth)
-        {
-            return;
-        }
-        ShowTilesAt(width);
-        SaveGridView();
-    }
-
-    private void SaveGridView()
-    {
-        try
-        {
-            GridViewFile.Save(GridViewFile.DefaultPath, new GridView(_tileWidth, _onlineOnly));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            StatusTextBlock.Text = $"O tamanho e o filtro das telas não puderam ser guardados: {ErrorText.Describe(ex)}";
-        }
-    }
-
     // A tile the grid stopped showing ("Só online") leaves the selection, so
     // "Ver a tela", "Controlar" and a tile's menu never act on a hidden one.
+    // Fewer or more shown, "Visualizar todos" fits them again.
     private void OnShownTilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         _selection.Prune();
@@ -335,6 +232,7 @@ public partial class MainWindow : Window
         {
             RefreshSelection();
         }
+        FitSoon();
     }
 
     // The grid's filtered list, as GridSelection reads it: live, in grid order.
@@ -351,24 +249,6 @@ public partial class MainWindow : Window
         public IEnumerator<MachineTile> GetEnumerator() => _view.Cast<MachineTile>().GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-    }
-
-    // Every tile's screen at this width (MainWindow.xaml's TileWidth and
-    // TileHeight); each machine is asked for a thumbnail to match from its
-    // next poll on, and the slider follows.
-    private void ShowTilesAt(int width)
-    {
-        Volatile.Write(ref _tileWidth, width);
-        Resources["TileWidth"] = (double)width;
-        Resources["TileHeight"] = (double)TileSize.HeightOf(width);
-        TileSizeSlider.Value = width;
-    }
-
-    // Thumbnails stay sharp on a monitor with another scale.
-    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
-    {
-        base.OnDpiChanged(oldDpi, newDpi);
-        Volatile.Write(ref _dpiScale, newDpi.DpiScaleX);
     }
 
     // A press on the grid's empty space -- a tile, being a button, takes its
@@ -424,6 +304,7 @@ public partial class MainWindow : Window
         if (ReferenceEquals(e.OriginalSource, GridSurface))
         {
             EndBand();
+            EndDrag();
         }
     }
 
@@ -1296,6 +1177,11 @@ public partial class MainWindow : Window
     private void InsertTile(int index, KnownMachine machine)
     {
         var tile = new MachineTile(machine);
+        // Where the teacher placed it in the room, if ever ("Organizar sala").
+        if (_cells.TryGetValue(machine.Name, out var cell))
+        {
+            tile.Cell = cell;
+        }
         // A machine "Só online" hides can still change what the grid says
         // when it shows none (still looking, or none online).
         tile.PropertyChanged += (_, e) =>
@@ -1306,12 +1192,17 @@ public partial class MainWindow : Window
             }
         };
         _tiles.Insert(index, tile);
+        // A machine new to a room the teacher organized: the first free cell.
+        if (_arranged && RowWidth() > 0)
+        {
+            PlaceTiles();
+        }
 
         var poller = new ThumbnailPoller(
             machine, _masterCertificate,
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
             appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
-            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _tileWidth), Volatile.Read(ref _dpiScale)));
+            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)));
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>
@@ -1397,6 +1288,12 @@ public partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
+        // A size still settling is saved now.
+        if (_saveTimer.IsEnabled)
+        {
+            SaveGridViewNow();
+        }
+
         // Closing the teacher's program unlocks every screen it locked.
         foreach (var keeper in _screenLocks.Values)
         {

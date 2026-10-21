@@ -36,13 +36,36 @@ public class GridViewFileTests : IDisposable
         Assert.Equal(new GridView(TileSize.Default, OnlineOnly: false), GridViewFile.Load(GridViewPath));
     }
 
-    [Fact]
-    public void AWidthThatIsNotAStep_IsTheNearestStep()
+    [Theory]
+    [InlineData(300, 300)] // any size in range, no steps
+    [InlineData(5000, 960)]
+    [InlineData(10, 120)]
+    public void AWidthOutOfRange_IsBroughtIntoIt(int saved, int expected)
     {
         Directory.CreateDirectory(_directory);
-        File.WriteAllText(GridViewPath, """{ "TileWidth": 300 }""");
+        File.WriteAllText(GridViewPath, $$"""{ "TileWidth": {{saved}} }""");
 
-        Assert.Equal(320, GridViewFile.Load(GridViewPath).TileWidth);
+        Assert.Equal(expected, GridViewFile.Load(GridViewPath).TileWidth);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsTheLayout()
+    {
+        var view = new GridView(300, OnlineOnly: false, FitAll: true, Arranged: true);
+        GridViewFile.Save(GridViewPath, view);
+
+        Assert.Equal(view, GridViewFile.Load(GridViewPath));
+    }
+
+    // What 0.0.22 saved, before "Visualizar todos" stayed on and the room.
+    [Fact]
+    public void AFileWithOnlyTheSizeAndFilter_HasTheRestOff()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(GridViewPath, """{"TileWidth":256,"OnlineOnly":true}""");
+
+        Assert.Equal(new GridView(256, OnlineOnly: true, FitAll: false, Arranged: false),
+            GridViewFile.Load(GridViewPath));
     }
 
     // What 0.0.19 saved, before the filter existed.

@@ -23,6 +23,7 @@ public sealed class MachineTile : INotifyPropertyChanged
     private string _screenLockBadge = string.Empty;
     private bool _screenLockAlert;
     private TilePresence _presence;
+    private TileCell? _cell;
 
     public MachineTile(KnownMachine machine)
     {
@@ -113,6 +114,21 @@ public sealed class MachineTile : INotifyPropertyChanged
             if (_screenLockAlert != value)
             {
                 _screenLockAlert = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Where the tile sits when the teacher places them like the room
+    // (TileGridPanel, TileArrangement); none until it has a place.
+    public TileCell? Cell
+    {
+        get => _cell;
+        set
+        {
+            if (_cell != value)
+            {
+                _cell = value;
                 OnPropertyChanged();
             }
         }

@@ -95,8 +95,15 @@
                 <!-- How big each machine's screen is drawn (TileSize, remembered in
                      GridViewFile); also Ctrl + the mouse wheel and Ctrl +, -, 0. -->
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                    <Button Content="Visualizar todos" Click="OnFitAllClicked" Padding="10,2" FontSize="12"
-                            ToolTip="Deixa as telas no maior tamanho em que todas as máquinas mostradas cabem na janela, sem rolar." />
+                    <!-- TileArrangement: the tiles where the machines are in the room. -->
+                    <ToggleButton x:Name="ArrangeButton" Content="Organizar sala" Click="OnArrangeClicked" Padding="10,2" FontSize="12"
+                                  Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Ligado, você arrasta as telas para ficarem como as máquinas estão na sala. As posições ficam guardadas." />
+                    <Button x:Name="AlignButton" Content="Alinhar" Click="OnAlignClicked" Padding="10,2" FontSize="12" Margin="6,0,0,0"
+                            Visibility="Collapsed" ToolTip="Encaixa cada tela na posição inteira mais próxima, sem sobrepor." />
+                    <ToggleButton x:Name="FitAllButton" Content="Visualizar todos" Click="OnFitAllClicked" Padding="10,2" FontSize="12"
+                                  Margin="12,0,0,0" Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Ligado, mantém todas as máquinas mostradas na janela, sem rolar: as telas mudam de tamanho sozinhas quando a janela muda ou quando máquinas aparecem e somem. Mudar o tamanho à mão desliga." />
                     <!-- GridFilter: hides the machines that are off or not answering. -->
                     <ToggleButton x:Name="OnlineOnlyButton" Content="Só online" Click="OnOnlineOnlyClicked" Padding="10,2" FontSize="12"
                                   Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
@@ -105,8 +112,7 @@
                             ToolTip="Telas menores, para ver mais máquinas de uma vez (Ctrl + roda do mouse ou Ctrl -).">
                         <TextBlock Text="&#xE71F;" FontFamily="{StaticResource IconFont}" FontSize="12" />
                     </Button>
-                    <Slider x:Name="TileSizeSlider" Width="140" VerticalAlignment="Center" IsSnapToTickEnabled="True"
-                            TickPlacement="None"
+                    <Slider x:Name="TileSizeSlider" Width="140" VerticalAlignment="Center" SmallChange="8" LargeChange="32"
                             ToolTip="Tamanho das telas dos alunos (Ctrl + roda do mouse)." />
                     <Button Click="OnLargerTilesClicked" Padding="6,3" Margin="6,0,0,0"
                             ToolTip="Telas maiores, para ver melhor cada máquina (Ctrl + roda do mouse ou Ctrl +).">
@@ -140,7 +146,7 @@
                  press in the empty space (so no tile keeps a focus border), and a
                  dotted line around the whole grid would read as a selection. -->
             <ScrollViewer x:Name="MachinesScrollViewer" VerticalScrollBarVisibility="Auto" ScrollChanged="OnMachinesScrolled"
-                          FocusVisualStyle="{x:Null}">
+                          SizeChanged="OnMachinesScrollViewerSizeChanged" FocusVisualStyle="{x:Null}">
                 <!-- Transparent rather than no background, so a press on the space
                      between and around the tiles reaches it and can start a selection
                      rectangle; the tiles, being buttons, take their own presses. It is
@@ -148,16 +154,24 @@
                      the Canvas above them) scrolls with them. -->
                 <Grid x:Name="GridSurface" Background="Transparent"
                       MouseLeftButtonDown="OnGridSurfaceMouseDown" MouseMove="OnGridSurfaceMouseMove"
-                      MouseLeftButtonUp="OnGridSurfaceMouseUp" LostMouseCapture="OnGridSurfaceLostCapture">
-                    <ItemsControl x:Name="MachinesItemsControl" Margin="10">
+                      MouseLeftButtonUp="OnGridSurfaceMouseUp" LostMouseCapture="OnGridSurfaceLostCapture"
+                      PreviewMouseMove="OnGridSurfacePreviewMouseMove" PreviewMouseLeftButtonUp="OnGridSurfacePreviewMouseUp">
+                    <ItemsControl x:Name="MachinesItemsControl" Margin="10" SizeChanged="OnMachinesItemsSizeChanged">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel />
+                                <local:TileGridPanel Loaded="OnTilePanelLoaded" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
+                        <!-- Where each tile sits when placed like the room ("Organizar sala"). -->
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Setter Property="local:TileGridPanel.Cell" Value="{Binding Cell}" />
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
+                                        PreviewMouseLeftButtonDown="OnTilePressed"
                                         PreviewMouseRightButtonDown="OnMachineRightClicked" ContextMenuOpening="OnMachineMenuOpening"
                                         ToolTip="Clique para selecionar. Botão direito para mais opções.">
                                     <Button.ContextMenu>
