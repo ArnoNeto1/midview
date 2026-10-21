@@ -252,6 +252,9 @@ public class ClassFolderTests : IDisposable
         var folder = MakeLessonFolder();
         var deep = string.Join("/", Enumerable.Range(1, FileCollection.MaxDepth + 2).Select(level => $"n{level}"));
         Write(folder, $"{deep}/fundo.txt");
+        // One segment too many: the file name counts, so MaxDepth folders and a file is MaxDepth + 1.
+        var justTooDeep = string.Join("/", Enumerable.Range(1, FileCollection.MaxDepth).Select(level => $"m{level}")) + "/fundo.txt";
+        Write(folder, justTooDeep);
         var deepest = string.Join("/", Enumerable.Range(1, FileCollection.MaxDepth - 1).Select(level => $"n{level}")) + "/ok.txt";
         Write(folder, deepest);
 

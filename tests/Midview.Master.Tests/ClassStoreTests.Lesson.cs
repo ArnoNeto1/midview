@@ -30,17 +30,51 @@ public partial class ClassStoreTests
     }
 
     [Fact]
-    public void RefreshTombstones_IndexesWhatTheTeacherAdded_WithTheDayItWasFirstSeen()
+    public void RefreshTombstones_IndexesWhatTheTeacherAdded_WithTheDayOfItsOwnTime()
     {
         MakeClass();
-        Write(Turma, "do-professor.pdf");
-        Assert.False(_store.IsKnown(Turma, "do-professor.pdf"));
+        var yesterday = Today.AddDays(-1);
+        Write(Turma, "de-ontem.pdf", "x", NowUtc.AddDays(-1));
+        Write(Turma, "de-hoje.pdf", "x", NowUtc);
+        Write(Turma, "de-semana-passada.pdf", "x", NowUtc.AddDays(-8));
+        Assert.False(_store.IsKnown(Turma, "de-ontem.pdf"));
 
         _store.RefreshTombstones(Turma);
         _now = _now.AddDays(2);
         _store.RefreshTombstones(Turma);
 
-        Assert.Equal(new DateOnly(2026, 10, 20), _store.ArrivedOn(Turma, "do-professor.pdf"));
+        Assert.Equal(yesterday, _store.ArrivedOn(Turma, "de-ontem.pdf"));
+        Assert.Equal(yesterday.AddDays(1), _store.ArrivedOn(Turma, "de-hoje.pdf"));
+        Assert.Equal(yesterday.AddDays(-7), _store.ArrivedOn(Turma, "de-semana-passada.pdf"));
+        Assert.Equal(yesterday, NewStore(_bin).ArrivedOn(Turma, "de-ontem.pdf"));
+    }
+
+    [Fact]
+    public void RefreshTombstones_TheDayOfAFile_IsTheTeachersLocalOne_NotTheUtcOne()
+    {
+        MakeClass();
+        // Late in the evening and just after midnight, local time: in any time zone but UTC itself,
+        // one of the two is on another day in UTC.
+        var late = new DateTime(2026, 10, 19, 23, 30, 0, DateTimeKind.Local);
+        var early = new DateTime(2026, 10, 19, 0, 30, 0, DateTimeKind.Local);
+        Write(Turma, "de-noite.pdf", "x", late.ToUniversalTime());
+        Write(Turma, "de-madrugada.pdf", "x", early.ToUniversalTime());
+
+        _store.RefreshTombstones(Turma);
+
+        Assert.Equal(new DateOnly(2026, 10, 19), _store.ArrivedOn(Turma, "de-noite.pdf"));
+        Assert.Equal(new DateOnly(2026, 10, 19), _store.ArrivedOn(Turma, "de-madrugada.pdf"));
+    }
+
+    [Fact]
+    public void RefreshTombstones_AFileWithATimeInTheFuture_IsNotToday_UntilThen()
+    {
+        MakeClass();
+        Write(Turma, "do-futuro.pdf", "x", NowUtc.AddDays(3));
+
+        _store.RefreshTombstones(Turma);
+
+        Assert.Equal(Today.AddDays(3), _store.ArrivedOn(Turma, "do-futuro.pdf"));
     }
 
     [Fact]
@@ -70,7 +104,7 @@ public partial class ClassStoreTests
         _store.RefreshTombstones(Turma);
 
         Assert.False(_store.IsDeleted(Turma, "a.txt"));
-        Assert.Equal(Today, _store.ArrivedOn(Turma, "a.txt"));
+        Assert.Equal(LocalDay(DefaultWriteUtc), _store.ArrivedOn(Turma, "a.txt"));
     }
 
     [Fact]
@@ -97,7 +131,7 @@ public partial class ClassStoreTests
         _store.RefreshTombstones(Turma);
 
         Assert.False(_store.IsDeleted(Turma, "a.txt"));
-        Assert.Equal(Today, _store.ArrivedOn(Turma, "a.txt"));
+        Assert.Equal(LocalDay(DefaultWriteUtc), _store.ArrivedOn(Turma, "a.txt"));
     }
 
     // --- Ending a lesson ---
@@ -112,14 +146,18 @@ public partial class ClassStoreTests
         Commit(Turma, "hoje.txt", "h");
         Commit(Turma, "fotos/hoje.png", "h");
         Commit(Turma, "pasta/so-hoje.png", "h");
-        File.WriteAllText(Path.Combine(FolderOf(Turma), "do-professor.txt"), "p"); // never indexed: arrives today
+        // Never indexed: each arrives the day of its own time.
+        Write(Turma, "do-professor.txt", "p", NowUtc);
+        Write(Turma, "do-professor-antigo.txt", "p", NowUtc.AddDays(-3));
         _store.RecordSynced(Turma, "AAAA", "hoje.txt", new FileVersion(1, 1));
 
         var (recycled, problems) = _store.EndLesson(Turma, EndChoice.DeleteToday);
 
         Assert.Equal(4, recycled);
         Assert.Empty(problems);
-        Assert.Equal(new[] { "fotos/ontem.png", "ontem.txt" }, _store.Files(Turma).Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            new[] { "do-professor-antigo.txt", "fotos/ontem.png", "ontem.txt" },
+            _store.Files(Turma).Keys.Order(StringComparer.Ordinal));
         Assert.Equal(4, _bin.Recycled.Count);
         Assert.False(Directory.Exists(Path.Combine(FolderOf(Turma), "pasta"))); // emptied, so tidied away
         Assert.True(Directory.Exists(Path.Combine(FolderOf(Turma), "fotos")));
@@ -177,7 +215,7 @@ public partial class ClassStoreTests
         Assert.False(_store.IsDeleted(Turma, "b.txt"));
         Assert.False(_store.IsKnown(Turma, "b.txt"));
         Assert.Equal(Today, _store.ArrivedOn(Turma, "a.txt"));
-        Assert.Equal(Today, _store.ArrivedOn(Turma, "do-professor.txt"));
+        Assert.Equal(LocalDay(DefaultWriteUtc), _store.ArrivedOn(Turma, "do-professor.txt"));
         var reloaded = NewStore(_bin);
         Assert.Null(reloaded.LastSynced(Turma, "AAAA", "a.txt"));
         Assert.False(reloaded.IsDeleted(Turma, "b.txt"));
@@ -191,9 +229,8 @@ public partial class ClassStoreTests
         var bin = new MovingRecycleBin(Path.Combine(_root, "lixeira2"), refused: "aberto.docx");
         var store = NewStore(bin);
         store.Create(Turma);
-        File.WriteAllText(Path.Combine(FolderOf(Turma), "aberto.docx"), "x");
-        Directory.CreateDirectory(Path.Combine(FolderOf(Turma), "sub"));
-        File.WriteAllText(Path.Combine(FolderOf(Turma), "sub", "livre.txt"), "x");
+        Write(Turma, "aberto.docx", "x", NowUtc);
+        Write(Turma, "sub/livre.txt", "x", NowUtc);
         store.RefreshTombstones(Turma);
 
         var (recycled, problems) = store.EndLesson(Turma, choice);
@@ -287,11 +324,34 @@ public partial class ClassStoreTests
         Assert.Null(reloaded.ArrivedOn(Turma, "a.txt"));
         Assert.Equal("{\"ArrivedOn\": {\"a.txt\": \"2026-", File.ReadAllText(IndexFileOf(Turma) + ".corrupt"));
         Assert.False(File.Exists(IndexFileOf(Turma)));
-        // The files on disk are still the class's files, first indexed as arriving today.
+        // The files on disk are still the class's files, first indexed as arriving the day of their own time.
         Assert.Equal(new[] { "a.txt" }, reloaded.Files(Turma).Keys);
         reloaded.RefreshTombstones(Turma);
-        Assert.Equal(Today, reloaded.ArrivedOn(Turma, "a.txt"));
+        Assert.Equal(LocalDay(DefaultWriteUtc), reloaded.ArrivedOn(Turma, "a.txt"));
         Assert.True(File.Exists(IndexFileOf(Turma)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ALostOrCorruptIndex_DoesNotMakeEveryFileArriveToday(bool corrupt)
+    {
+        MakeClass();
+        Write(Turma, "de-ontem.png", "o", NowUtc.AddDays(-1));
+        Write(Turma, "da-semana-passada.png", "s", NowUtc.AddDays(-7));
+        Write(Turma, "de-hoje.png", "h", NowUtc);
+        if (corrupt)
+        {
+            Directory.CreateDirectory(IndexRoot);
+            File.WriteAllText(IndexFileOf(Turma), "{ \"ArrivedOn\": ");
+        }
+
+        var (recycled, problems) = NewStore(_bin).EndLesson(Turma, EndChoice.DeleteToday);
+
+        Assert.Equal(1, recycled);
+        Assert.Empty(problems);
+        Assert.Equal(new[] { "da-semana-passada.png", "de-ontem.png" }, _store.Files(Turma).Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(corrupt, File.Exists(IndexFileOf(Turma) + ".corrupt"));
     }
 
     [Theory]
@@ -327,7 +387,7 @@ public partial class ClassStoreTests
     }
 
     [Fact]
-    public void TheIndexIsSavedAfterEveryChange_WithNoTempFileLeft()
+    public void TheIndexIsSavedAtOnceByEveryChangeButARecord_WithNoTempFileLeft()
     {
         MakeClass();
 
@@ -337,7 +397,9 @@ public partial class ClassStoreTests
         Assert.Equal(Today, NewStore(_bin).ArrivedOn(Turma, "a.txt"));
 
         _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(1, 1));
+        _store.SaveIndex(Turma);
         Assert.Equal(new FileVersion(1, 1), NewStore(_bin).LastSynced(Turma, "AAAA", "a.txt"));
+        Assert.False(File.Exists(IndexFileOf(Turma) + ".tmp"));
         Assert.Equal(new[] { "3º A.json" }, Directory.GetFiles(IndexRoot).Select(file => Path.GetFileName(file)));
     }
 

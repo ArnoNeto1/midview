@@ -20,6 +20,9 @@ internal sealed class ClassIndex
     // Machine key -> path -> the version that PC last got from, or gave to,
     // the store.
     public Dictionary<string, Dictionary<string, FileVersion>> Machines { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    // Changed in memory (the per-PC records) and not saved yet.
+    public bool Dirty { get; set; }
 }
 
 // "<indexRoot>\<turma>.json", saved like KnownMachinesFile: a temp file

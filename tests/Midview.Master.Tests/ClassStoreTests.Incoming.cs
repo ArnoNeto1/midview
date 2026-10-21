@@ -4,6 +4,51 @@ using Xunit;
 
 public partial class ClassStoreTests
 {
+    // --- Paths ---
+
+    [Theory]
+    [InlineData("../fora.txt")]
+    [InlineData("a/../../fora.txt")]
+    [InlineData("a/..")]
+    [InlineData("/fora.txt")]
+    [InlineData("C:/fora.txt")]
+    [InlineData("C:\\fora.txt")]
+    [InlineData("a\\b.txt")]
+    [InlineData("a//b.txt")]
+    [InlineData("a/")]
+    [InlineData("")]
+    [InlineData(".")]
+    [InlineData("a/./b.txt")]
+    [InlineData("CON")]
+    [InlineData("a/nul.txt")]
+    [InlineData("arquivo.txt:sombra")]
+    [InlineData("termina em ponto.")]
+    public void PathOf_RejectsEscape(string relativePath)
+    {
+        MakeClass();
+
+        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, relativePath));
+    }
+
+    [Fact]
+    public void PathOf_GivesThePathInsideTheClassFolder()
+    {
+        MakeClass();
+
+        Assert.Equal(Path.Combine(FolderOf(Turma), "fotos", "mapa.png"), _store.PathOf(Turma, "fotos/mapa.png"));
+        Assert.Equal(Path.Combine(FolderOf(Turma), "a.txt"), _store.PathOf(Turma, "a.txt"));
+    }
+
+    [Fact]
+    public void PathOf_ThroughALink_Throws()
+    {
+        MakeClass();
+        MakeJunction(Path.Combine(FolderOf(Turma), "atalho"), Outside);
+
+        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, "atalho/x.txt"));
+        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, "atalho"));
+    }
+
     // --- Receiving a file ---
 
     [Fact]
@@ -269,6 +314,7 @@ public partial class ClassStoreTests
         Assert.Null(_store.LastSynced(Turma, "CCCC", "fotos/mapa.png"));
         Assert.Null(_store.LastSynced(Turma, "AAAA", "nunca.txt"));
 
+        _store.SaveIndex(Turma);
         var reloaded = NewStore(_bin);
 
         Assert.Equal(one, reloaded.LastSynced(Turma, "AAAA", "fotos/mapa.png"));
@@ -277,33 +323,104 @@ public partial class ClassStoreTests
     }
 
     [Fact]
-    public void RecordSynced_AgainWithTheSameVersion_DoesNotRewriteTheIndex()
+    public void RecordSynced_IsOnlyInMemoryUntilSaveIndex()
     {
         MakeClass();
-        _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(1, 1));
-        var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        File.SetLastWriteTimeUtc(IndexFileOf(Turma), longAgo);
 
-        _store.RecordSynced(Turma, "AAAA", "A.TXT", new FileVersion(1, 1));
-        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(IndexFileOf(Turma)));
+        for (var file = 0; file < 150; file++)
+        {
+            _store.RecordSynced(Turma, $"PC{file % 3}", $"fotos/imagem-{file}.jpg", new FileVersion(file, file + 1000));
+        }
 
-        _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(2, 1));
-        Assert.True(File.GetLastWriteTimeUtc(IndexFileOf(Turma)) > longAgo);
-        Assert.Equal(new FileVersion(2, 1), _store.LastSynced(Turma, "AAAA", "a.txt"));
+        // Nothing is written yet: not even an index file, and a store started now has none of it.
+        Assert.False(File.Exists(IndexFileOf(Turma)));
+        Assert.Null(NewStore(_bin).LastSynced(Turma, "PC0", "fotos/imagem-0.jpg"));
+        Assert.Equal(new FileVersion(3, 1003), _store.LastSynced(Turma, "PC0", "fotos/imagem-3.jpg"));
+
+        _store.SaveIndex(Turma);
+
+        Assert.True(File.Exists(IndexFileOf(Turma)));
+        Assert.False(File.Exists(IndexFileOf(Turma) + ".tmp"));
+        var reloaded = NewStore(_bin);
+        for (var file = 0; file < 150; file++)
+        {
+            Assert.Equal(new FileVersion(file, file + 1000), reloaded.LastSynced(Turma, $"PC{file % 3}", $"fotos/imagem-{file}.jpg"));
+        }
     }
 
     [Fact]
-    public void ForgetMachine_DropsOnlyThatMachinesRecords()
+    public void SaveIndex_WritesOnlyWhatChanged()
+    {
+        MakeClass();
+        _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(1, 1));
+        _store.SaveIndex(Turma);
+        var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(IndexFileOf(Turma), longAgo);
+
+        // Nothing new, and a record that is what it already was: no write.
+        _store.SaveIndex(Turma);
+        _store.RecordSynced(Turma, "AAAA", "A.TXT", new FileVersion(1, 1));
+        _store.SaveIndex(Turma);
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(IndexFileOf(Turma)));
+
+        _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(2, 1));
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(IndexFileOf(Turma)));
+        _store.SaveIndex(Turma);
+        Assert.True(File.GetLastWriteTimeUtc(IndexFileOf(Turma)) > longAgo);
+        Assert.Equal(new FileVersion(2, 1), NewStore(_bin).LastSynced(Turma, "AAAA", "a.txt"));
+
+        // Saved, so no longer pending.
+        File.SetLastWriteTimeUtc(IndexFileOf(Turma), longAgo);
+        _store.SaveIndex(Turma);
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(IndexFileOf(Turma)));
+    }
+
+    [Fact]
+    public void AnyOtherChange_SavesAtOnce_AndCarriesTheRecordsNotYetSavedAlong()
+    {
+        MakeClass();
+        _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(1, 1));
+        Assert.False(File.Exists(IndexFileOf(Turma)));
+
+        Commit(Turma, "b.txt");
+
+        var reloaded = NewStore(_bin);
+        Assert.Equal(Today, reloaded.ArrivedOn(Turma, "b.txt"));
+        Assert.Equal(new FileVersion(1, 1), reloaded.LastSynced(Turma, "AAAA", "a.txt"));
+        // Nothing left pending.
+        var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(IndexFileOf(Turma), longAgo);
+        _store.SaveIndex(Turma);
+        Assert.Equal(longAgo, File.GetLastWriteTimeUtc(IndexFileOf(Turma)));
+    }
+
+    [Fact]
+    public void SaveIndex_OfAClassThatHasNothingPending_OrIsNoClassName()
+    {
+        _store.SaveIndex(Turma); // not even loaded
+        Assert.False(File.Exists(IndexFileOf(Turma)));
+
+        Assert.Throws<ArgumentException>(() => _store.SaveIndex(".."));
+    }
+
+    [Fact]
+    public void ForgetMachine_DropsOnlyThatMachinesRecords_WhenSaved()
     {
         MakeClass();
         _store.RecordSynced(Turma, "AAAA", "a.txt", new FileVersion(1, 1));
         _store.RecordSynced(Turma, "BBBB", "a.txt", new FileVersion(2, 2));
+        _store.SaveIndex(Turma);
 
         _store.ForgetMachine(Turma, "AAAA");
         _store.ForgetMachine(Turma, "ZZZZ");
 
         Assert.Null(_store.LastSynced(Turma, "AAAA", "a.txt"));
         Assert.Equal(new FileVersion(2, 2), _store.LastSynced(Turma, "BBBB", "a.txt"));
+        // Like a record, it waits for SaveIndex.
+        Assert.Equal(new FileVersion(1, 1), NewStore(_bin).LastSynced(Turma, "AAAA", "a.txt"));
+
+        _store.SaveIndex(Turma);
+
         Assert.Null(NewStore(_bin).LastSynced(Turma, "AAAA", "a.txt"));
         Assert.Equal(new FileVersion(2, 2), NewStore(_bin).LastSynced(Turma, "BBBB", "a.txt"));
     }
@@ -316,7 +433,12 @@ public partial class ClassStoreTests
         Parallel.For(0, 120, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
         {
             _store.RecordSynced(Turma, $"PC{i % 4}", $"arquivo-{i}.txt", new FileVersion(i, i));
+            if (i % 10 == 0)
+            {
+                _store.SaveIndex(Turma); // the rounds of other PCs save while this one records
+            }
         });
+        _store.SaveIndex(Turma);
 
         var reloaded = NewStore(_bin);
         for (var i = 0; i < 120; i++)

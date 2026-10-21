@@ -15,8 +15,9 @@ public sealed partial class ClassStore
     // records are cleared whatever the choice: the next lesson starts from
     // what is in the folder.
     //
-    // DeleteToday deletes the files whose arrival day is today (one the
-    // index hasn't seen yet arrives today too). DeleteAll deletes everything
+    // DeleteToday deletes the files whose arrival day is today (one the index
+    // hasn't seen yet arrived the day of its own time, so after a lost index
+    // the older files are not taken for today's). DeleteAll deletes everything
     // in the folder, hidden files and the ones the sync leaves out included;
     // a link in it is left alone, and said. Folders left empty are tidied
     // away.
@@ -122,7 +123,7 @@ public sealed partial class ClassStore
                 recycled += RecycleEverything(subdirectory, path + "/", problems);
                 TryDeleteIfEmpty(subdirectory.FullName);
             }
-            else if (!IsTemp(entry.Name) && TryRecycle(entry.FullName, path, problems))
+            else if (!ClassFolderRules.IsTempName(entry.Name) && TryRecycle(entry.FullName, path, problems))
             {
                 recycled++;
             }

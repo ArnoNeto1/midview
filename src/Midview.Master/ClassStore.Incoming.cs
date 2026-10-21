@@ -51,7 +51,11 @@ public sealed partial class ClassStore
         }
     }
 
-    // Nothing is written when the record is already that.
+    // Only in memory until SaveIndex (or any other change, which saves the
+    // whole index): a round records a record per file and per PC, and writing
+    // the index for each would cost more than the copying. A record lost to a
+    // crash is harmless: the next round finds the PC's file equal to the
+    // store's and records it again.
     public void RecordSynced(string turma, string machineKey, string path, FileVersion version)
     {
         lock (_gate)
@@ -68,16 +72,32 @@ public sealed partial class ClassStore
             }
 
             records[path] = version;
-            Save(turma, index);
+            index.Dirty = true;
         }
     }
 
+    // Like RecordSynced, for all of that PC's records of the class.
     public void ForgetMachine(string turma, string machineKey)
     {
         lock (_gate)
         {
             var index = IndexOf(turma);
             if (index.Machines.Remove(machineKey))
+            {
+                index.Dirty = true;
+            }
+        }
+    }
+
+    // Writes the index (atomically) if records changed since it was last
+    // written, which is what the sync calls after each PC's round. Does nothing
+    // otherwise.
+    public void SaveIndex(string turma)
+    {
+        FolderOf(turma); // refuses a name that is no class name
+        lock (_gate)
+        {
+            if (_indexes.TryGetValue(turma, out var index) && index.Dirty)
             {
                 Save(turma, index);
             }
@@ -93,7 +113,7 @@ public sealed partial class ClassStore
     public FileStream BeginIncoming(string turma)
     {
         var folder = RealFolderOf(turma);
-        var tempPath = Path.Combine(folder, $"{TempPrefix}{Guid.NewGuid():N}{TempSuffix}");
+        var tempPath = Path.Combine(folder, ClassFolderRules.NewTempName());
         return new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
     }
 
@@ -169,7 +189,8 @@ public sealed partial class ClassStore
     // --- What the teacher does in Explorer ---
 
     // Brings the index up to date with the folder: a file in it the index
-    // hasn't seen is new (added by the teacher; it arrives today), and one
+    // hasn't seen is new (added by the teacher, or all of them once the index was
+    // lost; it arrived the day of its own time, see ArrivalOf), and one
     // the index knew that is gone becomes a tombstone (the teacher deleted
     // it). A file that is only hidden now, or can't be looked at, is not
     // gone; and with the class folder itself missing nothing is deleted,

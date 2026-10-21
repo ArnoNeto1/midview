@@ -42,6 +42,14 @@ public partial class ClassStoreTests : IDisposable
 
     private DateOnly Today => DateOnly.FromDateTime(_now);
 
+    // When a file written by Write has no time of its own: the day before the clock the tests start with.
+    private static readonly DateTime DefaultWriteUtc = new(2026, 10, 19, 10, 0, 0, DateTimeKind.Utc);
+
+    private DateTime NowUtc => DateTime.SpecifyKind(_now, DateTimeKind.Local).ToUniversalTime();
+
+    // The day a file with that time arrived on the teacher's PC, when nothing else says (the teacher's own local date).
+    private static DateOnly LocalDay(DateTime utc) => DateOnly.FromDateTime(utc.ToLocalTime());
+
     private ClassStore NewStore(IRecycleBin bin) => new(FilesRoot, IndexRoot, bin, () => _now);
 
     private string FolderOf(string turma) => Path.Combine(FilesRoot, turma);
@@ -61,12 +69,12 @@ public partial class ClassStoreTests : IDisposable
         var path = Path.Combine(FolderOf(turma), relativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
-        File.SetLastWriteTimeUtc(path, utc ?? new DateTime(2026, 10, 19, 10, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(path, utc ?? DefaultWriteUtc);
         return path;
     }
 
     private static FileVersion VersionOf(string content, DateTime? utc = null) => new(
-        Encoding.UTF8.GetByteCount(content), (utc ?? new DateTime(2026, 10, 19, 10, 0, 0, DateTimeKind.Utc)).Ticks);
+        Encoding.UTF8.GetByteCount(content), (utc ?? DefaultWriteUtc).Ticks);
 
     private (string TempPath, FileVersion Version) Incoming(string turma, string content, DateTime? utc = null)
     {
@@ -117,6 +125,34 @@ public partial class ClassStoreTests : IDisposable
         Assert.Equal("Já existe uma turma com esse nome.", againDetail);
         Assert.Equal(string.Empty, againTurma);
         Assert.Equal(new[] { "Turma_ 3º A" }, _store.List().Select(c => c.Turma));
+    }
+
+    [Theory]
+    [InlineData("Turma 1/2", "Turma 1-2")]
+    [InlineData("Turma 1\\2", "Turma 1-2")]
+    [InlineData("1º/2º\\3º", "1º-2º-3º")]
+    [InlineData("../fora", "..-fora")]
+    [InlineData("C:\\Windows", "C_-Windows")]
+    public void Create_TurnsSlashesIntoHyphens_SoNothingOfTheNameIsLost(string requested, string expected)
+    {
+        var (ok, detail, turma) = _store.Create(requested);
+
+        Assert.True(ok, detail);
+        Assert.Equal(expected, turma);
+        Assert.Equal(new[] { expected }, Directory.GetDirectories(FilesRoot).Select(path => Path.GetFileName(path)));
+        Assert.True(_store.Exists(expected));
+    }
+
+    [Fact]
+    public void Rename_TurnsSlashesIntoHyphens_Too()
+    {
+        MakeClass();
+
+        var (ok, detail) = _store.Rename(Turma, "Turma 1/2");
+
+        Assert.True(ok, detail);
+        Assert.Equal(new[] { "Turma 1-2" }, _store.List().Select(c => c.Turma));
+        Assert.True(Directory.Exists(FolderOf("Turma 1-2")));
     }
 
     [Fact]
@@ -285,8 +321,8 @@ public partial class ClassStoreTests : IDisposable
 
         Assert.Equal(new[] { Turma, "3º B", "10º A" }, list.Select(c => c.Turma));
         Assert.Equal(new ClassSummary(Turma, 3, 9, DateOnly.FromDateTime(_now)), list[0]);
-        // Never indexed: it counts as arriving today, as when it is first indexed.
-        Assert.Equal(new ClassSummary("3º B", 1, 1, DateOnly.FromDateTime(_now)), list[1]);
+        // Never indexed: it counts as arriving the day of its own time, as when it is first indexed.
+        Assert.Equal(new ClassSummary("3º B", 1, 1, LocalDay(DefaultWriteUtc)), list[1]);
         Assert.Equal(new ClassSummary("10º A", 0, 0, null), list[2]);
     }
 
@@ -415,50 +451,5 @@ public partial class ClassStoreTests : IDisposable
         Assert.Throws<ArgumentException>(() => _store.BeginIncoming(turma));
         Assert.Throws<ArgumentException>(() => _store.RefreshTombstones(turma));
         Assert.Throws<ArgumentException>(() => _store.EndLesson(turma, EndChoice.DeleteAll));
-    }
-
-    // --- Paths ---
-
-    [Theory]
-    [InlineData("../fora.txt")]
-    [InlineData("a/../../fora.txt")]
-    [InlineData("a/..")]
-    [InlineData("/fora.txt")]
-    [InlineData("C:/fora.txt")]
-    [InlineData("C:\\fora.txt")]
-    [InlineData("a\\b.txt")]
-    [InlineData("a//b.txt")]
-    [InlineData("a/")]
-    [InlineData("")]
-    [InlineData(".")]
-    [InlineData("a/./b.txt")]
-    [InlineData("CON")]
-    [InlineData("a/nul.txt")]
-    [InlineData("arquivo.txt:sombra")]
-    [InlineData("termina em ponto.")]
-    public void PathOf_RejectsEscape(string relativePath)
-    {
-        MakeClass();
-
-        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, relativePath));
-    }
-
-    [Fact]
-    public void PathOf_GivesThePathInsideTheClassFolder()
-    {
-        MakeClass();
-
-        Assert.Equal(Path.Combine(FolderOf(Turma), "fotos", "mapa.png"), _store.PathOf(Turma, "fotos/mapa.png"));
-        Assert.Equal(Path.Combine(FolderOf(Turma), "a.txt"), _store.PathOf(Turma, "a.txt"));
-    }
-
-    [Fact]
-    public void PathOf_ThroughALink_Throws()
-    {
-        MakeClass();
-        MakeJunction(Path.Combine(FolderOf(Turma), "atalho"), Outside);
-
-        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, "atalho/x.txt"));
-        Assert.Throws<ArgumentException>(() => _store.PathOf(Turma, "atalho"));
     }
 }

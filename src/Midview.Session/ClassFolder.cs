@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Midview.Protocol;
 
@@ -20,8 +19,9 @@ public sealed class ClassFolder
 {
     // A file still being written, or one of Midview's own temp files, is never
     // listed (and so never copied half-written): Chrome's ".crdownload", an
-    // Office or editor ".tmp", a ".part" and Midview's ".parcial".
-    public static readonly string[] SkippedSuffixes = { ".crdownload", ".tmp", ".parcial", ".part" };
+    // Office or editor ".tmp", a ".part" and Midview's ".parcial". The rule is
+    // ClassFolderRules', shared with the Master's store.
+    public static IReadOnlyList<string> SkippedSuffixes => ClassFolderRules.SkippedSuffixes;
 
     private const string OtherLesson = "aula diferente";
     private const string NoFolder = "sem pasta";
@@ -47,8 +47,6 @@ public sealed class ClassFolder
     };
 
     private static readonly FollowedLesson NoLesson = new(Guid.Empty, string.Empty);
-
-    private static readonly UTF8Encoding StrictUtf8 = new(false, throwOnInvalidBytes: true);
 
     private readonly object _followLock = new();
     private FollowState? _state; // read from SessionStatePath on the first Follow
@@ -88,11 +86,12 @@ public sealed class ClassFolder
     // The files of the current lesson's Desktop folder (LessonId = the current
     // lesson) and of every set-aside lesson (LessonId = that lesson), at most
     // ClassFolderWire.MaxEntries, files before subfolders and in name order,
-    // the current lesson first. Left out: what SkippedSuffixes, "~$", Midview's
-    // ".midview-" prefix, hidden or system attributes and links say, anything
-    // deeper than FileCollection.MaxDepth, and anything the wire format or the
-    // other messages couldn't carry (a file over FileTransfer.MaxFileSize, a
-    // path over FileTransfer.MaxNameBytes of UTF-8, a name that
+    // the current lesson first. Left out: hidden or system attributes and links,
+    // and what ClassFolderRules says (the same rules the Master's store applies):
+    // lock files, Midview's own and still-being-written ones, anything deeper
+    // than FileCollection.MaxDepth, and anything the wire format or the other
+    // messages couldn't carry (a file over FileTransfer.MaxFileSize, a path
+    // over FileTransfer.MaxNameBytes of UTF-8, a name that
     // FileCollection.SafeRelativePath would rewrite), so one such file never
     // spoils the listing.
     //
@@ -164,7 +163,7 @@ public sealed class ClassFolder
 
         var directory = Path.GetDirectoryName(target)!;
         Directory.CreateDirectory(directory);
-        var tempPath = Path.Combine(directory, $".midview-{Guid.NewGuid():N}.parcial");
+        var tempPath = Path.Combine(directory, ClassFolderRules.NewTempName());
         return new ClassFolderIncoming(target, tempPath);
     }
 
@@ -784,9 +783,9 @@ public sealed class ClassFolder
 
     // What a listing shows of that folder: the files, each with its path from
     // the folder ('/' between the segments), files before subfolders and in name
-    // order, nothing Options, IsListed, FileCollection.MaxDepth or FitsTheWire
-    // leave out. One place for it, because what Follow sets aside has to be
-    // what the Master was shown, and no more.
+    // order, nothing Options or ClassFolderRules leave out. One place for it,
+    // because what Follow sets aside has to be what the Master was shown, and
+    // no more.
     //
     // A folder that can't be read (gone, or closed to the student, while we
     // looked) gives nothing this time, and with no unreadable callback that is
@@ -810,13 +809,13 @@ public sealed class ClassFolder
         foreach (var file in files)
         {
             var path = prefix + file.Name;
-            if (FitsTheWire(path))
+            if (ClassFolderRules.FitsTheWire(path))
             {
                 yield return (file, path);
             }
         }
 
-        if (depth >= FileCollection.MaxDepth)
+        if (!ClassFolderRules.CanDescendFrom(depth))
         {
             yield break;
         }
@@ -836,11 +835,11 @@ public sealed class ClassFolder
         try
         {
             var files = directory.EnumerateFiles("*", options)
-                .Where(IsListed)
+                .Where(file => ClassFolderRules.IsListedFile(file.Name, file.Length))
                 .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             var subdirectories = directory.EnumerateDirectories("*", options)
-                .Where(subdirectory => IsAddressable(subdirectory.Name))
+                .Where(subdirectory => ClassFolderRules.IsAddressable(subdirectory.Name))
                 .OrderBy(subdirectory => subdirectory.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
             return (files, subdirectories, null);
@@ -866,35 +865,6 @@ public sealed class ClassFolder
                 return;
             }
             entries.Add(new ClassFolderEntry(lessonId, path, file.Length, file.LastWriteTimeUtc.Ticks));
-        }
-    }
-
-    private static bool IsListed(FileInfo file)
-    {
-        var name = file.Name;
-        return !name.StartsWith("~$", StringComparison.Ordinal)
-            && !name.StartsWith(".midview-", StringComparison.OrdinalIgnoreCase)
-            && !SkippedSuffixes.Any(suffix => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            && file.Length <= FileTransfer.MaxFileSize
-            && IsAddressable(name);
-    }
-
-    // Every message names a file by a path run through
-    // FileCollection.SafeRelativePath; a name it would rewrite (one over
-    // FileNames.MaxNameLength, say) could never be found again.
-    private static bool IsAddressable(string name) =>
-        string.Equals(FileNames.Safe(name), name, StringComparison.Ordinal);
-
-    // What ClassFolderWire.EncodeListing takes as a path.
-    private static bool FitsTheWire(string path)
-    {
-        try
-        {
-            return !string.IsNullOrWhiteSpace(path) && StrictUtf8.GetByteCount(path) <= FileTransfer.MaxNameBytes;
-        }
-        catch (EncoderFallbackException)
-        {
-            return false; // a name with half a surrogate pair, which NTFS allows
         }
     }
 }

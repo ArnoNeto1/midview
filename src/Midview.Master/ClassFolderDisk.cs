@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -9,19 +8,6 @@ namespace Midview.Master;
 // a lesson.
 internal static class ClassFolderDisk
 {
-    // In-progress downloads are written to ".midview-<guid>.parcial" in the
-    // class folder (ClassStore.BeginIncoming), as the Session does on the
-    // student's side.
-    public const string TempPrefix = ".midview-";
-    public const string TempSuffix = ".parcial";
-
-    // What the Session's ClassFolder.IsListed leaves out of a listing. The
-    // store must leave out the same, or the sync would push a file the PC
-    // never lists, and push it again every round.
-    private static readonly string[] SkippedSuffixes = { ".crdownload", ".tmp", ".parcial", ".part" };
-
-    private static readonly UTF8Encoding StrictUtf8 = new(false, throwOnInvalidBytes: true);
-
     private static readonly EnumerationOptions ListedOptions = new()
     {
         RecurseSubdirectories = false,
@@ -65,49 +51,19 @@ internal static class ClassFolderDisk
         {
             if (entry is DirectoryInfo subdirectory)
             {
-                if (depth < FileCollection.MaxDepth && IsAddressable(subdirectory.Name) && !IsLink(subdirectory))
+                if (ClassFolderRules.CanDescendFrom(depth) && ClassFolderRules.IsAddressable(subdirectory.Name)
+                    && !IsLink(subdirectory))
                 {
                     Scan(subdirectory, prefix + subdirectory.Name + "/", depth + 1, found);
                 }
             }
-            else if (entry is FileInfo file && IsListed(file) && FitsTheWire(prefix + file.Name) && !IsLink(file))
+            else if (entry is FileInfo file && ClassFolderRules.IsListedFile(file.Name, file.Length)
+                && ClassFolderRules.FitsTheWire(prefix + file.Name) && !IsLink(file))
             {
                 found[prefix + file.Name] = new FileVersion(file.Length, file.LastWriteTimeUtc.Ticks);
             }
         }
     }
-
-    private static bool IsListed(FileInfo file)
-    {
-        var name = file.Name;
-        return !name.StartsWith("~$", StringComparison.Ordinal)
-            && !name.StartsWith(TempPrefix, StringComparison.OrdinalIgnoreCase)
-            && !SkippedSuffixes.Any(suffix => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-            && file.Length <= FileTransfer.MaxFileSize
-            && IsAddressable(name);
-    }
-
-    // Every message names a file by a path run through
-    // FileCollection.SafeRelativePath; a name it would rewrite (one over
-    // FileNames.MaxNameLength, say) could never be found again.
-    public static bool IsAddressable(string name) =>
-        string.Equals(FileNames.Safe(name), name, StringComparison.Ordinal);
-
-    // What ClassFolderWire.EncodeListing takes as a path.
-    private static bool FitsTheWire(string path)
-    {
-        try
-        {
-            return StrictUtf8.GetByteCount(path) <= FileTransfer.MaxNameBytes;
-        }
-        catch (EncoderFallbackException)
-        {
-            return false; // a name with half a surrogate pair, which NTFS allows
-        }
-    }
-
-    public static bool IsTemp(string name) => name.StartsWith(TempPrefix, StringComparison.OrdinalIgnoreCase)
-        && name.EndsWith(TempSuffix, StringComparison.OrdinalIgnoreCase);
 
     // folder plus the '/'-separated path, or null when that isn't a file or
     // folder inside it: every segment must be a name FileNames.Safe leaves
@@ -124,7 +80,7 @@ internal static class ClassFolderDisk
         var path = folder;
         foreach (var segment in relativePath.Split('/'))
         {
-            if (!IsAddressable(segment))
+            if (!ClassFolderRules.IsAddressable(segment))
             {
                 return null;
             }
@@ -213,7 +169,7 @@ internal static class ClassFolderDisk
     {
         try
         {
-            foreach (var temp in Directory.EnumerateFiles(folder, TempPrefix + "*" + TempSuffix))
+            foreach (var temp in Directory.EnumerateFiles(folder, ClassFolderRules.TempPrefix + "*" + ClassFolderRules.TempSuffix))
             {
                 try
                 {

@@ -33,8 +33,9 @@ public enum EndChoice
 // apart so the teacher browsing or deleting in Explorer can't corrupt it.
 //
 // The sync calls this from several PCs' rounds at once, so everything that
-// reads or changes an index goes through one lock, and every change to an
-// index is saved at once (ClassIndexFile).
+// reads or changes an index goes through one lock. Every change to an index
+// is saved at once (ClassIndexFile), except the per-PC records, which wait
+// for SaveIndex (the sync calls it after each PC's round).
 //
 // A class name is only ever one Create made: FileNames.Safe(name) == name,
 // not empty, at most ClassLesson.MaxTurmaLength characters, no "${" (Chrome
@@ -127,14 +128,15 @@ public sealed partial class ClassStore
         {
             var files = Files(name);
             summaries.Add(new ClassSummary(
-                name, files.Count, files.Values.Sum(version => version.Size), LastArrival(name, files.Keys)));
+                name, files.Count, files.Values.Sum(version => version.Size), LastArrival(name, files)));
         }
         return summaries;
     }
 
     // Detail is why not (in the teacher's words) and Turma empty when it
     // isn't Ok; on success Turma is the name the folder got, which can
-    // differ from the one asked for ("Turma: 3º A" is "Turma_ 3º A").
+    // differ from the one asked for ("Turma: 3º A" is "Turma_ 3º A", and
+    // "Turma 1/2" is "Turma 1-2": a slash is a hyphen, so none of the name is lost).
     public (bool Ok, string Detail, string Turma) Create(string requestedName)
     {
         var (name, refusal) = Normalize(requestedName);
@@ -253,13 +255,14 @@ public sealed partial class ClassStore
     // --- The files ---
 
     // The class's files by their path ('/'-separated, case-insensitive), with
-    // their version. Left out: what the Session's listing leaves out (hidden
-    // and system files, links, in-progress and lock files, a file over
-    // FileTransfer.MaxFileSize, a name FileNames.Safe would rewrite, a path
-    // over FileTransfer.MaxNameBytes of UTF-8), and anything deeper than
-    // FileCollection.MaxDepth path segments (the file name counts as one), so
-    // the sync never pushes a path the student's side would rewrite or
-    // refuse, every round. Empty for a class whose folder isn't there.
+    // their version. Left out: what the Session's listing leaves out, which is
+    // hidden and system files, links, and what ClassFolderRules says (lock,
+    // in-progress and Midview's own files, a file over FileTransfer.MaxFileSize,
+    // a name FileNames.Safe would rewrite, a path over FileTransfer.MaxNameBytes
+    // of UTF-8, anything deeper than FileCollection.MaxDepth path segments, the
+    // file name counted), so the sync never pushes a path the student's side
+    // would rewrite or refuse, every round. Empty for a class whose folder
+    // isn't there.
     public IReadOnlyDictionary<string, FileVersion> Files(string turma)
     {
         var folder = FolderOf(turma);
@@ -284,11 +287,13 @@ public sealed partial class ClassStore
         IgnoreInaccessible = true,
     };
 
-    // The name a request asks for, made safe, and why it can't be used (null if it can).
+    // The name a request asks for, made safe, and why it can't be used (null if it
+    // can). A slash or backslash becomes a hyphen first: FileNames.Safe would keep
+    // only what follows the last one ("Turma 1/2" would be "2").
     private static (string Name, string? Refusal) Normalize(string? requested)
     {
         var trimmed = (requested ?? string.Empty).Trim();
-        var name = trimmed.Length == 0 ? trimmed : FileNames.Safe(trimmed);
+        var name = trimmed.Length == 0 ? trimmed : FileNames.Safe(trimmed.Replace('/', '-').Replace('\\', '-'));
         return (name, NameRefusal(name));
     }
 
@@ -306,7 +311,7 @@ public sealed partial class ClassStore
         {
             return "O nome da turma não pode ter \"${\".";
         }
-        if (!IsAddressable(name))
+        if (!ClassFolderRules.IsAddressable(name))
         {
             return "Esse nome não pode ser usado como nome de pasta.";
         }
@@ -385,7 +390,12 @@ public sealed partial class ClassStore
         return index;
     }
 
-    private void Save(string turma, ClassIndex index) => ClassIndexFile.Save(IndexPath(turma), index);
+    // With _gate held. Writes all of the index, so whatever was pending goes with it.
+    private void Save(string turma, ClassIndex index)
+    {
+        ClassIndexFile.Save(IndexPath(turma), index);
+        index.Dirty = false;
+    }
 
     // With _gate held.
     private void DiscardIndex(string turma)
@@ -401,11 +411,17 @@ public sealed partial class ClassStore
         }
     }
 
+    // The day a file the index hasn't seen yet arrived: the day of its own last
+    // write time, in the teacher's local time. That is a file the teacher added in
+    // Explorer, or any file once the index was lost; one the sync committed
+    // arrived today (CommitIncoming), whatever its time.
+    private static DateOnly ArrivalOf(FileVersion version) =>
+        DateOnly.FromDateTime(new DateTime(version.LastWriteTicks, DateTimeKind.Utc).ToLocalTime());
+
     // The day the newest of the class's files arrived (null for a class with
-    // none). A file the index hasn't seen yet counts as arriving today, as it will be once indexed.
-    private DateOnly? LastArrival(string turma, IEnumerable<string> paths)
+    // none), as the index has it, or as it will be once indexed.
+    private DateOnly? LastArrival(string turma, IReadOnlyDictionary<string, FileVersion> files)
     {
-        var today = Today;
         DateOnly? last = null;
         lock (_gate)
         {
@@ -419,9 +435,9 @@ public sealed partial class ClassStore
                 // An index that can't be read right now: all that is known is what is on the disk.
             }
 
-            foreach (var path in paths)
+            foreach (var (path, version) in files)
             {
-                var day = index is not null && index.ArrivedOn.TryGetValue(path, out var arrived) ? arrived : today;
+                var day = index is not null && index.ArrivedOn.TryGetValue(path, out var arrived) ? arrived : ArrivalOf(version);
                 if (last is null || day > last)
                 {
                     last = day;
@@ -431,17 +447,17 @@ public sealed partial class ClassStore
         return last;
     }
 
-    // Adds the files the index hasn't seen, as arriving today, and takes
-    // the ones that are back off the tombstones. True if anything changed.
+    // Adds the files the index hasn't seen, as arrived on the day of their own
+    // time (ArrivalOf), and takes the ones that are back off the tombstones.
+    // True if anything changed.
     private bool IndexNewFiles(ClassIndex index, IReadOnlyDictionary<string, FileVersion> present)
     {
         var changed = false;
-        var today = Today;
-        foreach (var path in present.Keys)
+        foreach (var (path, version) in present)
         {
             if (!index.ArrivedOn.ContainsKey(path))
             {
-                index.ArrivedOn[path] = today;
+                index.ArrivedOn[path] = ArrivalOf(version);
                 changed = true;
             }
             changed |= index.Deleted.Remove(path);
