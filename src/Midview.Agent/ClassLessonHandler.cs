@@ -88,6 +88,27 @@ public sealed class ClassLessonHandler
     // when this PC's folder or policy couldn't be set up yet.
     public ClassLesson Current => Volatile.Read(ref _lesson);
 
+    // Whether this machine keeps the class folders' home (GetClassHome and
+    // ClaimClassHome), and which PC it is.
+    public bool KeepsHome => _home is not null;
+
+    public ClassHome? CurrentHome => _home?.Current;
+
+    // A teacher PC saying it is the home, decided under the lesson's lock: a
+    // start and a claim never cross, and the folders don't move to another
+    // PC while a lesson is on.
+    public (bool Ok, string Detail) ClaimHome(string senderThumbprint, string senderAddress, ClassHomeClaim claim)
+    {
+        if (_home is null)
+        {
+            return (false, "esta máquina não guarda o PC das pastas");
+        }
+        lock (_gate)
+        {
+            return _home.Claim(senderThumbprint, senderAddress, claim, lessonOn: _lesson.IsOn);
+        }
+    }
+
     // For the tests from before two teacher PCs (the Master's too): a sender
     // with no identity, which only a handler with no home lets start a lesson.
     public (bool Succeeded, string Detail) Handle(byte[] payload) => Handle(payload, "", "");
@@ -109,9 +130,9 @@ public sealed class ClassLessonHandler
 
         lock (_gate)
         {
-            if (lesson.IsOn && _home is not null && !_home.MayStart(senderThumbprint))
+            if (lesson.IsOn && _home is not null && !_home.TryStart(senderThumbprint, senderAddress, out var refusal))
             {
-                return (false, ClassHomeState.OtherHomeDetail(_home.Current!));
+                return (false, refusal);
             }
             if (lesson.SavedAt < _lesson.SavedAt)
             {
@@ -134,10 +155,6 @@ public sealed class ClassLessonHandler
                     return (false, $"não foi possível gravar a aula: {ErrorText.Describe(ex)}");
                 }
                 Volatile.Write(ref _lesson, lesson);
-            }
-            if (lesson.IsOn)
-            {
-                _home?.RecordStarter(senderThumbprint, senderAddress);
             }
 
             // The teacher's own command: Chrome is closed if its folder changed.

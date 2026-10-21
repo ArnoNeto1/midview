@@ -31,7 +31,6 @@ public sealed class AgentServer
     private readonly PendingUninstalls? _pendingUninstalls;
     private readonly PairingService? _pairing;
     private readonly ClassLessonHandler? _classLesson;
-    private readonly ClassHomeState? _classHome;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -41,11 +40,9 @@ public sealed class AgentServer
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
         LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
-        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null,
-        ClassHomeState? classHome = null)
+        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null)
     {
         _classLesson = classLesson;
-        _classHome = classHome;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -259,21 +256,21 @@ public sealed class AgentServer
             return;
         }
 
-        // The class folders' home, for two teacher PCs in one lab; likewise
-        // only with the state, so an Agent without it says "no home" the old
-        // way (CommandAck [0]).
-        if (message.Type == MessageType.ClaimClassHome && _classHome is not null)
+        // The class folders' home, for two teacher PCs in one lab, kept by the
+        // lesson handler; likewise only when it keeps one, so an Agent without
+        // it says "no home" the old way (CommandAck [0]).
+        if (message.Type == MessageType.ClaimClassHome && _classLesson is { KeepsHome: true })
         {
             var (succeeded, detail) = ClassHomeClaim.TryDecode(message.Payload, out var claim)
-                ? _classHome.Claim(channel.RemoteThumbprint, RemoteAddressText(client), claim!)
+                ? _classLesson.ClaimHome(channel.RemoteThumbprint, RemoteAddressText(client), claim!)
                 : (false, "pedido inválido");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
             return;
         }
 
-        if (message.Type == MessageType.GetClassHome && _classHome is not null)
+        if (message.Type == MessageType.GetClassHome && _classLesson is { KeepsHome: true })
         {
-            channel.Send(new Message(MessageType.ClassHomeStatus, ClassHome.Encode(_classHome.Current)));
+            channel.Send(new Message(MessageType.ClassHomeStatus, ClassHome.Encode(_classLesson.CurrentHome)));
             return;
         }
 

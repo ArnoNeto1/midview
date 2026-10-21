@@ -211,14 +211,15 @@ public class AgentServerTests
     public async Task ClaimThenGetClassHome_RoundTrips_WithTheSendersThumbprintAndAddress()
     {
         using var masterCert = SelfSignedCertificate.Create("master-under-test");
-        var statePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
-        var classHome = new ClassHomeState(statePath, _ => { });
+        var homePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
+        var lessonPath = Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json");
         try
         {
-            var answers = await ExchangeWithAgentAs(masterCert, null, classHome,
+            var answers = await ExchangeWithAgentAs(masterCert, LessonHandler(lessonPath, new ClassHomeState(homePath, _ => { })),
                 new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false).Encode()),
                 new Message(MessageType.GetClassHome, Array.Empty<byte>()),
-                new Message(MessageType.ClaimClassHome, new byte[] { 9 }));
+                new Message(MessageType.ClaimClassHome, new byte[] { 9 }),
+                new Message(MessageType.ClaimClassHome, new ClassHomeClaim("", ClassFolderRemote.Port, false).Encode()));
 
             Assert.Equal(MessageType.CommandAck, answers[0].Type);
             Assert.Equal((true, "este PC guarda as pastas"), CommandResult.Decode(answers[0].Payload));
@@ -226,10 +227,12 @@ public class AgentServerTests
             Assert.True(ClassHome.TryDecode(answers[1].Payload, out var home));
             Assert.Equal(new ClassHome(masterCert.Thumbprint, "PROF-1", "127.0.0.1", ClassFolderRemote.Port), home);
             Assert.Equal((false, "pedido inválido"), CommandResult.Decode(answers[2].Payload));
+            Assert.Equal((false, "pedido inválido"), CommandResult.Decode(answers[3].Payload));
         }
         finally
         {
-            File.Delete(statePath);
+            File.Delete(homePath);
+            File.Delete(lessonPath);
         }
     }
 
@@ -237,9 +240,10 @@ public class AgentServerTests
     public async Task GetClassHome_WithNoHome_AnswersAnEmptyStatus()
     {
         using var masterCert = SelfSignedCertificate.Create("master-under-test");
-        var statePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
+        var homePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
+        var lessonPath = Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json");
 
-        var answer = (await ExchangeWithAgentAs(masterCert, null, new ClassHomeState(statePath, _ => { }),
+        var answer = (await ExchangeWithAgentAs(masterCert, LessonHandler(lessonPath, new ClassHomeState(homePath, _ => { })),
             new Message(MessageType.GetClassHome, Array.Empty<byte>())))[0];
 
         Assert.Equal(MessageType.ClassHomeStatus, answer.Type);
@@ -259,16 +263,16 @@ public class AgentServerTests
         var lesson = new ClassLesson(100, Guid.NewGuid(), "3º A", DateTimeOffset.Now.ToUnixTimeSeconds(), Ended: false);
         try
         {
-            var classHome = new ClassHomeState(homePath, _ => { });
-            var answers = await ExchangeWithAgentAs(masterCert, LessonHandler(lessonPath, classHome), classHome,
+            var handler = LessonHandler(lessonPath, new ClassHomeState(homePath, _ => { }));
+            var answers = await ExchangeWithAgentAs(masterCert, handler,
                 new Message(MessageType.SetClassLesson, lesson.Encode()));
 
             Assert.True(CommandResult.Decode(answers[0].Payload).Succeeded);
-            Assert.Equal(new ClassHome(masterCert.Thumbprint, "", "127.0.0.1", ClassFolderRemote.Port), classHome.Current);
+            Assert.Equal(new ClassHome(masterCert.Thumbprint, "", "127.0.0.1", ClassFolderRemote.Port), handler.CurrentHome);
 
-            var otherHome = new ClassHomeState(otherHomePath, _ => { });
-            otherHome.Claim(new string('B', 40), "10.0.0.7", new ClassHomeClaim("PROF-2", ClassFolderRemote.Port, false));
-            var refused = await ExchangeWithAgentAs(masterCert, LessonHandler(otherLessonPath, otherHome), otherHome,
+            var otherHandler = LessonHandler(otherLessonPath, new ClassHomeState(otherHomePath, _ => { }));
+            otherHandler.ClaimHome(new string('B', 40), "10.0.0.7", new ClassHomeClaim("PROF-2", ClassFolderRemote.Port, false));
+            var refused = await ExchangeWithAgentAs(masterCert, otherHandler,
                 new Message(MessageType.SetClassLesson, lesson.Encode()));
 
             Assert.Equal((false, "As pastas das turmas ficam no PC PROF-2"), CommandResult.Decode(refused[0].Payload));
@@ -288,7 +292,7 @@ public class AgentServerTests
     {
         using var masterCert = SelfSignedCertificate.Create("master-under-test");
 
-        var answers = await ExchangeWithAgentAs(masterCert, null, null,
+        var answers = await ExchangeWithAgentAs(masterCert, null,
             new Message(MessageType.IsTeacherTrusted, Encoding.ASCII.GetBytes(masterCert.Thumbprint.ToLowerInvariant())),
             new Message(MessageType.IsTeacherTrusted, Encoding.ASCII.GetBytes(new string('C', 40))),
             new Message(MessageType.IsTeacherTrusted, Encoding.UTF8.GetBytes("não é uma impressão digital")));
@@ -300,13 +304,20 @@ public class AgentServerTests
     }
 
     // What an Agent from before the second teacher PC answers, which the
-    // Master takes as "no home".
+    // Master takes as "no home": with no lesson handler, or one that keeps
+    // no home.
     [Fact]
-    public async Task WithoutHandler_GetAndClaimClassHome_AnswerCommandAck()
+    public async Task WithoutTheHome_GetAndClaimClassHome_AnswerCommandAck()
     {
-        var answers = await ExchangeWithAgent(null,
+        var lessonPath = Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json");
+        var requests = new[]
+        {
             new Message(MessageType.GetClassHome, Array.Empty<byte>()),
-            new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false).Encode()));
+            new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false).Encode()),
+        };
+
+        var answers = (await ExchangeWithAgent(null, requests))
+            .Concat(await ExchangeWithAgent(LessonHandler(lessonPath, null), requests));
 
         Assert.All(answers, answer =>
         {
@@ -315,21 +326,21 @@ public class AgentServerTests
         });
     }
 
-    private static ClassLessonHandler LessonHandler(string statePath, ClassHomeState home) =>
+    private static ClassLessonHandler LessonHandler(string statePath, ClassHomeState? home) =>
         new(statePath, () => null, _ => null, new AppBlockEnforcer(new EmptyInspector()),
             System.Security.Principal.WindowsIdentity.GetCurrent().User!, () => DateTime.Now, _ => { }, home);
 
     private static async Task<Message[]> ExchangeWithAgent(ClassLessonHandler? classLesson, params Message[] requests)
     {
         using var masterCert = SelfSignedCertificate.Create("master-under-test");
-        return await ExchangeWithAgentAs(masterCert, classLesson, null, requests);
+        return await ExchangeWithAgentAs(masterCert, classLesson, requests);
     }
 
     // One connection per request, in order, from the teacher with masterCert,
-    // against an AgentServer with only the class lesson handler and the class
-    // home (or neither) besides site blocking.
+    // against an AgentServer with only the class lesson handler (or none)
+    // besides site blocking.
     private static async Task<Message[]> ExchangeWithAgentAs(
-        X509Certificate2 masterCert, ClassLessonHandler? classLesson, ClassHomeState? classHome, params Message[] requests)
+        X509Certificate2 masterCert, ClassLessonHandler? classLesson, params Message[] requests)
     {
         using var agentCert = SelfSignedCertificate.Create("agent-under-test");
         var siteBlock = new SiteBlockCommandHandler(new SiteBlockState(), "unused", "unused-hosts", new FakeFirewallController());
@@ -337,8 +348,7 @@ public class AgentServerTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         var server = new AgentServer(
-            listener, agentCert, new TrustStore(new[] { masterCert.Thumbprint }), siteBlock, classLesson: classLesson,
-            classHome: classHome);
+            listener, agentCert, new TrustStore(new[] { masterCert.Thumbprint }), siteBlock, classLesson: classLesson);
 
         Message Exchange(Message request)
         {

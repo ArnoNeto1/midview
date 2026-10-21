@@ -3,25 +3,29 @@ using Midview.Protocol;
 using Xunit;
 
 // Two teacher PCs in one lab: only the class folders' home starts a lesson or
-// changes the class; any trusted teacher ends it (decision 3).
+// changes the class; any trusted teacher ends it (decision 3). Claims go
+// through the handler, under the lesson's lock.
 public sealed partial class ClassLessonHandlerTests
 {
     private const string HomePc = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private const string OtherPc = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
-    private ClassHomeState HomeClaimedBy(string thumbprint, string name)
+    private static ClassHomeClaim ClaimOf(string name, bool takeOver = false) =>
+        new(name, ClassFolderRemote.Port, takeOver);
+
+    private (ClassLessonHandler Handler, ClassHomeState Home) HandlerWithHomeClaimedBy(string thumbprint, string name)
     {
         var home = new ClassHomeState(_homePath, _log.Add);
-        Assert.True(home.Claim(thumbprint, "10.0.0.5", new ClassHomeClaim(name, ClassFolderRemote.Port, false)).Ok);
-        return home;
+        var handler = Create(home: home);
+        Assert.True(handler.ClaimHome(thumbprint, "10.0.0.5", ClaimOf(name)).Ok);
+        return (handler, home);
     }
 
     [Fact]
     public void Handle_AStartFromAnotherTeacherPc_IsRefused_AndChangesNothing()
     {
-        var home = HomeClaimedBy(HomePc, "PROF-1");
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
         var homeFile = File.ReadAllBytes(_homePath);
-        var handler = Create(home: home);
         _inspector.Start("chrome.exe");
 
         var (ok, detail) = handler.Handle(Lesson("3º A", 100).Encode(), OtherPc, "10.0.0.7");
@@ -37,10 +41,23 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal(homeFile, File.ReadAllBytes(_homePath));
     }
 
+    // The overload with no sender identity is refused like any other PC.
+    [Fact]
+    public void Handle_WithNoSender_IsRefusedOnceAHomeExists()
+    {
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+
+        var (ok, detail) = handler.Handle(Lesson("3º A", 100).Encode());
+
+        Assert.False(ok);
+        Assert.Equal("As pastas das turmas ficam no PC PROF-1", detail);
+        Assert.False(File.Exists(_statePath));
+    }
+
     [Fact]
     public void Handle_AClassChangeFromAnotherTeacherPc_IsRefused_AndTheLessonStays()
     {
-        var handler = Create(home: HomeClaimedBy(HomePc, "PROF-1"));
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
         var lesson = Lesson("3º A", 100);
         Assert.True(handler.Handle(lesson.Encode(), HomePc, "10.0.0.5").Succeeded);
         var stateFile = File.ReadAllBytes(_statePath);
@@ -60,8 +77,7 @@ public sealed partial class ClassLessonHandlerTests
     [Fact]
     public void Handle_AnEndFromAnotherTeacherPc_IsAccepted()
     {
-        var home = HomeClaimedBy(HomePc, "PROF-1");
-        var handler = Create(home: home);
+        var (handler, home) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
         var lesson = Lesson("3º A", 100);
         Assert.True(handler.Handle(lesson.Encode(), HomePc, "10.0.0.5").Succeeded);
         var ended = lesson with { SavedAt = 101, Ended = true };
@@ -88,12 +104,12 @@ public sealed partial class ClassLessonHandlerTests
 
         Assert.True(ok);
         Assert.Equal("aula do 3º A", detail);
-        Assert.Equal(new ClassHome(HomePc, "", "10.0.0.5", ClassFolderRemote.Port), home.Current);
+        Assert.Equal(new ClassHome(HomePc, "", "10.0.0.5", ClassFolderRemote.Port), handler.CurrentHome);
 
         var (otherOk, otherDetail) = handler.Handle(Lesson("3º B", 200).Encode(), OtherPc, "10.0.0.7");
 
         Assert.False(otherOk);
-        Assert.Equal(ClassHomeClaim.OtherHomeText + "outro PC de professor", otherDetail);
+        Assert.Equal("As pastas das turmas ficam no PC de outro professor", otherDetail);
     }
 
     [Fact]
@@ -110,18 +126,62 @@ public sealed partial class ClassLessonHandlerTests
         Assert.False(File.Exists(_homePath));
     }
 
-    // A start refused for the lesson's own reasons records no home.
+    // Ruling 5: the home PC with another certificate (reinstalled, paired
+    // again, another Windows account) is still the home, and starts lessons.
     [Fact]
-    public void Handle_AnOlderStartWithNoHome_RecordsNobody()
+    public void ClaimHome_TheHomesNameWithAnotherThumbprint_ThenStartsALesson()
     {
-        ClassLessonFile.Write(_statePath, Lesson("3º A", 200) with { Ended = true });
-        var home = new ClassHomeState(_homePath, _log.Add);
-        var handler = Create(home: home);
+        var (handler, home) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
 
-        var (ok, detail) = handler.Handle(Lesson("3º B", 100).Encode(), HomePc, "10.0.0.5");
+        var (ok, detail) = handler.ClaimHome(OtherPc, "10.0.0.8", ClaimOf("prof-1"));
+        var (started, _) = handler.Handle(Lesson("3º A", 100).Encode(), OtherPc, "10.0.0.8");
+        var (oldCertificate, oldDetail) = handler.Handle(Lesson("3º B", 200).Encode(), HomePc, "10.0.0.5");
 
         Assert.True(ok);
-        Assert.StartsWith(ClassLesson.KeptNewerText, detail);
-        Assert.Null(home.Current);
+        Assert.Equal("este PC guarda as pastas", detail);
+        Assert.Equal(new ClassHome(OtherPc, "PROF-1", "10.0.0.8", ClassFolderRemote.Port), home.Current);
+        Assert.True(started);
+        Assert.False(oldCertificate);
+        Assert.Equal("As pastas das turmas ficam no PC PROF-1", oldDetail);
+    }
+
+    [Fact]
+    public void ClaimHome_AnotherNameWithAnotherThumbprint_IsRefused()
+    {
+        var (handler, home) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+
+        var (ok, detail) = handler.ClaimHome(OtherPc, "10.0.0.8", ClaimOf("PROF-2"));
+
+        Assert.False(ok);
+        Assert.Equal("As pastas das turmas ficam no PC PROF-1", detail);
+        Assert.Equal(HomePc, home.Current!.Thumbprint);
+    }
+
+    // Plan decision 7: a TakeOver waits for the lesson's end.
+    [Fact]
+    public void ClaimHome_TakeOverWhileALessonIsOn_IsRefused_UntilItEnds()
+    {
+        var (handler, home) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+        var lesson = Lesson("3º A", 100);
+        handler.Handle(lesson.Encode(), HomePc, "10.0.0.5");
+
+        var during = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true));
+        handler.Handle((lesson with { SavedAt = 101, Ended = true }).Encode(), OtherPc, "10.0.0.7");
+        var after = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true));
+
+        Assert.Equal((false, "Encerre a aula antes de passar as pastas."), during);
+        Assert.Equal((true, "as pastas passaram para este PC"), after);
+        Assert.Equal(new ClassHome(OtherPc, "PROF-2", "10.0.0.7", ClassFolderRemote.Port), home.Current);
+    }
+
+    [Fact]
+    public void WithNoHomeState_TheHandlerKeepsNoHome()
+    {
+        var handler = Create();
+
+        Assert.False(handler.KeepsHome);
+        Assert.Null(handler.CurrentHome);
+        Assert.False(handler.ClaimHome(HomePc, "10.0.0.5", ClaimOf("PROF-1")).Ok);
+        Assert.True(handler.Handle(Lesson("3º A", 100).Encode(), OtherPc, "10.0.0.7").Succeeded);
     }
 }

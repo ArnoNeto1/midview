@@ -7,13 +7,17 @@ namespace Midview.Agent;
 // Which teacher PC keeps the class folders ("Pasta da turma" with two teacher
 // PCs in one lab, MessageType.ClaimClassHome and GetClassHome): the one whose
 // Master claimed it first, or, for a Master that sends no claim, started the
-// first lesson. Only the home may start a lesson or change the class
-// (ClassLessonHandler); any trusted teacher may end one.
+// first lesson. Only the home may start a lesson or change the class; any
+// trusted teacher may end one. ClassLessonHandler asks under its lesson's
+// lock, so a claim and a start never cross.
 //
 // The identity is the thumbprint (from the TLS channel, never the payload)
 // and the computer name (from the claim): two teacher PCs can share one
-// certificate. The address is where the connection came from, refreshed by
-// every claim from the home, so a home whose address changed is found again.
+// certificate. The home's own name with another certificate is still the
+// home (Midview reinstalled or paired again, or another Windows account on
+// that PC: each has its own teacher identity). The address is where the
+// connection came from, refreshed by every claim from the home, so a home
+// whose address changed is found again.
 //
 // Kept in %ProgramData%\Midview\class-home.json, replaced whole so a crash
 // never leaves half of it; a corrupt file is set aside and means no home.
@@ -22,9 +26,12 @@ public sealed class ClassHomeState
     public const string HomeIsHereText = "este PC guarda as pastas";
     public const string MovedHereText = "as pastas passaram para este PC";
 
+    // The folders don't move while a lesson is on (plan decision 7).
+    public const string EndLessonFirstText = "Encerre a aula antes de passar as pastas.";
+
     // In a refusal, for a home recorded with no name (a Master that sent no
-    // claim).
-    public const string UnnamedHomeText = "outro PC de professor";
+    // claim): "As pastas das turmas ficam no PC de outro professor".
+    public const string UnnamedHomeText = "de outro professor";
 
     private readonly string _statePath;
     private readonly Action<string> _log;
@@ -43,16 +50,12 @@ public sealed class ClassHomeState
     // What GetClassHome answers: null until a teacher PC claims it.
     public ClassHome? Current => Volatile.Read(ref _home);
 
-    // What an Agent answers a claim, or a lesson start, from a PC that isn't
-    // the home. Starts with ClassHomeClaim.OtherHomeText, which the Master
-    // looks for.
-    public static string OtherHomeDetail(ClassHome home) =>
-        ClassHomeClaim.OtherHomeText + (home.Name.Length > 0 ? home.Name : UnnamedHomeText);
-
     // senderThumbprint: the TLS channel's; senderAddress: the connection's.
-    public (bool Ok, string Detail) Claim(string senderThumbprint, string senderAddress, ClassHomeClaim claim)
+    // lessonOn: whether this machine follows a lesson now (a TakeOver waits
+    // for its end).
+    public (bool Ok, string Detail) Claim(string senderThumbprint, string senderAddress, ClassHomeClaim claim, bool lessonOn)
     {
-        if (!IsSender(senderThumbprint, senderAddress) || !IsUsable(claim.Name, claim.Port))
+        if (!IsSender(senderThumbprint, senderAddress) || claim.Name.Length == 0 || !IsUsable(claim.Name, claim.Port))
         {
             return (false, "pedido inválido");
         }
@@ -67,25 +70,25 @@ public sealed class ClassHomeState
                 claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port);
                 detail = HomeIsHereText;
             }
-            else if (home.IsSameIdentity(senderThumbprint, claim.Name))
+            else if (IsSamePc(home, senderThumbprint, claim.Name))
             {
                 // The name a Master with no claim left empty is filled in.
-                claimed = home with
-                {
-                    Name = home.Name.Length > 0 ? home.Name : claim.Name,
-                    Address = senderAddress,
-                    Port = claim.Port,
-                };
+                claimed = new ClassHome(
+                    Normalize(senderThumbprint), home.Name.Length > 0 ? home.Name : claim.Name, senderAddress, claim.Port);
                 detail = HomeIsHereText;
             }
-            else if (claim.TakeOver)
+            else if (!claim.TakeOver)
             {
-                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port);
-                detail = MovedHereText;
+                return (false, OtherHomeDetail(home));
+            }
+            else if (lessonOn)
+            {
+                return (false, EndLessonFirstText);
             }
             else
             {
-                return (false, OtherHomeDetail(home));
+                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port);
+                detail = MovedHereText;
             }
 
             if (claimed == home)
@@ -105,41 +108,65 @@ public sealed class ClassHomeState
         }
     }
 
-    // A lesson started by a Master that sent no claim (decision 4): it is
-    // the home, with no name, while there is none. Kept for this run even if
-    // it can't be saved, so the rest of today's lessons go by it.
-    public void RecordStarter(string senderThumbprint, string senderAddress)
+    // May this teacher start a lesson or change the class? With no home, yes,
+    // and it becomes the home with no name (a Master that sent no claim,
+    // decision 4; a sender with no identity isn't recorded). With one, only
+    // from the home's certificate: the name was checked at the claim, and a
+    // Master refused there doesn't go on to start. refusal: the answer when
+    // not, naming the home.
+    public bool TryStart(string senderThumbprint, string senderAddress, out string refusal)
+    {
+        refusal = "";
+        lock (_gate)
+        {
+            var home = _home;
+            if (home is null)
+            {
+                RecordStarter(senderThumbprint, senderAddress);
+                return true;
+            }
+            if (string.Equals(home.Thumbprint, senderThumbprint, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            refusal = OtherHomeDetail(home);
+            return false;
+        }
+    }
+
+    // What an Agent answers a claim, or a lesson start, from a PC that isn't
+    // the home. Starts with ClassHomeClaim.OtherHomeText, which the Master
+    // looks for.
+    private static string OtherHomeDetail(ClassHome home) =>
+        ClassHomeClaim.OtherHomeText + (home.Name.Length > 0 ? home.Name : UnnamedHomeText);
+
+    // The home's own PC: its certificate and name (a home recorded with no
+    // name is any PC with that certificate), or its name with another
+    // certificate.
+    private static bool IsSamePc(ClassHome home, string thumbprint, string name) =>
+        home.IsSameIdentity(thumbprint, name)
+        || (home.Name.Length > 0 && string.Equals(home.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    // Kept for this run even if it can't be saved, so the rest of today's
+    // lessons go by it. Under _gate, with no home.
+    private void RecordStarter(string senderThumbprint, string senderAddress)
     {
         if (!IsSender(senderThumbprint, senderAddress))
         {
             return;
         }
 
-        lock (_gate)
+        var starter = new ClassHome(Normalize(senderThumbprint), "", senderAddress, ClassFolderRemote.Port);
+        try
         {
-            if (_home is not null)
-            {
-                return;
-            }
-
-            var starter = new ClassHome(Normalize(senderThumbprint), "", senderAddress, ClassFolderRemote.Port);
-            try
-            {
-                Save(starter);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                _log($"Couldn't save the class folders' home: {ex.Message}");
-                Volatile.Write(ref _home, starter);
-            }
+            Save(starter);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"Couldn't save the class folders' home: {ex.Message}");
+            Volatile.Write(ref _home, starter);
         }
     }
-
-    // May this teacher start a lesson or change the class? With no home,
-    // anyone. The name was checked at the claim: a Master that was refused
-    // there doesn't go on to start the lesson.
-    public bool MayStart(string senderThumbprint) =>
-        Current is not { } home || string.Equals(home.Thumbprint, senderThumbprint, StringComparison.OrdinalIgnoreCase);
 
     // Written, then made the current home. Throws if it can't be written.
     private void Save(ClassHome home)
