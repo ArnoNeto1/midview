@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 using Midview.Protocol;
 using Midview.Session;
@@ -12,7 +14,8 @@ public class ClassFolderTests : IDisposable
     private readonly string _outside;
     private readonly List<string> _links = new();
     private readonly List<string> _protected = new();
-    private readonly RecordingRecycleBin _bin = new();
+    private readonly List<string> _closed = new();
+    private readonly RecordingRecycleBin _bin;
     private ClassLesson? _lesson = new(1, Guid.NewGuid(), "3º A", 1, false);
 
     public ClassFolderTests()
@@ -20,6 +23,7 @@ public class ClassFolderTests : IDisposable
         _desktop = Path.Combine(_root, "Desktop");
         _setAside = Path.Combine(_root, "guardada");
         _outside = Path.Combine(_root, "fora");
+        _bin = new RecordingRecycleBin(Path.Combine(_root, "lixeira"));
         Directory.CreateDirectory(_desktop);
         Directory.CreateDirectory(_outside);
     }
@@ -29,6 +33,10 @@ public class ClassFolderTests : IDisposable
         foreach (var folder in _protected.Where(Directory.Exists))
         {
             Unprotect(folder);
+        }
+        if (_closed.Count > 0)
+        {
+            OpenEverythingBelow(_root); // a folder closed to us can't be deleted, nor can what it holds
         }
         // Links first: deleting one removes the link, never what it points at.
         foreach (var link in _links.Where(Directory.Exists))
@@ -943,46 +951,203 @@ public class ClassFolderTests : IDisposable
         // What the student saved is already safe, the folder waits for the Agent to release it.
         Assert.True(Directory.Exists(folder));
         Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "a.png")));
-        Assert.Equal((id, "3º A"), Remembered());
+        Assert.Equal((Guid.Empty, ""), Remembered());
+        Assert.Equal(new[] { (id, "3º A") }, Pending());
 
         // Saved in the meantime: goes aside as well.
         Write(folder, "tarde.txt");
         classFolder.Follow(null);
         Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "tarde.txt")));
-        Assert.Equal((id, "3º A"), Remembered());
+        Assert.Equal(new[] { (id, "3º A") }, Pending());
 
         Unprotect(folder);
         classFolder.Follow(null);
 
         Assert.False(Directory.Exists(folder));
-        Assert.Equal((Guid.Empty, ""), Remembered());
+        Assert.Empty(Pending());
     }
 
+    // A folder the Agent hasn't released yet doesn't hold the next lesson back.
     [Fact]
-    public void Follow_FolderStillProtected_HoldsBackTheNoticeOfTheNextLesson()
+    public void Follow_FolderStillProtected_StillAdoptsTheNextLesson()
     {
         var folder = MakeLessonFolder();
         var display = new RecordingDisplay();
         var classFolder = NewClassFolder();
         classFolder.Follow(display);
         var first = LessonId;
+        Write(folder, "a.png", "A");
         Protect(folder);
         _lesson = new ClassLesson(2, Guid.NewGuid(), "3º B", 1, false);
+        var newFolder = MakeLessonFolder();
+        Write(newFolder, "b.png");
 
         classFolder.Follow(display);
 
-        Assert.Single(display.Shown);
-        Assert.Equal((first, "3º A"), Remembered());
-
-        Unprotect(folder);
-        classFolder.Follow(display);
-
-        Assert.False(Directory.Exists(folder));
+        // The notice and the new lesson at once; the old one is waiting, its files already aside.
         Assert.Equal(2, display.Shown.Count);
         Assert.StartsWith("Aula do 3º B" + Environment.NewLine, display.Shown[1]);
         Assert.Equal((LessonId, "3º B"), Remembered());
+        Assert.Equal(new[] { (first, "3º A") }, Pending());
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(first), "a.png")));
+        Assert.True(File.Exists(Path.Combine(newFolder, "b.png")));
+
+        // Still blocked, the Session started again: nothing is said twice, the old lesson is still waited for.
+        var restarted = NewClassFolder();
+        restarted.Follow(display);
+        Assert.Equal(2, display.Shown.Count);
+        Assert.Equal(new[] { (first, "3º A") }, Pending());
+
+        Unprotect(folder);
+        restarted.Follow(display);
+
+        Assert.False(Directory.Exists(folder));
+        Assert.Empty(Pending());
+        Assert.Equal(2, display.Shown.Count);
+        Assert.Equal((LessonId, "3º B"), Remembered());
+        Assert.True(File.Exists(Path.Combine(newFolder, "b.png")));
     }
 
+    [Fact]
+    public void Follow_TwoChangesWhileTheFirstFolderIsBlocked_SetsBothAsideUnderTheirOwnLesson()
+    {
+        var display = new RecordingDisplay();
+        var classFolder = NewClassFolder();
+        var folderA = MakeLessonFolder();
+        classFolder.Follow(display);
+        var idA = LessonId;
+        Write(folderA, "a.png", "A");
+        Protect(folderA);
+
+        _lesson = new ClassLesson(2, Guid.NewGuid(), "3º B", 1, false);
+        var folderB = MakeLessonFolder();
+        Write(folderB, "b.png", "B");
+        classFolder.Follow(display);
+        var idB = LessonId;
+        Protect(folderB);
+
+        _lesson = new ClassLesson(3, Guid.NewGuid(), "3º C", 1, false);
+        var folderC = MakeLessonFolder();
+        Write(folderC, "c.png", "C");
+        Write(folderB, "b2.png", "B2"); // saved by a student before the Agent let go of it
+        classFolder.Follow(display);
+        var idC = LessonId;
+
+        Assert.Equal(3, display.Shown.Count);
+        Assert.Equal((idC, "3º C"), Remembered());
+        Assert.Equal(new[] { (idA, "3º A"), (idB, "3º B") }, Pending());
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(idA), "a.png")));
+        Assert.Equal("B", File.ReadAllText(Path.Combine(SetAsideFolder(idB), "b.png")));
+        Assert.Equal("B2", File.ReadAllText(Path.Combine(SetAsideFolder(idB), "b2.png")));
+
+        // One is let go, the other still not: only that one is settled.
+        Unprotect(folderB);
+        classFolder.Follow(display);
+        Assert.False(Directory.Exists(folderB));
+        Assert.True(Directory.Exists(folderA));
+        Assert.Equal(new[] { (idA, "3º A") }, Pending());
+
+        Unprotect(folderA);
+        classFolder.Follow(display);
+
+        Assert.False(Directory.Exists(folderA));
+        Assert.Empty(Pending());
+        Assert.Equal(3, display.Shown.Count);
+        Assert.Equal((idC, "3º C"), Remembered());
+        Assert.Equal(new[] { "a.png" }, Directory.GetFiles(SetAsideFolder(idA)).Select(Path.GetFileName));
+        Assert.Equal(new[] { "b.png", "b2.png" }, Directory.GetFiles(SetAsideFolder(idB)).Select(Path.GetFileName).OrderBy(name => name));
+        Assert.False(Directory.Exists(SetAsideFolder(idC)));
+        Assert.Equal("C", File.ReadAllText(Path.Combine(folderC, "c.png")));
+    }
+
+    [Fact]
+    public void Follow_WhenAFolderCantBeRead_SetsAsideWhatItCanAndTriesAgain()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var id = LessonId;
+        Write(folder, "a.png", "A");
+        var closed = Path.Combine(folder, "sub");
+        Write(closed, "b.txt", "B");
+        CloseToTheStudent(closed);
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        // A folder that couldn't be read isn't an empty one: what is in it must not go to the Recycle Bin unseen.
+        Assert.Empty(_bin.Recycled);
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(id), "a.png")));
+        Assert.Equal(new[] { (id, "3º A") }, Pending());
+
+        OpenToTheStudent(closed);
+        classFolder.Follow(null);
+
+        Assert.Equal("B", File.ReadAllText(Path.Combine(SetAsideFolder(id), "sub", "b.txt")));
+        Assert.Equal(new[] { folder }, _bin.Recycled);
+        Assert.Empty(Pending());
+    }
+
+    // The search for links stops at the first link, so it would settle the folder before it ever tried the closed one.
+    [Fact]
+    public void Follow_WithALinkAndAFolderThatCantBeRead_DoesNotSettleUntilItIsRead()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var id = LessonId;
+        Write(_outside, "segredo.txt");
+        MakeJunction(Path.Combine(folder, "atalho"), _outside);
+        var closed = Path.Combine(folder, "sub");
+        Write(closed, "b.txt", "B");
+        CloseToTheStudent(closed);
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        Assert.Equal(new[] { (id, "3º A") }, Pending());
+        Assert.False(File.Exists(Path.Combine(SetAsideFolder(id), "sub", "b.txt")));
+
+        OpenToTheStudent(closed);
+        classFolder.Follow(null);
+
+        Assert.Equal("B", File.ReadAllText(Path.Combine(SetAsideFolder(id), "sub", "b.txt")));
+        Assert.Empty(Pending());
+        Assert.Empty(_bin.Recycled);
+        Assert.True(File.Exists(Path.Combine(_outside, "segredo.txt")));
+    }
+
+    // The search for links can't read it either: that is not "a link", and not "none": it is asked again.
+    [Fact]
+    public void Follow_WhenAHiddenFolderCantBeRead_NeitherRecyclesNorSettles()
+    {
+        var folder = MakeLessonFolder();
+        var classFolder = NewClassFolder();
+        classFolder.Follow(null);
+        var id = LessonId;
+        Write(folder, "a.png", "A");
+        var closed = Path.Combine(folder, "escondida");
+        Write(closed, "dentro.txt");
+        File.SetAttributes(closed, FileAttributes.Hidden);
+        CloseToTheStudent(closed);
+        _lesson = _lesson! with { Ended = true };
+
+        classFolder.Follow(null);
+
+        Assert.Empty(_bin.Recycled);
+        Assert.True(Directory.Exists(folder));
+        Assert.Equal("A", File.ReadAllText(Path.Combine(SetAsideFolder(id), "a.png")));
+        Assert.Equal(new[] { (id, "3º A") }, Pending());
+
+        OpenToTheStudent(closed);
+        classFolder.Follow(null);
+
+        Assert.Equal(new[] { folder }, _bin.Recycled);
+        Assert.Equal(new[] { "escondida/dentro.txt" }, _bin.Contents[folder].Where(entry => entry.EndsWith(".txt")));
+        Assert.Empty(Pending());
+    }
     [Fact]
     public void Follow_ChangeOfClass_SetsTheOldFolderAside_AndLeavesTheNewOne()
     {
@@ -1043,7 +1208,7 @@ public class ClassFolderTests : IDisposable
 
             Assert.True(File.Exists(held));
             Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "livre.txt")));
-            Assert.Equal((id, "3º A"), Remembered());
+            Assert.Equal(new[] { (id, "3º A") }, Pending());
         }
 
         classFolder.Follow(null);
@@ -1051,6 +1216,7 @@ public class ClassFolderTests : IDisposable
         Assert.False(Directory.Exists(folder));
         Assert.Equal("meu", File.ReadAllText(Path.Combine(SetAsideFolder(id), "sub", "aberto.docx")));
         Assert.Equal((Guid.Empty, ""), Remembered());
+        Assert.Empty(Pending());
     }
 
     [Fact]
@@ -1108,7 +1274,8 @@ public class ClassFolderTests : IDisposable
         Assert.True(File.Exists(Path.Combine(SetAsideFolder(id), "meu.txt")));
         Assert.Equal(new[] { "meu.txt" }, Directory.GetFileSystemEntries(SetAsideFolder(id)).Select(Path.GetFileName));
         Assert.Empty(_bin.Recycled); // a folder with a link in it isn't handed to the Recycle Bin
-        Assert.Equal((Guid.Empty, ""), Remembered()); // the folder stays: not worth holding the lessons back
+        Assert.Equal((Guid.Empty, ""), Remembered());
+        Assert.Empty(Pending()); // the folder stays: not worth trying again
     }
 
     [Fact]
@@ -1233,6 +1400,62 @@ public class ClassFolderTests : IDisposable
 
     private string StatePath => Path.Combine(_root, "session.json");
 
+    // The finished lessons the state file still has to settle, oldest first.
+    private (Guid LessonId, string Turma)[] Pending()
+    {
+        if (!File.Exists(StatePath))
+        {
+            return Array.Empty<(Guid, string)>();
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(StatePath));
+        if (!document.RootElement.TryGetProperty("Pending", out var pending) || pending.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<(Guid, string)>();
+        }
+
+        return pending.EnumerateArray()
+            .Select(entry => (entry.GetProperty("LessonId").GetGuid(), entry.GetProperty("Turma").GetString()!))
+            .ToArray();
+    }
+
+    // A folder the student can't look into, as an ACL can make it: listing it is "access denied".
+    private void CloseToTheStudent(string folder)
+    {
+        var info = new DirectoryInfo(folder);
+        var security = info.GetAccessControl();
+        security.AddAccessRule(NoListing());
+        info.SetAccessControl(security);
+        _closed.Add(folder);
+    }
+
+    private static void OpenToTheStudent(string folder)
+    {
+        var info = new DirectoryInfo(folder);
+        var security = info.GetAccessControl();
+        security.RemoveAccessRuleSpecific(NoListing());
+        info.SetAccessControl(security);
+    }
+
+    private static FileSystemAccessRule NoListing() =>
+        new(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+
+    // For the cleanup of a test that failed with a folder still closed: opens each folder before looking inside it.
+    private static void OpenEverythingBelow(string folder)
+    {
+        try
+        {
+            OpenToTheStudent(folder);
+            foreach (var subfolder in Directory.EnumerateDirectories(folder))
+            {
+                OpenEverythingBelow(subfolder);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+        }
+    }
+
     // What the Session's state file says it follows, or null without a file.
     private (Guid LessonId, string Turma)? Remembered()
     {
@@ -1294,6 +1517,10 @@ public class ClassFolderTests : IDisposable
     // Takes what it's given out of the way, as the Recycle Bin does, and remembers the paths.
     private sealed class RecordingRecycleBin : IRecycleBin
     {
+        private readonly string _binFolder;
+
+        public RecordingRecycleBin(string binFolder) => _binFolder = binFolder;
+
         public List<string> Recycled { get; } = new();
 
         // What was inside each folder when it went.
@@ -1310,16 +1537,32 @@ public class ClassFolderTests : IDisposable
 
             if (Directory.Exists(path))
             {
-                Contents[path] = Directory.GetFileSystemEntries(path, "*", SearchOption.AllDirectories)
-                    .Select(entry => Path.GetRelativePath(path, entry).Replace('\\', '/'))
-                    .OrderBy(entry => entry, StringComparer.Ordinal)
-                    .ToArray();
-                Directory.Delete(path, recursive: true);
+                // The Agent's folder, until it lets go of it, can't be deleted by the student: the Bin can't have it either.
+                if ((File.GetAttributes(path) & FileAttributes.ReadOnly) != 0)
+                {
+                    throw new UnauthorizedAccessException($"{path} is protected");
+                }
+
+                // What went with the folder. A folder that can't be looked into goes with it unseen, as with the shell's one move.
+                try
+                {
+                    Contents[path] = Directory.GetFileSystemEntries(path, "*", SearchOption.AllDirectories)
+                        .Select(entry => Path.GetRelativePath(path, entry).Replace('\\', '/'))
+                        .OrderBy(entry => entry, StringComparer.Ordinal)
+                        .ToArray();
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+
+                Directory.CreateDirectory(_binFolder);
+                Directory.Move(path, Path.Combine(_binFolder, Guid.NewGuid().ToString("N")));
             }
             else
             {
                 File.Delete(path);
             }
+
             Recycled.Add(path);
         }
     }

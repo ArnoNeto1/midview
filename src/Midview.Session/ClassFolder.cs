@@ -27,21 +27,23 @@ public sealed class ClassFolder
     private const string NoFolder = "sem pasta";
     private const string Linked = "pasta vinculada";
 
-    // Hidden and system entries (Office's "~$" lock files, say) and links are skipped.
-    private static readonly EnumerationOptions Options = new()
-    {
-        RecurseSubdirectories = false,
-        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
-        IgnoreInaccessible = true,
-    };
+    // Hidden and system entries (Office's "~$" lock files, say) and links are
+    // skipped, and so is a folder the student can't look into: a listing makes
+    // do with what it can see.
+    private static readonly EnumerationOptions Options = ListingOptions(ignoreInaccessible: true);
 
-    // Every entry, hidden, system and links included: to find a link, which
-    // Options leaves out of sight.
+    // The same, except that a folder that can't be looked into is an error
+    // instead of an empty one: for Follow, which must not take "couldn't
+    // read" for "nothing there".
+    private static readonly EnumerationOptions StrictOptions = ListingOptions(ignoreInaccessible: false);
+
+    // Every entry, hidden, system and links included, an unreadable folder an
+    // error: to find a link, which Options leaves out of sight.
     private static readonly EnumerationOptions AllEntries = new()
     {
         RecurseSubdirectories = false,
         AttributesToSkip = FileAttributes.None,
-        IgnoreInaccessible = true,
+        IgnoreInaccessible = false,
     };
 
     private static readonly FollowedLesson NoLesson = new(Guid.Empty, string.Empty);
@@ -49,7 +51,7 @@ public sealed class ClassFolder
     private static readonly UTF8Encoding StrictUtf8 = new(false, throwOnInvalidBytes: true);
 
     private readonly object _followLock = new();
-    private FollowedLesson? _followed; // read from SessionStatePath on the first Follow
+    private FollowState? _state; // read from SessionStatePath on the first Follow
     private readonly HashSet<string> _problems = new();
 
     private readonly string _desktopDirectory;
@@ -63,7 +65,8 @@ public sealed class ClassFolder
     // agentLesson: the lesson the Agent says is on (an ended lesson says it
     // has ended; null is "not known", such as a lesson file that couldn't be
     // read just now, and Follow does nothing with it). sessionStatePath: where
-    // the lesson this Session last followed is remembered.
+    // the lesson this Session last followed is remembered, with the finished
+    // ones whose folder isn't settled yet.
     public ClassFolder(
         string desktopDirectory,
         string setAsideRoot,
@@ -262,20 +265,23 @@ public sealed class ClassFolder
 
     // Called every few seconds. Compares the lesson the Agent says is on with
     // the one this Session last followed (remembered in SessionStatePath, so a
-    // restart doesn't repeat itself) and when they differ:
-    //  1. the folder of the lesson that is over, if it is still on the Desktop,
-    //     has the files a listing shows (List's own filters) moved, relative
-    //     paths kept, to setAsideRoot\<lesson id, "N" format>, where the
-    //     teacher's Master collects what it hasn't got yet. Whatever else is
-    //     left in it (a half-downloaded file, a lock file, a hidden one...)
-    //     goes with the folder itself to the student's Recycle Bin, so what is
-    //     set aside is always something the Master can see. The Agent releases
-    //     the folder so the student can delete it; until it does the Recycle
-    //     Bin is refused (access denied), and so is a file a program holds
-    //     open: what is left is tried again on the next call, and the old
-    //     lesson is still the one remembered.
-    //  2. a lesson that is on gets its notice, if there is somewhere to show it.
-    //  3. the new lesson is remembered.
+    // restart doesn't repeat itself). A lesson that is on and new gets its
+    // notice, if there is somewhere to show it, and is remembered at once.
+    // The one it replaces, if there was one, is kept in a list of finished
+    // lessons not yet settled (in the state file too), and every one in the
+    // list is tried on every call:
+    //  - the folder of the finished lesson, if it is still on the Desktop, has
+    //    the files a listing shows (List's own filters) moved, relative paths
+    //    kept, to setAsideRoot\<lesson id, "N" format>, where the teacher's
+    //    Master collects what it hasn't got yet. Whatever else is left in it (a
+    //    half-downloaded file, a lock file, a hidden one...) goes with the
+    //    folder itself to the student's Recycle Bin, so what is set aside is
+    //    always something the Master can see. The Agent releases the folder so
+    //    the student can delete it; until it does the Recycle Bin is refused
+    //    (access denied), and so is a file a program holds open, or a folder
+    //    that can't be read: the lesson stays in the list for the next call,
+    //    and holds nothing else back.
+    //  - a settled lesson leaves the list.
     // An agentLesson of null is not known (the lesson file couldn't be read,
     // say), never "the lesson is over" (that is an ended lesson): nothing
     // happens then, so a failed read mid-lesson moves no file.
@@ -311,26 +317,53 @@ public sealed class ClassFolder
 
         var lesson = reported.IsOn ? reported : null;
         var now = lesson is null ? NoLesson : new FollowedLesson(lesson.LessonId, lesson.Turma);
-        var before = _followed ??= ReadFollowed();
-        if (now == before)
+        var state = _state ??= ReadState();
+        var changed = false;
+        try
         {
-            return;
-        }
+            if (now != state.Current)
+            {
+                // The new lesson is taken up at once, whatever state the old one's folder is in.
+                if (state.Current.LessonId != Guid.Empty && !state.Pending.Contains(state.Current))
+                {
+                    state.Pending.Add(state.Current);
+                }
 
-        if (before.LessonId != Guid.Empty && !SetAside(before, lesson))
+                if (lesson is not null)
+                {
+                    ShowNotice(notices, lesson);
+                }
+
+                // In memory too, whatever happens to the file: it must not make the notice come back every few seconds.
+                state.Current = now;
+                changed = true;
+            }
+
+            for (var index = 0; index < state.Pending.Count;)
+            {
+                if (SetAsideSafely(state.Pending[index], lesson))
+                {
+                    state.Pending.RemoveAt(index);
+                    changed = true;
+                }
+                else
+                {
+                    index++;
+                }
+            }
+
+            if (state.Pending.Count == 0)
+            {
+                _problems.Clear();
+            }
+        }
+        finally
         {
-            return;
+            if (changed)
+            {
+                SaveState(state);
+            }
         }
-
-        _problems.Clear();
-        if (lesson is not null)
-        {
-            ShowNotice(notices, lesson);
-        }
-
-        // In memory first: a state file that can't be written must not make the notice come back every few seconds.
-        _followed = now;
-        SaveFollowed(now);
     }
 
     private static void ShowNotice(IMessageDisplay? notices, ClassLesson lesson)
@@ -347,6 +380,20 @@ public sealed class ClassFolder
         catch (Exception ex)
         {
             Console.WriteLine($"Showing the class lesson notice failed: {ex.Message}");
+        }
+    }
+
+    // One lesson's trouble is that lesson's: it is tried again, and the others go on.
+    private bool SetAsideSafely(FollowedLesson finished, ClassLesson? current)
+    {
+        try
+        {
+            return SetAside(finished, current);
+        }
+        catch (Exception ex)
+        {
+            Problem($"Setting aside the files of {finished.Turma} failed: {ex.Message}");
+            return false;
         }
     }
 
@@ -384,7 +431,14 @@ public sealed class ClassFolder
         }
 
         // A folder with a link in it is not handed to the Recycle Bin: whether the shell would follow the link isn't ours to find out.
-        if (HasLinkInside(folder))
+        var (links, detail) = SearchForLinks(folder);
+        if (links == LinkSearch.Unreadable)
+        {
+            Problem($"Could not look through {folder} yet: {detail}");
+            return false;
+        }
+
+        if (links == LinkSearch.Found)
         {
             Problem($"Leaving {folder}: there is a link in it, which isn't followed or removed.");
             return true;
@@ -404,11 +458,18 @@ public sealed class ClassFolder
 
     // The files ListedFiles finds under source go to the same place under
     // destination (a name taken there is kept: the file coming gets another
-    // one). False when one couldn't be moved.
+    // one). False when one couldn't be moved, or a folder couldn't be read, so
+    // that there may be more to move.
     private bool MoveListedFiles(DirectoryInfo source, string destination)
     {
         var moved = true;
-        foreach (var (file, path) in ListedFiles(source, string.Empty, depth: 1).ToList())
+        var listed = ListedFiles(source, string.Empty, depth: 1, (directory, failure) =>
+        {
+            moved = false;
+            Problem($"Could not look into {directory.FullName}: {failure.Message}");
+        }).ToList();
+
+        foreach (var (file, path) in listed)
         {
             var target = Path.Combine(destination, path.Replace('/', Path.DirectorySeparatorChar));
             try
@@ -425,11 +486,19 @@ public sealed class ClassFolder
         return moved;
     }
 
+    private enum LinkSearch
+    {
+        None,
+        Found,
+        Unreadable,
+    }
+
     // Is there a link (junction or symbolic link) anywhere under folder, at
-    // any depth? None is entered. What can't be looked into is taken for one.
+    // any depth? None is entered. A folder that can't be looked into is not
+    // "no link" and not "a link" either: it is Unreadable, to be asked again.
     // Not recursive in code, because a student can nest folders as deep as
     // a path allows.
-    private static bool HasLinkInside(string folder)
+    private static (LinkSearch Result, string Detail) SearchForLinks(string folder)
     {
         var pending = new Stack<DirectoryInfo>();
         pending.Push(new DirectoryInfo(folder));
@@ -441,7 +510,7 @@ public sealed class ClassFolder
                 {
                     if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
                     {
-                        return true;
+                        return (LinkSearch.Found, string.Empty);
                     }
 
                     if (entry is DirectoryInfo directory)
@@ -450,11 +519,11 @@ public sealed class ClassFolder
                     }
                 }
             }
-            return false;
+            return (LinkSearch.None, string.Empty);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return true;
+            return (LinkSearch.Unreadable, ex.Message);
         }
     }
 
@@ -511,29 +580,39 @@ public sealed class ClassFolder
         }
     }
 
-    private FollowedLesson ReadFollowed()
+    private FollowState ReadState()
     {
         try
         {
             if (!File.Exists(SessionStatePath))
             {
-                return NoLesson;
+                return new FollowState(NoLesson, new List<FollowedLesson>());
             }
 
             using var stream = new FileStream(SessionStatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            var stored = JsonSerializer.Deserialize<StoredFollowed>(stream);
-            return stored?.Turma is null ? NoLesson : new FollowedLesson(stored.LessonId, stored.Turma);
+            var stored = JsonSerializer.Deserialize<StoredState>(stream);
+            if (stored?.Turma is null)
+            {
+                return new FollowState(NoLesson, new List<FollowedLesson>());
+            }
+
+            // The file is the student's to edit: only what makes sense is taken.
+            var pending = (stored.Pending ?? new List<FollowedLesson>())
+                .Where(lesson => lesson?.Turma is not null && lesson.LessonId != Guid.Empty)
+                .Distinct()
+                .ToList();
+            return new FollowState(new FollowedLesson(stored.LessonId, stored.Turma), pending);
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException
             or IOException or UnauthorizedAccessException)
         {
             Console.WriteLine($"Could not read {SessionStatePath}: {ex.Message}");
-            return NoLesson;
+            return new FollowState(NoLesson, new List<FollowedLesson>());
         }
     }
 
     // Written to a temporary file and moved over the old one, as ClassLessonFile does.
-    private void SaveFollowed(FollowedLesson lesson)
+    private void SaveState(FollowState state)
     {
         var tempPath = SessionStatePath + ".tmp";
         try
@@ -546,7 +625,7 @@ public sealed class ClassFolder
 
             using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(stream, new StoredFollowed(lesson.LessonId, lesson.Turma));
+                JsonSerializer.Serialize(stream, new StoredState(state.Current.LessonId, state.Current.Turma, state.Pending));
                 stream.Flush(flushToDisk: true);
             }
             File.Move(tempPath, SessionStatePath, overwrite: true);
@@ -566,8 +645,22 @@ public sealed class ClassFolder
 
     private sealed record FollowedLesson(Guid LessonId, string Turma);
 
-    private sealed record StoredFollowed(Guid LessonId, string Turma);
+    // What this Session follows: the lesson that is on (or none), and the
+    // finished ones whose folder still has to be set aside, oldest first.
+    private sealed class FollowState
+    {
+        public FollowState(FollowedLesson current, List<FollowedLesson> pending)
+        {
+            Current = current;
+            Pending = pending;
+        }
 
+        public FollowedLesson Current { get; set; }
+
+        public List<FollowedLesson> Pending { get; }
+    }
+
+    private sealed record StoredState(Guid LessonId, string Turma, List<FollowedLesson>? Pending = null);
     // The lesson the Agent says is on; null when none is.
     private ClassLesson? CurrentLesson() => _agentLesson() is { IsOn: true } lesson ? lesson : null;
 
@@ -690,13 +783,23 @@ public sealed class ClassFolder
     // leave out. One place for it, because what Follow sets aside has to be
     // what the Master was shown, and no more.
     //
+    // A folder that can't be read (gone, or closed to the student, while we
+    // looked) gives nothing this time, and with no unreadable callback that is
+    // all there is to it, as for a listing. With one, nothing is skipped quietly:
+    // a folder the student can't look into is an error (StrictOptions) and the
+    // callback is told which and why, so that the caller can tell "nothing
+    // there" from "couldn't see".
+    //
     // Manual recursion, as DeliveryFolder.ListFiles does, to stop at MaxDepth
     // (the folder itself is depth 1).
-    private static IEnumerable<(FileInfo File, string Path)> ListedFiles(DirectoryInfo directory, string prefix, int depth)
+    private static IEnumerable<(FileInfo File, string Path)> ListedFiles(
+        DirectoryInfo directory, string prefix, int depth, Action<DirectoryInfo, Exception>? unreadable = null)
     {
-        if (!TryEnumerate(directory, out var files, out var subdirectories))
+        var (files, subdirectories, failure) = Enumerate(directory, unreadable is null ? Options : StrictOptions);
+        if (failure is not null)
         {
-            yield break; // gone or closed to the student while we looked: nothing from it this time
+            unreadable?.Invoke(directory, failure);
+            yield break;
         }
 
         foreach (var file in files)
@@ -715,35 +818,40 @@ public sealed class ClassFolder
 
         foreach (var subdirectory in subdirectories)
         {
-            foreach (var listed in ListedFiles(subdirectory, prefix + subdirectory.Name + "/", depth + 1))
+            foreach (var listed in ListedFiles(subdirectory, prefix + subdirectory.Name + "/", depth + 1, unreadable))
             {
                 yield return listed;
             }
         }
     }
 
-    private static bool TryEnumerate(DirectoryInfo directory, out List<FileInfo> files, out List<DirectoryInfo> subdirectories)
+    private static (List<FileInfo> Files, List<DirectoryInfo> Subdirectories, Exception? Failure) Enumerate(
+        DirectoryInfo directory, EnumerationOptions options)
     {
         try
         {
-            files = directory.EnumerateFiles("*", Options)
+            var files = directory.EnumerateFiles("*", options)
                 .Where(IsListed)
                 .OrderBy(file => file.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            subdirectories = directory.EnumerateDirectories("*", Options)
+            var subdirectories = directory.EnumerateDirectories("*", options)
                 .Where(subdirectory => IsAddressable(subdirectory.Name))
                 .OrderBy(subdirectory => subdirectory.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            return true;
+            return (files, subdirectories, null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            files = new List<FileInfo>();
-            subdirectories = new List<DirectoryInfo>();
-            return false;
+            return (new List<FileInfo>(), new List<DirectoryInfo>(), ex);
         }
     }
 
+    private static EnumerationOptions ListingOptions(bool ignoreInaccessible) => new()
+    {
+        RecurseSubdirectories = false,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+        IgnoreInaccessible = ignoreInaccessible,
+    };
     private void Walk(DirectoryInfo directory, Guid lessonId, List<ClassFolderEntry> entries)
     {
         foreach (var (file, path) in ListedFiles(directory, string.Empty, depth: 1))
