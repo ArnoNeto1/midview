@@ -513,6 +513,19 @@ public class ClassFolderTests : IDisposable
         Assert.Equal(new[] { target }, Directory.GetFiles(folder));
     }
 
+    // What a push is asked before it is accepted: the Desktop's disk, in FileInbox's words.
+    [Fact]
+    public void RefusalFor_ASizeThatFits_IsNull()
+    {
+        Assert.Null(NewClassFolder().RefusalFor(1024));
+    }
+
+    [Fact]
+    public void RefusalFor_MoreThanTheDiskHolds_SaysThereIsNoRoom()
+    {
+        Assert.Equal("não há espaço livre suficiente no disco do aluno", NewClassFolder().RefusalFor(long.MaxValue));
+    }
+
     [Fact]
     public void Complete_OverAFileHeldOpen_Throws_AndLeavesNoTempFile()
     {

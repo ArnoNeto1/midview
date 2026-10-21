@@ -1535,6 +1535,449 @@ public class SessionServerTests
         Assert.Equal((false, "esta máquina não abre programas"), result);
     }
 
+    [Fact]
+    public async Task ListClassFolder_ReturnsTheListing()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "a.txt", new byte[] { 1, 2, 3 });
+        WriteFile(rig.LessonFolder, "site/b.txt", new byte[] { 4 });
+        var finished = Guid.NewGuid();
+        WriteFile(rig.SetAsideFolder(finished), "velho.txt", new byte[] { 9, 9 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (current, problem, entries) = await Task.Run(teacher.ListClassFolder).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(rig.LessonId, current);
+        Assert.Null(problem);
+        Assert.Equal(
+            new[] { (rig.LessonId, "a.txt", 3L), (rig.LessonId, "site/b.txt", 1L), (finished, "velho.txt", 2L) },
+            entries.Select(entry => (entry.LessonId, entry.Path, entry.Size)));
+        Assert.Equal(File.GetLastWriteTimeUtc(rig.PathIn("a.txt")).Ticks, entries[0].LastWriteTicks);
+    }
+
+    [Fact]
+    public async Task ListClassFolder_WhenTheLessonsFolderIsntThere_SaysSo()
+    {
+        using var rig = new ClassFolderRig(lessonFolder: false);
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (current, problem, entries) = await Task.Run(teacher.ListClassFolder).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(rig.LessonId, current);
+        Assert.Equal("sem pasta", problem);
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task PullClassFile_StreamsTheFile()
+    {
+        using var rig = new ClassFolderRig();
+        var content = Enumerable.Range(0, FileTransfer.ChunkSize * 2 + 10).Select(i => (byte)i).ToArray();
+        WriteFile(rig.LessonFolder, "site/index.html", content);
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (name, received, result) = await Task.Run(() => teacher.PullClassFile(rig.LessonId, "site/index.html"))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("site/index.html", name);
+        Assert.Equal(content, received);
+        Assert.Equal((true, string.Empty), result);
+    }
+
+    [Fact]
+    public async Task PullClassFile_AnEmptyFile_SendsTheHeaderAndNoChunk()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "vazio.txt", Array.Empty<byte>());
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (name, received, result) = await Task.Run(() => teacher.PullClassFile(rig.LessonId, "vazio.txt"))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("vazio.txt", name);
+        Assert.Empty(received!);
+        Assert.Equal((true, string.Empty), result);
+    }
+
+    [Fact]
+    public async Task PullClassFile_FromAFinishedLesson_ReadsWhatWasSetAside()
+    {
+        using var rig = new ClassFolderRig();
+        var finished = Guid.NewGuid();
+        WriteFile(rig.SetAsideFolder(finished), "trabalhos/ana.txt", new byte[] { 5, 6 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (name, received, result) = await Task.Run(() => teacher.PullClassFile(finished, "trabalhos/ana.txt"))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("trabalhos/ana.txt", name);
+        Assert.Equal(new byte[] { 5, 6 }, received);
+        Assert.True(result.Succeeded);
+        Assert.True(File.Exists(Path.Combine(rig.SetAsideFolder(finished), "trabalhos", "ana.txt"))); // reading takes nothing
+    }
+
+    [Fact]
+    public async Task PullClassFile_WhatIsntThere_IsRefusedInOneAnswer()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "a.txt", new byte[] { 1 });
+        File.WriteAllText(Path.Combine(rig.Desktop, "segredo.txt"), "fora da pasta");
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+
+        foreach (var (lessonId, path) in new[]
+                 {
+                     (rig.LessonId, "nao-existe.txt"),
+                     (rig.LessonId, "../segredo.txt"),
+                     (Guid.NewGuid(), "a.txt"),
+                 })
+        {
+            using var teacher = harness.ConnectMaster();
+            var (name, received, result) = await Task.Run(() => teacher.PullClassFile(lessonId, path))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Null(name);
+            Assert.Null(received);
+            Assert.Equal((false, "arquivo não encontrado"), result);
+        }
+    }
+
+    // Word keeps a document open for writing, and lets others read it.
+    [Fact]
+    public async Task PullClassFile_AFileAProgramHasOpen_IsStillRead()
+    {
+        using var rig = new ClassFolderRig();
+        var open = WriteAndReturn(rig, "aberto.docx", new byte[] { 1, 2 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        using (new FileStream(open, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+        {
+            var (_, content, result) = await Task.Run(() => teacher.PullClassFile(rig.LessonId, "aberto.docx"))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(new byte[] { 1, 2 }, content);
+            Assert.Equal((true, string.Empty), result);
+        }
+    }
+
+    [Fact]
+    public async Task PullClassFile_AFileLockedAgainstReading_IsRefusedInOneAnswer()
+    {
+        using var rig = new ClassFolderRig();
+        var locked = WriteAndReturn(rig, "trancado.docx", new byte[] { 3 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var (name, content, result) = await Task.Run(() => teacher.PullClassFile(rig.LessonId, "trancado.docx"))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Null(name);
+            Assert.Null(content);
+            Assert.False(result.Succeeded);
+            Assert.Contains("em uso", result.Detail);
+        }
+    }
+
+    // A file that is still being written can't be sent whole: what the Master
+    // would get is the start of it, under a size that is no longer the file's.
+    // The connection is dropped instead, which the Master discards.
+    [Fact]
+    public async Task PullClassFile_AFileThatGrowsWhileSent_DropsTheConnection_InsteadOfEndingWell()
+    {
+        using var rig = new ClassFolderRig();
+        var path = WriteAndReturn(rig, "grande.bin", new byte[64 * 1024 * 1024]); // more than the sockets hold
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+        teacher.Channel.Send(new Message(MessageType.PullClassFile, ClassFolderWire.EncodeFileRef(rig.LessonId, "grande.bin")));
+        var header = await Task.Run(() => teacher.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(MessageType.SendFile, header.Type);
+
+        using (var writer = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+        {
+            writer.WriteByte(1);
+        }
+
+        var answered = await Task.Run(() =>
+        {
+            try
+            {
+                while (true)
+                {
+                    if (teacher.Channel.Receive().Type == MessageType.CommandAck)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return false; // the connection ended without an answer
+            }
+        }).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(answered);
+    }
+
+    [Fact]
+    public async Task PushClassFile_SavesWithItsTime()
+    {
+        using var rig = new ClassFolderRig();
+        var content = Enumerable.Range(0, FileTransfer.ChunkSize + 10).Select(i => (byte)(i * 7)).ToArray();
+        var when = new DateTime(2026, 10, 20, 8, 30, 15, DateTimeKind.Utc);
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (accepted, result) = await Task.Run(
+            () => teacher.PushClassFile(rig.LessonId, "site/novo.bin", content, when.Ticks)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, string.Empty), accepted);
+        Assert.Equal((true, string.Empty), result);
+        var saved = rig.PathIn("site/novo.bin");
+        Assert.Equal(content, File.ReadAllBytes(saved));
+        Assert.Equal(when.Ticks, File.GetLastWriteTimeUtc(saved).Ticks);
+        Assert.Equal(new[] { saved }, Directory.GetFiles(rig.LessonFolder, "*", SearchOption.AllDirectories)); // no temp file left
+    }
+
+    [Fact]
+    public async Task PushClassFile_ReplacesAnOlderCopy_AndSavesAnEmptyFile()
+    {
+        using var rig = new ClassFolderRig();
+        var older = WriteAndReturn(rig, "trabalho.txt", new byte[] { 1, 1, 1 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        var when = new DateTime(2026, 10, 20, 9, 0, 0, DateTimeKind.Utc).Ticks;
+
+        using (var teacher = harness.ConnectMaster())
+        {
+            var (_, result) = await Task.Run(() => teacher.PushClassFile(rig.LessonId, "trabalho.txt", new byte[] { 2 }, when))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(result.Succeeded);
+        }
+        using (var teacher = harness.ConnectMaster())
+        {
+            var (_, result) = await Task.Run(() => teacher.PushClassFile(rig.LessonId, "vazio.txt", Array.Empty<byte>(), when))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(result.Succeeded);
+        }
+
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(older));
+        Assert.Equal(when, File.GetLastWriteTimeUtc(older).Ticks);
+        Assert.Empty(File.ReadAllBytes(rig.PathIn("vazio.txt")));
+    }
+
+    [Fact]
+    public async Task PushClassFile_ForAnotherLesson_IsRefused()
+    {
+        using var rig = new ClassFolderRig();
+        var finished = Guid.NewGuid();
+        Directory.CreateDirectory(rig.SetAsideFolder(finished));
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+
+        // One never heard of, and one that has finished: neither takes files any more.
+        foreach (var lessonId in new[] { Guid.NewGuid(), finished })
+        {
+            using var teacher = harness.ConnectMaster();
+            var (accepted, _) = await Task.Run(
+                () => teacher.PushClassFile(lessonId, "a.txt", new byte[] { 1 }, DateTime.UtcNow.Ticks)).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal((false, "aula diferente"), accepted);
+        }
+
+        Assert.Empty(Directory.GetFiles(rig.LessonFolder, "*", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(rig.SetAsideFolder(finished), "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task PushClassFile_WhenTheLessonsFolderIsntThere_IsRefused_AndMakesNoFolder()
+    {
+        using var rig = new ClassFolderRig(lessonFolder: false);
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (accepted, _) = await Task.Run(
+            () => teacher.PushClassFile(rig.LessonId, "a.txt", new byte[] { 1 }, DateTime.UtcNow.Ticks)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "sem pasta"), accepted);
+        Assert.False(Directory.Exists(rig.LessonFolder));
+    }
+
+    [Fact]
+    public async Task PushClassFile_OverAFileHeldOpen_ReportsArquivoEmUso()
+    {
+        using var rig = new ClassFolderRig();
+        var target = WriteAndReturn(rig, "aberto.docx", "antigo"u8.ToArray());
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var (accepted, result) = await Task.Run(
+                () => teacher.PushClassFile(rig.LessonId, "aberto.docx", "novo"u8.ToArray(), DateTime.UtcNow.Ticks))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.True(accepted.Succeeded);
+            Assert.False(result.Succeeded);
+            Assert.Contains("em uso", result.Detail);
+        }
+
+        Assert.Equal("antigo", File.ReadAllText(target));
+        Assert.Equal(new[] { target }, Directory.GetFiles(rig.LessonFolder)); // the new copy was thrown away
+    }
+
+    [Fact]
+    public async Task PushClassFile_ThatComesInCorrupt_IsNotSaved_AndSaysSo()
+    {
+        using var rig = new ClassFolderRig();
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+        teacher.Channel.Send(new Message(
+            MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(rig.LessonId, "a.txt", 10, DateTime.UtcNow.Ticks)));
+        Assert.True(CommandResult.Decode(teacher.Channel.Receive().Payload).Succeeded);
+
+        teacher.Channel.Send(new Message(MessageType.FileChunk, new byte[20])); // more than it said
+        var reply = await Task.Run(() => teacher.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((false, "a transferência chegou incompleta ou corrompida"), CommandResult.Decode(reply.Payload));
+        Assert.Empty(Directory.GetFiles(rig.LessonFolder, "*", SearchOption.AllDirectories));
+    }
+
+    // Windows can't give a file a time before 1601, though the wire format can say one.
+    [Fact]
+    public async Task PushClassFile_WithATimeWindowsCantStore_IsAnsweredNotDropped()
+    {
+        using var rig = new ClassFolderRig();
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var teacher = harness.ConnectMaster();
+
+        var (accepted, result) = await Task.Run(
+            () => teacher.PushClassFile(rig.LessonId, "a.txt", new byte[] { 1 }, lastWriteTicks: 0)).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(accepted.Succeeded);
+        Assert.False(result.Succeeded);
+        Assert.StartsWith("não foi possível salvar o arquivo", result.Detail);
+        Assert.Empty(Directory.GetFiles(rig.LessonFolder, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task DeleteRenameClear_AnswerWithAResult()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "apagar.txt", new byte[] { 1 });
+        WriteFile(rig.LessonFolder, "velho.txt", new byte[] { 2 });
+        WriteFile(rig.LessonFolder, "ocupado.txt", new byte[] { 3 });
+        var finished = Guid.NewGuid();
+        WriteFile(rig.SetAsideFolder(finished), "guardado.txt", new byte[] { 4 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+
+        (bool Succeeded, string Detail) Ask(MessageType type, byte[] payload)
+        {
+            using var teacher = harness.ConnectMaster();
+            return teacher.Command(type, payload);
+        }
+
+        // Each message is a connection of its own.
+        var deleted = await Task.Run(() => Ask(MessageType.DeleteClassFile, ClassFolderWire.EncodeFileRef(rig.LessonId, "apagar.txt")))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        var notThere = await Task.Run(() => Ask(MessageType.DeleteClassFile, ClassFolderWire.EncodeFileRef(rig.LessonId, "apagar.txt")))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        var renamed = await Task.Run(() => Ask(MessageType.RenameClassFile, ClassFolderWire.EncodeRename(rig.LessonId, "velho.txt", "novo.txt")))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        var taken = await Task.Run(() => Ask(MessageType.RenameClassFile, ClassFolderWire.EncodeRename(rig.LessonId, "ocupado.txt", "novo.txt")))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        var cleared = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(finished)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+        var clearedAgain = await Task.Run(() => Ask(MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(finished)))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal((true, string.Empty), deleted);
+        Assert.False(File.Exists(rig.PathIn("apagar.txt")));
+        Assert.True(File.Exists(Path.Combine(rig.Bin.BinDirectory, "apagar.txt")));
+        Assert.Equal((false, "arquivo não encontrado"), notThere);
+        Assert.Equal((true, string.Empty), renamed);
+        Assert.False(File.Exists(rig.PathIn("velho.txt")));
+        Assert.Equal(new byte[] { 2 }, File.ReadAllBytes(rig.PathIn("novo.txt")));
+        Assert.Equal((false, "já existe um arquivo com esse nome"), taken);
+        Assert.True(File.Exists(rig.PathIn("ocupado.txt")));
+        Assert.Equal((true, string.Empty), cleared);
+        Assert.False(Directory.Exists(rig.SetAsideFolder(finished)));
+        Assert.Equal((true, string.Empty), clearedAgain); // nothing set aside is nothing to clear
+    }
+
+    [Fact]
+    public async Task ClassFolderMessages_AnswerAnInvalidRequest_WithoutTouchingAnything()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "a.txt", new byte[] { 1 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+
+        foreach (var type in new[]
+                 {
+                     MessageType.PullClassFile, MessageType.PushClassFile, MessageType.DeleteClassFile,
+                     MessageType.RenameClassFile, MessageType.ClearSetAside,
+                 })
+        {
+            using var teacher = harness.ConnectMaster();
+            var result = await Task.Run(() => teacher.Command(type, new byte[] { 99, 1, 2 })).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.False(result.Succeeded);
+            Assert.NotEmpty(result.Detail);
+        }
+
+        Assert.Equal(new[] { rig.PathIn("a.txt") }, Directory.GetFiles(rig.LessonFolder));
+    }
+
+    [Fact]
+    public async Task ClassFolderMessages_WhileAnotherMasterIsControlling_StillRun()
+    {
+        using var rig = new ClassFolderRig();
+        WriteFile(rig.LessonFolder, "a.txt", new byte[] { 7 });
+        using var harness = new ServerHarness(new CountingScreenCapture(), classFolder: rig.Folder);
+        using var controller = harness.ConnectMaster();
+        controller.StartControl();
+        await Task.Run(() => controller.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it holds the control slot now
+
+        using var teacher = harness.ConnectMaster();
+
+        var (_, _, entries) = await Task.Run(teacher.ListClassFolder).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(new[] { "a.txt" }, entries.Select(entry => entry.Path));
+    }
+
+    [Fact]
+    public async Task WithoutClassFolder_AnswersEachWithARefusal()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        var lessonId = Guid.NewGuid();
+        var requests = new (MessageType Type, byte[] Payload)[]
+        {
+            (MessageType.ListClassFolder, Array.Empty<byte>()),
+            (MessageType.PullClassFile, ClassFolderWire.EncodeFileRef(lessonId, "a.txt")),
+            (MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, "a.txt", 1, DateTime.UtcNow.Ticks)),
+            (MessageType.DeleteClassFile, ClassFolderWire.EncodeFileRef(lessonId, "a.txt")),
+            (MessageType.RenameClassFile, ClassFolderWire.EncodeRename(lessonId, "a.txt", "b.txt")),
+            (MessageType.ClearSetAside, ClassFolderWire.EncodeLessonId(lessonId)),
+        };
+
+        foreach (var (type, payload) in requests)
+        {
+            using var teacher = harness.ConnectMaster();
+            var result = await Task.Run(() => teacher.Command(type, payload)).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal((false, "esta máquina não tem pasta da turma"), result);
+        }
+    }
+
+    private static string WriteAndReturn(ClassFolderRig rig, string relativePath, byte[] content)
+    {
+        WriteFile(rig.LessonFolder, relativePath, content);
+        return rig.PathIn(relativePath);
+    }
+
     private static void WriteFile(string root, string relativePath, byte[] content)
     {
         var path = Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -1559,6 +2002,53 @@ public class SessionServerTests
             if (System.IO.Directory.Exists(Directory))
             {
                 System.IO.Directory.Delete(Directory, recursive: true);
+            }
+        }
+    }
+
+    // The class folder as the student's Session sees it: a Desktop with the
+    // folder of the lesson that is on, and where finished lessons' files wait.
+    private sealed class ClassFolderRig : IDisposable
+    {
+        private readonly string _root = Path.Combine(Path.GetTempPath(), $"midview-classserver-{Guid.NewGuid():N}");
+
+        public ClassFolderRig(bool lessonFolder = true)
+        {
+            Lesson = new ClassLesson(1, Guid.NewGuid(), "3º A", 1, false);
+            Desktop = Path.Combine(_root, "Desktop");
+            SetAside = Path.Combine(_root, "guardada");
+            Bin = new FakeRecycleBin(Path.Combine(_root, "lixeira"));
+            Directory.CreateDirectory(Desktop);
+            if (lessonFolder)
+            {
+                Directory.CreateDirectory(LessonFolder);
+            }
+            Folder = new ClassFolder(Desktop, SetAside, () => Lesson, Bin, Path.Combine(_root, "session.json"));
+        }
+
+        public ClassLesson Lesson { get; }
+
+        public Guid LessonId => Lesson.LessonId;
+
+        public string Desktop { get; }
+
+        public string SetAside { get; }
+
+        public FakeRecycleBin Bin { get; }
+
+        public ClassFolder Folder { get; }
+
+        public string LessonFolder => Path.Combine(Desktop, Lesson.FolderName);
+
+        public string SetAsideFolder(Guid lessonId) => Path.Combine(SetAside, lessonId.ToString("N"));
+
+        public string PathIn(string relativePath) => Path.Combine(LessonFolder, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        public void Dispose()
+        {
+            if (Directory.Exists(_root))
+            {
+                Directory.Delete(_root, recursive: true);
             }
         }
     }
@@ -1589,7 +2079,7 @@ public class SessionServerTests
             IOpenProgramsLister? openPrograms = null, IScreenLockDisplay? screenLock = null,
             IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null, string? trustedMastersFile = null,
             ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-            IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null)
+            IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, ClassFolder? classFolder = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -1601,7 +2091,8 @@ public class SessionServerTests
                 capture, Injector,
                 new InputLockManager(Devices, new FakeClock(), TimeSpan.FromSeconds(5)),
                 messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms, screenLock,
-                fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter, frameAckTimeout);
+                fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter, frameAckTimeout,
+                classFolder: classFolder);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 
@@ -1719,6 +2210,68 @@ public class SessionServerTests
                 Assert.Equal(size, content.Count);
                 files.Add(path, content.ToArray());
             }
+        }
+
+        public (Guid CurrentLessonId, string? Problem, IReadOnlyList<ClassFolderEntry> Entries) ListClassFolder()
+        {
+            Channel.Send(new Message(MessageType.ListClassFolder, Array.Empty<byte>()));
+            var reply = Channel.Receive();
+            Assert.Equal(MessageType.ClassFolderListing, reply.Type);
+            Assert.True(ClassFolderWire.TryDecodeListing(reply.Payload, out var current, out var problem, out var entries));
+            return (current, problem, entries);
+        }
+
+        // The file the Session sent for a PullClassFile (its name as the header
+        // gives it, and its content), or null for both when it only answered;
+        // then how that ended.
+        public (string? Name, byte[]? Content, (bool Succeeded, string Detail) Result) PullClassFile(Guid lessonId, string path)
+        {
+            Channel.Send(new Message(MessageType.PullClassFile, ClassFolderWire.EncodeFileRef(lessonId, path)));
+            var first = Channel.Receive();
+            if (first.Type == MessageType.CommandAck)
+            {
+                return (null, null, CommandResult.Decode(first.Payload));
+            }
+
+            Assert.Equal(MessageType.SendFile, first.Type);
+            Assert.True(FileTransfer.TryDecodeHeader(first.Payload, out var name, out var size));
+            var content = new List<byte>();
+            while (content.Count < size)
+            {
+                var chunk = Channel.Receive();
+                Assert.Equal(MessageType.FileChunk, chunk.Type);
+                content.AddRange(chunk.Payload);
+            }
+            Assert.Equal(size, content.Count);
+            return (name, content.ToArray(), CommandResult.Decode(Channel.Receive().Payload));
+        }
+
+        // Accepted or refused first, then (if accepted) how saving it ended; a
+        // refusal has no second answer (Result is default).
+        public ((bool Succeeded, string Detail) Accepted, (bool Succeeded, string Detail) Result) PushClassFile(
+            Guid lessonId, string path, byte[] content, long lastWriteTicks)
+        {
+            Channel.Send(new Message(
+                MessageType.PushClassFile, ClassFolderWire.EncodePushHeader(lessonId, path, content.Length, lastWriteTicks)));
+            var accepted = CommandResult.Decode(Channel.Receive().Payload);
+            if (!accepted.Succeeded)
+            {
+                return (accepted, default);
+            }
+
+            for (var offset = 0; offset < content.Length; offset += FileTransfer.ChunkSize)
+            {
+                var length = Math.Min(FileTransfer.ChunkSize, content.Length - offset);
+                Channel.Send(new Message(MessageType.FileChunk, content.AsSpan(offset, length).ToArray()));
+            }
+            return (accepted, CommandResult.Decode(Channel.Receive().Payload));
+        }
+
+        // One CommandAck back, whatever the message.
+        public (bool Succeeded, string Detail) Command(MessageType type, byte[] payload)
+        {
+            Channel.Send(new Message(type, payload));
+            return CommandResult.Decode(Channel.Receive().Payload);
         }
 
         public (bool Succeeded, string Detail) CloseApps(CloseAppsMode mode, int delaySeconds = 0)

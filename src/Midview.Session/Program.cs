@@ -67,6 +67,25 @@ if (masterTrustStore.Count == 0)
 var deliveryFolder = new DeliveryFolder(DeliveryFolder.DefaultDirectory);
 deliveryFolder.TryCreate();
 
+// The class folder ("Pasta da turma"): the lesson's folder on the student's
+// Desktop, and where a finished lesson's files wait for the teacher's Master.
+// The Agent says which lesson is on (class-lesson.json); Follow, every few
+// seconds, tells the student about a new lesson and sets the old one's files
+// aside. The folders are the student's own, so all of it happens here.
+var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+var classFolder = new ClassFolder(
+    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+    Path.Combine(localAppData, "Midview", "Pasta da turma guardada"),
+    () => ClassLessonFile.Read(ClassLessonFile.DefaultPath),
+    new WindowsRecycleBin(),
+    Path.Combine(localAppData, "Midview", "class-folder-session.json"));
+var messageDisplay = new WinFormsMessageDisplay();
+
+// `using`, so the timer is still referred to (and not collected) for as long
+// as the server runs below.
+using var classFolderTimer = new System.Threading.Timer(
+    _ => classFolder.Follow(messageDisplay), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
@@ -79,7 +98,7 @@ var server = new SessionServer(
     // left a mouse disabled until the machine was restarted. Whatever ends
     // this process -- a crash, a kill, logging off -- ends the lock with it.
     new InputLockManager(new LowLevelInputBlocker(), new SystemClock(), TimeSpan.FromSeconds(5), new WinFormsControlNotice()),
-    new WinFormsMessageDisplay(),
+    messageDisplay,
     new WinFormsChatWindows(),
     new FileInbox(FileInbox.DefaultDirectory),
     new WindowsAppCloser(),
@@ -91,6 +110,7 @@ var server = new SessionServer(
     new WinFormsCountdownNotice(),
     new WindowsWebsiteOpener(),
     new WindowsProgramStarter(),
-    clipboard: new WindowsClipboard());
+    clipboard: new WindowsClipboard(),
+    classFolder: classFolder);
 
 server.Run(CancellationToken.None);

@@ -168,6 +168,11 @@ public sealed class ClassFolder
         return new ClassFolderIncoming(target, tempPath);
     }
 
+    // Null when a file of that size fits on the Desktop's disk, otherwise why
+    // not: in the words FileInbox uses for the same question. For the caller of
+    // BeginPush to ask before it accepts what it can't keep.
+    public string? RefusalFor(long size) => new FileInbox(_desktopDirectory).RefusalFor(size);
+
     // To the student's Recycle Bin, so it can be undone.
     public (bool Ok, string Detail) Delete(Guid lessonId, string relativePath)
     {
