@@ -44,21 +44,15 @@
         </StackPanel>
 
         <Grid>
-            <!-- Before a lesson (and while choosing the next class: "Trocar de turma…"). -->
+            <!-- Before a lesson. -->
             <DockPanel x:Name="ClassesView">
-                <StackPanel DockPanel.Dock="Top">
-                    <TextBlock x:Name="SwitchingText" Visibility="Collapsed" TextWrapping="Wrap" FontWeight="SemiBold"
-                               Foreground="{StaticResource InkBrush}" Margin="0,0,0,6" />
-                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10"
-                               Text="Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
-                </StackPanel>
+                <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10"
+                           Text="Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
 
                 <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
                     <Button x:Name="StartButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="OnStartClicked"
                             IsEnabled="False" />
                     <Button x:Name="CloseButton" Content="Fechar" Click="OnCloseClicked" HorizontalAlignment="Left" />
-                    <Button x:Name="BackToLessonButton" Click="OnBackToLessonClicked" Margin="8,0,0,0" HorizontalAlignment="Left"
-                            Visibility="Collapsed" />
                 </DockPanel>
 
                 <!-- "+ Nova turma" and "Renomear" ask the name here. -->
@@ -91,26 +85,10 @@
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <DockPanel>
-                                    <Border DockPanel.Dock="Right" Background="{StaticResource SelectedFillBrush}" CornerRadius="6"
-                                            BorderBrush="{StaticResource SelectedLineBrush}" BorderThickness="1" Padding="6,1"
-                                            VerticalAlignment="Center">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsLessonOn}" Value="False">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock Text="aula agora" FontSize="11" Foreground="{StaticResource InkBrush}" />
-                                    </Border>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Turma}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
-                                    </StackPanel>
-                                </DockPanel>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Turma}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -131,7 +109,7 @@
                     <Button x:Name="EndButton" DockPanel.Dock="Right" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}"
                             Click="OnEndClicked" />
                     <Button x:Name="SwitchButton" Content="Trocar de turma…" Click="OnSwitchClicked" HorizontalAlignment="Left"
-                            ToolTip="Volta para a lista de turmas. A aula atual continua até você começar a próxima; então ela é encerrada como escolhido acima." />
+                            ToolTip="Encerra esta aula como escolhido acima e volta para a lista de turmas, para começar a da próxima." />
                 </DockPanel>
 
                 <StackPanel DockPanel.Dock="Bottom">

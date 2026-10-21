@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -37,16 +38,12 @@ public partial class ClassFolderWindow
         }
     }
 
-    // The classes, the one of the lesson on marked, the selection kept.
+    // The classes, the selection kept.
     private void ShowClasses(IReadOnlyList<ClassSummary> classes)
     {
         var select = _selectNext ?? SelectedClass?.Turma;
         _selectNext = null;
-        var lesson = Lesson;
-        var rows = classes
-            .Select(summary => new ClassRow(
-                summary, ClassFolderText.Summary(summary), lesson.IsOn && SameClass(summary.Turma, lesson.Turma)))
-            .ToList();
+        var rows = classes.Select(summary => new ClassRow(summary, ClassFolderText.Summary(summary))).ToList();
         ClassesList.ItemsSource = rows;
         ClassesList.SelectedItem = rows.FirstOrDefault(row => SameClass(row.Turma, select));
         if (ClassesList.SelectedItem is { } selected)
@@ -57,16 +54,9 @@ public partial class ClassFolderWindow
         UpdateButtons();
     }
 
-    // The lesson started or ended: the mark moves, without reading the disk.
-    private void MarkLessonClass()
-    {
-        if (ClassesList.ItemsSource is IEnumerable<ClassRow> rows)
-        {
-            ShowClasses(rows.Select(row => row.Class).ToList());
-        }
-    }
-
     private static bool SameClass(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private bool IsLessonClass(string turma) => Lesson.IsOn && SameClass(Lesson.Turma, turma);
 
     private void OnClassSelected(object sender, SelectionChangedEventArgs e) => UpdateButtons();
 
@@ -75,7 +65,7 @@ public partial class ClassFolderWindow
 
     private void OnRenameClicked(object sender, RoutedEventArgs e)
     {
-        if (SelectedClass is { IsLessonOn: false } row)
+        if (SelectedClass is { } row && !IsLessonClass(row.Turma))
         {
             OpenNameRow(NameEdit.Rename, row.Turma, $"Novo nome para a turma {row.Turma}:", "Renomear", row.Turma);
         }
@@ -120,49 +110,70 @@ public partial class ClassFolderWindow
     private void OnNameOkClicked(object sender, RoutedEventArgs e) => ConfirmName();
 
     // The store makes the name safe for a folder ("Turma 1/2" is "Turma 1-2")
-    // and says why not when it can't be one.
-    private void ConfirmName()
+    // and says why not when it can't be one. Off the UI thread: it moves folders.
+    private async void ConfirmName()
     {
-        var name = NameTextBox.Text.Trim();
-        string detail;
-        switch (_nameEdit)
+        if (_busy)
         {
-            case NameEdit.Create:
-                var created = _store.Create(name);
-                if (created.Ok)
-                {
-                    CloseNameRow();
-                    _selectNext = created.Turma;
-                    ShowResults($"Turma {created.Turma} criada.", Array.Empty<string>());
-                    RefreshFromDisk();
-                    return;
-                }
-                detail = created.Detail;
-                break;
-
-            case NameEdit.Rename when _renaming is { } turma:
-                if (Lesson.IsOn && SameClass(Lesson.Turma, turma))
-                {
-                    detail = "A turma da aula em andamento não pode ser renomeada.";
-                    break;
-                }
-                var renamed = _store.Rename(turma, name);
-                if (renamed.Ok)
-                {
-                    CloseNameRow();
-                    _selectNext = name;
-                    ShowResults($"Turma {turma} renomeada.", Array.Empty<string>());
-                    RefreshFromDisk();
-                    return;
-                }
-                detail = renamed.Detail;
-                break;
-
-            default:
-                CloseNameRow();
-                return;
+            return;
+        }
+        var name = NameTextBox.Text.Trim();
+        var edit = _nameEdit;
+        var turma = _renaming;
+        if (edit == NameEdit.Rename && turma is not null && IsLessonClass(turma))
+        {
+            ShowNameError("A turma da aula em andamento não pode ser renomeada.");
+            return;
         }
 
+        SetBusy(true);
+        (bool Ok, string Detail, string Selected, string Said) outcome;
+        try
+        {
+            outcome = edit switch
+            {
+                NameEdit.Create => await Task.Run(() =>
+                {
+                    var created = _store.Create(name);
+                    return (created.Ok, created.Detail, created.Turma, $"Turma {created.Turma} criada.");
+                }),
+                NameEdit.Rename when turma is not null => await Task.Run(() =>
+                {
+                    var renamed = _store.Rename(turma, name);
+                    var stored = ClassStore.CleanName(name);
+                    return (renamed.Ok, renamed.Detail, stored, ClassFolderText.Renamed(turma, stored));
+                }),
+                _ => (false, string.Empty, string.Empty, string.Empty),
+            };
+        }
+        catch (Exception ex)
+        {
+            outcome = (false, ErrorText.Describe(ex), string.Empty, string.Empty);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+
+        if (outcome.Ok)
+        {
+            CloseNameRow();
+            _selectNext = outcome.Selected;
+            ShowResults(outcome.Said, Array.Empty<string>());
+            RefreshFromDisk();
+        }
+        else if (outcome.Detail.Length > 0)
+        {
+            ShowNameError(outcome.Detail);
+        }
+        else
+        {
+            CloseNameRow();
+        }
+    }
+
+    private void ShowNameError(string detail)
+    {
         NameErrorText.Text = detail;
         NameErrorText.Visibility = Visibility.Visible;
     }
@@ -170,7 +181,7 @@ public partial class ClassFolderWindow
     // Asks first, naming how many files go; they go to this PC's Recycle Bin.
     private async void OnDeleteClicked(object sender, RoutedEventArgs e)
     {
-        if (SelectedClass is not { IsLessonOn: false } row || Lesson.IsOn && SameClass(Lesson.Turma, row.Turma))
+        if (SelectedClass is not { } row || IsLessonClass(row.Turma))
         {
             return;
         }
@@ -189,15 +200,13 @@ public partial class ClassFolderWindow
         }
         catch (Exception ex)
         {
-            deleted = (false, "Não foi possível excluir a turma: " + Midview.Protocol.ErrorText.Describe(ex));
+            deleted = (false, "Não foi possível excluir a turma: " + ErrorText.Describe(ex));
         }
         finally
         {
             SetBusy(false);
         }
-        ShowResults(
-            deleted.Ok ? $"Turma {row.Turma} excluída. Os arquivos dela estão na Lixeira deste PC." : deleted.Detail,
-            Array.Empty<string>());
+        ShowResults(deleted.Ok ? ClassFolderText.Deleted(row.Class) : deleted.Detail, Array.Empty<string>());
         RefreshFromDisk();
     }
 }

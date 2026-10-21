@@ -123,9 +123,11 @@ public static class ClassFolderText
     public static string Result(string name, bool ok, string detail) =>
         $"{(ok ? "✓" : "✗")} {name}" + (detail.Length > 0 ? $": {detail}" : string.Empty);
 
-    // After a start (started) or an end: how many PCs took it. A PC that didn't
-    // gets it from its poller once it answers again.
-    public static string Outcome(bool started, string turma, int reached, int total)
+    // After a start (started) or an end: how many PCs took it. offline: how
+    // many of the others were switched off, which get it from their poller
+    // once they answer again; said only when that is all of them (any other
+    // reason is in that PC's own line).
+    public static string Outcome(bool started, string turma, int reached, int total, int offline)
     {
         var what = started ? $"A aula do {turma} começou" : $"A aula do {turma} foi encerrada";
         if (total == 0)
@@ -136,9 +138,28 @@ public static class ClassFolderText
         {
             return total == 1 ? $"{what} no único PC da sala." : $"{what} em todos os {total} PCs.";
         }
-        var rest = started ? "os desligados recebem a pasta ao ligar" : "os desligados encerram ao ligar";
-        return $"{what} em {reached} de {total} {(total == 1 ? "PC" : "PCs")}; {rest}.";
+        var count = $"{what} em {reached} de {total} {(total == 1 ? "PC" : "PCs")}";
+        if (reached + offline != total)
+        {
+            return count + ".";
+        }
+        return count + (started ? "; os desligados recebem a pasta ao ligar." : "; os desligados encerram ao ligar.");
     }
+
+    // After "Trocar de turma…" ended the lesson.
+    public const string ChooseNextClass = "Escolha a turma da próxima aula.";
+
+    // --- Changes to the list ---
+
+    public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";
+
+    // The files went to this PC's Recycle Bin (ClassStore.Delete).
+    public static string Deleted(ClassSummary summary) => summary.Files switch
+    {
+        0 => $"Turma {summary.Turma} excluída.",
+        1 => $"Turma {summary.Turma} excluída. O arquivo dela está na Lixeira deste PC.",
+        _ => $"Turma {summary.Turma} excluída. Os {Count(summary.Files)} arquivos dela estão na Lixeira deste PC.",
+    };
 
     private static string Files(int count) => count == 1 ? "1 arquivo" : $"{Count(count)} arquivos";
 

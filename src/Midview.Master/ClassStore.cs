@@ -116,6 +116,10 @@ public sealed partial class ClassStore
     // Whether the name is one a class can have (see the class comment).
     public static bool IsValidName(string name) => NameRefusal(name) is null;
 
+    // The name Create and Rename give a class asked for under that name
+    // ("Turma 1/2" is "Turma 1-2"); whether it is one is IsValidName's to say.
+    public static string CleanName(string requestedName) => Normalize(requestedName).Name;
+
     // Whether there is a folder for that class (a link doesn't count).
     public bool Exists(string turma) => IsValidName(turma) && IsRealDirectory(Path.Combine(_filesRoot, turma));
 

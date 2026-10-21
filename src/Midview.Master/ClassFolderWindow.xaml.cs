@@ -6,7 +6,7 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // One class in the window's list.
-internal sealed record ClassRow(ClassSummary Class, string Summary, bool IsLessonOn)
+internal sealed record ClassRow(ClassSummary Class, string Summary)
 {
     public string Turma => Class.Turma;
 }
@@ -17,9 +17,8 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 // "Pasta da turma" (docs/superpowers/specs/2026-10-20-class-folder-design.md:
 // "What the teacher sees (Master)"). Before a lesson: the classes, to create,
 // rename, delete and start one. During a lesson: the class's files, each PC's
-// state, and the end of the lesson with the teacher's choice for the files;
-// "Trocar de turma…" goes back to the list with the lesson still on, and
-// starting another class from there ends it as chosen.
+// state, and the end of the lesson with the teacher's choice for the files
+// ("Trocar de turma…" ends it the same way, then shows the list).
 //
 // The store and the sync are MainWindow's, for its whole life: this window
 // only shows them and asks them. Their events come on background threads (the
@@ -46,11 +45,11 @@ public partial class ClassFolderWindow : Window
     // A PC's status was queued for the UI thread and not shown yet: the next one waits for it.
     private int _pcsQueued;
 
-    // A start or an end is running: the buttons wait for it.
+    // A start, an end or a change to the list is running: the buttons wait for it.
     private bool _busy;
 
-    // "Trocar de turma…": the list, with the lesson still on until the next one starts.
-    private bool _switching;
+    // Which view was shown last (null before the first): moving to the other clears the results.
+    private bool? _shownLessonView;
 
     // The disk is being read for the views (RefreshFromDisk), and asked for again meanwhile.
     private bool _reading;
@@ -96,26 +95,30 @@ public partial class ClassFolderWindow : Window
 
     private ClassLesson Lesson => _sync.Lesson;
 
-    // The lesson view while a lesson is on, unless the teacher went back to the list.
-    private bool InLessonView => Lesson.IsOn && !_switching;
+    // The lesson view while a lesson is on, the list otherwise.
+    private bool InLessonView => Lesson.IsOn;
 
+    // Started or ended, here or by the sync itself (a lesson left from an earlier day).
     private void OnLessonChanged()
     {
-        // Ended elsewhere (the end of the day): nothing left to switch from.
-        if (!Lesson.IsOn)
-        {
-            _switching = false;
-        }
+        // Every lesson's end starts as "Manter os arquivos".
+        KeepChoice.IsChecked = true;
         _lessonFiles = null;
         ShowView();
         RefreshFromDisk();
     }
 
-    // Which view, and everything in it that doesn't need the disk.
+    // Which view, and everything in it that doesn't need the disk. Moving to
+    // the other view clears the results: they were about the one left.
     private void ShowView()
     {
         var lesson = Lesson;
         var inLesson = InLessonView;
+        if (_shownLessonView is { } shown && shown != inLesson)
+        {
+            ShowResults(string.Empty, Array.Empty<string>());
+        }
+        _shownLessonView = inLesson;
         ClassesView.Visibility = inLesson ? Visibility.Collapsed : Visibility.Visible;
         LessonView.Visibility = inLesson ? Visibility.Visible : Visibility.Collapsed;
 
@@ -125,17 +128,6 @@ public partial class ClassFolderWindow : Window
             DeleteAllLabel.Text = $"Apagar tudo do {lesson.Turma}";
             ShowLessonFiles();
             ShowPcs();
-        }
-        else
-        {
-            var switching = lesson.IsOn;
-            SwitchingText.Visibility = switching ? Visibility.Visible : Visibility.Collapsed;
-            SwitchingText.Text = switching
-                ? $"A aula do {lesson.Turma} continua até você começar a próxima; então ela é encerrada como escolhido."
-                : string.Empty;
-            BackToLessonButton.Visibility = switching ? Visibility.Visible : Visibility.Collapsed;
-            BackToLessonButton.Content = switching ? $"Voltar à aula do {lesson.Turma}" : string.Empty;
-            MarkLessonClass();
         }
         UpdateButtons();
     }
@@ -183,12 +175,12 @@ public partial class ClassFolderWindow : Window
     {
         var selected = SelectedClass;
         StartButton.Content = ClassFolderText.StartButton(selected?.Turma);
-        // The class whose lesson is on: "Voltar à aula" is the way back to it.
-        StartButton.IsEnabled = !_busy && selected is { IsLessonOn: false };
+        StartButton.IsEnabled = !_busy && selected is not null;
         NewClassButton.IsEnabled = !_busy;
-        RenameButton.IsEnabled = !_busy && selected is { IsLessonOn: false };
-        DeleteButton.IsEnabled = !_busy && selected is { IsLessonOn: false };
-        BackToLessonButton.IsEnabled = !_busy;
+        NameOkButton.IsEnabled = !_busy;
+        // Never the class whose lesson is on (the list only shows between lessons; this is the guard).
+        RenameButton.IsEnabled = !_busy && selected is not null && !IsLessonClass(selected.Turma);
+        DeleteButton.IsEnabled = !_busy && selected is not null && !IsLessonClass(selected.Turma);
         EndButton.IsEnabled = !_busy;
         SwitchButton.IsEnabled = !_busy;
         KeepChoice.IsEnabled = DeleteTodayChoice.IsEnabled = DeleteAllChoice.IsEnabled = !_busy;

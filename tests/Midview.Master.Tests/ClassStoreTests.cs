@@ -162,6 +162,20 @@ public partial class ClassStoreTests : IDisposable
         Assert.True(Directory.Exists(FolderOf("Turma 1-2")));
     }
 
+    // The window selects a renamed class by the name the store gave it.
+    [Theory]
+    [InlineData("Turma 1/2", "Turma 1-2")]
+    [InlineData("  3º C ", "3º C")]
+    [InlineData("Turma: 3º A", "Turma_ 3º A")]
+    public void CleanName_IsTheNameRenameGivesTheClass(string asked, string expected)
+    {
+        MakeClass();
+
+        Assert.Equal(expected, ClassStore.CleanName(asked));
+        Assert.True(_store.Rename(Turma, asked).Ok);
+        Assert.Equal(new[] { expected }, _store.List().Select(c => c.Turma));
+    }
+
     [Fact]
     public void Create_RefusesTheSameNameTwice()
     {

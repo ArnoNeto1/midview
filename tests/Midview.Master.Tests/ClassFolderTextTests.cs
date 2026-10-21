@@ -146,17 +146,35 @@ public class ClassFolderTextTests
     public void Result_IsOneLinePerPc(string name, bool ok, string detail, string expected) =>
         Assert.Equal(expected, ClassFolderText.Result(name, ok, detail));
 
+    // offline: how many of the PCs that didn't take it were switched off. Only
+    // then "they get it when they're turned on"; any other reason is in the PC's ✗ line.
     [Theory]
-    [InlineData(true, 3, 3, "A aula do 3º A começou em todos os 3 PCs.")]
-    [InlineData(true, 2, 3, "A aula do 3º A começou em 2 de 3 PCs; os desligados recebem a pasta ao ligar.")]
-    [InlineData(true, 0, 0, "A aula do 3º A começou.")]
-    [InlineData(true, 1, 1, "A aula do 3º A começou no único PC da sala.")]
-    [InlineData(true, 0, 1, "A aula do 3º A começou em 0 de 1 PC; os desligados recebem a pasta ao ligar.")]
-    [InlineData(false, 3, 3, "A aula do 3º A foi encerrada em todos os 3 PCs.")]
-    [InlineData(false, 1, 3, "A aula do 3º A foi encerrada em 1 de 3 PCs; os desligados encerram ao ligar.")]
-    [InlineData(false, 0, 0, "A aula do 3º A foi encerrada.")]
-    public void Outcome_CountsThePcsThatTookIt(bool started, int reached, int total, string expected) =>
-        Assert.Equal(expected, ClassFolderText.Outcome(started, "3º A", reached, total));
+    [InlineData(true, 3, 3, 0, "A aula do 3º A começou em todos os 3 PCs.")]
+    [InlineData(true, 2, 3, 1, "A aula do 3º A começou em 2 de 3 PCs; os desligados recebem a pasta ao ligar.")]
+    [InlineData(true, 2, 3, 0, "A aula do 3º A começou em 2 de 3 PCs.")]
+    [InlineData(true, 1, 3, 1, "A aula do 3º A começou em 1 de 3 PCs.")]
+    [InlineData(true, 0, 0, 0, "A aula do 3º A começou.")]
+    [InlineData(true, 1, 1, 0, "A aula do 3º A começou no único PC da sala.")]
+    [InlineData(true, 0, 1, 1, "A aula do 3º A começou em 0 de 1 PC; os desligados recebem a pasta ao ligar.")]
+    [InlineData(false, 3, 3, 0, "A aula do 3º A foi encerrada em todos os 3 PCs.")]
+    [InlineData(false, 1, 3, 2, "A aula do 3º A foi encerrada em 1 de 3 PCs; os desligados encerram ao ligar.")]
+    [InlineData(false, 1, 3, 0, "A aula do 3º A foi encerrada em 1 de 3 PCs.")]
+    [InlineData(false, 0, 0, 0, "A aula do 3º A foi encerrada.")]
+    public void Outcome_CountsThePcsThatTookIt(bool started, int reached, int total, int offline, string expected) =>
+        Assert.Equal(expected, ClassFolderText.Outcome(started, "3º A", reached, total, offline));
+
+    // --- Changes to the list ---
+
+    [Fact]
+    public void Renamed_SaysTheNewName() =>
+        Assert.Equal("Turma 3º A agora se chama 3º C.", ClassFolderText.Renamed("3º A", "3º C"));
+
+    [Theory]
+    [InlineData(38, "Turma 3º A excluída. Os 38 arquivos dela estão na Lixeira deste PC.")]
+    [InlineData(1, "Turma 3º A excluída. O arquivo dela está na Lixeira deste PC.")]
+    [InlineData(0, "Turma 3º A excluída.")]
+    public void Deleted_MentionsTheRecycleBinOnlyWhenFilesWentThere(int files, string expected) =>
+        Assert.Equal(expected, ClassFolderText.Deleted(new ClassSummary("3º A", files, files * KB, null)));
 
     private static ClassLesson LessonStartedAt(int hour, int minute)
     {

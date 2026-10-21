@@ -15,6 +15,9 @@ public static class FailureText
     private const string NobodyLoggedIn = "Sem usuário logado";
     private const string CertificateRefused = "Certificado recusado";
 
+    // Switched off or unreachable.
+    public const string Offline = "Offline";
+
     // For connections to a Session (port 5901).
     public static string Describe(Exception ex) => Known(ex, refused: NobodyLoggedIn) ?? Technical(ex);
 
@@ -41,7 +44,7 @@ public static class FailureText
         SocketException { SocketErrorCode: SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain }
             => "Nome não encontrado na rede",
         // Switched off or unreachable: the connect timed out (5 s).
-        SocketException or OperationCanceledException => "Offline",
+        SocketException or OperationCanceledException => Offline,
         // Either side didn't trust the other's certificate: a wrong
         // thumbprint here, or this Master missing from the machine's
         // trusted-masters.json.
