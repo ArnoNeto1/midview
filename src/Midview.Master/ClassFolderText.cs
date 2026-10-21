@@ -22,12 +22,16 @@ public static class ClassFolderText
         return summary.LastLesson is { } day ? $"{files} · última aula {day.ToString("dd/MM", PtBr)}" : files;
     }
 
-    // Asked before "Excluir": the files go to this PC's Recycle Bin.
-    public static string DeleteQuestion(ClassSummary summary) => summary.Files switch
+    // Asked before "Excluir": the files go to this PC's Recycle Bin, unless
+    // they are more than it holds (tooBigForTheBin, RecycleBinRoom): then
+    // Windows deletes them for good, and the question says so.
+    public static string DeleteQuestion(ClassSummary summary, bool tooBigForTheBin) => (summary.Files, tooBigForTheBin) switch
     {
-        0 => $"Excluir a turma {summary.Turma}? Ela está vazia.",
-        1 => $"Excluir a turma {summary.Turma}? O arquivo dela vai para a Lixeira deste PC.",
-        _ => $"Excluir a turma {summary.Turma}? Os {Count(summary.Files)} arquivos dela vão para a Lixeira deste PC.",
+        (0, _) => $"Excluir a turma {summary.Turma}? Ela está vazia.",
+        (1, false) => $"Excluir a turma {summary.Turma}? O arquivo dela vai para a Lixeira deste PC.",
+        (_, false) => $"Excluir a turma {summary.Turma}? Os {Count(summary.Files)} arquivos dela vão para a Lixeira deste PC.",
+        (1, true) => $"Excluir a turma {summary.Turma}? O arquivo dela ({Size(summary.Bytes)}) não cabe na Lixeira deste PC e será apagado de vez.",
+        _ => $"Excluir a turma {summary.Turma}? Os {Count(summary.Files)} arquivos dela ({Size(summary.Bytes)}) não cabem na Lixeira deste PC e serão apagados de vez.",
     };
 
     public static string StartButton(string? turma) =>
@@ -91,31 +95,39 @@ public static class ClassFolderText
 
     // --- Ending a lesson ---
 
-    // The line under each of the three choices.
-    public static string EndChoiceHint(EndChoice choice, string turma, int todayFiles, int allFiles) => choice switch
+    // The line under each of the three choices. tooBigForTheBin: the files
+    // that choice deletes are more than this PC's Recycle Bin holds
+    // (RecycleBinRoom), so Windows deletes them for good: the line says so
+    // instead of promising the Recycle Bin.
+    public static string EndChoiceHint(EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin) => choice switch
     {
         EndChoice.Keep => $"Voltam para todos os PCs na próxima aula do {turma}.",
-        EndChoice.DeleteToday => todayFiles switch
+        EndChoice.DeleteToday => (todayFiles, tooBigForTheBin) switch
         {
-            0 => "Nenhum arquivo chegou nesta aula; os das aulas anteriores ficam.",
-            1 => "O arquivo desta aula sai; os das aulas anteriores ficam.",
-            _ => $"Os {Count(todayFiles)} arquivos desta aula saem; os das aulas anteriores ficam.",
+            (0, _) => "Nenhum arquivo chegou nesta aula; os das aulas anteriores ficam.",
+            (1, false) => "O arquivo desta aula sai; os das aulas anteriores ficam.",
+            (_, false) => $"Os {Count(todayFiles)} arquivos desta aula saem; os das aulas anteriores ficam.",
+            (1, true) => "O arquivo desta aula sai; os das aulas anteriores ficam. Ele não cabe na Lixeira deste PC: será apagado de vez.",
+            _ => $"Os {Count(todayFiles)} arquivos desta aula saem; os das aulas anteriores ficam. Os desta aula não cabem na Lixeira deste PC: serão apagados de vez.",
         },
-        _ => allFiles switch
+        _ => (allFiles, tooBigForTheBin) switch
         {
-            0 => "Não há arquivos na pasta da turma.",
-            1 => "O arquivo sai do seu PC e de todos os PCs. Vai para a Lixeira deste PC.",
-            _ => $"Os {Count(allFiles)} arquivos saem do seu PC e de todos os PCs. Vão para a Lixeira deste PC.",
+            (0, _) => "Não há arquivos na pasta da turma.",
+            (1, false) => "O arquivo sai do seu PC e de todos os PCs. Vai para a Lixeira deste PC.",
+            (_, false) => $"Os {Count(allFiles)} arquivos saem do seu PC e de todos os PCs. Vão para a Lixeira deste PC.",
+            (1, true) => "O arquivo sai do seu PC e de todos os PCs. Não cabe na Lixeira deste PC: será apagado de vez.",
+            _ => $"Os {Count(allFiles)} arquivos saem do seu PC e de todos os PCs. Não cabem na Lixeira deste PC: serão apagados de vez.",
         },
     };
 
     // Asked before a lesson ends deleting files; null for "Manter", which asks nothing.
-    public static string? EndQuestion(EndChoice choice, string turma, int todayFiles, int allFiles) => choice switch
+    public static string? EndQuestion(EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin) => choice switch
     {
         EndChoice.Keep => null,
         EndChoice.DeleteToday => $"Encerrar a aula do {turma} e apagar os arquivos de hoje?\n\n"
-            + EndChoiceHint(choice, turma, todayFiles, allFiles),
-        _ => $"Encerrar a aula do {turma} e apagar tudo do {turma}?\n\n" + EndChoiceHint(choice, turma, todayFiles, allFiles),
+            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin),
+        _ => $"Encerrar a aula do {turma} e apagar tudo do {turma}?\n\n"
+            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin),
     };
 
     // --- What each PC answered ---
@@ -153,12 +165,15 @@ public static class ClassFolderText
 
     public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";
 
-    // The files went to this PC's Recycle Bin (ClassStore.Delete).
-    public static string Deleted(ClassSummary summary) => summary.Files switch
+    // The files went to this PC's Recycle Bin (ClassStore.Delete), or for good
+    // when they were more than it holds (tooBigForTheBin).
+    public static string Deleted(ClassSummary summary, bool tooBigForTheBin) => (summary.Files, tooBigForTheBin) switch
     {
-        0 => $"Turma {summary.Turma} excluída.",
-        1 => $"Turma {summary.Turma} excluída. O arquivo dela está na Lixeira deste PC.",
-        _ => $"Turma {summary.Turma} excluída. Os {Count(summary.Files)} arquivos dela estão na Lixeira deste PC.",
+        (0, _) => $"Turma {summary.Turma} excluída.",
+        (1, false) => $"Turma {summary.Turma} excluída. O arquivo dela está na Lixeira deste PC.",
+        (_, false) => $"Turma {summary.Turma} excluída. Os {Count(summary.Files)} arquivos dela estão na Lixeira deste PC.",
+        (1, true) => $"Turma {summary.Turma} excluída. O arquivo dela foi apagado de vez: não cabia na Lixeira deste PC.",
+        _ => $"Turma {summary.Turma} excluída. Os {Count(summary.Files)} arquivos dela foram apagados de vez: não cabiam na Lixeira deste PC.",
     };
 
     private static string Files(int count) => count == 1 ? "1 arquivo" : $"{Count(count)} arquivos";

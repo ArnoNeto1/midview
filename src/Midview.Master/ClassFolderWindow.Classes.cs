@@ -178,14 +178,16 @@ public partial class ClassFolderWindow
         NameErrorText.Visibility = Visibility.Visible;
     }
 
-    // Asks first, naming how many files go; they go to this PC's Recycle Bin.
+    // Asks first, naming how many files go; they go to this PC's Recycle Bin, or
+    // for good when they are more than it holds (and then the question says so).
     private async void OnDeleteClicked(object sender, RoutedEventArgs e)
     {
         if (SelectedClass is not { } row || IsLessonClass(row.Turma))
         {
             return;
         }
-        if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class), "Excluir turma",
+        var tooBigForTheBin = row.Class.Bytes > _store.RecycleBinBytes();
+        if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin), "Excluir turma",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
         {
             return;
@@ -206,7 +208,7 @@ public partial class ClassFolderWindow
         {
             SetBusy(false);
         }
-        ShowResults(deleted.Ok ? ClassFolderText.Deleted(row.Class) : deleted.Detail, Array.Empty<string>());
+        ShowResults(deleted.Ok ? ClassFolderText.Deleted(row.Class, tooBigForTheBin) : deleted.Detail, Array.Empty<string>());
         RefreshFromDisk();
     }
 }

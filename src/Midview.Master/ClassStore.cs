@@ -116,6 +116,10 @@ public sealed partial class ClassStore
         }
     }
 
+    // What this PC's Recycle Bin holds on the disk that holds the classes
+    // (RecycleBinRoom): deleting more than that deletes for good.
+    public long RecycleBinBytes() => RecycleBinRoom.CapacityFor(_filesRoot);
+
     // --- Classes ---
 
     // Whether the name is one a class can have (see the class comment).

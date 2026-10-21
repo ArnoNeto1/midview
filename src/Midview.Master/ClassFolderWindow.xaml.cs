@@ -142,13 +142,13 @@ public partial class ClassFolderWindow : Window
         HeaderText.Text = files is null
             ? string.Empty
             : ClassFolderText.Header(lesson, files.Files, files.Bytes, files.FreeBytes);
-        KeepHint.Text = ClassFolderText.EndChoiceHint(EndChoice.Keep, lesson.Turma, 0, 0);
+        KeepHint.Text = ClassFolderText.EndChoiceHint(EndChoice.Keep, lesson.Turma, 0, 0, tooBigForTheBin: false);
         DeleteTodayHint.Text = files is null
             ? string.Empty
-            : ClassFolderText.EndChoiceHint(EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files);
+            : ClassFolderText.EndChoiceHint(EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteToday));
         DeleteAllHint.Text = files is null
             ? string.Empty
-            : ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files);
+            : ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll));
     }
 
     // Every PC of the classroom list: as the sync last saw it, or, before its
@@ -253,9 +253,11 @@ public partial class ClassFolderWindow : Window
             var files = _store.Files(turma);
             var today = DateOnly.FromDateTime(DateTime.Now);
             // A file the index hasn't seen yet arrived the day of its own time, as EndLesson counts it.
-            var todays = files.Count(file => (_store.ArrivedOn(turma, file.Key)
-                ?? DateOnly.FromDateTime(new DateTime(file.Value.LastWriteTicks, DateTimeKind.Utc).ToLocalTime())) == today);
-            return new LessonFiles(turma, files.Count, files.Values.Sum(version => version.Size), todays, long.MaxValue);
+            var todays = files.Where(file => (_store.ArrivedOn(turma, file.Key)
+                ?? DateOnly.FromDateTime(new DateTime(file.Value.LastWriteTicks, DateTimeKind.Utc).ToLocalTime())) == today).ToList();
+            return new LessonFiles(
+                turma, files.Count, files.Values.Sum(version => version.Size), todays.Count, todays.Sum(file => file.Value.Size),
+                long.MaxValue, _store.RecycleBinBytes());
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -272,8 +274,14 @@ public partial class ClassFolderWindow : Window
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
 
-    // The class's files as last read, and the free space on the disk that holds them.
-    private sealed record LessonFiles(string Turma, int Files, long Bytes, int Today, long FreeBytes);
+    // The class's files as last read (all, and those that arrived today), the free
+    // space on the disk that holds them, and what this PC's Recycle Bin holds there.
+    private sealed record LessonFiles(
+        string Turma, int Files, long Bytes, int Today, long TodayBytes, long FreeBytes, long BinBytes)
+    {
+        // Whether what that choice deletes is more than the Recycle Bin holds (it goes for good).
+        public bool TooBigForTheBin(EndChoice choice) => (choice == EndChoice.DeleteAll ? Bytes : TodayBytes) > BinBytes;
+    }
 
     // One read of the disk: the class list or the lesson's files (null when not read or not readable).
     private sealed record DiskRead(IReadOnlyList<ClassSummary>? Classes, LessonFiles? Files, long FreeBytes);

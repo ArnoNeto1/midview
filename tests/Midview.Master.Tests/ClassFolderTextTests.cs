@@ -31,7 +31,15 @@ public class ClassFolderTextTests
     [InlineData(1, "Excluir a turma 3º A? O arquivo dela vai para a Lixeira deste PC.")]
     [InlineData(0, "Excluir a turma 3º A? Ela está vazia.")]
     public void DeleteQuestion_SaysHowManyFilesGo(int files, string expected) =>
-        Assert.Equal(expected, ClassFolderText.DeleteQuestion(new ClassSummary("3º A", files, files * KB, null)));
+        Assert.Equal(expected, ClassFolderText.DeleteQuestion(new ClassSummary("3º A", files, files * KB, null), tooBigForTheBin: false));
+
+    // More than this PC's Recycle Bin holds (RecycleBinRoom): Windows deletes them for good, and the question says so.
+    [Theory]
+    [InlineData(38, "Excluir a turma 3º A? Os 38 arquivos dela (38 KB) não cabem na Lixeira deste PC e serão apagados de vez.")]
+    [InlineData(1, "Excluir a turma 3º A? O arquivo dela (1 KB) não cabe na Lixeira deste PC e será apagado de vez.")]
+    [InlineData(0, "Excluir a turma 3º A? Ela está vazia.")]
+    public void DeleteQuestion_TooBigForTheRecycleBin_SaysTheyGoForGood(int files, string expected) =>
+        Assert.Equal(expected, ClassFolderText.DeleteQuestion(new ClassSummary("3º A", files, files * KB, null), tooBigForTheBin: true));
 
     [Theory]
     [InlineData("3º A", "Começar a aula do 3º A")]
@@ -125,17 +133,34 @@ public class ClassFolderTextTests
     [InlineData(EndChoice.DeleteAll, 1, 1, "O arquivo sai do seu PC e de todos os PCs. Vai para a Lixeira deste PC.")]
     [InlineData(EndChoice.DeleteAll, 0, 0, "Não há arquivos na pasta da turma.")]
     public void EndChoiceHint_SaysWhatHappensToTheFiles(EndChoice choice, int todayFiles, int allFiles, string expected) =>
-        Assert.Equal(expected, ClassFolderText.EndChoiceHint(choice, "3º A", todayFiles, allFiles));
+        Assert.Equal(expected, ClassFolderText.EndChoiceHint(choice, "3º A", todayFiles, allFiles, tooBigForTheBin: false));
+
+    [Theory]
+    [InlineData(EndChoice.Keep, 23, 214, "Voltam para todos os PCs na próxima aula do 3º A.")]
+    [InlineData(EndChoice.DeleteToday, 23, 214, "Os 23 arquivos desta aula saem; os das aulas anteriores ficam. Os desta aula não cabem na Lixeira deste PC: serão apagados de vez.")]
+    [InlineData(EndChoice.DeleteToday, 1, 214, "O arquivo desta aula sai; os das aulas anteriores ficam. Ele não cabe na Lixeira deste PC: será apagado de vez.")]
+    [InlineData(EndChoice.DeleteToday, 0, 214, "Nenhum arquivo chegou nesta aula; os das aulas anteriores ficam.")]
+    [InlineData(EndChoice.DeleteAll, 23, 214, "Os 214 arquivos saem do seu PC e de todos os PCs. Não cabem na Lixeira deste PC: serão apagados de vez.")]
+    [InlineData(EndChoice.DeleteAll, 1, 1, "O arquivo sai do seu PC e de todos os PCs. Não cabe na Lixeira deste PC: será apagado de vez.")]
+    [InlineData(EndChoice.DeleteAll, 0, 0, "Não há arquivos na pasta da turma.")]
+    public void EndChoiceHint_TooBigForTheRecycleBin_SaysTheyGoForGood(EndChoice choice, int todayFiles, int allFiles, string expected) =>
+        Assert.Equal(expected, ClassFolderText.EndChoiceHint(choice, "3º A", todayFiles, allFiles, tooBigForTheBin: true));
 
     [Theory]
     [InlineData(EndChoice.DeleteToday, "Encerrar a aula do 3º A e apagar os arquivos de hoje?\n\nOs 23 arquivos desta aula saem; os das aulas anteriores ficam.")]
     [InlineData(EndChoice.DeleteAll, "Encerrar a aula do 3º A e apagar tudo do 3º A?\n\nOs 214 arquivos saem do seu PC e de todos os PCs. Vão para a Lixeira deste PC.")]
     public void EndQuestion_AsksBeforeDeleting(EndChoice choice, string expected) =>
-        Assert.Equal(expected, ClassFolderText.EndQuestion(choice, "3º A", 23, 214));
+        Assert.Equal(expected, ClassFolderText.EndQuestion(choice, "3º A", 23, 214, tooBigForTheBin: false));
+
+    [Fact]
+    public void EndQuestion_TooBigForTheRecycleBin_DoesNotPromiseIt() =>
+        Assert.Equal(
+            "Encerrar a aula do 3º A e apagar tudo do 3º A?\n\nOs 214 arquivos saem do seu PC e de todos os PCs. Não cabem na Lixeira deste PC: serão apagados de vez.",
+            ClassFolderText.EndQuestion(EndChoice.DeleteAll, "3º A", 23, 214, tooBigForTheBin: true));
 
     [Fact]
     public void EndQuestion_KeepingTheFiles_AsksNothing() =>
-        Assert.Null(ClassFolderText.EndQuestion(EndChoice.Keep, "3º A", 23, 214));
+        Assert.Null(ClassFolderText.EndQuestion(EndChoice.Keep, "3º A", 23, 214, tooBigForTheBin: true));
 
     // --- What each PC answered ---
 
@@ -174,7 +199,14 @@ public class ClassFolderTextTests
     [InlineData(1, "Turma 3º A excluída. O arquivo dela está na Lixeira deste PC.")]
     [InlineData(0, "Turma 3º A excluída.")]
     public void Deleted_MentionsTheRecycleBinOnlyWhenFilesWentThere(int files, string expected) =>
-        Assert.Equal(expected, ClassFolderText.Deleted(new ClassSummary("3º A", files, files * KB, null)));
+        Assert.Equal(expected, ClassFolderText.Deleted(new ClassSummary("3º A", files, files * KB, null), tooBigForTheBin: false));
+
+    [Theory]
+    [InlineData(38, "Turma 3º A excluída. Os 38 arquivos dela foram apagados de vez: não cabiam na Lixeira deste PC.")]
+    [InlineData(1, "Turma 3º A excluída. O arquivo dela foi apagado de vez: não cabia na Lixeira deste PC.")]
+    [InlineData(0, "Turma 3º A excluída.")]
+    public void Deleted_TooBigForTheRecycleBin_SaysTheyWentForGood(int files, string expected) =>
+        Assert.Equal(expected, ClassFolderText.Deleted(new ClassSummary("3º A", files, files * KB, null), tooBigForTheBin: true));
 
     private static ClassLesson LessonStartedAt(int hour, int minute)
     {

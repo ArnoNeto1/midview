@@ -113,7 +113,7 @@ public partial class ClassFolderWindow
             ShowResults("A pasta da turma deste PC não pôde ser lida agora. Tente de novo em instantes.", Array.Empty<string>());
             return false;
         }
-        var question = ClassFolderText.EndQuestion(choice, lesson.Turma, files.Today, files.Files);
+        var question = ClassFolderText.EndQuestion(choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice));
         return question is null || MessageBox.Show(this, question, "Encerrar a aula", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
