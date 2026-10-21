@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Midview.Protocol;
 
 namespace Midview.Session;
@@ -34,7 +35,22 @@ public sealed class ClassFolder
         IgnoreInaccessible = true,
     };
 
+    // Moving a finished lesson's folder aside takes everything in it, hidden
+    // or not (it has to go empty); only links are left out, and not followed.
+    private static readonly EnumerationOptions EverythingButLinks = new()
+    {
+        RecurseSubdirectories = false,
+        AttributesToSkip = FileAttributes.None,
+        IgnoreInaccessible = true,
+    };
+
+    private static readonly FollowedLesson NoLesson = new(Guid.Empty, string.Empty);
+
     private static readonly UTF8Encoding StrictUtf8 = new(false, throwOnInvalidBytes: true);
+
+    private readonly object _followLock = new();
+    private FollowedLesson? _followed; // read from SessionStatePath on the first Follow
+    private readonly HashSet<string> _problems = new();
 
     private readonly string _desktopDirectory;
     private readonly string _setAsideRoot;
@@ -235,6 +251,318 @@ public sealed class ClassFolder
         {
             return (false, ErrorText.Describe(ex));
         }
+    }
+
+    // What the student is told when a lesson starts: shown once per lesson.
+    public static string LessonNotice(ClassLesson lesson) =>
+        $"Aula do {lesson.Turma}{Environment.NewLine}"
+        + $"O que você baixar ou salvar na {lesson.FolderName} (na Área de Trabalho) aparece em todos os computadores da sala.";
+
+    // Called every few seconds. Compares the lesson the Agent says is on with
+    // the one this Session last followed (remembered in SessionStatePath, so a
+    // restart doesn't repeat itself) and when they differ:
+    //  1. the folder of the lesson that is over, if it is still on the Desktop,
+    //     has everything in it moved (relative paths kept) to
+    //     setAsideRoot\<lesson id, "N" format>, where the teacher's Master
+    //     collects what it hasn't got yet, and is then removed. The Agent
+    //     releases it so the student can delete it; until it does the removal
+    //     is refused (access denied), and so is a file a program holds open:
+    //     what is left is tried again on the next call, and the old lesson is
+    //     still the one remembered.
+    //  2. a lesson that is on gets its notice, if there is somewhere to show it.
+    //  3. the new lesson is remembered.
+    // Never throws.
+    public void Follow(IMessageDisplay? notices)
+    {
+        if (!Monitor.TryEnter(_followLock))
+        {
+            return; // the last call is still moving files; it will see the same
+        }
+
+        try
+        {
+            FollowLesson(notices);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Following the class lesson failed: {ex.Message}");
+        }
+        finally
+        {
+            Monitor.Exit(_followLock);
+        }
+    }
+
+    private void FollowLesson(IMessageDisplay? notices)
+    {
+        var lesson = CurrentLesson();
+        var now = lesson is null ? NoLesson : new FollowedLesson(lesson.LessonId, lesson.Turma);
+        var before = _followed ??= ReadFollowed();
+        if (now == before)
+        {
+            return;
+        }
+
+        if (before.LessonId != Guid.Empty && !SetAside(before, lesson))
+        {
+            return;
+        }
+
+        _problems.Clear();
+        if (lesson is not null)
+        {
+            ShowNotice(notices, lesson);
+        }
+
+        // In memory first: a state file that can't be written must not make the notice come back every few seconds.
+        _followed = now;
+        SaveFollowed(now);
+    }
+
+    private static void ShowNotice(IMessageDisplay? notices, ClassLesson lesson)
+    {
+        if (notices is null)
+        {
+            return;
+        }
+
+        try
+        {
+            notices.Show(LessonNotice(lesson));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Showing the class lesson notice failed: {ex.Message}");
+        }
+    }
+
+    // Moves what the student has in the finished lesson's Desktop folder aside
+    // and removes the folder. False when that has to be tried again.
+    private bool SetAside(FollowedLesson finished, ClassLesson? current)
+    {
+        // The turma comes from the student's own state file: it goes through the same check as the Agent's.
+        var folder = DesktopFolder(new ClassLesson(0, finished.LessonId, finished.Turma, 0, false));
+        if (folder is null || !Directory.Exists(folder))
+        {
+            return true; // no Desktop, or the folder is gone already
+        }
+
+        // The next lesson is of the same turma: the folder is the new lesson's now, with the same class's files.
+        if (current is not null && string.Equals(DesktopFolder(current), folder, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var destination = SetAsideFolder(finished.LessonId);
+        if (destination is null || IsLink(folder) || IsLink(destination))
+        {
+            // Nowhere to put the files, or a link in the way: the student keeps them where they are.
+            Problem($"Leaving {folder} as it is: the files can't be set aside.");
+            return true;
+        }
+
+        var left = new Leftovers();
+        MoveAll(new DirectoryInfo(folder), destination, left);
+        RemoveEmptyFolders(destination);
+        if (left.Failed)
+        {
+            return false;
+        }
+
+        if (left.Linked)
+        {
+            Problem($"Leaving {folder}: there is a link in it, which isn't followed or removed.");
+            return true;
+        }
+
+        try
+        {
+            Directory.Delete(folder); // not recursive: only an empty folder goes
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Problem($"The folder {folder} can't be removed yet: {ex.Message}");
+            return false;
+        }
+    }
+
+    // Everything under source goes to the same place under destination, a link
+    // is never followed (nor moved), and a name taken there is kept as it is:
+    // the file coming gets another one. The folders left empty go.
+    private void MoveAll(DirectoryInfo source, string destination, Leftovers left)
+    {
+        List<FileSystemInfo> entries;
+        try
+        {
+            entries = source.EnumerateFileSystemInfos("*", EverythingButLinks).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            left.Failed = true;
+            Problem($"Could not look into {source.FullName}: {ex.Message}");
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                left.Linked = true;
+                continue;
+            }
+
+            var target = Path.Combine(destination, entry.Name);
+            try
+            {
+                if (entry is DirectoryInfo directory)
+                {
+                    MoveAll(directory, target, left);
+                    TryDeleteFolder(directory.FullName);
+                }
+                else
+                {
+                    Directory.CreateDirectory(destination);
+                    File.Move(entry.FullName, FreeName(target));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                left.Failed = true;
+                Problem($"Could not set {entry.FullName} aside: {ex.Message}");
+            }
+        }
+    }
+
+    // Empty by now, or it stays; then the folder above can't go either, which is what says "try again".
+    private static void TryDeleteFolder(string folder)
+    {
+        try
+        {
+            Directory.Delete(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    // path, or the first of "name (2).ext", "name (3).ext"... that is free.
+    private static string FreeName(string path)
+    {
+        if (!File.Exists(path) && !Directory.Exists(path))
+        {
+            return path;
+        }
+
+        var directory = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+        for (var number = 2; ; number++)
+        {
+            var candidate = Path.Combine(directory, $"{name} ({number}){extension}");
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    // Folders with nothing in them, the folder itself included. Never recursive
+    // on a folder that has something in it, and never into a link.
+    private static void RemoveEmptyFolders(string folder)
+    {
+        try
+        {
+            if (!Directory.Exists(folder) || IsLink(folder))
+            {
+                return;
+            }
+
+            foreach (var subfolder in Directory.EnumerateDirectories(folder))
+            {
+                RemoveEmptyFolders(subfolder);
+            }
+            Directory.Delete(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // not empty, or not ours to remove: it stays
+        }
+    }
+
+    // Said once, not every few seconds for as long as it lasts.
+    private void Problem(string text)
+    {
+        if (_problems.Add(text))
+        {
+            Console.WriteLine(text);
+        }
+    }
+
+    private FollowedLesson ReadFollowed()
+    {
+        try
+        {
+            if (!File.Exists(SessionStatePath))
+            {
+                return NoLesson;
+            }
+
+            using var stream = new FileStream(SessionStatePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var stored = JsonSerializer.Deserialize<StoredFollowed>(stream);
+            return stored?.Turma is null ? NoLesson : new FollowedLesson(stored.LessonId, stored.Turma);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException
+            or IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"Could not read {SessionStatePath}: {ex.Message}");
+            return NoLesson;
+        }
+    }
+
+    // Written to a temporary file and moved over the old one, as ClassLessonFile does.
+    private void SaveFollowed(FollowedLesson lesson)
+    {
+        var tempPath = SessionStatePath + ".tmp";
+        try
+        {
+            var directory = Path.GetDirectoryName(SessionStatePath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                JsonSerializer.Serialize(stream, new StoredFollowed(lesson.LessonId, lesson.Turma));
+                stream.Flush(flushToDisk: true);
+            }
+            File.Move(tempPath, SessionStatePath, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            Console.WriteLine($"Could not remember the class lesson in {SessionStatePath}: {ex.Message}");
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (Exception deleteEx) when (deleteEx is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+            }
+        }
+    }
+
+    private sealed record FollowedLesson(Guid LessonId, string Turma);
+
+    private sealed record StoredFollowed(Guid LessonId, string Turma);
+
+    // What MoveAll couldn't empty: a file it couldn't move (to be tried again),
+    // a link (never to be).
+    private sealed class Leftovers
+    {
+        public bool Failed { get; set; }
+
+        public bool Linked { get; set; }
     }
 
     // The lesson the Agent says is on; null when none is.
