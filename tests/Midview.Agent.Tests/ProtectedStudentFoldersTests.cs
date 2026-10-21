@@ -270,6 +270,14 @@ public class ProtectedStudentFoldersTests : IDisposable
     [InlineData("a/b")]
     [InlineData("..")]
     [InlineData("")]
+    // Windows drops trailing dots and spaces from the last segment, so these
+    // end up as the Desktop itself (or its parent).
+    [InlineData("...")]
+    [InlineData(". ")]
+    [InlineData(".. ")]
+    [InlineData(" ")]
+    [InlineData("turma.")]
+    [InlineData("turma ")]
     public void Protect_RefusesANameThatIsAPath(string name)
     {
         var target = Path.GetFullPath(Path.Combine(_desktop, name));
@@ -281,6 +289,8 @@ public class ProtectedStudentFoldersTests : IDisposable
             Assert.Contains(problems, problem => problem.StartsWith(name + ":", StringComparison.Ordinal));
             Assert.Equal(existed, Directory.Exists(target));
             Assert.Empty(Directory.EnumerateDirectories(_desktop));
+            // The Desktop itself is never locked down like one of the folders.
+            Assert.False(new DirectoryInfo(_desktop).GetAccessControl().AreAccessRulesProtected);
             Assert.False(ProtectedStudentFolders.NeedsProtecting(_desktop, Me, new[] { name }));
         }
         finally
@@ -289,6 +299,26 @@ public class ProtectedStudentFoldersTests : IDisposable
             {
                 Directory.Delete(target, recursive: true);
             }
+        }
+    }
+
+    // Nor does Release treat the Desktop as one of the folders to give back.
+    [Theory]
+    [InlineData("...")]
+    [InlineData(". ")]
+    [InlineData(@"..\midview-escape")]
+    public void Release_SkipsANameThatIsAPath(string name)
+    {
+        ProtectedStudentFolders.Protect(_desktop, Student, Me);
+
+        var problems = ProtectedStudentFolders.Release(_desktop, Student, new[] { name });
+
+        Assert.Empty(problems);
+        Assert.True(IsDenied(_desktop, Student));
+        Assert.False(new DirectoryInfo(_desktop).GetAccessControl().AreAccessRulesProtected);
+        foreach (var folder in StudentFolderNames.All)
+        {
+            Assert.True(new DirectoryInfo(Path.Combine(_desktop, folder)).GetAccessControl().AreAccessRulesProtected);
         }
     }
 

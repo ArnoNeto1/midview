@@ -265,9 +265,14 @@ public static class ProtectedStudentFolders
 
     // A folder name is one path segment, never a path: it is joined onto the
     // student's Desktop by a service running as SYSTEM, so a name carrying
-    // "..\" or a drive must not reach anywhere else.
+    // "..\" or a drive must not reach anywhere else. Windows drops trailing
+    // dots and spaces from a path's last segment, so "...", ". " and ".. "
+    // would come out as the Desktop itself or its parent: a name must not
+    // end in either (nor be blank).
     private static bool IsPlainName(string name) =>
-        name is not ("" or "." or "..") && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+        !string.IsNullOrWhiteSpace(name)
+        && name == name.TrimEnd('.', ' ')
+        && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
     private static FileSystemAccessRule DenyDeleteChildRule(SecurityIdentifier student) => new(
         student, FileSystemRights.DeleteSubdirectoriesAndFiles, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Deny);
