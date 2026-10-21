@@ -376,12 +376,69 @@ public class ClassFolderRemoteTests
         return padded;
     }
 
-    [Fact]
-    public void DecodeJson_NestingTooDeep_IsNull()
-    {
-        var json = string.Concat(Enumerable.Repeat("[", 200)) + string.Concat(Enumerable.Repeat("]", 200));
+    // A valid command with `depth` arrays nested inside a field it doesn't know.
+    private static byte[] CommandWithIgnoredNesting(int depth) => Bytes(
+        "{\"kind\":\"start\",\"turma\":\"3º A\",\"later\":" + new string('[', depth) + new string(']', depth) + "}");
 
-        Assert.Null(ClassFolderRemote.DecodeJson<RemoteCommand>(Bytes(json)));
+    [Fact]
+    public void DecodeJson_ModestNestingInAnIgnoredField_IsAccepted()
+    {
+        // The control for the tests below: nothing but the depth is wrong with them.
+        Assert.Equal(
+            new RemoteCommand("start", "3º A", null, null),
+            ClassFolderRemote.DecodeJson<RemoteCommand>(CommandWithIgnoredNesting(10)));
+    }
+
+    [Theory]
+    [InlineData(40)]
+    [InlineData(200)]
+    public void DecodeJson_NestingTooDeepInAnIgnoredField_IsNull(int depth)
+    {
+        // 40 is under System.Text.Json's own default limit (64): the limit is ours.
+        Assert.Null(ClassFolderRemote.DecodeJson<RemoteCommand>(CommandWithIgnoredNesting(depth)));
+    }
+
+    [Theory]
+    [InlineData("\"text\"")]
+    [InlineData("{ this is not json")]
+    [InlineData("")]
+    public void DecodeJson_ATypeThatIsNoDto_Throws(string json)
+    {
+        // A mistake in the code, not in what arrived: it never reads as a bad payload.
+        Assert.Throws<NotSupportedException>(() => ClassFolderRemote.DecodeJson<string>(Bytes(json)));
+        Assert.Throws<NotSupportedException>(() => ClassFolderRemote.DecodeJson<object>(Bytes(json)));
+    }
+
+    [Theory]
+    [InlineData(60, true)]
+    [InlineData(61, false)]
+    public void DecodeJson_AClassNameOverTheTurmaLimit_IsNull(int length, bool accepted)
+    {
+        var json = ValidStateJson.Replace(
+            "\"classes\":[]", $"\"classes\":[{{\"turma\":\"{new string('a', length)}\",\"files\":0,\"bytes\":0}}]");
+
+        Assert.Equal(accepted, ClassFolderRemote.DecodeJson<RemoteState>(Bytes(json)) is not null);
+    }
+
+    [Theory]
+    [InlineData(64, true)]
+    [InlineData(65, false)]
+    public void DecodeJson_APcNameOverTheLimit_IsNull(int length, bool accepted)
+    {
+        var json = ValidStateJson.Replace(
+            "\"pcs\":[]", $"\"pcs\":[{{\"name\":\"{new string('a', length)}\",\"state\":\"InSync\",\"detail\":\"\"}}]");
+
+        Assert.Equal(accepted, ClassFolderRemote.DecodeJson<RemoteState>(Bytes(json)) is not null);
+    }
+
+    [Theory]
+    [InlineData(64, true)]
+    [InlineData(65, false)]
+    public void DecodeJson_AResultNameOverTheLimit_IsNull(int length, bool accepted)
+    {
+        var json = $"{{\"ok\":true,\"detail\":\"\",\"lines\":[{{\"name\":\"{new string('a', length)}\",\"ok\":true,\"detail\":\"\"}}]}}";
+
+        Assert.Equal(accepted, ClassFolderRemote.DecodeJson<RemoteReply>(Bytes(json)) is not null);
     }
 
     [Fact]

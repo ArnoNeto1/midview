@@ -13,9 +13,10 @@ namespace Midview.Protocol;
 // the two Masters don't share a classroom list.
 //
 // Decoding refuses a payload over MaxJsonBytes and answers null for anything
-// that isn't one of these: not JSON, a field of the wrong type, a field
-// without a ? that is missing or null, a number below zero, an unknown Kind or
-// Choice, a lesson that isn't one. Fields it doesn't know are ignored.
+// that isn't one of these: not JSON, nested deeper than MaxJsonDepth (even
+// inside a field it doesn't know), a field of the wrong type, a field without a
+// ? that is missing or null, a number below zero, a name too long, an unknown
+// Kind or Choice, a lesson that isn't one. Fields it doesn't know are ignored.
 public static class ClassFolderRemote
 {
     public const int Port = 28903;
@@ -23,13 +24,41 @@ public static class ClassFolderRemote
     // The most a payload can be: the state is a few lines per class and PC.
     public const int MaxJsonBytes = 4 * 1024 * 1024;
 
-    private static readonly JsonSerializerOptions Options = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    // These records nest three levels at most (state, list, line); a payload
+    // can't nest much further, not even inside a field that is ignored.
+    private const int MaxJsonDepth = 32;
+
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        MaxDepth = MaxJsonDepth,
+    };
+
+    // How DecodeJson checks each record it can decode.
+    private static readonly Dictionary<Type, Func<object, bool>> Validators = new()
+    {
+        [typeof(RemoteState)] = value => ((RemoteState)value).IsValid,
+        [typeof(RemoteCommand)] = value => ((RemoteCommand)value).IsValid,
+        [typeof(RemoteReply)] = value => ((RemoteReply)value).IsValid,
+        [typeof(ClassLessonDto)] = value => ((ClassLessonDto)value).IsValid,
+        [typeof(ClassSummaryDto)] = value => ((ClassSummaryDto)value).IsValid,
+        [typeof(LessonFilesDto)] = value => ((LessonFilesDto)value).IsValid,
+        [typeof(PcLineDto)] = value => ((PcLineDto)value).IsValid,
+        [typeof(ResultLineDto)] = value => ((ResultLineDto)value).IsValid,
+    };
 
     public static byte[] EncodeJson<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value, Options);
 
-    // Null unless the payload is a valid T (one of the records below).
+    // Null unless the payload is a valid T. T is one of the records below
+    // (NotSupportedException for any other type: that is a mistake in the code,
+    // whatever arrived).
     public static T? DecodeJson<T>(byte[] payload) where T : class
     {
+        if (!Validators.TryGetValue(typeof(T), out var isValid))
+        {
+            throw new NotSupportedException($"{typeof(T).Name} is not a class folder record.");
+        }
+
         if (payload.Length == 0 || payload.Length > MaxJsonBytes)
         {
             return null;
@@ -38,26 +67,13 @@ public static class ClassFolderRemote
         try
         {
             var value = JsonSerializer.Deserialize<T>(payload, Options);
-            return value is not null && IsValid(value) ? value : null;
+            return value is not null && isValid(value) ? value : null;
         }
         catch (JsonException)
         {
             return null;
         }
     }
-
-    private static bool IsValid(object value) => value switch
-    {
-        RemoteState state => state.IsValid,
-        RemoteCommand command => command.IsValid,
-        RemoteReply reply => reply.IsValid,
-        ClassLessonDto lesson => lesson.IsValid,
-        ClassSummaryDto summary => summary.IsValid,
-        LessonFilesDto files => files.IsValid,
-        PcLineDto pc => pc.IsValid,
-        ResultLineDto result => result.IsValid,
-        _ => true,
-    };
 }
 
 // The reply to RemoteClassFolderState: what the home's window shows now.
@@ -112,7 +128,7 @@ public sealed record ClassSummaryDto(
     [property: JsonRequired] long Bytes,
     DateOnly? LastLesson)
 {
-    internal bool IsValid => Turma is not null && Files >= 0 && Bytes >= 0;
+    internal bool IsValid => Turma is { Length: <= ClassLesson.MaxTurmaLength } && Files >= 0 && Bytes >= 0;
 }
 
 // The numbers a lesson's window shows for its class: the files (count and
@@ -134,7 +150,8 @@ public sealed record PcLineDto(
     [property: JsonRequired] string State,
     [property: JsonRequired] string Detail)
 {
-    internal bool IsValid => Name is not null && State is not null && Detail is not null;
+    internal bool IsValid =>
+        Name is { Length: <= ClassHome.MaxNameLength } && State is not null && Detail is not null;
 }
 
 // What a command did on one PC.
@@ -143,7 +160,7 @@ public sealed record ResultLineDto(
     [property: JsonRequired] bool Ok,
     [property: JsonRequired] string Detail)
 {
-    internal bool IsValid => Name is not null && Detail is not null;
+    internal bool IsValid => Name is { Length: <= ClassHome.MaxNameLength } && Detail is not null;
 }
 
 // RemoteClassFolderCommand's payload: what the teacher did in the colleague's
