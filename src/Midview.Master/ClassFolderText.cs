@@ -161,9 +161,35 @@ public static class ClassFolderText
     // After "Trocar de turma…" ended the lesson.
     public const string ChooseNextClass = "Escolha a turma da próxima aula.";
 
+    // A start that didn't happen because another teacher PC keeps the class
+    // folders (each PC's line says which), or this PC couldn't tell.
+    public static string NotStarted(string turma) => $"A aula do {turma} não começou.";
+
+    // A start or an end that failed as a whole; reason is ErrorText.Describe's.
+    public static string StartFailed(string turma, string reason) => $"Não foi possível começar a aula do {turma}: {reason}";
+
+    public static string EndFailed(string turma, string reason) => $"Não foi possível encerrar a aula do {turma}: {reason}";
+
+    // --- Refusals (a window that showed something already changed: the other teacher PC's, say) ---
+
+    public const string ClassGone = "Essa turma não existe mais.";
+
+    public const string LessonClassNotRenamed = "A turma da aula em andamento não pode ser renomeada.";
+
+    public const string LessonClassNotDeleted = "A turma da aula em andamento não pode ser excluída.";
+
+    // A start asked for while a lesson is on.
+    public static string LessonAlreadyOn(string turma) => $"A aula do {turma} está em andamento: encerre-a antes de começar outra.";
+
+    // An end asked for a lesson that is no longer on.
+    public static string LessonAlreadyOver(string turma) => $"A aula do {turma} já foi encerrada.";
+
     // --- Changes to the list ---
 
     public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";
+
+    // A deletion that failed as a whole; reason is ErrorText.Describe's.
+    public static string DeleteFailed(string reason) => "Não foi possível excluir a turma: " + reason;
 
     // The files went to this PC's Recycle Bin (ClassStore.Delete), or for good
     // when they were more than it holds (tooBigForTheBin).

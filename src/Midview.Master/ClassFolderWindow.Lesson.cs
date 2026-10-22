@@ -22,18 +22,26 @@ public partial class ClassFolderWindow
         var lines = new List<string>();
         try
         {
-            var started = await Task.Run(() => _sync.StartAsync(turma));
-            headline = ClassFolderText.Outcome(started: true, turma, started.Count(result => result.Ok), started.Count, Offline(started));
+            var started = await Task.Run(() => _controller.StartAsync(turma));
+            // Not started when another teacher PC keeps the class folders: each PC's line says which.
+            headline = Lesson.IsOn && SameClass(Lesson.Turma, turma)
+                ? ClassFolderText.Outcome(started: true, turma, started.Count(result => result.Ok), started.Count, Offline(started))
+                : ClassFolderText.NotStarted(turma);
             lines.AddRange(ResultLines(started));
+        }
+        catch (ClassFolderRefusedException ex)
+        {
+            // The class was deleted meanwhile ("Essa turma não existe mais."), or a lesson is on.
+            headline = ex.Message;
         }
         catch (ArgumentException ex)
         {
-            // The class was deleted meanwhile ("Essa turma não existe mais.").
+            // The class was deleted meanwhile, in Explorer.
             headline = ex.Message;
         }
         catch (Exception ex)
         {
-            headline = $"Não foi possível começar a aula do {turma}: {ErrorText.Describe(ex)}";
+            headline = ClassFolderText.StartFailed(turma, ErrorText.Describe(ex));
         }
         finally
         {
@@ -70,7 +78,7 @@ public partial class ClassFolderWindow
         var lines = new List<string>();
         try
         {
-            var ended = await Task.Run(() => _sync.EndAsync(choice));
+            var ended = await Task.Run(() => _controller.EndAsync(lesson.Turma, choice));
             headline = ClassFolderText.Outcome(started: false, lesson.Turma, ended.Count(result => result.Ok), ended.Count, Offline(ended));
             if (nextClass)
             {
@@ -79,9 +87,14 @@ public partial class ClassFolderWindow
             lines.AddRange(ResultLines(ended));
             lines.AddRange(EndProblems());
         }
+        catch (ClassFolderRefusedException ex)
+        {
+            // Ended meanwhile (by the other teacher PC's window, say).
+            headline = ex.Message;
+        }
         catch (Exception ex)
         {
-            headline = $"Não foi possível encerrar a aula do {lesson.Turma}: {ErrorText.Describe(ex)}";
+            headline = ClassFolderText.EndFailed(lesson.Turma, ErrorText.Describe(ex));
         }
         finally
         {
@@ -107,7 +120,9 @@ public partial class ClassFolderWindow
     {
         var files = _lessonFiles is { } read && SameClass(read.Turma, lesson.Turma)
             ? read
-            : await Task.Run(() => ReadLessonFiles(lesson.Turma));
+            : await ReadAsync(lessonFiles: true) is { } state && LessonFilesOf(state) is { } now && SameClass(now.Turma, lesson.Turma)
+                ? now
+                : null;
         if (files is null)
         {
             ShowResults("A pasta da turma deste PC não pôde ser lida agora. Tente de novo em instantes.", Array.Empty<string>());
@@ -118,16 +133,16 @@ public partial class ClassFolderWindow
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
-    private static IEnumerable<string> ResultLines(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> results) =>
-        results.Select(result => ClassFolderText.Result(result.Machine.Name, result.Ok, result.Detail));
+    private static IEnumerable<string> ResultLines(IReadOnlyList<ResultLineDto> results) =>
+        results.Select(result => ClassFolderText.Result(result.Name, result.Ok, result.Detail));
 
     // The PCs that didn't take it because they were switched off (their poller hands it over later).
-    private static int Offline(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> results) =>
+    private static int Offline(IReadOnlyList<ResultLineDto> results) =>
         results.Count(result => !result.Ok && result.Detail == FailureText.Offline);
 
     // What the end couldn't do with the class's files on this PC.
     private IEnumerable<string> EndProblems() =>
-        _sync.LastEndProblems.Select(problem => $"✗ Neste PC: {problem}");
+        _controller.LastEndProblems.Select(problem => $"✗ Neste PC: {problem}");
 
     private void SetBusy(bool busy, string? progress = null)
     {

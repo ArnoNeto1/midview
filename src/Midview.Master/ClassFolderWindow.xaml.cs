@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using Midview.Protocol;
@@ -20,11 +19,12 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 // state, and the end of the lesson with the teacher's choice for the files
 // ("Trocar de turma…" ends it the same way, then shows the list).
 //
-// The store and the sync are MainWindow's, for its whole life: this window
-// only shows them and asks them. Their events come on background threads (the
-// sync's sometimes while it holds its lesson lock), so they are only ever
-// passed on to the UI thread with BeginInvoke; and a start or an end runs off
-// the UI thread, so the window never freezes.
+// What it shows and asks goes through its controller (IClassFolderController):
+// on the class folders' home PC, MainWindow's LocalClassFolderController over
+// its store and sync, for its whole life. The controller's Changed comes on
+// background threads (sometimes while the sync holds its lesson lock), so it is
+// only ever passed on to the UI thread with BeginInvoke; and every read and
+// command runs off the UI thread, so the window never freezes.
 //
 // In three files: this one (the two views and what keeps them current),
 // ClassFolderWindow.Classes.cs (the class list) and ClassFolderWindow.Lesson.cs
@@ -34,16 +34,16 @@ public partial class ClassFolderWindow : Window
     // How often the views read the disk again (the files, the free space).
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
 
-    private readonly ClassStore _store;
-    private readonly ClassFolderSync _sync;
-    private readonly Func<IReadOnlyList<KnownMachine>> _machines;
-    private readonly Func<KnownMachine, bool> _isOnline;
+    private readonly IClassFolderController _controller;
     private readonly DispatcherTimer _refreshTimer;
-    private readonly Action<ClassLesson> _onLessonChanged;
-    private readonly Action<PcStatus> _onStatusChanged;
+    private readonly Action _onChanged;
 
-    // A PC's status was queued for the UI thread and not shown yet: the next one waits for it.
-    private int _pcsQueued;
+    // A change was queued for the UI thread and not shown yet: the next one waits for it.
+    private int _changeQueued;
+
+    // The lesson as OnLessonChanged last saw it: a change to it is a lesson
+    // started or ended; any other change is a PC's state.
+    private ClassLesson _shownLesson;
 
     // A start, an end or a change to the list is running: the buttons wait for it.
     private bool _busy;
@@ -58,32 +58,24 @@ public partial class ClassFolderWindow : Window
     // The lesson's files as last read: for the header and the end choices' lines.
     private LessonFiles? _lessonFiles;
 
-    // machines: the classroom list, as the class actions take it. isOnline: the
-    // grid's view of each machine, for PCs the sync hasn't reached yet in this lesson.
-    public ClassFolderWindow(
-        ClassStore store, ClassFolderSync sync, Func<IReadOnlyList<KnownMachine>> machines, Func<KnownMachine, bool> isOnline)
+    // What the Recycle Bin holds on the disk of the classes, as last read: for "Excluir".
+    private long _binBytes;
+
+    public ClassFolderWindow(IClassFolderController controller)
     {
         InitializeComponent();
-        _store = store;
-        _sync = sync;
-        _machines = machines;
-        _isOnline = isOnline;
+        _controller = controller;
         NameTextBox.MaxLength = ClassLesson.MaxTurmaLength;
 
-        _onLessonChanged = _ => Dispatcher.BeginInvoke(OnLessonChanged);
-        _onStatusChanged = _ =>
+        _shownLesson = _controller.Lesson;
+        _onChanged = () =>
         {
-            if (Interlocked.Exchange(ref _pcsQueued, 1) == 0)
+            if (Interlocked.Exchange(ref _changeQueued, 1) == 0)
             {
-                Dispatcher.BeginInvoke(() =>
-                {
-                    Volatile.Write(ref _pcsQueued, 0);
-                    ShowPcs();
-                });
+                Dispatcher.BeginInvoke(OnChanged);
             }
         };
-        _sync.LessonChanged += _onLessonChanged;
-        _sync.StatusChanged += _onStatusChanged;
+        _controller.Changed += _onChanged;
 
         _refreshTimer = new DispatcherTimer { Interval = RefreshInterval };
         _refreshTimer.Tick += OnRefreshTick;
@@ -93,14 +85,29 @@ public partial class ClassFolderWindow : Window
         RefreshFromDisk();
     }
 
-    private ClassLesson Lesson => _sync.Lesson;
+    private ClassLesson Lesson => _controller.Lesson;
 
     // The lesson view while a lesson is on, the list otherwise.
     private bool InLessonView => Lesson.IsOn;
 
+    // The lesson, or the PCs' states.
+    private void OnChanged()
+    {
+        Volatile.Write(ref _changeQueued, 0);
+        if (Lesson != _shownLesson)
+        {
+            OnLessonChanged();
+        }
+        else
+        {
+            ShowPcs();
+        }
+    }
+
     // Started or ended, here or by the sync itself (a lesson left from an earlier day).
     private void OnLessonChanged()
     {
+        _shownLesson = Lesson;
         // Every lesson's end starts as "Manter os arquivos".
         KeepChoice.IsChecked = true;
         _lessonFiles = null;
@@ -151,8 +158,7 @@ public partial class ClassFolderWindow : Window
             : ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll));
     }
 
-    // Every PC of the classroom list: as the sync last saw it, or, before its
-    // first round of this lesson, copying when it answers and off when not.
+    // Every PC of the classroom list, as the controller says each stands.
     private void ShowPcs()
     {
         if (!InLessonView)
@@ -160,16 +166,20 @@ public partial class ClassFolderWindow : Window
             return;
         }
 
-        var statuses = _sync.Statuses.ToDictionary(status => status.Machine.SessionThumbprint, StringComparer.OrdinalIgnoreCase);
-        PcsList.ItemsSource = _machines()
-            .Select(machine => statuses.TryGetValue(machine.SessionThumbprint, out var status)
-                ? status with { Machine = machine }
-                : new PcStatus(machine, _isOnline(machine) ? PcSyncState.Copying : PcSyncState.Offline, string.Empty))
+        PcsList.ItemsSource = _controller.Pcs
+            .Select(StatusOf)
             .Select(status => new PcRow(
                 ClassFolderText.State(status), ClassFolderText.StateHint(status),
                 status.State == PcSyncState.Failed, status.State == PcSyncState.Offline))
             .ToList();
     }
+
+    // A PC's line as the texts take it (they only use its name); a state this
+    // Midview doesn't know shows as a failure, with its detail.
+    private static PcStatus StatusOf(PcLineDto line) => new(
+        new KnownMachine(line.Name, string.Empty, string.Empty, null),
+        Enum.TryParse<PcSyncState>(line.State, out var state) && Enum.IsDefined(state) ? state : PcSyncState.Failed,
+        line.Detail);
 
     private void UpdateButtons()
     {
@@ -204,16 +214,22 @@ public partial class ClassFolderWindow : Window
                 _readAgain = false;
                 var lesson = Lesson;
                 var inLesson = InLessonView;
-                var read = await Task.Run(() => ReadDisk(inLesson, lesson.Turma));
+                if (await ReadAsync(inLesson) is not { } read)
+                {
+                    continue; // not readable just now: the views keep what they show
+                }
 
                 ShowLowSpace(read.FreeBytes);
-                if (read.Classes is not null && !InLessonView)
+                _binBytes = read.RecycleBinBytes;
+                if (!inLesson && !InLessonView)
                 {
-                    ShowClasses(read.Classes);
+                    ShowClasses(read.Classes
+                        .Select(summary => new ClassSummary(summary.Turma, summary.Files, summary.Bytes, summary.LastLesson))
+                        .ToList());
                 }
-                if (read.Files is not null && InLessonView && Lesson.LessonId == lesson.LessonId)
+                if (inLesson && LessonFilesOf(read) is { } files && InLessonView && Lesson.LessonId == lesson.LessonId)
                 {
-                    _lessonFiles = read.Files with { FreeBytes = read.FreeBytes };
+                    _lessonFiles = files;
                     ShowLessonFiles();
                 }
             }
@@ -234,9 +250,24 @@ public partial class ClassFolderWindow : Window
         }
     }
 
-    private DiskRead ReadDisk(bool inLesson, string turma) => inLesson
-        ? new DiskRead(null, ReadLessonFiles(turma), _store.FreeBytes())
-        : new DiskRead(ReadClasses(), null, _store.FreeBytes());
+    // Null when it can't be read just now, whatever kept it from being read.
+    private async Task<RemoteState?> ReadAsync(bool lessonFiles)
+    {
+        try
+        {
+            return await Task.Run(() => _controller.ReadAsync(lessonFiles));
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // The lesson's numbers in a read; null when it has none (no lesson, or
+    // its class's folder not readable whole just now: the last numbers stay).
+    private static LessonFiles? LessonFilesOf(RemoteState read) => read.LessonFiles is { } files
+        ? new LessonFiles(files.Turma, files.Files, files.Bytes, files.Today, files.TodayBytes, read.FreeBytes, read.RecycleBinBytes)
+        : null;
 
     private void ShowLowSpace(long freeBytes)
     {
@@ -245,44 +276,20 @@ public partial class ClassFolderWindow : Window
         LowSpaceBorder.Visibility = warning is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    // Null when the class's folder can't be read whole just now (the last numbers stay).
-    private LessonFiles? ReadLessonFiles(string turma)
-    {
-        try
-        {
-            var files = _store.Files(turma);
-            var today = DateOnly.FromDateTime(DateTime.Now);
-            // A file the index hasn't seen yet arrived the day of its own time, as EndLesson counts it.
-            var todays = files.Where(file => (_store.ArrivedOn(turma, file.Key)
-                ?? DateOnly.FromDateTime(new DateTime(file.Value.LastWriteTicks, DateTimeKind.Utc).ToLocalTime())) == today).ToList();
-            return new LessonFiles(
-                turma, files.Count, files.Values.Sum(version => version.Size), todays.Count, todays.Sum(file => file.Value.Size),
-                long.MaxValue, _store.RecycleBinBytes());
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            return null;
-        }
-    }
-
     private void OnClosed(object? sender, EventArgs e)
     {
         _refreshTimer.Stop();
-        _sync.LessonChanged -= _onLessonChanged;
-        _sync.StatusChanged -= _onStatusChanged;
+        _controller.Changed -= _onChanged;
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
 
     // The class's files as last read (all, and those that arrived today), the free
-    // space on the disk that holds them, and what this PC's Recycle Bin holds there.
+    // space on the disk that holds them, and what the Recycle Bin holds there.
     private sealed record LessonFiles(
         string Turma, int Files, long Bytes, int Today, long TodayBytes, long FreeBytes, long BinBytes)
     {
         // Whether what that choice deletes is more than the Recycle Bin holds (it goes for good).
         public bool TooBigForTheBin(EndChoice choice) => (choice == EndChoice.DeleteAll ? Bytes : TodayBytes) > BinBytes;
     }
-
-    // One read of the disk: the class list or the lesson's files (null when not read or not readable).
-    private sealed record DiskRead(IReadOnlyList<ClassSummary>? Classes, LessonFiles? Files, long FreeBytes);
 }

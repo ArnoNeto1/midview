@@ -49,10 +49,15 @@ public partial class MainWindow
     private void PublishPresence(MachineTile tile) =>
         _online[tile.Machine.SessionThumbprint] = tile.Presence == TilePresence.Online;
 
+    // What the window works: this PC's store and sync. One for the window's
+    // whole life, like them, so every command goes through its one-at-a-time
+    // gate whichever window asks. Made on the UI thread, at the first opening.
+    private LocalClassFolderController? _classController;
+
     // For the whole room, whichever machines are in it, like "Agendar".
     private void OnClassFolderClicked(object sender, RoutedEventArgs e) =>
         ShowOnce("pasta-da-turma", Array.Empty<KnownMachine>(), () => new ClassFolderWindow(
-            _classStore, _classSync, () => Volatile.Read(ref _roster), IsOnline)
+            _classController ??= new LocalClassFolderController(_classStore, _classSync, () => Volatile.Read(ref _roster), IsOnline))
         {
             Owner = this,
         });

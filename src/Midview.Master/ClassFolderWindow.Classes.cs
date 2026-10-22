@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -24,19 +23,6 @@ public partial class ClassFolderWindow
     private string? _selectNext;
 
     private ClassRow? SelectedClass => ClassesList.SelectedItem as ClassRow;
-
-    // Null when the classes' folder can't be read just now (the list stays as it was).
-    private IReadOnlyList<ClassSummary>? ReadClasses()
-    {
-        try
-        {
-            return _store.List();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
 
     // The classes, the selection kept.
     private void ShowClasses(IReadOnlyList<ClassSummary> classes)
@@ -122,7 +108,7 @@ public partial class ClassFolderWindow
         var turma = _renaming;
         if (edit == NameEdit.Rename && turma is not null && IsLessonClass(turma))
         {
-            ShowNameError("A turma da aula em andamento não pode ser renomeada.");
+            ShowNameError(ClassFolderText.LessonClassNotRenamed);
             return;
         }
 
@@ -132,14 +118,14 @@ public partial class ClassFolderWindow
         {
             outcome = edit switch
             {
-                NameEdit.Create => await Task.Run(() =>
+                NameEdit.Create => await Task.Run(async () =>
                 {
-                    var created = _store.Create(name);
+                    var created = await _controller.CreateAsync(name);
                     return (created.Ok, created.Detail, created.Turma, $"Turma {created.Turma} criada.");
                 }),
-                NameEdit.Rename when turma is not null => await Task.Run(() =>
+                NameEdit.Rename when turma is not null => await Task.Run(async () =>
                 {
-                    var renamed = _store.Rename(turma, name);
+                    var renamed = await _controller.RenameAsync(turma, name);
                     var stored = ClassStore.CleanName(name);
                     return (renamed.Ok, renamed.Detail, stored, ClassFolderText.Renamed(turma, stored));
                 }),
@@ -186,7 +172,7 @@ public partial class ClassFolderWindow
         {
             return;
         }
-        var tooBigForTheBin = row.Class.Bytes > _store.RecycleBinBytes();
+        var tooBigForTheBin = row.Class.Bytes > _binBytes;
         if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin), "Excluir turma",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
         {
@@ -198,11 +184,11 @@ public partial class ClassFolderWindow
         (bool Ok, string Detail) deleted;
         try
         {
-            deleted = await Task.Run(() => _store.Delete(row.Turma));
+            deleted = await Task.Run(() => _controller.DeleteAsync(row.Turma));
         }
         catch (Exception ex)
         {
-            deleted = (false, "Não foi possível excluir a turma: " + ErrorText.Describe(ex));
+            deleted = (false, ClassFolderText.DeleteFailed(ErrorText.Describe(ex)));
         }
         finally
         {
