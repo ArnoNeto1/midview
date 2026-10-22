@@ -49,6 +49,23 @@ public sealed class LocalClassFolderControllerTests
         Assert.NotEmpty(gone.Detail);
     }
 
+    // What isn't a class name (a path, say) never reaches the store's folders.
+    [Theory]
+    [InlineData(@"..\fora")]
+    [InlineData("a/b")]
+    [InlineData("")]
+    public async Task ANameThatIsNoClass_IsNeitherRenamedNorDeleted(string turma)
+    {
+        using var rig = new ClassSyncRig(pcs: 1);
+        var controller = NewController(rig, rig.NewSync());
+        Directory.CreateDirectory(Path.Combine(rig.Root, "fora"));
+
+        Assert.Equal((false, ClassFolderText.ClassGone), await controller.RenameAsync(turma, "9º A"));
+        Assert.Equal((false, ClassFolderText.ClassGone), await controller.DeleteAsync(turma));
+        Assert.True(Directory.Exists(Path.Combine(rig.Root, "fora")));
+        Assert.False(rig.Store.Exists("9º A"));
+    }
+
     [Fact]
     public async Task TheLessonsClass_IsNeitherRenamedNorDeleted()
     {
@@ -211,7 +228,10 @@ public sealed class LocalClassFolderControllerTests
         Assert.Null(list.LessonFiles);
         Assert.Equal(54_321_000_000, list.FreeBytes);
         Assert.Equal(new[] { "PC1" }, list.Pcs.Select(pc => pc.Name));
-        Assert.Null((await controller.ReadAsync(lessonFiles: true)).LessonFiles); // no lesson on
+        // Asked for the lesson's numbers with no lesson on (one ended meanwhile): the class list.
+        var noLesson = await controller.ReadAsync(lessonFiles: true);
+        Assert.Null(noLesson.LessonFiles);
+        Assert.Equal(new[] { Turma, "3º B" }, noLesson.Classes.Select(summary => summary.Turma));
 
         await controller.StartAsync(Turma);
         rig.Pcs[0].Write("hoje.txt", Bytes(10, 2), Utc(1));

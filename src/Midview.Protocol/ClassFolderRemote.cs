@@ -24,6 +24,20 @@ public static class ClassFolderRemote
     // The most a payload can be: the state is a few lines per class and PC.
     public const int MaxJsonBytes = 4 * 1024 * 1024;
 
+    // What the home answers instead (one CommandAck carrying a CommandResult,
+    // false, with this detail): to a PC it doesn't serve (not a colleague the
+    // room's Agents trust)...
+    public const string NotTrustedText =
+        "O PC que guarda as pastas das turmas recusou o pedido: este computador não tem acesso aos PCs desta sala.";
+
+    // ...to a message it doesn't know...
+    public const string UnknownRequestText =
+        "O PC que guarda as pastas das turmas não entendeu o pedido. Atualize o Midview nos dois PCs de professor.";
+
+    // ...and to RemoteClassFolderState when it can't read the class folders
+    // just now: the detail starts with this, and the reason follows.
+    public const string UnreadableText = "O PC que guarda as pastas das turmas não conseguiu lê-las agora: ";
+
     // These records nest three levels at most (state, list, line); a payload
     // can't nest much further, not even inside a field that is ignored.
     private const int MaxJsonDepth = 32;

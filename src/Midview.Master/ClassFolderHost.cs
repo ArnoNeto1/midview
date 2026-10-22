@@ -16,33 +16,26 @@ namespace Midview.Master;
 //
 // Any teacher certificate gets through the handshake; then only a colleague is
 // served: a PC with this PC's own identity (two teacher PCs can share one), or
-// one isTrusted says the room's Agents trust (a colleague given access with
-// "Dar acesso a um colega"). Anyone else, and any message that isn't
-// RemoteClassFolderState or RemoteClassFolderCommand, gets one CommandAck with
-// a CommandResult saying no, after their request was read. What the messages
-// can't carry is left out or cut (Ruling 4): a class folder made by hand with a
-// name over ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
-// ClassHome.MaxNameLength.
+// one isTrusted says the room's Agents trust (ColleagueTrust: a colleague given
+// access with "Dar acesso a um colega"). Anyone else, and any message that
+// isn't RemoteClassFolderState or RemoteClassFolderCommand, gets one
+// CommandAck with a CommandResult saying no (ClassFolderRemote's texts), after
+// their request was read. What the messages can't carry is left out or cut
+// (Ruling 4): a class folder made by hand with a name over
+// ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
+// ClassHome.MaxNameLength. What a colleague's PC sends as a class is taken only
+// when it is a class name (ClassStore.IsValidName); and what the home tells it
+// is always in the teacher's words, never an exception's own message.
 //
-// The request is read within ReadTimeout; a command may run for CommandTimeout
-// (a lesson's end brings the last files in first), after which the colleague
-// is told it is still running. Nothing a client does (nonsense, hanging up,
-// never finishing the handshake) stops the host: the next connection is served.
-public sealed class ClassFolderHost : IDisposable
+// The handshake and the request must be in within ReadTimeout, however they
+// trickle in; a command may then run for CommandTimeout (a lesson's end brings
+// the last files in first), after which the colleague is told it is still
+// running. At most MaxConnections at once, MaxPerAddress from one PC. Nothing a
+// client does (nonsense, hanging up, never finishing) stops the host: the next
+// connection is served. In two files: this one (the connections) and
+// ClassFolderHost.Answers.cs (what each request gets).
+public sealed partial class ClassFolderHost : IDisposable
 {
-    public const string NotTrustedText =
-        "O PC que guarda as pastas das turmas recusou o pedido: este computador não tem acesso aos PCs desta sala.";
-
-    public const string UnknownRequestText =
-        "O PC que guarda as pastas das turmas não entendeu o pedido. Atualize o Midview nos dois PCs de professor.";
-
-    public const string IncompleteText = "O pedido chegou incompleto ao PC que guarda as pastas das turmas. Tente de novo.";
-
-    public const string StillRunningText =
-        "O PC que guarda as pastas das turmas ainda está fazendo isso. Veja o resultado na janela em instantes.";
-
-    public const string UnreadableText = "O PC que guarda as pastas das turmas não conseguiu lê-las agora: ";
-
     // Requests are a few names at most; anything longer is refused before it is read.
     private const int MaxRequestBytes = 64 * 1024;
 
@@ -50,8 +43,11 @@ public sealed class ClassFolderHost : IDisposable
     // at once than this is someone flooding the port, and is closed unanswered.
     private const int MaxConnections = 8;
 
-    // How long the answer to "is this a colleague?" may take (the Agents are asked).
-    private static readonly TimeSpan TrustWait = TimeSpan.FromSeconds(30);
+    // One PC: a state read, a command running, and the state read right after it.
+    private const int MaxPerAddress = 3;
+
+    // How long the answer to "is this a colleague?" may take at most (ColleagueTrust bounds its own well under it).
+    private static readonly TimeSpan TrustWait = TimeSpan.FromSeconds(10);
 
     private readonly X509Certificate2 _certificate;
     private readonly IClassFolderController _local;
@@ -59,6 +55,10 @@ public sealed class ClassFolderHost : IDisposable
     private readonly Action<string> _log;
     private readonly TcpListener _tcp;
     private readonly CancellationTokenSource _stop = new();
+
+    // The connections being served, in all and by the address they came from. Under _connectionsLock.
+    private readonly object _connectionsLock = new();
+    private readonly Dictionary<IPAddress, int> _byAddress = new();
     private int _connections;
 
     private ClassFolderHost(
@@ -76,15 +76,16 @@ public sealed class ClassFolderHost : IDisposable
     // The port it listens on (the one asked for, or the one the system gave for 0).
     public int Port { get; }
 
-    // How long a client has to send its request, and to take the answer.
+    // How long a client has for the handshake and its request together, and to take the answer.
     internal TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     internal TimeSpan CommandTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
     // Starts listening on every address (address: one only, for the tests)
     // and serving on the thread pool, never on the caller's context (Master
-    // calls this on its UI thread). Null when the port can't be had (another
-    // program holds it): logged, in English, by default to System.Diagnostics.Trace.
+    // calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync.
+    // Null when the port can't be had (another program holds it): logged, in
+    // English, by default to System.Diagnostics.Trace.
     public static ClassFolderHost? Open(
         X509Certificate2 certificate, IClassFolderController local, Func<string, Task<bool>> isTrusted,
         int port = ClassFolderRemote.Port, Action<string>? log = null, IPAddress? address = null)
@@ -108,7 +109,8 @@ public sealed class ClassFolderHost : IDisposable
         return host;
     }
 
-    // Stops listening. A command already running on the home goes on.
+    // Stops listening. A request already being served is answered, and a
+    // command already running on the home goes on.
     public void Dispose()
     {
         _stop.Cancel();
@@ -140,9 +142,8 @@ public sealed class ClassFolderHost : IDisposable
                 continue;
             }
 
-            if (Interlocked.Increment(ref _connections) > MaxConnections)
+            if (AddressOf(client) is not { } address || !TryTake(address))
             {
-                Interlocked.Decrement(ref _connections);
                 client.Dispose();
                 continue;
             }
@@ -159,10 +160,55 @@ public sealed class ClassFolderHost : IDisposable
                     finally
                     {
                         client.Dispose();
-                        Interlocked.Decrement(ref _connections);
+                        Release(address);
                     }
                 },
                 CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+    }
+
+    // Null for a client already gone.
+    private static IPAddress? AddressOf(TcpClient client)
+    {
+        try
+        {
+            return (client.Client.RemoteEndPoint as IPEndPoint)?.Address;
+        }
+        catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
+    private bool TryTake(IPAddress address)
+    {
+        lock (_connectionsLock)
+        {
+            var fromThere = _byAddress.GetValueOrDefault(address);
+            if (_connections >= MaxConnections || fromThere >= MaxPerAddress)
+            {
+                return false;
+            }
+            _connections++;
+            _byAddress[address] = fromThere + 1;
+            return true;
+        }
+    }
+
+    private void Release(IPAddress address)
+    {
+        lock (_connectionsLock)
+        {
+            _connections--;
+            var left = _byAddress[address] - 1;
+            if (left == 0)
+            {
+                _byAddress.Remove(address);
+            }
+            else
+            {
+                _byAddress[address] = left;
+            }
         }
     }
 
@@ -171,22 +217,34 @@ public sealed class ClassFolderHost : IDisposable
         var timeout = (int)ReadTimeout.TotalMilliseconds;
         client.ReceiveTimeout = timeout;
         client.SendTimeout = timeout;
+        SecureChannel? channel = null;
         try
         {
-            using var channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _certificate);
-            // Read whole before answering: closing with a request unread would
-            // make Windows reset the connection, and the answer could be lost.
-            var request = channel.Receive(MaxRequestBytes);
-            channel.Send(IsColleague(channel.RemoteThumbprint) ? Answer(request) : Refusal(NotTrustedText));
+            Message request;
+            // The handshake and the request, whole, by the deadline: a client
+            // trickling bytes never waits long on one read, so the deadline
+            // closes it. Read whole before answering: closing with a request
+            // unread would make Windows reset the connection, and lose the answer.
+            using (var deadline = new CancellationTokenSource(ReadTimeout))
+            using (deadline.Token.Register(client.Dispose))
+            {
+                channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _certificate);
+                request = channel.Receive(MaxRequestBytes);
+            }
+            channel.Send(IsColleague(channel.RemoteThumbprint) ? Answer(request) : Refusal(ClassFolderRemote.NotTrustedText));
         }
         catch (Exception ex) when (ex is IOException or SocketException or AuthenticationException or InvalidDataException
             or ObjectDisposedException)
         {
-            // A client that left, sent nonsense or never finished the handshake.
+            // A client that left, sent nonsense or too much, or missed the deadline.
         }
         catch (Exception ex)
         {
             _log($"Serving a colleague's teacher PC failed: {ex}");
+        }
+        finally
+        {
+            channel?.Dispose();
         }
     }
 
@@ -210,139 +268,6 @@ public sealed class ClassFolderHost : IDisposable
             _log($"Asking whether {thumbprint} is a colleague failed: {ex.Message}");
             return false;
         }
-    }
-
-    private Message Answer(Message request)
-    {
-        switch (request.Type)
-        {
-            case MessageType.RemoteClassFolderState:
-                RemoteState state;
-                try
-                {
-                    // The view the home itself shows: the lesson's numbers while one is on, the class list otherwise.
-                    var read = _local.ReadAsync(lessonFiles: _local.Lesson.IsOn);
-                    if (!read.Wait(CommandTimeout))
-                    {
-                        return Refusal(UnreadableText + "demorou demais.");
-                    }
-                    state = read.Result;
-                }
-                catch (Exception ex)
-                {
-                    return Refusal(UnreadableText + ErrorText.Describe(ex is AggregateException { InnerException: { } inner } ? inner : ex));
-                }
-                return new Message(MessageType.RemoteClassFolderStateReply, ClassFolderRemote.EncodeJson(ForTheWire(state)));
-
-            case MessageType.RemoteClassFolderCommand:
-                var command = ClassFolderRemote.DecodeJson<RemoteCommand>(request.Payload);
-                RemoteReply reply;
-                if (command is null)
-                {
-                    reply = new RemoteReply(false, IncompleteText, Array.Empty<ResultLineDto>(), null);
-                }
-                else
-                {
-                    var running = RunAsync(command);
-                    reply = running.Wait(CommandTimeout)
-                        ? running.Result
-                        : new RemoteReply(false, StillRunningText, Array.Empty<ResultLineDto>(), command.Turma);
-                }
-                return new Message(MessageType.RemoteClassFolderCommandReply, ClassFolderRemote.EncodeJson(ForTheWire(reply)));
-
-            default:
-                return Refusal(UnknownRequestText);
-        }
-    }
-
-    // The command, as if clicked in the home's window; never throws. A class
-    // created is named by Turma (the name asked for); the reply's Turma is the
-    // class it ended up about (the folder's name a create or a rename gave it).
-    private async Task<RemoteReply> RunAsync(RemoteCommand command)
-    {
-        var none = Array.Empty<ResultLineDto>();
-        var turma = command.Turma;
-        try
-        {
-            switch (command.Kind)
-            {
-                case RemoteCommand.Create when turma is not null:
-                    var created = await _local.CreateAsync(turma).ConfigureAwait(false);
-                    return new RemoteReply(created.Ok, created.Detail, none, created.Ok ? created.Turma : null);
-
-                case RemoteCommand.Rename when turma is not null && command.NewName is { } newName:
-                    var renamed = await _local.RenameAsync(turma, newName).ConfigureAwait(false);
-                    return new RemoteReply(renamed.Ok, renamed.Detail, none, renamed.Ok ? ClassStore.CleanName(newName) : turma);
-
-                case RemoteCommand.Delete when turma is not null:
-                    var deleted = await _local.DeleteAsync(turma).ConfigureAwait(false);
-                    return new RemoteReply(deleted.Ok, deleted.Detail, none, turma);
-
-                case RemoteCommand.Start when turma is not null:
-                    var started = await _local.StartAsync(turma).ConfigureAwait(false);
-                    // Another teacher PC keeps the class folders: no lesson, and the lines say which.
-                    var on = _local.Lesson is { IsOn: true } lesson && string.Equals(lesson.Turma, turma, StringComparison.OrdinalIgnoreCase);
-                    return new RemoteReply(on, on ? string.Empty : ClassFolderText.NotStarted(turma), started, turma);
-
-                case RemoteCommand.End when turma is not null && ChoiceOf(command.Choice) is { } choice:
-                    var ended = await _local.EndAsync(turma, choice).ConfigureAwait(false);
-                    return new RemoteReply(true, string.Empty, ended, turma);
-
-                default:
-                    return new RemoteReply(false, IncompleteText, none, turma);
-            }
-        }
-        catch (ClassFolderRefusedException ex)
-        {
-            return new RemoteReply(false, ex.Message, none, turma);
-        }
-        catch (Exception ex)
-        {
-            // What the home's own window says when that fails.
-            var reason = ErrorText.Describe(ex);
-            var detail = command.Kind switch
-            {
-                RemoteCommand.Start => ClassFolderText.StartFailed(turma ?? string.Empty, reason),
-                RemoteCommand.End => ClassFolderText.EndFailed(turma ?? string.Empty, reason),
-                RemoteCommand.Delete => ClassFolderText.DeleteFailed(reason),
-                _ => reason,
-            };
-            _log($"A colleague's {command.Kind} failed: {ex}");
-            return new RemoteReply(false, detail, none, turma);
-        }
-    }
-
-    private static EndChoice? ChoiceOf(string? choice) => choice switch
-    {
-        RemoteCommand.Keep => EndChoice.Keep,
-        RemoteCommand.Today => EndChoice.DeleteToday,
-        RemoteCommand.All => EndChoice.DeleteAll,
-        _ => null,
-    };
-
-    private static RemoteState ForTheWire(RemoteState state) => state with
-    {
-        HomeName = Cut(state.HomeName),
-        Classes = state.Classes
-            .Where(summary => summary.Turma.Length <= ClassLesson.MaxTurmaLength && summary.Files >= 0 && summary.Bytes >= 0)
-            .ToList(),
-        Pcs = state.Pcs.Select(pc => pc with { Name = Cut(pc.Name) }).ToList(),
-        FreeBytes = Math.Max(0, state.FreeBytes),
-        RecycleBinBytes = Math.Max(0, state.RecycleBinBytes),
-    };
-
-    private static RemoteReply ForTheWire(RemoteReply reply) =>
-        reply with { Lines = reply.Lines.Select(line => line with { Name = Cut(line.Name) }).ToList() };
-
-    // At most ClassHome.MaxNameLength characters, never half of a surrogate pair.
-    private static string Cut(string name)
-    {
-        if (name.Length <= ClassHome.MaxNameLength)
-        {
-            return name;
-        }
-        var length = char.IsHighSurrogate(name[ClassHome.MaxNameLength - 1]) ? ClassHome.MaxNameLength - 1 : ClassHome.MaxNameLength;
-        return name[..length];
     }
 
     private static Message Refusal(string detail) => new(MessageType.CommandAck, CommandResult.Encode(false, detail));

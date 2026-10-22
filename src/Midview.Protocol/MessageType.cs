@@ -270,7 +270,11 @@ public enum MessageType : byte
     // RemoteClassFolderCommand (a RemoteCommand), with
     // RemoteClassFolderCommandReply (a RemoteReply); RemoteHandOver, a PC asking
     // the home for the class folders to take them over, with RemoteHandOverDone
-    // once the home has sent all of them.
+    // once the home has sent all of them. The home refuses with one CommandAck
+    // carrying a CommandResult (false): ClassFolderRemote.NotTrustedText to a PC
+    // it doesn't serve, UnknownRequestText to any other message, and, to
+    // RemoteClassFolderState when it can't read the class folders just now, a
+    // detail starting with UnreadableText.
     RemoteClassFolderState = 79,
     RemoteClassFolderStateReply = 80,
     RemoteClassFolderCommand = 81,

@@ -34,12 +34,13 @@ public interface IClassFolderController
     event Action? Changed;
 
     // What the window shows that comes from the disk, with the lesson, the PCs
-    // and LastEndProblems. lessonFiles: the numbers of the lesson's class
-    // (LessonFiles, null with no lesson on or when they can't be read just now)
-    // instead of the class list (Classes, empty then): the window shows one or
-    // the other, and reading the list goes through every class's folder. Throws
-    // (IOException, say) when what was asked for can't be read just now: the
-    // window keeps what it shows.
+    // and LastEndProblems. lessonFiles, with a lesson on: the numbers of its
+    // class (LessonFiles, null when they can't be read just now) instead of the
+    // class list (Classes, empty then): the window shows one or the other, and
+    // reading the list goes through every class's folder. With no lesson on (one
+    // that ended meanwhile, say), or lessonFiles false: the class list, and no
+    // LessonFiles. Throws (IOException, say) when what it reads can't be read
+    // just now: the window keeps what it shows.
     Task<RemoteState> ReadAsync(bool lessonFiles);
 
     // ClassStore.Create's answer: on success Turma is the name the folder got.

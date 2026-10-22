@@ -12,8 +12,10 @@ using Xunit;
 // system picks. The home is the rig's Master (PROF-1) with a real
 // LocalClassFolderController over ClassSyncRig's PCs; the colleague is the
 // rig's OtherMaster. A fake controller checks what the host itself must do with
-// whatever a controller gives it.
-public sealed class ClassFolderHostTests
+// whatever a controller gives it. The connections themselves (misbehaving
+// clients, the deadline, the caps, closing the host) are in
+// ClassFolderHostTests.Connections.cs.
+public sealed partial class ClassFolderHostTests
 {
     private const string Turma = ClassSyncRig.Turma;
 
@@ -110,7 +112,7 @@ public sealed class ClassFolderHostTests
         foreach (var answer in new[] { state, start })
         {
             Assert.Equal(MessageType.CommandAck, answer.Type);
-            Assert.Equal((false, ClassFolderHost.NotTrustedText), CommandResult.Decode(answer.Payload));
+            Assert.Equal((false, ClassFolderRemote.NotTrustedText), CommandResult.Decode(answer.Payload));
         }
         Assert.False(controller.Lesson.IsOn);
         Assert.Equal(new[] { stranger.Thumbprint, stranger.Thumbprint }, asked.Select(thumbprint => thumbprint.ToUpperInvariant()));
@@ -210,73 +212,57 @@ public sealed class ClassFolderHostTests
         var answer = Ask(host, rig.OtherMaster, rig.Master, new Message(MessageType.SetClassLesson, Array.Empty<byte>()));
 
         Assert.Equal(MessageType.CommandAck, answer.Type);
-        Assert.Equal((false, ClassFolderHost.UnknownRequestText), CommandResult.Decode(answer.Payload));
+        Assert.Equal((false, ClassFolderRemote.UnknownRequestText), CommandResult.Decode(answer.Payload));
     }
 
-    // Nonsense, a client that hangs up, a handshake never finished: the next colleague is still served.
-    [Fact]
-    public void TheHost_OutlivesClientsThatSendNonsense()
+    // Whatever a colleague's PC sends as a class name, only a class name
+    // reaches the store; anything else is a class that isn't there.
+    [Theory]
+    [InlineData(RemoteCommand.Rename)]
+    [InlineData(RemoteCommand.Delete)]
+    [InlineData(RemoteCommand.Start)]
+    [InlineData(RemoteCommand.End)]
+    public async Task ANameThatIsNoClass_IsAClassThatIsGone(string kind)
     {
         using var rig = new ClassSyncRig(pcs: 1);
         var controller = LocalClassFolderControllerTests.NewController(rig, rig.NewSync());
         using var host = Open(rig.Master, controller, Trusting(rig.OtherMaster));
+        var outside = Path.Combine(rig.Root, "fora");
+        Directory.CreateDirectory(outside);
 
-        using (var garbage = new TcpClient())
-        {
-            garbage.Connect(IPAddress.Loopback, host.Port);
-            garbage.GetStream().Write(Encoding.ASCII.GetBytes("GET / HTTP/1.0\r\n\r\n"));
-        }
-        using (var silent = new TcpClient())
-        {
-            silent.Connect(IPAddress.Loopback, host.Port);
-        }
-        Assert.ThrowsAny<Exception>(() =>
-        {
-            using var tcp = new TcpClient();
-            tcp.Connect(IPAddress.Loopback, host.Port);
-            tcp.ReceiveTimeout = 10_000;
-            using var channel = SecureChannel.AuthenticateAsClient(tcp, "localhost", rig.OtherMaster, new TrustStore(new[] { "00" }));
-        });
+        var reply = await Task.Run(() => Command(
+            host, rig.OtherMaster, rig.Master, new RemoteCommand(kind, @"..\fora", "9º A", RemoteCommand.All)));
 
-        Assert.Equal(2, State(host, rig.OtherMaster, rig.Master).Classes.Count);
+        Assert.Equal((false, ClassFolderText.ClassGone), (reply.Ok, reply.Detail));
+        Assert.True(Directory.Exists(outside));
+        Assert.False(rig.Store.Exists("9º A"));
+        Assert.False(controller.Lesson.IsOn);
     }
 
+    // The colleague's PC shows what the home says as it is: Portuguese, never
+    // an exception's own message.
     [Fact]
-    public void APortAnotherProgramHolds_IsLogged_AndGivesNoHost()
-    {
-        using var rig = new ClassSyncRig(pcs: 1);
-        var controller = LocalClassFolderControllerTests.NewController(rig, rig.NewSync());
-        var taken = new TcpListener(IPAddress.Loopback, 0);
-        taken.Start();
-        try
-        {
-            var logged = new List<string>();
-            var host = ClassFolderHost.Open(
-                rig.Master, controller, Trusting(rig.OtherMaster), ((IPEndPoint)taken.LocalEndpoint).Port, logged.Add, IPAddress.Loopback);
-
-            Assert.Null(host);
-            Assert.Single(logged);
-        }
-        finally
-        {
-            taken.Stop();
-        }
-    }
-
-    // A command still running when the wait is over is answered so, not left hanging.
-    [Fact]
-    public void ACommandThatTakesTooLong_IsAnsweredThatItIsStillRunning()
+    public void AFailureOnTheHome_IsToldInTheTeachersWords()
     {
         using var master = SelfSignedCertificate.Create("master-under-test");
         using var colleague = SelfSignedCertificate.Create("colleague-under-test");
-        var never = new TaskCompletionSource<IReadOnlyList<ResultLineDto>>();
-        var controller = new FakeController { Start = _ => never.Task };
+        var controller = new FakeController
+        {
+            Read = _ => throw new InvalidOperationException("internal state broke"),
+            Delete = _ => throw new InvalidOperationException("internal state broke"),
+            Start = _ => Task.FromException<IReadOnlyList<ResultLineDto>>(
+                new UnauthorizedAccessException("Access to the path is denied.")),
+        };
         using var host = Open(master, controller, Trusting(colleague));
-        host.CommandTimeout = TimeSpan.FromMilliseconds(300);
 
-        var reply = Command(host, colleague, master, new RemoteCommand(RemoteCommand.Start, Turma, null, null));
+        var state = Ask(host, colleague, master, new Message(MessageType.RemoteClassFolderState, Array.Empty<byte>()));
+        var deleted = Command(host, colleague, master, new RemoteCommand(RemoteCommand.Delete, Turma, null, null));
+        var started = Command(host, colleague, master, new RemoteCommand(RemoteCommand.Start, Turma, null, null));
 
-        Assert.Equal((false, ClassFolderHost.StillRunningText, Turma), (reply.Ok, reply.Detail, reply.Turma));
+        Assert.Equal(MessageType.CommandAck, state.Type);
+        Assert.Equal((false, ClassFolderRemote.UnreadableText + ClassFolderHost.UnexpectedReason), CommandResult.Decode(state.Payload));
+        Assert.Equal((false, ClassFolderText.DeleteFailed(ClassFolderHost.UnexpectedReason)), (deleted.Ok, deleted.Detail));
+        Assert.Equal((false, ClassFolderText.StartFailed(Turma, "acesso negado")), (started.Ok, started.Detail));
     }
 
     // Ruling 4: a class folder made by hand with a name over 60 characters is
@@ -332,6 +318,27 @@ public sealed class ClassFolderHostTests
         return ClassFolderRemote.DecodeJson<RemoteState>(answer.Payload) ?? throw new InvalidDataException("Not a state.");
     }
 
+    // The state, asked again until the host takes the connection (it may still hold this PC's last few).
+    private static async Task<RemoteState> StateSoon(ClassFolderHost host, X509Certificate2 client, X509Certificate2 home)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                return await Task.Run(() => State(host, client, home));
+            }
+            catch (Exception) when (clock.Elapsed < Wait)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    private static RemoteState EmptyState() => new(
+        "PROF-1", ClassLessonDto.From(ClassLesson.None(0)), Array.Empty<ClassSummaryDto>(), null, Array.Empty<PcLineDto>(),
+        Array.Empty<string>(), 0, 0);
+
     private static RemoteReply Command(ClassFolderHost host, X509Certificate2 client, X509Certificate2 home, RemoteCommand command)
     {
         var answer = Ask(host, client, home, new Message(MessageType.RemoteClassFolderCommand, ClassFolderRemote.EncodeJson(command)));
@@ -345,6 +352,8 @@ public sealed class ClassFolderHostTests
         public Func<bool, RemoteState>? Read { get; init; }
 
         public Func<string, Task<IReadOnlyList<ResultLineDto>>>? Start { get; init; }
+
+        public Func<string, Task<(bool Ok, string Detail)>>? Delete { get; init; }
 
         public ClassLesson Lesson => ClassLesson.None(0);
 
@@ -368,7 +377,7 @@ public sealed class ClassFolderHostTests
 
         public Task<(bool Ok, string Detail)> RenameAsync(string turma, string newName) => throw new NotSupportedException();
 
-        public Task<(bool Ok, string Detail)> DeleteAsync(string turma) => throw new NotSupportedException();
+        public Task<(bool Ok, string Detail)> DeleteAsync(string turma) => Delete!(turma);
 
         public Task<IReadOnlyList<ResultLineDto>> StartAsync(string turma) => Start!(turma);
 

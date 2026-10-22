@@ -109,21 +109,22 @@ public sealed class LocalClassFolderController : IClassFolderController
     }
 
     // The class list throws IOException or UnauthorizedAccessException when the
-    // classes' folder can't be read just now.
+    // classes' folder can't be read just now. The lesson is read once, so the
+    // numbers and the lesson in a state always go together.
     public Task<RemoteState> ReadAsync(bool lessonFiles) => Task.Run(() =>
     {
         var lesson = Lesson;
         IReadOnlyList<ClassSummaryDto> classes = Array.Empty<ClassSummaryDto>();
         LessonFilesDto? files = null;
-        if (!lessonFiles)
+        if (lessonFiles && lesson.IsOn)
+        {
+            files = ReadLessonFiles(lesson.Turma);
+        }
+        else
         {
             classes = _store.List()
                 .Select(summary => new ClassSummaryDto(summary.Turma, summary.Files, summary.Bytes, summary.LastLesson))
                 .ToList();
-        }
-        else if (lesson.IsOn)
-        {
-            files = ReadLessonFiles(lesson.Turma);
         }
         return new RemoteState(
             _homeName, ClassLessonDto.From(lesson), classes, files, Pcs, LastEndProblems, _store.FreeBytes(), _store.RecycleBinBytes());
@@ -132,14 +133,15 @@ public sealed class LocalClassFolderController : IClassFolderController
     public Task<(bool Ok, string Detail, string Turma)> CreateAsync(string name) =>
         OneAtATime(() => Task.Run(() => _store.Create(name)));
 
+    // What isn't a class name (a path, say) is a class that isn't there: it never reaches the store's folders.
     public Task<(bool Ok, string Detail)> RenameAsync(string turma, string newName) =>
-        OneAtATime(() => IsLessonClass(turma)
-            ? Task.FromResult((false, ClassFolderText.LessonClassNotRenamed))
+        OneAtATime(() => !ClassStore.IsValidName(turma) ? Task.FromResult((false, ClassFolderText.ClassGone))
+            : IsLessonClass(turma) ? Task.FromResult((false, ClassFolderText.LessonClassNotRenamed))
             : Task.Run(() => _store.Rename(turma, newName)));
 
     public Task<(bool Ok, string Detail)> DeleteAsync(string turma) =>
-        OneAtATime(() => IsLessonClass(turma)
-            ? Task.FromResult((false, ClassFolderText.LessonClassNotDeleted))
+        OneAtATime(() => !ClassStore.IsValidName(turma) ? Task.FromResult((false, ClassFolderText.ClassGone))
+            : IsLessonClass(turma) ? Task.FromResult((false, ClassFolderText.LessonClassNotDeleted))
             : Task.Run(() => _store.Delete(turma)));
 
     public Task<IReadOnlyList<ResultLineDto>> StartAsync(string turma) => OneAtATime(async () =>
