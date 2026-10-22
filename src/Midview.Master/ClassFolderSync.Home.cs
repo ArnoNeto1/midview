@@ -18,6 +18,10 @@ public sealed partial class ClassFolderSync
     // An end saved further ahead of this PC's clock than this is not believed.
     private static readonly TimeSpan AdoptHorizon = TimeSpan.FromDays(1);
 
+    // A start's answer on every PC when this PC's own file (ClassHomeFileMaster)
+    // is there but can't be read; the reason follows.
+    private const string HomeFileUnreadableText = "não foi possível ler, neste computador, qual PC guarda as pastas das turmas: ";
+
     // The generation this run claimed with, for when its file (ClassHomeFileMaster)
     // couldn't be saved or read back. Under the lesson lock.
     private long? _generation;
@@ -114,11 +118,28 @@ public sealed partial class ClassFolderSync
     // one the Agents recorded for it, and one that was never the home claims
     // with now's; either is kept once an Agent took the claim. But a PC that
     // was never the home and saw another one as the home (ClassHomeFileMaster,
-    // Ruling 11) is refused as if every Agent that answered still kept it: it
-    // becomes the home only by taking the folders over.
+    // Ruling 11) is refused as if every PC still kept it: it becomes the home
+    // only by taking the folders over. And a file of this PC's that is there
+    // but can't be read refuses the start too, saying so (Ruling 12): it isn't
+    // taken for "never the home". A refusal of either kind has a line for
+    // every PC of the room.
     private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>?> ClaimHomeAsync()
     {
-        var saved = ClassHomeFileMaster.Read(_homePath) ?? _generation;
+        long? onDisk;
+        ClassHome? seen;
+        try
+        {
+            (onDisk, seen) = await Task.Run(
+                () => (ClassHomeFileMaster.Read(_homePath), ClassHomeFileMaster.ReadLastOtherHome(_homePath))).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Ruling 12: not "never the home", which would claim with now.
+            _log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
+            return EveryPc(HomeFileUnreadableText + ErrorText.Describe(ex));
+        }
+
+        var saved = onDisk ?? _generation;
         var reports = (await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(() => HomeOf(machine))))
             .ConfigureAwait(false)).OfType<HomeReport>().ToList();
 
@@ -135,10 +156,11 @@ public sealed partial class ClassFolderSync
         }
 
         // Ruling 11: never the home, but it saw another PC as the home: as if
-        // every Agent that answered still said so.
-        if (ours is null && ClassHomeFileMaster.ReadLastOtherHome(_homePath) is { } seen)
+        // every PC still said so (Ruling 12: every PC's line, even with no
+        // Agent answering).
+        if (ours is null && seen is not null)
         {
-            return reports.Select(report => (report.Machine, false, seen.RefusalText)).ToList();
+            return EveryPc(seen.RefusalText);
         }
 
         var claimed = ours ?? new DateTimeOffset(_localNow()).UtcTicks;
@@ -150,12 +172,18 @@ public sealed partial class ClassFolderSync
             // Its lesson start says so too.
             _log($"{answer.Machine.Name} didn't take this PC as the class folders' home: {answer.Detail}");
         }
-        if (saved != claimed && answers.OfType<ClaimAnswer>().Any(answer => answer.Ok))
+        // Against what is on disk, so a generation that couldn't be saved is saved next time.
+        if (onDisk != claimed && answers.OfType<ClaimAnswer>().Any(answer => answer.Ok))
         {
             KeepGeneration(claimed);
         }
         return null;
     }
+
+    // What a cancelled start answers: one line for every PC of the room, as a
+    // start's lesson goes to every one (SendToEveryAgentAsync).
+    private List<(KnownMachine Machine, bool Ok, string Detail)> EveryPc(string detail) =>
+        Machines().Select(machine => (machine, false, detail)).ToList();
 
     private bool IsThisPc(ClassHome home, long? generation) =>
         home.IsSamePc(_masterCertificate.Thumbprint, _machineName, generation);
@@ -165,7 +193,7 @@ public sealed partial class ClassFolderSync
     {
         try
         {
-            ClassHomeFileMaster.WriteLastOtherHome(SeenHome.Of(home), _homePath);
+            ClassHomeFileMaster.WriteLastOtherHome(home, _homePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

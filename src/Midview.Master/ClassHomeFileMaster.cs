@@ -1,36 +1,27 @@
 using System.IO;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Midview.Protocol;
 
 namespace Midview.Master;
 
-// Another teacher PC this one saw as the class folders' home (Ruling 11): its
-// certificate thumbprint, computer name and generation (ClassHome).
-public sealed record SeenHome(string Thumbprint, string Name, long Generation)
-{
-    public static SeenHome Of(ClassHome home) => new(home.Thumbprint, home.Name, home.Generation);
-
-    // What an Agent keeping it would answer this PC's claim.
-    [JsonIgnore]
-    public string RefusalText =>ClassHomeClaim.OtherHomeText + (Name.Length > 0 ? Name : ClassHome.UnnamedText);
-
-    internal bool IsWellFormed =>
-        TeacherInvite.IsThumbprint(Thumbprint) && Name is { Length: <= ClassHome.MaxNameLength } && Generation >= 0;
-}
-
-// What this teacher PC knows of the class folders' home (plan Ruling 9 and
-// 11), kept next to the classroom list (MasterData.Folder): its own
+// What this teacher PC knows of the class folders' home (plan Rulings 9, 11
+// and 12), kept next to the classroom list (MasterData.Folder): its own
 // generation as the home (ClassHome.Generation), when it became the home in
 // UTC ticks on its own clock, which its claims carry ever after; and the last
 // other PC it saw as the home, so that a PC that was never the home but saw
 // another one never becomes the home by starting a lesson while only Agents
-// with no home are on (only by taking the folders over). Written whole through
-// a temp file, so a crash never leaves half of it; a file that is missing,
-// can't be read or isn't one means neither (this PC was never the home and
-// saw none). path: elsewhere than Path (a test's folder).
+// with no home are on (only by taking the folders over), and goes on working
+// through that PC. Written whole through a temp file, so a crash never leaves
+// half of it. A file that isn't there, or isn't one, means neither (this PC
+// was never the home and saw none); a file that is there but can't be read
+// right now is tried once more after a moment, then reading it throws
+// (IOException or UnauthorizedAccessException) rather than pass for neither.
+// path: elsewhere than Path (a test's folder).
 public static class ClassHomeFileMaster
 {
+    // How long a file that couldn't be read gets before the second try.
+    private static readonly TimeSpan RetryWait = TimeSpan.FromMilliseconds(200);
+
     // The tracker and the sync write it from their own threads.
     private static readonly object Gate = new();
 
@@ -40,10 +31,10 @@ public static class ClassHomeFileMaster
     public static long? Read(string? path = null) => Load(path ?? Path).Generation is > 0 and var generation ? generation : null;
 
     // The last other PC this one saw as the home; null for none.
-    public static SeenHome? ReadLastOtherHome(string? path = null) =>
-        Load(path ?? Path).LastOtherHome is { IsWellFormed: true } seen ? seen : null;
+    public static ClassHome? ReadLastOtherHome(string? path = null) =>
+        Load(path ?? Path).LastOtherHome is { } stored && stored.ToHome() is { } home && IsHome(home) ? home : null;
 
-    // Keeps the last other home seen. Throws if it can't be written.
+    // Keeps the last other home seen. Throws if it can't be read or written.
     public static void Write(long generation, string? path = null)
     {
         if (generation <= 0)
@@ -59,21 +50,22 @@ public static class ClassHomeFileMaster
     }
 
     // Keeps this PC's generation; writes nothing when that home is already
-    // the one on file. Throws if it can't be written.
-    public static void WriteLastOtherHome(SeenHome home, string? path = null)
+    // the one on file. Throws if it can't be read or written.
+    public static void WriteLastOtherHome(ClassHome home, string? path = null)
     {
-        if (!home.IsWellFormed)
+        if (!IsHome(home))
         {
             throw new ArgumentException("Not a home.", nameof(home));
         }
 
         path ??= Path;
+        var stored = StoredHome.Of(home);
         lock (Gate)
         {
-            var stored = Load(path);
-            if (stored.LastOtherHome != home)
+            var file = Load(path);
+            if (file.LastOtherHome != stored)
             {
-                Save(path, stored with { LastOtherHome = home });
+                Save(path, file with { LastOtherHome = stored });
             }
         }
     }
@@ -88,18 +80,52 @@ public static class ClassHomeFileMaster
 
     private static Stored Load(string path)
     {
+        string text;
         try
         {
-            if (File.Exists(path) && JsonSerializer.Deserialize<Stored>(File.ReadAllText(path)) is { } stored)
-            {
-                return stored;
-            }
+            text = ReadText(path);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+        catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && File.Exists(path))
         {
-            // Neither, as for no file.
+            Thread.Sleep(RetryWait);
+            text = ReadText(path);
         }
-        return new Stored(null, null);
+
+        try
+        {
+            return text.Length > 0 && JsonSerializer.Deserialize<Stored>(text) is { } stored ? stored : None;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            return None;
+        }
+    }
+
+    // Empty when there is no file. FileNotFoundException and the like mean it went meanwhile.
+    private static string ReadText(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : "";
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return "";
+        }
+    }
+
+    private static readonly Stored None = new(null, null);
+
+    private static bool IsHome(ClassHome home)
+    {
+        try
+        {
+            return ClassHome.TryDecode(home.Encode(), out _);
+        }
+        catch (InvalidOperationException)
+        {
+            return false; // what Encode says of a home that can't be one
+        }
     }
 
     private static void Save(string path, Stored stored)
@@ -119,5 +145,12 @@ public static class ClassHomeFileMaster
         File.Move(tempPath, path, overwrite: true);
     }
 
-    private sealed record Stored(long? Generation, SeenHome? LastOtherHome);
+    private sealed record Stored(long? Generation, StoredHome? LastOtherHome);
+
+    private sealed record StoredHome(string Thumbprint, string Name, string Address, int Port, long Generation)
+    {
+        public static StoredHome Of(ClassHome home) => new(home.Thumbprint, home.Name, home.Address, home.Port, home.Generation);
+
+        public ClassHome ToHome() => new(Thumbprint, Name, Address, Port, Generation);
+    }
 }

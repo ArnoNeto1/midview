@@ -86,16 +86,63 @@ public sealed class ClassHomeTrackerTests
         }
         await tracker.RefreshAsync();
 
-        Assert.Equal(new SeenHome(rig.OtherMaster.Thumbprint, OtherPc, Older), ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath));
+        var seen = tracker.Home;
+        Assert.Equal((rig.OtherMaster.Thumbprint, OtherPc, Older), (seen!.Thumbprint, seen.Name, seen.Generation));
+        Assert.Equal(seen, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath));
         Assert.Null(ClassHomeFileMaster.Read(rig.HomePath));
 
-        // Seen go away again (all off): still remembered.
+        // Ruling 12: with no Agent saying anything (all off), still the home this PC goes by.
         foreach (var pc in rig.Pcs)
         {
             rig.Offline[pc.Name] = true;
         }
         await tracker.RefreshAsync();
-        Assert.Equal(OtherPc, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)?.Name);
+        Assert.Equal(seen, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath));
+        Assert.Equal(seen, tracker.Home);
+        Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
+    }
+
+    // Ruling 12: no Agent reports a home, this PC never was one, but it saw another: that
+    // one is the home. Once this PC has a generation (it took the folders over), no longer.
+    [Fact]
+    public async Task TheLastHomeSeen_IsTheHome_WhileNoAgentReportsOne_AndThisPcHasNoGeneration()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var tracker = NewTracker(rig);
+        var seen = new ClassHome(rig.OtherMaster.Thumbprint, OtherPc, "10.0.0.7", ClassFolderRemote.Port, Older);
+        ClassHomeFileMaster.WriteLastOtherHome(seen, rig.HomePath);
+
+        await tracker.RefreshAsync();
+
+        Assert.Equal(seen, tracker.Home);
+        Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
+
+        ClassHomeFileMaster.Write(Newer, rig.HomePath);
+        await tracker.RefreshAsync();
+
+        Assert.Null(tracker.Home);
+        Assert.Equal(ClassFolderMode.Local, tracker.Mode);
+    }
+
+    // A file this PC can't read just now is no reason for a refresh to fail.
+    [Fact]
+    public async Task AnUnreadableFile_DoesNotStopTheTracker()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var tracker = NewTracker(rig);
+        foreach (var pc in rig.Pcs)
+        {
+            Claim(rig, pc, rig.OtherMaster, OtherPc);
+        }
+        ClassHomeFileMaster.Write(Older, rig.HomePath);
+
+        using (new FileStream(rig.HomePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await tracker.RefreshAsync();
+        }
+
+        Assert.Equal(OtherPc, tracker.Home?.Name);
+        Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
     }
 
     // Two teacher PCs can share one teacher identity: the computer name tells them apart.
@@ -255,16 +302,16 @@ public sealed class ClassHomeTrackerTests
     }
 
     [Fact]
-    public async Task NoAgentOnline_IsLocal()
+    public async Task NoAgentOnline_IsLocal_ForAPcThatSawNoHome()
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var tracker = NewTracker(rig);
         foreach (var pc in rig.Pcs)
         {
-            Claim(rig, pc, rig.OtherMaster, OtherPc);
+            Claim(rig, pc, rig.Master, ThisPc);
         }
         await tracker.RefreshAsync();
-        Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
+        Assert.Equal(ThisPc, tracker.Home?.Name);
 
         foreach (var pc in rig.Pcs)
         {
@@ -296,8 +343,46 @@ public sealed class ClassHomeTrackerTests
             Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(path));
             File.WriteAllText(path, "{\"Generation\":0}");
             Assert.Null(ClassHomeFileMaster.Read(path));
-            File.WriteAllText(path, "{\"LastOtherHome\":{\"Thumbprint\":\"xyz\",\"Name\":\"PROF-2\",\"Generation\":1}}");
+            File.WriteAllText(path,
+                "{\"LastOtherHome\":{\"Thumbprint\":\"xyz\",\"Name\":\"PROF-2\",\"Address\":\"10.0.0.7\",\"Port\":28903,\"Generation\":1}}");
             Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(path));
+            File.WriteAllText(path, "{\"LastOtherHome\":{\"Thumbprint\":\"" + new string('B', 40) + "\",\"Name\":\"PROF-2\",\"Generation\":1}}");
+            Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(path)); // no address
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // Ruling 12: a file that is there but can't be read is tried once more, then said so;
+    // it never passes for no file (which would let this PC claim the home with now).
+    [Fact]
+    public async Task AFileThatCantBeRead_IsTriedAgain_ThenThrows()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"midview-generation-{Guid.NewGuid():N}");
+        var path = Path.Combine(folder, "class-home.json");
+        try
+        {
+            ClassHomeFileMaster.Write(Newer, path);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.ThrowsAny<IOException>(() => ClassHomeFileMaster.Read(path));
+                Assert.ThrowsAny<IOException>(() => ClassHomeFileMaster.ReadLastOtherHome(path));
+                Assert.ThrowsAny<IOException>(() => ClassHomeFileMaster.Write(Newer + 1, path));
+            }
+            Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
+
+            // Held for a moment only: the second try reads it.
+            var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            var letGo = Task.Run(async () =>
+            {
+                await Task.Delay(50);
+                held.Dispose();
+            });
+            Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
+            await letGo;
         }
         finally
         {
@@ -310,7 +395,7 @@ public sealed class ClassHomeTrackerTests
     {
         var folder = Path.Combine(Path.GetTempPath(), $"midview-generation-{Guid.NewGuid():N}");
         var path = Path.Combine(folder, "class-home.json");
-        var seen = new SeenHome(new string('B', 40), OtherPc, Older);
+        var seen = new ClassHome(new string('B', 40), OtherPc, "10.0.0.7", ClassFolderRemote.Port, Older);
         var later = seen with { Name = "PROF-3", Generation = Newer };
         try
         {
@@ -331,7 +416,6 @@ public sealed class ClassHomeTrackerTests
             File.SetLastWriteTimeUtc(path, longAgo);
             ClassHomeFileMaster.WriteLastOtherHome(later, path);
             Assert.Equal(longAgo, File.GetLastWriteTimeUtc(path));
-            Assert.Equal("As pastas das turmas ficam no PC PROF-3", later.RefusalText);
         }
         finally
         {

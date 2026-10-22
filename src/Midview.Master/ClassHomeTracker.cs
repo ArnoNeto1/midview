@@ -35,7 +35,9 @@ public enum ClassFolderMode
 // the generation it keeps on file (ClassHomeFileMaster: the PC renamed), or its
 // name under another certificate (Midview reinstalled, or paired again).
 //
-// Another PC seen as the home is kept on file (ClassHomeFileMaster, Ruling 11).
+// Another PC seen as the home is kept on file (ClassHomeFileMaster, Ruling 11),
+// and with no home reported, a PC that was never the home but saw one goes by
+// it (Ruling 12): Remote, as its starts are refused for it.
 //
 // machines and isOnline are called from background threads, and Changed is
 // raised on them. Nothing an Agent does escapes as an exception.
@@ -106,10 +108,20 @@ public sealed class ClassHomeTracker : IDisposable
             var online = Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
             await Task.WhenAll(online.Select(machine => Task.Run(() => Ask(machine, answers)))).ConfigureAwait(false);
 
+            // This PC's generation and the last other home it saw; neither when
+            // the file can't be read just now (only no file means none).
+            var (fileRead, generation, seen) = ReadFile();
+
             var home = Choose(answers.ToList(), Home);
-            var state = new State(home, home is not null && !IsThisPc(home) ? ClassFolderMode.Remote : ClassFolderMode.Local);
+            if (home is null && fileRead && generation is null)
+            {
+                // Ruling 12: never the home, but it saw another PC as the home.
+                home = seen;
+            }
+            var state = new State(
+                home, home is not null && !IsThisPc(home, generation) ? ClassFolderMode.Remote : ClassFolderMode.Local);
             changed = Interlocked.Exchange(ref _state, state) != state;
-            if (state.Mode == ClassFolderMode.Remote)
+            if (state.Mode == ClassFolderMode.Remote && fileRead)
             {
                 RememberOtherHome(home!);
             }
@@ -171,8 +183,21 @@ public sealed class ClassHomeTracker : IDisposable
     private static string KeyOf(ClassHome home) =>
         $"{home.Thumbprint.ToUpperInvariant()}\n{home.Name.ToUpperInvariant()}\n{home.Generation}";
 
-    private bool IsThisPc(ClassHome home) =>
-        home.IsSamePc(_masterCertificate.Thumbprint, _machineName, ClassHomeFileMaster.Read(_homePath));
+    private bool IsThisPc(ClassHome home, long? generation) =>
+        home.IsSamePc(_masterCertificate.Thumbprint, _machineName, generation);
+
+    private (bool Read, long? Generation, ClassHome? Seen) ReadFile()
+    {
+        try
+        {
+            return (true, ClassHomeFileMaster.Read(_homePath), ClassHomeFileMaster.ReadLastOtherHome(_homePath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
+            return (false, null, null);
+        }
+    }
 
     // Ruling 11: a PC that saw another one as the home doesn't become the home
     // by starting a lesson (ClassFolderSync), only by taking the folders over.
@@ -180,7 +205,7 @@ public sealed class ClassHomeTracker : IDisposable
     {
         try
         {
-            ClassHomeFileMaster.WriteLastOtherHome(SeenHome.Of(home), _homePath);
+            ClassHomeFileMaster.WriteLastOtherHome(home, _homePath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

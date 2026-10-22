@@ -2,10 +2,11 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderSync with two teacher PCs in one lab (plan decisions 2, 8 and 9,
-// Rulings 9 and 10): the claim on the class folders' home before a start, by
-// generation; standing down when another PC keeps them; and adopting an end
-// another PC made on the Agents. The rig's Agents keep the home (homes).
+// ClassFolderSync with two teacher PCs in one lab (plan decisions 2 and 8,
+// Rulings 9 to 12): the claim on the class folders' home before a start, by
+// generation, and standing down when another PC keeps them. Adopting an end
+// another PC made on the Agents is in ClassFolderSyncTests.Adopt.cs. The rig's
+// Agents keep the home (homes).
 public sealed partial class ClassFolderSyncTests
 {
     private const string ThisPc = ClassSyncRig.MachineName;
@@ -96,12 +97,88 @@ public sealed partial class ClassFolderSyncTests
 
         var refused = await other.StartAsync("3º B");
 
-        Assert.Equal(new[] { "PC2", "PC3" }, refused.Select(result => result.Machine.Name).Order());
+        // Ruling 12: a line for every PC of the room, as a start's lesson goes to every one.
+        Assert.Equal(new[] { "PC1", "PC2", "PC3" }, refused.Select(result => result.Machine.Name).Order());
         Assert.All(refused, result => Assert.Equal((false, ClassHomeClaim.OtherHomeText + ThisPc), (result.Ok, result.Detail)));
         Assert.False(other.Lesson.IsOn);
         Assert.Null(ClassHomeFileMaster.Read(OtherHomePath(rig)));
         Assert.All(rig.Pcs.Skip(1), pc => Assert.Null(pc.Agent.CurrentHome));
         Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+    }
+
+    // Ruling 12: no Agent answers at all; the start still says why it didn't happen, on
+    // every PC's line, never with no line.
+    [Fact]
+    public async Task APcThatSawAnotherHome_WithNoAgentOn_SaysSoForEveryPc()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        ClassHomeFileMaster.WriteLastOtherHome(
+            new ClassHome(rig.Master.Thumbprint, ThisPc, "10.0.0.5", ClassFolderRemote.Port, rig.NowTicks), OtherHomePath(rig));
+        foreach (var pc in rig.Pcs)
+        {
+            rig.Offline[pc.Name] = true;
+        }
+        var other = OtherSync(rig, sameCertificate: false);
+
+        var refused = await other.StartAsync("3º B");
+
+        Assert.Equal(3, refused.Count);
+        Assert.All(refused, result => Assert.Equal((false, ClassHomeClaim.OtherHomeText + ThisPc), (result.Ok, result.Detail)));
+        Assert.False(other.Lesson.IsOn);
+        Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+    }
+
+    // Ruling 12: this PC's file is there but can't be read: the start doesn't go by "no
+    // generation" (claiming with now); it says why, on every PC's line, and claims nothing.
+    [Fact]
+    public async Task AnUnreadableGenerationFile_CancelsTheStart_SayingWhy()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        await sync.EndAsync(EndChoice.Keep);
+        var ended = sync.Lesson;
+        var homes = rig.Pcs.Select(pc => pc.Agent.CurrentHome).ToList();
+
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> refused;
+        using (new FileStream(rig.HomePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            refused = await sync.StartAsync("3º B");
+        }
+
+        Assert.Equal(3, refused.Count);
+        Assert.All(refused, result =>
+        {
+            Assert.False(result.Ok);
+            Assert.StartsWith("não foi possível ler, neste computador, qual PC guarda as pastas das turmas", result.Detail);
+        });
+        Assert.Equal(ended, sync.Lesson);
+        Assert.Equal(homes, rig.Pcs.Select(pc => pc.Agent.CurrentHome));
+
+        var started = await sync.StartAsync("3º B");
+        Assert.All(started, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
+    }
+
+    // Ruling 12: a generation that couldn't be saved is saved at the next start.
+    [Fact]
+    public async Task AGenerationThatCouldNotBeSaved_IsSavedAtTheNextStart()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var blocker = Path.Combine(rig.Root, "bloqueio"); // a file where the folder should be
+        File.WriteAllText(blocker, "");
+        var homePath = Path.Combine(blocker, "class-home.json");
+        var sync = rig.NewSync(homePath: homePath);
+
+        await sync.StartAsync(Turma);
+        await sync.EndAsync(EndChoice.Keep);
+        Assert.Null(ClassHomeFileMaster.Read(homePath));
+
+        File.Delete(blocker);
+        rig.Now = rig.Now.AddMinutes(5);
+        var started = await sync.StartAsync("3º B");
+
+        Assert.All(started, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
+        Assert.Equal(rig.NowTicks - TimeSpan.FromMinutes(5).Ticks, ClassHomeFileMaster.Read(homePath));
     }
 
     // Ruling 11: a PC that never saw a home starts in a lab where no Agent keeps one.
@@ -138,12 +215,12 @@ public sealed partial class ClassFolderSyncTests
         var refused = await other.StartAsync("3º B");
 
         Assert.Equal(new[] { "PC1" }, refused.Select(result => result.Machine.Name));
-        Assert.Equal(new SeenHome(rig.Master.Thumbprint, ThisPc, rig.NowTicks), ClassHomeFileMaster.ReadLastOtherHome(OtherHomePath(rig)));
+        Assert.Equal(pc1.Agent.CurrentHome, ClassHomeFileMaster.ReadLastOtherHome(OtherHomePath(rig)));
 
         rig.Offline[pc1.Name] = true;
         var again = await other.StartAsync("3º B");
 
-        Assert.Equal(2, again.Count);
+        Assert.Equal(3, again.Count);
         Assert.False(other.Lesson.IsOn);
         Assert.All(rig.Pcs.Skip(1), pc => Assert.Null(pc.Agent.CurrentHome));
     }
@@ -338,112 +415,6 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs, pc => Assert.Equal(theirs, pc.Agent.Current));
     }
 
-    // The home's Master was closed and a colleague's PC ended the lesson straight on the
-    // Agents ("Encerrar a aula", keeping the files): the home takes the end as one nobody
-    // collected, and what the PCs set aside comes in at the next lesson.
-    [Fact]
-    public async Task AnEndAnotherPcMade_IsAdoptedUncollected_AndItsFilesComeInAtTheNextLesson()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var sync = rig.NewSync();
-        await sync.StartAsync(Turma);
-        var lesson = sync.Lesson;
-        var pc1 = rig.Pcs[0];
-        foreach (var pc in rig.Pcs)
-        {
-            pc.Follow();
-        }
-        pc1.Write("depois.txt", Bytes(10, 1), Utc(1)); // never copied
-        var ended = EndOnTheAgents(rig, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true });
-        var changes = new List<ClassLesson>();
-        sync.LessonChanged += changes.Add;
-
-        await sync.AdoptAgentsEndAsync();
-
-        Assert.Equal(ended, sync.Lesson);
-        Assert.Equal(new[] { ended }, changes);
-        Assert.Equal(ended, ClassLessonFile.Read(rig.LessonPath));
-        Assert.False(rig.Store.IsCollected(lesson.LessonId));
-
-        await sync.StartAsync("3º B");
-        foreach (var pc in rig.Pcs)
-        {
-            pc.Follow();
-        }
-        await rig.Rounds(sync, 1);
-
-        Assert.Equal(new[] { "depois.txt" }, rig.StoreFiles(Turma));
-        Assert.Equal(Bytes(10, 1), File.ReadAllBytes(rig.StorePath("depois.txt")));
-        Assert.Empty(rig.StoreFiles("3º B"));
-    }
-
-    // Ruling 10: what is adopted is this lesson, ended when the Agents say, whatever else
-    // their copy says.
-    [Fact]
-    public async Task AnAgentsEnd_IsAdoptedAsThisLessonEnded()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var sync = rig.NewSync();
-        await sync.StartAsync(Turma);
-        var lesson = sync.Lesson;
-        EndOnTheAgents(rig, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true, Turma = "3º B", StartedAt = 0 });
-
-        await sync.AdoptAgentsEndAsync();
-
-        Assert.Equal(lesson with { SavedAt = lesson.SavedAt + 5, Ended = true }, sync.Lesson);
-    }
-
-    // Ruling 10: an end saved more than a day ahead of this PC's clock is not believed.
-    [Fact]
-    public async Task AnEndFromMoreThanADayAhead_IsNotAdopted()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var sync = rig.NewSync();
-        await sync.StartAsync(Turma);
-        var lesson = sync.Lesson;
-        var now = new DateTimeOffset(rig.Now).ToUnixTimeSeconds();
-        EndOnTheAgents(rig, lesson with { SavedAt = now + (long)TimeSpan.FromDays(2).TotalSeconds, Ended = true });
-
-        await sync.AdoptAgentsEndAsync();
-
-        Assert.Equal(lesson, sync.Lesson);
-    }
-
-    [Fact]
-    public async Task AHomeOpenedAfterAnotherPcEndedItsLesson_AdoptsTheEndByItself()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var closed = rig.NewSync();
-        await closed.StartAsync(Turma);
-        var lesson = closed.Lesson;
-        closed.Dispose();
-        var ended = EndOnTheAgents(rig, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true });
-
-        var reopened = rig.NewSync();
-
-        await WaitUntil(() => reopened.Lesson == ended);
-        Assert.Equal(ended, ClassLessonFile.Read(rig.LessonPath));
-        Assert.False(rig.Store.IsCollected(lesson.LessonId));
-    }
-
-    // Only an end of this very lesson, newer than the one the home has.
-    [Fact]
-    public async Task AnotherLessonOnTheAgents_IsNotAdopted()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var sync = rig.NewSync();
-        await sync.StartAsync(Turma);
-        var lesson = sync.Lesson;
-        EndOnTheAgents(rig, new ClassLesson(lesson.SavedAt + 5, Guid.NewGuid(), Turma, lesson.StartedAt, Ended: true));
-        var changes = new List<ClassLesson>();
-        sync.LessonChanged += changes.Add;
-
-        await sync.AdoptAgentsEndAsync();
-
-        Assert.Equal(lesson, sync.Lesson);
-        Assert.Empty(changes);
-    }
-
     private static string OtherLessonPath(ClassSyncRig rig) => Path.Combine(rig.Root, "outro-professor", "class-lesson.json");
 
     private static string OtherHomePath(ClassSyncRig rig) => Path.Combine(rig.Root, "outro-professor", "class-home.json");
@@ -465,18 +436,5 @@ public sealed partial class ClassFolderSyncTests
         var (ok, detail, _) = ClassFolderClient.ClaimHome(
             pc.Machine, rig.OtherMaster, new ClassHomeClaim(name, ClassFolderRemote.Port, takeOver, generation), rig.AgentPort);
         Assert.True(ok, detail);
-    }
-
-    // A colleague's PC sends that ended lesson to every Agent itself, as when the home's
-    // Master is closed; each PC's Session then sets the lesson's files aside.
-    private static ClassLesson EndOnTheAgents(ClassSyncRig rig, ClassLesson ended)
-    {
-        foreach (var pc in rig.Pcs)
-        {
-            var (ok, detail) = ClassFolderClient.SetLesson(pc.Machine, rig.OtherMaster, ended, rig.AgentPort);
-            Assert.True(ok, detail);
-            pc.Follow();
-        }
-        return ended;
     }
 }
