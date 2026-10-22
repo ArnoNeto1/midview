@@ -35,6 +35,8 @@ public enum ClassFolderMode
 // the generation it keeps on file (ClassHomeFileMaster: the PC renamed), or its
 // name under another certificate (Midview reinstalled, or paired again).
 //
+// Another PC seen as the home is kept on file (ClassHomeFileMaster, Ruling 11).
+//
 // machines and isOnline are called from background threads, and Changed is
 // raised on them. Nothing an Agent does escapes as an exception.
 public sealed class ClassHomeTracker : IDisposable
@@ -107,6 +109,10 @@ public sealed class ClassHomeTracker : IDisposable
             var home = Choose(answers.ToList(), Home);
             var state = new State(home, home is not null && !IsThisPc(home) ? ClassFolderMode.Remote : ClassFolderMode.Local);
             changed = Interlocked.Exchange(ref _state, state) != state;
+            if (state.Mode == ClassFolderMode.Remote)
+            {
+                RememberOtherHome(home!);
+            }
         }
         finally
         {
@@ -167,6 +173,20 @@ public sealed class ClassHomeTracker : IDisposable
 
     private bool IsThisPc(ClassHome home) =>
         home.IsSamePc(_masterCertificate.Thumbprint, _machineName, ClassHomeFileMaster.Read(_homePath));
+
+    // Ruling 11: a PC that saw another one as the home doesn't become the home
+    // by starting a lesson (ClassFolderSync), only by taking the folders over.
+    private void RememberOtherHome(ClassHome home)
+    {
+        try
+        {
+            ClassHomeFileMaster.WriteLastOtherHome(SeenHome.Of(home), _homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log($"The class folders' home seen could not be saved: {ex.Message}");
+        }
+    }
 
     private void Ask(KnownMachine machine, ConcurrentQueue<ClassHome?> answers)
     {

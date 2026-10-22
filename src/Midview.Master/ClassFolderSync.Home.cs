@@ -112,7 +112,10 @@ public sealed partial class ClassFolderSync
     // (TakeOver) those that keep an older home: they were off when this PC took
     // the folders over. Null then. A PC with no generation on file goes by the
     // one the Agents recorded for it, and one that was never the home claims
-    // with now's; either is kept once an Agent took the claim.
+    // with now's; either is kept once an Agent took the claim. But a PC that
+    // was never the home and saw another one as the home (ClassHomeFileMaster,
+    // Ruling 11) is refused as if every Agent that answered still kept it: it
+    // becomes the home only by taking the folders over.
     private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>?> ClaimHomeAsync()
     {
         var saved = ClassHomeFileMaster.Read(_homePath) ?? _generation;
@@ -127,7 +130,15 @@ public sealed partial class ClassFolderSync
         var newer = others.Where(report => ours is not { } generation || report.Home!.Generation > generation).ToList();
         if (newer.Count > 0)
         {
+            RememberOtherHome(newer.MaxBy(report => report.Home!.Generation)!.Home!);
             return newer.Select(report => (report.Machine, false, report.Home!.RefusalText)).ToList();
+        }
+
+        // Ruling 11: never the home, but it saw another PC as the home: as if
+        // every Agent that answered still said so.
+        if (ours is null && ClassHomeFileMaster.ReadLastOtherHome(_homePath) is { } seen)
+        {
+            return reports.Select(report => (report.Machine, false, seen.RefusalText)).ToList();
         }
 
         var claimed = ours ?? new DateTimeOffset(_localNow()).UtcTicks;
@@ -148,6 +159,19 @@ public sealed partial class ClassFolderSync
 
     private bool IsThisPc(ClassHome home, long? generation) =>
         home.IsSamePc(_masterCertificate.Thumbprint, _machineName, generation);
+
+    // A start refused for another home has seen it (Ruling 11), as the tracker does.
+    private void RememberOtherHome(ClassHome home)
+    {
+        try
+        {
+            ClassHomeFileMaster.WriteLastOtherHome(SeenHome.Of(home), _homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"The class folders' home seen could not be saved: {ex.Message}");
+        }
+    }
 
     private void KeepGeneration(long generation)
     {

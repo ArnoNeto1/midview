@@ -68,6 +68,34 @@ public sealed class ClassHomeTrackerTests
         Assert.Equal(Older, tracker.Home.Generation);
         Assert.Equal(ClassFolderMode.Local, tracker.Mode);
         Assert.Equal(1, changes);
+        Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)); // this PC is no other home
+    }
+
+    // Ruling 11: the last other PC seen as the home is kept on file, next to this PC's generation.
+    [Fact]
+    public async Task AnotherPcSeenAsHome_IsKeptOnFile()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var tracker = NewTracker(rig);
+        await tracker.RefreshAsync();
+        Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)); // no home seen
+
+        foreach (var pc in rig.Pcs)
+        {
+            Claim(rig, pc, rig.OtherMaster, OtherPc);
+        }
+        await tracker.RefreshAsync();
+
+        Assert.Equal(new SeenHome(rig.OtherMaster.Thumbprint, OtherPc, Older), ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath));
+        Assert.Null(ClassHomeFileMaster.Read(rig.HomePath));
+
+        // Seen go away again (all off): still remembered.
+        foreach (var pc in rig.Pcs)
+        {
+            rig.Offline[pc.Name] = true;
+        }
+        await tracker.RefreshAsync();
+        Assert.Equal(OtherPc, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)?.Name);
     }
 
     // Two teacher PCs can share one teacher identity: the computer name tells them apart.
@@ -265,8 +293,45 @@ public sealed class ClassHomeTrackerTests
 
             File.WriteAllText(path, "{ isto não é");
             Assert.Null(ClassHomeFileMaster.Read(path));
+            Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(path));
             File.WriteAllText(path, "{\"Generation\":0}");
             Assert.Null(ClassHomeFileMaster.Read(path));
+            File.WriteAllText(path, "{\"LastOtherHome\":{\"Thumbprint\":\"xyz\",\"Name\":\"PROF-2\",\"Generation\":1}}");
+            Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(path));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheGenerationAndTheLastOtherHome_AreKeptTogether()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"midview-generation-{Guid.NewGuid():N}");
+        var path = Path.Combine(folder, "class-home.json");
+        var seen = new SeenHome(new string('B', 40), OtherPc, Older);
+        var later = seen with { Name = "PROF-3", Generation = Newer };
+        try
+        {
+            ClassHomeFileMaster.WriteLastOtherHome(seen, path);
+            Assert.Equal(seen, ClassHomeFileMaster.ReadLastOtherHome(path));
+            Assert.Null(ClassHomeFileMaster.Read(path));
+
+            ClassHomeFileMaster.Write(Newer, path);
+            Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
+            Assert.Equal(seen, ClassHomeFileMaster.ReadLastOtherHome(path));
+
+            ClassHomeFileMaster.WriteLastOtherHome(later, path);
+            Assert.Equal(later, ClassHomeFileMaster.ReadLastOtherHome(path));
+            Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
+
+            // The same home again: nothing written.
+            var longAgo = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(path, longAgo);
+            ClassHomeFileMaster.WriteLastOtherHome(later, path);
+            Assert.Equal(longAgo, File.GetLastWriteTimeUtc(path));
+            Assert.Equal("As pastas das turmas ficam no PC PROF-3", later.RefusalText);
         }
         finally
         {

@@ -72,6 +72,82 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(homes, rig.Pcs.Select(pc => pc.Agent.CurrentHome));
     }
 
+    // Ruling 11: B saw A as the home; with only Agents that keep no home on, B's start is
+    // still cancelled, naming A, and nothing is claimed: B becomes the home only by taking
+    // the folders over.
+    [Fact]
+    public async Task APcThatSawAnotherHome_DoesNotBecomeTheHomeByStarting()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc1 = rig.Pcs[0];
+        var (claimed, why, _) = ClassFolderClient.ClaimHome(
+            pc1.Machine, rig.Master, new ClassHomeClaim(ThisPc, ClassFolderRemote.Port, false, rig.NowTicks), rig.AgentPort);
+        Assert.True(claimed, why);
+        rig.Offline[rig.Pcs[1].Name] = true;
+        rig.Offline[rig.Pcs[2].Name] = true;
+        using (var tracker = OtherTracker(rig))
+        {
+            await tracker.RefreshAsync();
+            Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
+        }
+        rig.Offline.Clear();
+        rig.Offline[pc1.Name] = true;
+        var other = OtherSync(rig, sameCertificate: false);
+
+        var refused = await other.StartAsync("3º B");
+
+        Assert.Equal(new[] { "PC2", "PC3" }, refused.Select(result => result.Machine.Name).Order());
+        Assert.All(refused, result => Assert.Equal((false, ClassHomeClaim.OtherHomeText + ThisPc), (result.Ok, result.Detail)));
+        Assert.False(other.Lesson.IsOn);
+        Assert.Null(ClassHomeFileMaster.Read(OtherHomePath(rig)));
+        Assert.All(rig.Pcs.Skip(1), pc => Assert.Null(pc.Agent.CurrentHome));
+        Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+    }
+
+    // Ruling 11: a PC that never saw a home starts in a lab where no Agent keeps one.
+    [Fact]
+    public async Task AFreshPcThatSawNoHome_StartsInAnEmptyLab()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using (var tracker = OtherTracker(rig))
+        {
+            await tracker.RefreshAsync();
+            Assert.Null(tracker.Home);
+        }
+        var other = OtherSync(rig, sameCertificate: false);
+
+        var started = await other.StartAsync("3º B");
+
+        Assert.All(started, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
+        Assert.True(other.Lesson.IsOn);
+        Assert.Equal(rig.NowTicks, ClassHomeFileMaster.Read(OtherHomePath(rig)));
+        Assert.All(rig.Pcs, pc => Assert.Equal(OtherPc, pc.Agent.CurrentHome?.Name));
+    }
+
+    // A start cancelled for another home counts as having seen it.
+    [Fact]
+    public async Task ACancelledStart_RemembersTheHomeItWasRefusedFor()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc1 = rig.Pcs[0];
+        var (claimed, why, _) = ClassFolderClient.ClaimHome(
+            pc1.Machine, rig.Master, new ClassHomeClaim(ThisPc, ClassFolderRemote.Port, false, rig.NowTicks), rig.AgentPort);
+        Assert.True(claimed, why);
+        var other = OtherSync(rig, sameCertificate: false);
+
+        var refused = await other.StartAsync("3º B");
+
+        Assert.Equal(new[] { "PC1" }, refused.Select(result => result.Machine.Name));
+        Assert.Equal(new SeenHome(rig.Master.Thumbprint, ThisPc, rig.NowTicks), ClassHomeFileMaster.ReadLastOtherHome(OtherHomePath(rig)));
+
+        rig.Offline[pc1.Name] = true;
+        var again = await other.StartAsync("3º B");
+
+        Assert.Equal(2, again.Count);
+        Assert.False(other.Lesson.IsOn);
+        Assert.All(rig.Pcs.Skip(1), pc => Assert.Null(pc.Agent.CurrentHome));
+    }
+
     // Ruling 9: a PC took the folders over while only one PC was on. Once the others are
     // back, the old home's start sees the newer home on that one and cancels; the new
     // home's start brings the others over.
@@ -377,6 +453,11 @@ public sealed partial class ClassFolderSyncTests
         rig.NewSync(
             machineName: OtherPc, master: sameCertificate ? rig.Master : rig.OtherMaster,
             lessonPath: OtherLessonPath(rig), homePath: OtherHomePath(rig));
+
+    // The other teacher PC's tracker, with its own generation file.
+    private static ClassHomeTracker OtherTracker(ClassSyncRig rig) =>
+        new(rig.OtherMaster, OtherPc, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name),
+            TimeSpan.FromHours(1), rig.AgentPort, OtherHomePath(rig));
 
     // What the other teacher PC's claim does on that Agent.
     private static void ClaimFor(ClassSyncRig rig, StudentPc pc, string name, bool takeOver, long generation)
