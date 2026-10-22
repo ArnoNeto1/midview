@@ -19,18 +19,21 @@ public enum ClassFolderMode
     Remote,
 }
 
-// Which teacher PC keeps the class folders (plan decision 8): what the room's
-// online Agents say (MessageType.GetClassHome), asked every interval (30 s by
-// default) and whenever RefreshAsync is called (the window opening). An Agent
-// from before two teacher PCs, one that doesn't answer, or a machine whose
-// Agent identity the classroom list doesn't have, says nothing. The
-// home is the one most of the others report, an Agent with no home being a
-// vote for none, as it is when a start claims the home (ClassFolderSync); a tie
-// goes to the one of the newest answer. No answer at all is no home.
+// Which teacher PC keeps the class folders (plan decision 8, Ruling 9): what
+// the room's online Agents say (MessageType.GetClassHome), asked every
+// interval (30 s by default) and whenever RefreshAsync is called (the window
+// opening). An Agent from before two teacher PCs, one that doesn't answer, or
+// a machine whose Agent identity the classroom list doesn't have, says
+// nothing, and so does one that keeps no home. The home is the one reported
+// with the newest generation (ClassHome.Generation), however few Agents have
+// heard of it yet, as a start goes by it (ClassFolderSync); between PCs of the
+// same generation, the one most Agents report, and on a tie the one already
+// known. No home reported is no home.
 //
-// This PC is the home when the home has its certificate and computer name, or
-// its name under another certificate (Midview reinstalled, or paired again),
-// as the Agents themselves decide (ClassHomeState).
+// This PC is the home when it is the home's PC as the Agents themselves decide
+// (ClassHome.IsSamePc): its certificate and computer name, its certificate and
+// the generation it keeps on file (ClassHomeFileMaster: the PC renamed), or its
+// name under another certificate (Midview reinstalled, or paired again).
 //
 // machines and isOnline are called from background threads, and Changed is
 // raised on them. Nothing an Agent does escapes as an exception.
@@ -47,6 +50,7 @@ public sealed class ClassHomeTracker : IDisposable
     private readonly Func<KnownMachine, bool> _isOnline;
     private readonly TimeSpan _interval;
     private readonly int _agentPort;
+    private readonly string _homePath;
 
     // One refresh at a time, so the last one to finish is the newest.
     private readonly SemaphoreSlim _refreshing = new(1, 1);
@@ -56,10 +60,12 @@ public sealed class ClassHomeTracker : IDisposable
     private int _disposed;
 
     // machineName: this PC's computer name (Environment.MachineName), what its
-    // claims carry. Until the first refresh: no home, Local.
+    // claims carry. homePath: its generation as the home (ClassHomeFileMaster.
+    // Path). Until the first refresh: no home, Local.
     public ClassHomeTracker(
         X509Certificate2 masterCertificate, string machineName, Func<IReadOnlyList<KnownMachine>> machines,
-        Func<KnownMachine, bool> isOnline, TimeSpan? interval = null, int agentPort = ConnectionClient.AgentPort)
+        Func<KnownMachine, bool> isOnline, TimeSpan? interval = null, int agentPort = ConnectionClient.AgentPort,
+        string? homePath = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(machineName);
         if (interval <= TimeSpan.Zero)
@@ -73,6 +79,7 @@ public sealed class ClassHomeTracker : IDisposable
         _isOnline = isOnline;
         _interval = interval ?? DefaultInterval;
         _agentPort = agentPort;
+        _homePath = homePath ?? ClassHomeFileMaster.Path;
         _loop = Task.Run(LoopAsync);
     }
 
@@ -84,9 +91,11 @@ public sealed class ClassHomeTracker : IDisposable
 
     public ClassFolderMode Mode => Volatile.Read(ref _state).Mode;
 
-    // Asks every online Agent at once and goes by what they answer.
+    // Asks every online Agent at once and goes by what they answer. Changed is
+    // raised once the refresh is over, so a handler may refresh again.
     public async Task RefreshAsync()
     {
+        bool changed;
         await _refreshing.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -95,17 +104,18 @@ public sealed class ClassHomeTracker : IDisposable
             var online = Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
             await Task.WhenAll(online.Select(machine => Task.Run(() => Ask(machine, answers)))).ConfigureAwait(false);
 
-            var home = Choose(answers.ToList());
+            var home = Choose(answers.ToList(), Home);
             var state = new State(home, home is not null && !IsThisPc(home) ? ClassFolderMode.Remote : ClassFolderMode.Local);
-            var before = Interlocked.Exchange(ref _state, state);
-            if (before != state)
-            {
-                RaiseChanged();
-            }
+            changed = Interlocked.Exchange(ref _state, state) != state;
         }
         finally
         {
             _refreshing.Release();
+        }
+
+        if (changed)
+        {
+            RaiseChanged();
         }
     }
 
@@ -127,30 +137,36 @@ public sealed class ClassHomeTracker : IDisposable
         }
     }
 
-    // The home most answers name (an answer of none counts too); a tie goes
-    // to the group with the newest answer, and the home is told as its newest
-    // answer has it (the address a claim refreshed last, most likely).
-    // answers: in the order they arrived.
-    internal static ClassHome? Choose(IReadOnlyList<ClassHome?> answers)
+    // The home of the newest generation the answers name (none: no home);
+    // between PCs of that generation, the one most answers name, then current
+    // (the home known so far), then the one of the newest answer. It is told as
+    // its newest answer has it (the address a claim refreshed last, most
+    // likely). answers: in the order they arrived.
+    internal static ClassHome? Choose(IReadOnlyList<ClassHome?> answers, ClassHome? current)
     {
-        if (answers.Count == 0)
+        var homes = answers.OfType<ClassHome>().Select((home, order) => (Home: home, Order: order)).ToList();
+        if (homes.Count == 0)
         {
             return null;
         }
 
-        var winner = answers
-            .Select((home, order) => (Home: home, Order: order))
-            .GroupBy(answer => answer.Home is null ? null : IdentityOf(answer.Home))
-            .MaxBy(group => (group.Count(), group.Max(answer => answer.Order)))!;
+        var newest = homes.Max(answer => answer.Home.Generation);
+        var groups = homes.Where(answer => answer.Home.Generation == newest).GroupBy(answer => KeyOf(answer.Home)).ToList();
+        var most = groups.Max(group => group.Count());
+        var tied = groups.Where(group => group.Count() == most).ToList();
+        var winner = tied.Count == 1
+            ? tied[0]
+            : tied.FirstOrDefault(group => current is not null && group.Key == KeyOf(current))
+              ?? tied.MaxBy(group => group.Max(answer => answer.Order))!;
         return winner.MaxBy(answer => answer.Order).Home;
     }
 
-    private static string? IdentityOf(ClassHome home) =>
-        home.Thumbprint.ToUpperInvariant() + "\n" + home.Name.ToUpperInvariant();
+    // One PC as its Agents record it.
+    private static string KeyOf(ClassHome home) =>
+        $"{home.Thumbprint.ToUpperInvariant()}\n{home.Name.ToUpperInvariant()}\n{home.Generation}";
 
     private bool IsThisPc(ClassHome home) =>
-        home.IsSameIdentity(_masterCertificate.Thumbprint, _machineName)
-        || (home.Name.Length > 0 && string.Equals(home.Name, _machineName, StringComparison.OrdinalIgnoreCase));
+        home.IsSamePc(_masterCertificate.Thumbprint, _machineName, ClassHomeFileMaster.Read(_homePath));
 
     private void Ask(KnownMachine machine, ConcurrentQueue<ClassHome?> answers)
     {

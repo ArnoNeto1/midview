@@ -83,6 +83,7 @@ public sealed partial class ClassFolderSync : IDisposable
     private readonly int _homePort;
     private readonly TimeSpan _interval;
     private readonly string _lessonPath;
+    private readonly string _homePath;
     private readonly Action<string> _log;
 
     // One start or end at a time.
@@ -113,13 +114,14 @@ public sealed partial class ClassFolderSync : IDisposable
     // listens for a colleague's PC (ClassFolderRemote.Port). interval: between
     // two listings of a PC (DefaultInterval). lessonPath: the lesson's file
     // (ClassLessonFileMaster.Path). log: what went wrong that no status says, in
-    // English, by default to System.Diagnostics.Trace.
+    // English, by default to System.Diagnostics.Trace. homePath: this PC's
+    // generation as the home (ClassHomeFileMaster.Path).
     public ClassFolderSync(
         ClassStore store, X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> machines,
         Func<KnownMachine, bool> isOnline, Func<DateTime> localNow, string machineName,
         int agentPort = ConnectionClient.AgentPort, int sessionPort = ConnectionClient.SessionPort,
         int homePort = ClassFolderRemote.Port, TimeSpan? interval = null, string? lessonPath = null,
-        Action<string>? log = null)
+        Action<string>? log = null, string? homePath = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(machineName);
         if (machineName.Length > ClassHome.MaxNameLength)
@@ -142,6 +144,7 @@ public sealed partial class ClassFolderSync : IDisposable
         _homePort = homePort;
         _interval = interval ?? DefaultInterval;
         _lessonPath = lessonPath ?? ClassLessonFileMaster.Path;
+        _homePath = homePath ?? ClassHomeFileMaster.Path;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderSync: " + message));
 
         _lesson = ClassLessonFileMaster.Read(_lessonPath) ?? ClassLesson.None(0);
@@ -191,9 +194,10 @@ public sealed partial class ClassFolderSync : IDisposable
     // what was never seen. Throws ArgumentException for a class that isn't there.
     //
     // Before anything, this PC claims the class folders' home on every online
-    // Agent (ClaimHomeAsync). When most of the room keeps another PC as home,
-    // nothing starts: nothing is saved or sent, and the answer is those Agents'
-    // refusals, each naming that PC.
+    // Agent (ClaimHomeAsync). When an Agent keeps another PC as home with a
+    // newer generation, nothing starts: nothing is saved or sent, and the
+    // answer is those Agents' refusals, each naming that PC (the lesson stays
+    // as it was: the caller looks at Lesson).
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> StartAsync(string turma)
     {
         if (!_store.Exists(turma))
@@ -306,8 +310,23 @@ public sealed partial class ClassFolderSync : IDisposable
 
     private long NextSavedAt()
     {
-        var last = Lesson.SavedAt;
+        var last = Math.Max(Lesson.SavedAt, Interlocked.Read(ref _savedAtFloor));
         return last == long.MaxValue ? long.MaxValue : Math.Max(UnixNow(), last + 1);
+    }
+
+    // A lesson cleared to ClassLesson.None(0) (StandDownAsync) still had a
+    // SavedAt: the next lesson is newer than it, even in the same second.
+    private long _savedAtFloor;
+
+    private void RaiseSavedAtFloor(long savedAt)
+    {
+        for (var floor = Interlocked.Read(ref _savedAtFloor); savedAt > floor; floor = Interlocked.Read(ref _savedAtFloor))
+        {
+            if (Interlocked.CompareExchange(ref _savedAtFloor, savedAt, floor) == floor)
+            {
+                return;
+            }
+        }
     }
 
     // Saved (a failure is only logged: the lesson goes on in memory), made the

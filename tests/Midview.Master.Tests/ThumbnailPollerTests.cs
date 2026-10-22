@@ -333,6 +333,33 @@ public class ThumbnailPollerTests
         Assert.Equal(new[] { 1000L, 1001L }, agent.LessonsReceived);
     }
 
+    // No lesson at all (a Master that stood down, Ruling 10) is never handed over, however
+    // it is saved: an Agent would take it for a newer end of the lesson it follows.
+    [Fact]
+    public async Task NoLesson_IsNeverHandedOver()
+    {
+        using var session = new LoopbackSession();
+        using var agentCertificate = SelfSignedCertificate.Create("agent-under-test");
+        var agentPort = FreePort();
+        var lesson = ClassLesson.None(5000);
+        using var agent = new FakeAgent(
+            session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "aula encerrada")),
+            agentPort, agentCertificate);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agentCertificate.Thumbprint }, session.MasterCertificate, session.Port,
+            agentPort, agentRetryInterval: TimeSpan.Zero, classLesson: () => lesson);
+        var thumbnails = 0;
+        poller.ThumbnailReceived += _ => Interlocked.Increment(ref thumbnails);
+
+        poller.Start();
+        await WaitUntil(() => Volatile.Read(ref thumbnails) >= 2);
+        Assert.Empty(agent.LessonsReceived);
+
+        lesson = new ClassLesson(5001, Guid.NewGuid(), "3º A", 1, Ended: false);
+        await WaitUntil(() => agent.LessonsReceived.Length > 0);
+        Assert.Equal(new[] { 5001L }, agent.LessonsReceived);
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow + 6 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);

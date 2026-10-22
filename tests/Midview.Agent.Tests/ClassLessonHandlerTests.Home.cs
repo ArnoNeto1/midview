@@ -10,8 +10,8 @@ public sealed partial class ClassLessonHandlerTests
     private const string HomePc = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private const string OtherPc = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
-    private static ClassHomeClaim ClaimOf(string name, bool takeOver = false) =>
-        new(name, ClassFolderRemote.Port, takeOver);
+    private static ClassHomeClaim ClaimOf(string name, bool takeOver = false, long generation = 100) =>
+        new(name, ClassFolderRemote.Port, takeOver, generation);
 
     private (ClassLessonHandler Handler, ClassHomeState Home) HandlerWithHomeClaimedBy(string thumbprint, string name)
     {
@@ -104,7 +104,7 @@ public sealed partial class ClassLessonHandlerTests
 
         Assert.True(ok);
         Assert.Equal("aula do 3º A", detail);
-        Assert.Equal(new ClassHome(HomePc, "", "10.0.0.5", ClassFolderRemote.Port), handler.CurrentHome);
+        Assert.Equal(new ClassHome(HomePc, "", "10.0.0.5", ClassFolderRemote.Port, 0), handler.CurrentHome);
 
         var (otherOk, otherDetail) = handler.Handle(Lesson("3º B", 200).Encode(), OtherPc, "10.0.0.7");
 
@@ -139,7 +139,7 @@ public sealed partial class ClassLessonHandlerTests
 
         Assert.True(ok);
         Assert.Equal("este PC guarda as pastas", detail);
-        Assert.Equal(new ClassHome(OtherPc, "PROF-1", "10.0.0.8", ClassFolderRemote.Port), home.Current);
+        Assert.Equal(new ClassHome(OtherPc, "PROF-1", "10.0.0.8", ClassFolderRemote.Port, 100), home.Current);
         Assert.True(started);
         Assert.False(oldCertificate);
         Assert.Equal("As pastas das turmas ficam no PC PROF-1", oldDetail);
@@ -165,13 +165,13 @@ public sealed partial class ClassLessonHandlerTests
         var lesson = Lesson("3º A", 100);
         handler.Handle(lesson.Encode(), HomePc, "10.0.0.5");
 
-        var during = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true));
+        var during = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: 200));
         handler.Handle((lesson with { SavedAt = 101, Ended = true }).Encode(), OtherPc, "10.0.0.7");
-        var after = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true));
+        var after = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: 200));
 
         Assert.Equal((false, "Encerre a aula antes de passar as pastas."), during);
         Assert.Equal((true, "as pastas passaram para este PC"), after);
-        Assert.Equal(new ClassHome(OtherPc, "PROF-2", "10.0.0.7", ClassFolderRemote.Port), home.Current);
+        Assert.Equal(new ClassHome(OtherPc, "PROF-2", "10.0.0.7", ClassFolderRemote.Port, 200), home.Current);
     }
 
     [Fact]

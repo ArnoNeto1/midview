@@ -73,6 +73,12 @@ internal sealed class ClassSyncRig : IDisposable
 
     public string LessonPath => Path.Combine(Root, "dados", "class-lesson.json");
 
+    // The teacher PC's generation as the class folders' home (ClassHomeFileMaster).
+    public string HomePath => Path.Combine(Root, "dados", "class-home.json");
+
+    // Now on the teacher's clock, as a generation (UTC ticks).
+    public long NowTicks => new DateTimeOffset(Now).UtcTicks;
+
     public int SessionPort { get; }
 
     public int AgentPort { get; }
@@ -85,15 +91,17 @@ internal sealed class ClassSyncRig : IDisposable
     public IReadOnlyList<KnownMachine> Machines => Pcs.Select(pc => pc.Machine).ToList();
 
     // An hour between rounds by default, so only the test runs them. By default
-    // the teacher PC is Master, MachineName, with the lesson at LessonPath;
-    // another teacher PC of the lab has its own name and lesson file.
+    // the teacher PC is Master, MachineName, with the lesson at LessonPath and
+    // its generation at HomePath; another teacher PC of the lab has its own
+    // name and files.
     public ClassFolderSync NewSync(
-        TimeSpan? interval = null, string machineName = MachineName, X509Certificate2? master = null, string? lessonPath = null)
+        TimeSpan? interval = null, string machineName = MachineName, X509Certificate2? master = null, string? lessonPath = null,
+        string? homePath = null)
     {
         var sync = new ClassFolderSync(
             Store, master ?? Master, () => Machines, machine => !Offline.ContainsKey(machine.Name), () => Now, machineName,
             agentPort: AgentPort, sessionPort: SessionPort, interval: interval ?? TimeSpan.FromHours(1),
-            lessonPath: lessonPath ?? LessonPath);
+            lessonPath: lessonPath ?? LessonPath, homePath: homePath ?? HomePath);
         _syncs.Add(sync);
         return sync;
     }
@@ -265,6 +273,13 @@ internal sealed class StudentPc : IDisposable
 
     // What the Session does every few seconds: follow the lesson, setting a finished one's files aside.
     public void Follow() => Folder.Follow(null);
+
+    // The Agent stops answering (its service stopped, say): connections to it are refused.
+    public void StopAgent()
+    {
+        _stopAgent.Cancel();
+        _agentListener.Stop();
+    }
 
     // The Agent makes the lesson's folder on the student's Desktop; here, the Session's view of the lesson does.
     private ClassLesson? SessionLesson()

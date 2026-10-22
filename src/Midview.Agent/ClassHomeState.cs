@@ -15,9 +15,12 @@ namespace Midview.Agent;
 // and the computer name (from the claim): two teacher PCs can share one
 // certificate. The home's own name with another certificate is still the
 // home (Midview reinstalled or paired again, or another Windows account on
-// that PC: each has its own teacher identity). The address is where the
-// connection came from, refreshed by every claim from the home, so a home
-// whose address changed is found again.
+// that PC: each has its own teacher identity), and so is its certificate with
+// its generation under a new name (the PC renamed). The generation (ClassHome.
+// Generation) is when that PC became the home: another PC takes the folders
+// over only with a newer one. The address is where the connection came from,
+// refreshed by every claim from the home, so a home whose address changed is
+// found again.
 //
 // Kept in %ProgramData%\Midview\class-home.json, replaced whole so a crash
 // never leaves half of it; a corrupt file is set aside and means no home.
@@ -31,7 +34,7 @@ public sealed class ClassHomeState
 
     // In a refusal, for a home recorded with no name (a Master that sent no
     // claim): "As pastas das turmas ficam no PC de outro professor".
-    public const string UnnamedHomeText = "de outro professor";
+    public const string UnnamedHomeText = ClassHome.UnnamedText;
 
     private readonly string _statePath;
     private readonly Action<string> _log;
@@ -53,9 +56,17 @@ public sealed class ClassHomeState
     // senderThumbprint: the TLS channel's; senderAddress: the connection's.
     // lessonOn: whether this machine follows a lesson now (a TakeOver waits
     // for its end).
+    //
+    // The home's own PC (ClassHome.IsSamePc: its identity, its certificate and
+    // generation under a new name, or its name under a new certificate)
+    // refreshes what is recorded and keeps the newer generation. Another PC is
+    // refused, naming the home, unless it takes the folders over with a newer
+    // generation than the home's (plan Ruling 9: an old home can't undo a
+    // takeover) and no lesson is on.
     public (bool Ok, string Detail) Claim(string senderThumbprint, string senderAddress, ClassHomeClaim claim, bool lessonOn)
     {
-        if (!IsSender(senderThumbprint, senderAddress) || claim.Name.Length == 0 || !IsUsable(claim.Name, claim.Port))
+        if (!IsSender(senderThumbprint, senderAddress) || claim.Name.Length == 0 || !IsUsable(claim.Name, claim.Port)
+            || claim.Generation <= 0)
         {
             return (false, "pedido inválido");
         }
@@ -67,19 +78,21 @@ public sealed class ClassHomeState
             string detail;
             if (home is null)
             {
-                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port);
+                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port, claim.Generation);
                 detail = HomeIsHereText;
             }
-            else if (IsSamePc(home, senderThumbprint, claim.Name))
+            else if (home.IsSamePc(senderThumbprint, claim.Name, claim.Generation))
             {
-                // The name a Master with no claim left empty is filled in.
+                // The name a Master with no claim left empty is filled in, and a
+                // renamed PC's new name taken; the same name in other letters stays.
+                var name = string.Equals(home.Name, claim.Name, StringComparison.OrdinalIgnoreCase) ? home.Name : claim.Name;
                 claimed = new ClassHome(
-                    Normalize(senderThumbprint), home.Name.Length > 0 ? home.Name : claim.Name, senderAddress, claim.Port);
+                    Normalize(senderThumbprint), name, senderAddress, claim.Port, Math.Max(home.Generation, claim.Generation));
                 detail = HomeIsHereText;
             }
-            else if (!claim.TakeOver)
+            else if (!claim.TakeOver || claim.Generation <= home.Generation)
             {
-                return (false, OtherHomeDetail(home));
+                return (false, home.RefusalText);
             }
             else if (lessonOn)
             {
@@ -87,7 +100,7 @@ public sealed class ClassHomeState
             }
             else
             {
-                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port);
+                claimed = new ClassHome(Normalize(senderThumbprint), claim.Name, senderAddress, claim.Port, claim.Generation);
                 detail = MovedHereText;
             }
 
@@ -129,23 +142,10 @@ public sealed class ClassHomeState
             {
                 return true;
             }
-            refusal = OtherHomeDetail(home);
+            refusal = home.RefusalText;
             return false;
         }
     }
-
-    // What an Agent answers a claim, or a lesson start, from a PC that isn't
-    // the home. Starts with ClassHomeClaim.OtherHomeText, which the Master
-    // looks for.
-    private static string OtherHomeDetail(ClassHome home) =>
-        ClassHomeClaim.OtherHomeText + (home.Name.Length > 0 ? home.Name : UnnamedHomeText);
-
-    // The home's own PC: its certificate and name (a home recorded with no
-    // name is any PC with that certificate), or its name with another
-    // certificate.
-    private static bool IsSamePc(ClassHome home, string thumbprint, string name) =>
-        home.IsSameIdentity(thumbprint, name)
-        || (home.Name.Length > 0 && string.Equals(home.Name, name, StringComparison.OrdinalIgnoreCase));
 
     // Kept for this run even if it can't be saved, so the rest of today's
     // lessons go by it. Under _gate, with no home.
@@ -156,7 +156,7 @@ public sealed class ClassHomeState
             return;
         }
 
-        var starter = new ClassHome(Normalize(senderThumbprint), "", senderAddress, ClassFolderRemote.Port);
+        var starter = new ClassHome(Normalize(senderThumbprint), "", senderAddress, ClassFolderRemote.Port, 0);
         try
         {
             Save(starter);
@@ -180,7 +180,7 @@ public sealed class ClassHomeState
         var tempPath = _statePath + ".tmp";
         using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
         {
-            JsonSerializer.Serialize(stream, new StoredHome(home.Thumbprint, home.Name, home.Address, home.Port));
+            JsonSerializer.Serialize(stream, new StoredHome(home.Thumbprint, home.Name, home.Address, home.Port, home.Generation));
             stream.Flush(flushToDisk: true);
         }
         File.Move(tempPath, _statePath, overwrite: true);
@@ -226,9 +226,10 @@ public sealed class ClassHomeState
 
         if (stored is not null
             && IsSender(stored.Thumbprint, stored.Address)
-            && IsUsable(stored.Name, stored.Port))
+            && IsUsable(stored.Name, stored.Port)
+            && stored.Generation >= 0)
         {
-            return new ClassHome(Normalize(stored.Thumbprint), stored.Name, stored.Address, stored.Port);
+            return new ClassHome(Normalize(stored.Thumbprint), stored.Name, stored.Address, stored.Port, stored.Generation);
         }
 
         _log("The class folders' home file is corrupt, following none; it is kept aside as .corrupt.");
@@ -243,5 +244,6 @@ public sealed class ClassHomeState
         return null;
     }
 
-    private sealed record StoredHome(string Thumbprint, string Name, string Address, int Port);
+    // Generation: 0 in a file written before it (a home with no claim's generation).
+    private sealed record StoredHome(string Thumbprint, string Name, string Address, int Port, long Generation);
 }

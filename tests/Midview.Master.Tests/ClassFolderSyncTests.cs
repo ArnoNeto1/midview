@@ -274,7 +274,8 @@ public sealed partial class ClassFolderSyncTests
         var machine = new KnownMachine("PC-antigo", "127.0.0.1", old.Thumbprint, null);
         using var sync = new ClassFolderSync(
             rig.Store, rig.Master, () => new[] { machine }, _ => true, () => rig.Now, ClassSyncRig.MachineName,
-            agentPort: rig.AgentPort, sessionPort: old.Port, interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath);
+            agentPort: rig.AgentPort, sessionPort: old.Port,
+            interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath, homePath: rig.HomePath);
         var statuses = ClassSyncRig.Watch(sync);
 
         var started = await sync.StartAsync(Turma);
@@ -417,7 +418,8 @@ public sealed partial class ClassFolderSyncTests
         var machine = new KnownMachine("PC-cortado", "127.0.0.1", cut.Thumbprint, null);
         using var sync = new ClassFolderSync(
             rig.Store, rig.Master, () => new[] { machine }, _ => true, () => rig.Now, ClassSyncRig.MachineName,
-            agentPort: rig.AgentPort, sessionPort: cut.Port, interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath);
+            agentPort: rig.AgentPort, sessionPort: cut.Port,
+            interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath, homePath: rig.HomePath);
         var seen = new System.Collections.Concurrent.ConcurrentQueue<PcStatus>();
         sync.StatusChanged += seen.Enqueue;
 

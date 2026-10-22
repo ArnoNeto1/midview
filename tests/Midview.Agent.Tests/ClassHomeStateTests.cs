@@ -8,6 +8,10 @@ public sealed class ClassHomeStateTests : IDisposable
     private const string Home = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private const string Other = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 
+    // When the home PC became the home (ClassHome.Generation); a takeover needs a newer one.
+    private const long Generation = 100;
+    private const long Newer = 200;
+
     private readonly string _statePath = Path.Combine(Path.GetTempPath(), $"midview-home-{Guid.NewGuid():N}.json");
     private readonly List<string> _log = new();
 
@@ -21,8 +25,11 @@ public sealed class ClassHomeStateTests : IDisposable
 
     private ClassHomeState Create() => new(_statePath, _log.Add);
 
-    private static ClassHomeClaim ClaimOf(string name, bool takeOver = false) =>
-        new(name, ClassFolderRemote.Port, takeOver);
+    private static ClassHomeClaim ClaimOf(string name, bool takeOver = false, long generation = Generation) =>
+        new(name, ClassFolderRemote.Port, takeOver, generation);
+
+    private static ClassHome HomeOf(string thumbprint, string name, string address, long generation = Generation) =>
+        new(thumbprint, name, address, ClassFolderRemote.Port, generation);
 
     private static bool TryStart(ClassHomeState state, string thumbprint, string address = "10.0.0.9") =>
         state.TryStart(thumbprint, address, out _);
@@ -37,7 +44,7 @@ public sealed class ClassHomeStateTests : IDisposable
     }
 
     [Fact]
-    public void FirstClaim_RecordsTheClaimer_AndKeepsIt()
+    public void FirstClaim_RecordsTheClaimer_WithItsGeneration_AndKeepsIt()
     {
         var state = Create();
 
@@ -45,7 +52,7 @@ public sealed class ClassHomeStateTests : IDisposable
 
         Assert.True(ok);
         Assert.Equal("este PC guarda as pastas", detail);
-        var expected = new ClassHome(Home, "PROF-1", "10.0.0.5", ClassFolderRemote.Port);
+        var expected = HomeOf(Home, "PROF-1", "10.0.0.5");
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
         Assert.True(TryStart(state, Home));
@@ -62,13 +69,27 @@ public sealed class ClassHomeStateTests : IDisposable
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
 
         var (ok, detail) = state.Claim(
-            Home.ToLowerInvariant(), "10.0.0.9", new ClassHomeClaim("prof-1", 28904, false), lessonOn: true);
+            Home.ToLowerInvariant(), "10.0.0.9", new ClassHomeClaim("prof-1", 28904, false, Generation), lessonOn: true);
 
         Assert.True(ok);
         Assert.Equal("este PC guarda as pastas", detail);
-        var expected = new ClassHome(Home, "PROF-1", "10.0.0.9", 28904);
+        var expected = new ClassHome(Home, "PROF-1", "10.0.0.9", 28904, Generation);
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
+    }
+
+    [Fact]
+    public void ClaimBySamePc_KeepsTheNewerGeneration()
+    {
+        var state = Create();
+        state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
+
+        Assert.True(state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", generation: Generation - 50), lessonOn: false).Ok);
+        Assert.Equal(Generation, state.Current!.Generation);
+
+        Assert.True(state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", generation: Newer), lessonOn: false).Ok);
+        Assert.Equal(Newer, state.Current!.Generation);
+        Assert.Equal(Newer, Create().Current!.Generation);
     }
 
     [Fact]
@@ -96,15 +117,31 @@ public sealed class ClassHomeStateTests : IDisposable
         var state = Create();
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
 
-        var (ok, detail) = state.Claim(Other, "10.0.0.6", ClaimOf("prof-1"), lessonOn: true);
+        var (ok, detail) = state.Claim(Other, "10.0.0.6", ClaimOf("prof-1", generation: Newer), lessonOn: true);
 
         Assert.True(ok);
         Assert.Equal("este PC guarda as pastas", detail);
-        var expected = new ClassHome(Other, "PROF-1", "10.0.0.6", ClassFolderRemote.Port);
+        var expected = HomeOf(Other, "PROF-1", "10.0.0.6", Newer);
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
         Assert.True(TryStart(state, Other));
         Assert.False(TryStart(state, Home));
+    }
+
+    // Ruling 9: the home PC renamed keeps its certificate and its generation.
+    [Fact]
+    public void SameThumbprintAndGeneration_UnderANewName_IsTheHomeRenamed()
+    {
+        var state = Create();
+        state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
+
+        var (ok, detail) = state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1-NOVO"), lessonOn: true);
+
+        Assert.True(ok);
+        Assert.Equal("este PC guarda as pastas", detail);
+        var expected = HomeOf(Home, "PROF-1-NOVO", "10.0.0.5");
+        Assert.Equal(expected, state.Current);
+        Assert.Equal(expected, Create().Current);
     }
 
     [Fact]
@@ -114,30 +151,49 @@ public sealed class ClassHomeStateTests : IDisposable
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
         var before = File.ReadAllBytes(_statePath);
 
-        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2"), lessonOn: false);
+        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", generation: Newer), lessonOn: false);
 
         Assert.False(ok);
         Assert.Equal("As pastas das turmas ficam no PC PROF-1", detail);
         Assert.StartsWith(ClassHomeClaim.OtherHomeText, detail);
-        Assert.Equal(new ClassHome(Home, "PROF-1", "10.0.0.5", ClassFolderRemote.Port), state.Current);
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5"), state.Current);
         Assert.Equal(before, File.ReadAllBytes(_statePath));
     }
 
     [Fact]
-    public void TakeOver_ReplacesTheHome()
+    public void TakeOver_WithANewerGeneration_ReplacesTheHome()
     {
         var state = Create();
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
 
-        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true), lessonOn: false);
+        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: Newer), lessonOn: false);
 
         Assert.True(ok);
         Assert.Equal("as pastas passaram para este PC", detail);
-        var expected = new ClassHome(Other, "PROF-2", "10.0.0.7", ClassFolderRemote.Port);
+        var expected = HomeOf(Other, "PROF-2", "10.0.0.7", Newer);
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
         Assert.False(TryStart(state, Home));
         Assert.True(TryStart(state, Other));
+    }
+
+    // Ruling 9: an older home (the one the folders were taken from) can't take them back by itself.
+    [Theory]
+    [InlineData(Generation)]
+    [InlineData(Generation - 1)]
+    public void TakeOver_WithoutANewerGeneration_IsRefused_NamingTheHome(long generation)
+    {
+        var state = Create();
+        state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
+        var before = File.ReadAllBytes(_statePath);
+
+        var free = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: generation), lessonOn: false);
+        var during = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: generation), lessonOn: true);
+
+        Assert.Equal((false, "As pastas das turmas ficam no PC PROF-1"), free);
+        Assert.Equal((false, "As pastas das turmas ficam no PC PROF-1"), during);
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5"), state.Current);
+        Assert.Equal(before, File.ReadAllBytes(_statePath));
     }
 
     // Plan decision 7: the folders move only while no lesson is on.
@@ -147,37 +203,37 @@ public sealed class ClassHomeStateTests : IDisposable
         var state = Create();
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
 
-        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true), lessonOn: true);
+        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: Newer), lessonOn: true);
 
         Assert.False(ok);
         Assert.Equal("Encerre a aula antes de passar as pastas.", detail);
-        Assert.Equal(new ClassHome(Home, "PROF-1", "10.0.0.5", ClassFolderRemote.Port), state.Current);
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5"), state.Current);
     }
 
     // Review Focus 1: two teacher PCs share one teacher identity (one
     // certificate); only the claimed name is the home.
     [Fact]
-    public void SameThumbprint_OtherName_IsRefused()
+    public void SameThumbprint_OtherNameAndGeneration_IsRefused()
     {
         var state = Create();
         state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false);
 
-        var (ok, detail) = state.Claim(Home, "10.0.0.7", ClaimOf("PROF-2"), lessonOn: false);
+        var (ok, detail) = state.Claim(Home, "10.0.0.7", ClaimOf("PROF-2", generation: Newer), lessonOn: false);
 
         Assert.False(ok);
         Assert.Equal("As pastas das turmas ficam no PC PROF-1", detail);
-        Assert.Equal(new ClassHome(Home, "PROF-1", "10.0.0.5", ClassFolderRemote.Port), state.Current);
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5"), state.Current);
     }
 
     [Fact]
-    public void NoHome_TryStart_RecordsTheStarterWithNoName()
+    public void NoHome_TryStart_RecordsTheStarterWithNoNameAndNoGeneration()
     {
         var state = Create();
 
         Assert.True(state.TryStart(Home, "10.0.0.5", out var refusal));
 
         Assert.Equal("", refusal);
-        var expected = new ClassHome(Home, "", "10.0.0.5", ClassFolderRemote.Port);
+        var expected = HomeOf(Home, "", "10.0.0.5", generation: 0);
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
     }
@@ -192,13 +248,13 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.True(state.TryStart(Home, "10.0.0.8", out _));
 
         Assert.Equal("As pastas das turmas ficam no PC PROF-1", refusal);
-        Assert.Equal(new ClassHome(Home, "PROF-1", "10.0.0.5", ClassFolderRemote.Port), state.Current);
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5"), state.Current);
     }
 
     // Decision 4: a Master from part 1 (no claim) started a lesson; its next
     // claim, as a part 2 Master with the same certificate, names the home.
     [Fact]
-    public void RecordedWithNoName_TheNextSameThumbprintClaim_FillsTheName()
+    public void RecordedWithNoName_TheNextSameThumbprintClaim_FillsTheNameAndGeneration()
     {
         var state = Create();
         state.TryStart(Home, "10.0.0.5", out _);
@@ -207,7 +263,7 @@ public sealed class ClassHomeStateTests : IDisposable
 
         Assert.True(ok);
         Assert.Equal("este PC guarda as pastas", detail);
-        var expected = new ClassHome(Home, "PROF-1", "10.0.0.6", ClassFolderRemote.Port);
+        var expected = HomeOf(Home, "PROF-1", "10.0.0.6");
         Assert.Equal(expected, state.Current);
         Assert.Equal(expected, Create().Current);
     }
@@ -227,6 +283,20 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.Equal(detail, refusal);
     }
 
+    // Any claim's generation is newer than a home recorded with none.
+    [Fact]
+    public void RecordedWithNoName_ATakeOverByAnotherPc_IsTaken()
+    {
+        var state = Create();
+        state.TryStart(Home, "10.0.0.5", out _);
+
+        var (ok, detail) = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true), lessonOn: false);
+
+        Assert.True(ok);
+        Assert.Equal("as pastas passaram para este PC", detail);
+        Assert.Equal(HomeOf(Other, "PROF-2", "10.0.0.7"), state.Current);
+    }
+
     [Fact]
     public void ASenderOrClaimThatIsntOne_IsRefused_AndNothingRecorded()
     {
@@ -235,6 +305,7 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.Equal((false, "pedido inválido"), state.Claim("", "10.0.0.5", ClaimOf("PROF-1"), lessonOn: false));
         Assert.Equal((false, "pedido inválido"), state.Claim(Home, "não é endereço", ClaimOf("PROF-1"), lessonOn: false));
         Assert.Equal((false, "pedido inválido"), state.Claim(Home, "10.0.0.5", ClaimOf(""), lessonOn: false));
+        Assert.Equal((false, "pedido inválido"), state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", generation: 0), lessonOn: false));
         // With no home anyone may start, but a sender with no identity isn't recorded.
         Assert.True(state.TryStart("", "10.0.0.5", out _));
         Assert.True(state.TryStart(Home, "", out _));
@@ -255,15 +326,25 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.False(File.Exists(_statePath));
     }
 
-    [Fact]
-    public void WellFormedJson_WithABadThumbprint_IsCorrupt()
+    [Theory]
+    [InlineData("{\"Thumbprint\":\"xyz\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903,\"Generation\":1}")]
+    [InlineData("{\"Thumbprint\":\"" + Home + "\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903,\"Generation\":-1}")]
+    public void WellFormedJson_ThatIsntAHome_IsCorrupt(string json)
     {
-        File.WriteAllText(_statePath, "{\"Thumbprint\":\"xyz\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903}");
+        File.WriteAllText(_statePath, json);
 
         var state = Create();
 
         Assert.Null(state.Current);
         Assert.True(File.Exists(_statePath + ".corrupt"));
+    }
+
+    [Fact]
+    public void AFileWithNoGeneration_IsAHomeWithNone()
+    {
+        File.WriteAllText(_statePath, "{\"Thumbprint\":\"" + Home + "\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903}");
+
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5", generation: 0), Create().Current);
     }
 
     [Fact]

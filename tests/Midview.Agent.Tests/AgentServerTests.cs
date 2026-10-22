@@ -216,16 +216,16 @@ public class AgentServerTests
         try
         {
             var answers = await ExchangeWithAgentAs(masterCert, LessonHandler(lessonPath, new ClassHomeState(homePath, _ => { })),
-                new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false).Encode()),
+                new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false, 100).Encode()),
                 new Message(MessageType.GetClassHome, Array.Empty<byte>()),
                 new Message(MessageType.ClaimClassHome, new byte[] { 9 }),
-                new Message(MessageType.ClaimClassHome, new ClassHomeClaim("", ClassFolderRemote.Port, false).Encode()));
+                new Message(MessageType.ClaimClassHome, new ClassHomeClaim("", ClassFolderRemote.Port, false, 100).Encode()));
 
             Assert.Equal(MessageType.CommandAck, answers[0].Type);
             Assert.Equal((true, "este PC guarda as pastas"), CommandResult.Decode(answers[0].Payload));
             Assert.Equal(MessageType.ClassHomeStatus, answers[1].Type);
             Assert.True(ClassHome.TryDecode(answers[1].Payload, out var home));
-            Assert.Equal(new ClassHome(masterCert.Thumbprint, "PROF-1", "127.0.0.1", ClassFolderRemote.Port), home);
+            Assert.Equal(new ClassHome(masterCert.Thumbprint, "PROF-1", "127.0.0.1", ClassFolderRemote.Port, 100), home);
             Assert.Equal((false, "pedido inválido"), CommandResult.Decode(answers[2].Payload));
             Assert.Equal((false, "pedido inválido"), CommandResult.Decode(answers[3].Payload));
         }
@@ -268,10 +268,10 @@ public class AgentServerTests
                 new Message(MessageType.SetClassLesson, lesson.Encode()));
 
             Assert.True(CommandResult.Decode(answers[0].Payload).Succeeded);
-            Assert.Equal(new ClassHome(masterCert.Thumbprint, "", "127.0.0.1", ClassFolderRemote.Port), handler.CurrentHome);
+            Assert.Equal(new ClassHome(masterCert.Thumbprint, "", "127.0.0.1", ClassFolderRemote.Port, 0), handler.CurrentHome);
 
             var otherHandler = LessonHandler(otherLessonPath, new ClassHomeState(otherHomePath, _ => { }));
-            otherHandler.ClaimHome(new string('B', 40), "10.0.0.7", new ClassHomeClaim("PROF-2", ClassFolderRemote.Port, false));
+            otherHandler.ClaimHome(new string('B', 40), "10.0.0.7", new ClassHomeClaim("PROF-2", ClassFolderRemote.Port, false, 100));
             var refused = await ExchangeWithAgentAs(masterCert, otherHandler,
                 new Message(MessageType.SetClassLesson, lesson.Encode()));
 
@@ -313,7 +313,7 @@ public class AgentServerTests
         var requests = new[]
         {
             new Message(MessageType.GetClassHome, Array.Empty<byte>()),
-            new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false).Encode()),
+            new Message(MessageType.ClaimClassHome, new ClassHomeClaim("PROF-1", ClassFolderRemote.Port, false, 100).Encode()),
         };
 
         var answers = (await ExchangeWithAgent(null, requests))

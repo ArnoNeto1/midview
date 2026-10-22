@@ -249,7 +249,8 @@ public enum MessageType : byte
     // Agent messages. ClaimClassHome is a command carrying a ClassHomeClaim, sent
     // before SetClassLesson (answered with one CommandAck and a CommandResult;
     // refused, with ClassHomeClaim.OtherHomeText and the home's name as the
-    // detail, when another PC is the home and the claim isn't a take-over).
+    // detail, when another PC is the home and the claim isn't a take-over with
+    // a newer generation than that home's).
     // GetClassHome, no payload, is answered with one ClassHomeStatus carrying the
     // ClassHome the Agent keeps (empty when it has none). IsTeacherTrusted, a
     // teacher's thumbprint (ASCII hex), asks an Agent whether it trusts that

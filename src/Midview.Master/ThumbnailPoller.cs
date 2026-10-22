@@ -247,10 +247,13 @@ public sealed class ThumbnailPoller : IDisposable
     // The same for the class folder's lesson: a machine that was off when the
     // teacher started or ended it gets it the next time it's on, and the Agent
     // keeps an older one out by SavedAt. A lesson never saved (SavedAt 0: the
-    // Master hasn't had one yet) is nothing to hand over.
+    // Master hasn't had one yet) is nothing to hand over, nor is no lesson at
+    // all (a Master that stood down, however saved), which an Agent would take
+    // for a newer end of the lesson another teacher PC runs.
     private void SendClassLessonIfChanged()
     {
-        if (_classLesson?.Invoke() is not { SavedAt: > 0 } lesson || lesson.SavedAt == _sentClassLessonSavedAt
+        if (_classLesson?.Invoke() is not { SavedAt: > 0 } lesson || lesson.LessonId == Guid.Empty
+            || lesson.SavedAt == _sentClassLessonSavedAt
             || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
             || DateTime.UtcNow < _nextClassLessonAttempt || _stop.IsCancellationRequested)
         {
