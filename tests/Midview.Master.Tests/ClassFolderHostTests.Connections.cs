@@ -196,6 +196,25 @@ public sealed partial class ClassFolderHostTests
         }
     }
 
+    // Ruling 15: a state read is a poll, answered within about ReadTimeout
+    // (the colleague's PC is waiting on it), not the minutes a command may take.
+    [Fact]
+    public void AStateReadThatHangs_IsAnsweredWithinTheReadTimeout()
+    {
+        using var master = SelfSignedCertificate.Create("master-under-test");
+        using var colleague = SelfSignedCertificate.Create("colleague-under-test");
+        var never = new TaskCompletionSource<RemoteState>();
+        using var host = Open(master, new FakeController { Reading = _ => never.Task }, Trusting(colleague));
+        host.ReadTimeout = TimeSpan.FromSeconds(1);
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var answer = Ask(host, colleague, master, new Message(MessageType.RemoteClassFolderState, Array.Empty<byte>()));
+
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"answered after {clock.Elapsed}"); // not CommandTimeout's minutes
+        Assert.Equal(MessageType.CommandAck, answer.Type);
+        Assert.Equal((false, ClassFolderRemote.UnreadableText + ClassFolderHost.TooLongReason), CommandResult.Decode(answer.Payload));
+    }
+
     // A command still running when the wait is over is answered so, not left hanging.
     [Fact]
     public void ACommandThatTakesTooLong_IsAnsweredThatItIsStillRunning()

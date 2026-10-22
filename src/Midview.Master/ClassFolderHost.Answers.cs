@@ -14,6 +14,9 @@ public sealed partial class ClassFolderHost
     // Why something failed when Windows didn't say why in words of ours (ErrorText).
     public const string UnexpectedReason = "erro inesperado";
 
+    // Why a state couldn't be read: it took longer than a colleague's PC waits.
+    public const string TooLongReason = "demorou demais.";
+
     private Message Answer(Message request)
     {
         switch (request.Type)
@@ -24,11 +27,12 @@ public sealed partial class ClassFolderHost
                 {
                     // The view the home itself shows: the lesson's numbers while one is
                     // on, the class list otherwise (the controller decides, so a lesson
-                    // ending meanwhile still comes with the list).
+                    // ending meanwhile still comes with the list). A poll: the colleague's
+                    // PC waits about ReadTimeout for it, not the minutes a command may take.
                     var read = _local.ReadAsync(lessonFiles: true);
-                    if (!read.Wait(CommandTimeout))
+                    if (!read.Wait(ReadTimeout))
                     {
-                        return Refusal(ClassFolderRemote.UnreadableText + "demorou demais.");
+                        return Refusal(ClassFolderRemote.UnreadableText + TooLongReason);
                     }
                     state = read.Result;
                 }

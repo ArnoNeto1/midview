@@ -17,8 +17,15 @@ using Xunit;
 // each test's own.
 public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
 {
-    // Well under the default bound on a whole check (5 s): an answer that didn't wait for it.
-    private static readonly TimeSpan Quick = TimeSpan.FromSeconds(3);
+    // For what only has to happen, however busy the PC running the tests is.
+    private static readonly TimeSpan Long = TimeSpan.FromSeconds(20);
+
+    // Half of Long, and of a hanging Agent's 20 s: a check that came back before it wasn't held up.
+    private static readonly TimeSpan Unbounded = TimeSpan.FromSeconds(10);
+
+    // Where a colleague's PC asks from, and another PC of the lab.
+    private static readonly IPAddress From = IPAddress.Parse("192.168.0.20");
+    private static readonly IPAddress Elsewhere = IPAddress.Parse("192.168.0.21");
 
     private readonly ColleagueTrustRoom _room;
     private readonly ConcurrentDictionary<string, bool> _offline = new() { ["PC3"] = true, ["PC4"] = true };
@@ -33,10 +40,10 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
     {
         var trust = NewTrust();
 
-        Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
-        Assert.True(await trust.IsTrustedAsync(Colleague.ToLowerInvariant()).WaitAsync(Quick));
-        Assert.False(await trust.IsTrustedAsync(_room.Stranger.Thumbprint).WaitAsync(Quick));
-        Assert.False(await trust.IsTrustedAsync("not a thumbprint").WaitAsync(Quick));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
+        Assert.True(await trust.IsTrustedAsync(Colleague.ToLowerInvariant(), From).WaitAsync(Long));
+        Assert.False(await trust.IsTrustedAsync(_room.Stranger.Thumbprint, From).WaitAsync(Long));
+        Assert.False(await trust.IsTrustedAsync("not a thumbprint", From).WaitAsync(Long));
     }
 
     [Fact]
@@ -44,21 +51,21 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
     {
         _offline["PC1"] = true;
 
-        Assert.False(await NewTrust().IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.False(await NewTrust().IsTrustedAsync(Colleague, From).WaitAsync(Long));
     }
 
     [Fact]
     public async Task AYes_IsKeptTenMinutes()
     {
         var trust = NewTrust();
-        Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
         _offline["PC1"] = true; // only PC2 left, which says no
 
         _now = _now.AddMinutes(10).AddSeconds(-1);
-        Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
 
         _now = _now.AddSeconds(2);
-        Assert.False(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.False(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
     }
 
     [Fact]
@@ -66,14 +73,14 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
     {
         _offline["PC1"] = true;
         var trust = NewTrust();
-        Assert.False(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.False(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
         _offline.TryRemove("PC1", out _); // given access meanwhile, say
 
         _now = _now.AddSeconds(29);
-        Assert.False(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.False(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
 
         _now = _now.AddSeconds(2);
-        Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
     }
 
     // Without any Agent's answer there is no "no" to keep: the next check asks again.
@@ -85,14 +92,14 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
             _offline[machine.Name] = true;
         }
         var trust = NewTrust();
-        Assert.False(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.False(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
 
         _offline.TryRemove("PC1", out _);
-        Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
     }
 
     // An Agent that never answers holds a check no longer than its bound, and
-    // never holds a yes from another Agent; a check it cut short isn't kept.
+    // a check it cut short isn't kept: once the room can answer, it does.
     [Fact]
     public async Task AnAgentThatNeverAnswers_HoldsNoCheckPastItsBound()
     {
@@ -102,17 +109,135 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         var trust = NewTrust(wait: TimeSpan.FromMilliseconds(500));
         try
         {
+            // Bounded: PC4's ask alone would wait for CommandClient's 20 s.
             var clock = Stopwatch.StartNew();
-            Assert.False(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+            Assert.False(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
             Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(400), $"answered after {clock.Elapsed}");
+            Assert.True(clock.Elapsed < Unbounded, $"answered after {clock.Elapsed}");
 
+            // Not a no kept 30 s (the clock stands still here): the next rounds, PC1
+            // on, say yes. (The first may still share the round that was cut short.)
             _offline.TryRemove("PC1", out _);
-            Assert.True(await trust.IsTrustedAsync(Colleague).WaitAsync(Quick));
+            await Until(async () => await trust.IsTrustedAsync(Colleague, From));
         }
         finally
         {
             _room.LetGoOfTheHanging(); // the asks still waiting on PC4 end now
         }
+    }
+
+    // ...nor does it hold up a yes from another Agent.
+    [Fact]
+    public async Task AnAgentThatNeverAnswers_DoesNotHoldUpAYes()
+    {
+        _offline.TryRemove("PC4", out _);
+        var trust = NewTrust();
+        try
+        {
+            // Held up, it would end at its bound (Long) with no answer.
+            var clock = Stopwatch.StartNew();
+            Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
+            Assert.True(clock.Elapsed < Unbounded, $"answered after {clock.Elapsed}");
+        }
+        finally
+        {
+            _room.LetGoOfTheHanging();
+        }
+    }
+
+    // Ruling 15: a stranger making a new certificate for every connection gets
+    // one round of the room at a time from its address; another PC isn't held
+    // up by it; and every certificate is still asked about, one after the other.
+    [Fact]
+    public async Task AStrangerRotatingCertificates_FromOneAddress_GetsOneRoundAtATime()
+    {
+        using var held = new ManualResetEventSlim();
+        var rounds = 0;
+        var trust = NewTrust(wait: Long, isOnline: Counting(() => Interlocked.Increment(ref rounds), held));
+
+        var checks = Enumerable.Range(0, 4).Select(_ => trust.IsTrustedAsync(NewThumbprint(), From)).ToList();
+        await Until(() => Volatile.Read(ref rounds) >= 1);
+        await Task.Delay(500);
+        Assert.Equal(1, Volatile.Read(ref rounds));
+
+        var elsewhere = trust.IsTrustedAsync(NewThumbprint(), Elsewhere);
+        await Until(() => Volatile.Read(ref rounds) == 2);
+
+        held.Set();
+        Assert.All(await Task.WhenAll(checks).WaitAsync(Long), Assert.False);
+        Assert.False(await elsewhere.WaitAsync(Long));
+        Assert.Equal(5, Volatile.Read(ref rounds));
+    }
+
+    // Two checks for one teacher at once, from wherever: one round, one answer for both.
+    [Fact]
+    public async Task ChecksForOneTeacherAtOnce_ShareOneRound()
+    {
+        using var held = new ManualResetEventSlim();
+        var rounds = 0;
+        var trust = NewTrust(wait: Long, isOnline: Counting(() => Interlocked.Increment(ref rounds), held));
+
+        var first = trust.IsTrustedAsync(Colleague, From);
+        await Until(() => Volatile.Read(ref rounds) == 1);
+        var second = trust.IsTrustedAsync(Colleague.ToLowerInvariant(), Elsewhere);
+        await Task.Delay(300);
+        held.Set();
+
+        Assert.True(await first.WaitAsync(Long));
+        Assert.True(await second.WaitAsync(Long));
+        Assert.Equal(1, Volatile.Read(ref rounds));
+    }
+
+    // One round per teacher means two never race; still, a no that comes in
+    // while a yes is kept and in date leaves the yes. Here the clock puts the
+    // earlier yes back in date while a round that will say no is out, as a
+    // yes given meanwhile would be.
+    [Fact]
+    public async Task ANoFromARacingRound_DoesNotReplaceAFreshYes()
+    {
+        using var held = new ManualResetEventSlim(initialState: true);
+        var trust = NewTrust(wait: Long, isOnline: Counting(() => { }, held));
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
+        var yesAt = _now;
+
+        _now = yesAt.AddMinutes(11);
+        _offline["PC1"] = true; // only PC2 left, which says no
+        held.Reset();
+        var racing = trust.IsTrustedAsync(Colleague, From);
+        await Task.Delay(300);
+        _now = yesAt.AddMinutes(1);
+        held.Set();
+
+        Assert.False(await racing.WaitAsync(Long)); // what its own round said
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long)); // the yes, still kept
+    }
+
+    // The classroom list's view of one machine failing doesn't stop the others being asked.
+    [Fact]
+    public async Task AMachineWhoseStateCantBeTold_IsTakenForOff_AndTheOthersAreAsked()
+    {
+        var trust = NewTrust(isOnline: machine => machine.Name == "PC1" ? true : throw new InvalidOperationException("roster changing"));
+
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
+    }
+
+    // The answers kept are at most maxKept: the oldest goes first.
+    [Fact]
+    public async Task TheAnswersKept_AreCapped_OldestOut()
+    {
+        var rounds = 0;
+        var trust = NewTrust(isOnline: Counting(() => Interlocked.Increment(ref rounds)), maxKept: 2);
+        var (a, b, c) = (NewThumbprint(), NewThumbprint(), NewThumbprint());
+        foreach (var stranger in new[] { a, b, c })
+        {
+            Assert.False(await trust.IsTrustedAsync(stranger, From).WaitAsync(Long));
+        }
+        Assert.Equal(3, Volatile.Read(ref rounds));
+
+        Assert.False(await trust.IsTrustedAsync(c, From).WaitAsync(Long)); // kept
+        Assert.Equal(3, Volatile.Read(ref rounds));
+        Assert.False(await trust.IsTrustedAsync(a, From).WaitAsync(Long)); // the oldest, gone
+        Assert.Equal(4, Volatile.Read(ref rounds));
     }
 
     // The production pairing: the home's host asks the room's Agents (the rig's
@@ -133,8 +258,39 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         Assert.Equal((false, ClassFolderRemote.NotTrustedText), CommandResult.Decode(stranger.Payload));
     }
 
-    private ColleagueTrust NewTrust(TimeSpan? wait = null) =>
-        new(_room.Home, () => _room.Machines, machine => !_offline.ContainsKey(machine.Name), () => _now, _room.Port, wait);
+    // A long bound on a whole check unless a test is about the bound: on a busy
+    // PC a round of the room can take more than the default 5 s.
+    private ColleagueTrust NewTrust(TimeSpan? wait = null, Func<KnownMachine, bool>? isOnline = null, int maxKept = ColleagueTrust.DefaultMaxKept) =>
+        new(_room.Home, () => _room.Machines, isOnline ?? IsOnline, () => _now, _room.Port, wait ?? Long, maxKept);
+
+    private bool IsOnline(KnownMachine machine) => !_offline.ContainsKey(machine.Name);
+
+    // The rounds a trust asks the room: each asks every machine whether it is on
+    // once, PC2 among them. held: PC2's question waits for it, holding the round.
+    private Func<KnownMachine, bool> Counting(Action counted, ManualResetEventSlim? held = null) => machine =>
+    {
+        if (machine.Name == "PC2")
+        {
+            counted();
+            held?.Wait(Long);
+        }
+        return IsOnline(machine);
+    };
+
+    // A teacher no Agent knows: another certificate the same stranger made.
+    private static string NewThumbprint() => Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(20));
+
+    private static Task Until(Func<bool> condition) => Until(() => Task.FromResult(condition()));
+
+    private static async Task Until(Func<Task<bool>> condition)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!await condition())
+        {
+            Assert.True(clock.Elapsed < Long, "waited too long");
+            await Task.Delay(20);
+        }
+    }
 
     private static Message Ask(ClassFolderHost host, X509Certificate2 client, X509Certificate2 home)
     {

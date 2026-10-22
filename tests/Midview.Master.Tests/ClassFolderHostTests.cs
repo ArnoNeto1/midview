@@ -99,9 +99,11 @@ public sealed partial class ClassFolderHostTests
         using var stranger = SelfSignedCertificate.Create("stranger-under-test");
         var controller = LocalClassFolderControllerTests.NewController(rig, rig.NewSync());
         var asked = new ConcurrentQueue<string>();
-        using var host = Open(rig.Master, controller, thumbprint =>
+        var from = new ConcurrentQueue<IPAddress>();
+        using var host = Open(rig.Master, controller, (thumbprint, address) =>
         {
             asked.Enqueue(thumbprint);
+            from.Enqueue(address);
             return Task.FromResult(false);
         });
 
@@ -116,6 +118,7 @@ public sealed partial class ClassFolderHostTests
         }
         Assert.False(controller.Lesson.IsOn);
         Assert.Equal(new[] { stranger.Thumbprint, stranger.Thumbprint }, asked.Select(thumbprint => thumbprint.ToUpperInvariant()));
+        Assert.All(from, address => Assert.Equal(IPAddress.Loopback, address)); // where it asked from, for ColleagueTrust
     }
 
     // Review Focus 1: two teacher PCs can share one teacher identity; the
@@ -126,7 +129,7 @@ public sealed partial class ClassFolderHostTests
         using var rig = new ClassSyncRig(pcs: 1);
         var controller = LocalClassFolderControllerTests.NewController(rig, rig.NewSync());
         var asked = 0;
-        using var host = Open(rig.Master, controller, _ =>
+        using var host = Open(rig.Master, controller, (_, _) =>
         {
             Interlocked.Increment(ref asked);
             return Task.FromResult(false);
@@ -292,12 +295,13 @@ public sealed partial class ClassFolderHostTests
         Assert.Equal(longPc[..ClassHome.MaxNameLength], Assert.Single(started.Lines).Name);
     }
 
-    private static ClassFolderHost Open(X509Certificate2 certificate, IClassFolderController controller, Func<string, Task<bool>> isTrusted) =>
+    private static ClassFolderHost Open(
+        X509Certificate2 certificate, IClassFolderController controller, Func<string, IPAddress, Task<bool>> isTrusted) =>
         ClassFolderHost.Open(certificate, controller, isTrusted, 0, _ => { }, IPAddress.Loopback)
         ?? throw new InvalidOperationException("The host could not listen.");
 
-    private static Func<string, Task<bool>> Trusting(X509Certificate2 colleague) =>
-        thumbprint => Task.FromResult(string.Equals(thumbprint, colleague.Thumbprint, StringComparison.OrdinalIgnoreCase));
+    private static Func<string, IPAddress, Task<bool>> Trusting(X509Certificate2 colleague) =>
+        (thumbprint, _) => Task.FromResult(string.Equals(thumbprint, colleague.Thumbprint, StringComparison.OrdinalIgnoreCase));
 
     // One request on its own connection, as the colleague's PC sends it, and the answer.
     private static Message Ask(ClassFolderHost host, X509Certificate2 client, X509Certificate2 home, Message request)
@@ -351,6 +355,9 @@ public sealed partial class ClassFolderHostTests
     {
         public Func<bool, RemoteState>? Read { get; init; }
 
+        // In place of Read, for a read that takes its time.
+        public Func<bool, Task<RemoteState>>? Reading { get; init; }
+
         public Func<string, Task<IReadOnlyList<ResultLineDto>>>? Start { get; init; }
 
         public Func<string, Task<(bool Ok, string Detail)>>? Delete { get; init; }
@@ -371,7 +378,7 @@ public sealed partial class ClassFolderHostTests
             remove { }
         }
 
-        public Task<RemoteState> ReadAsync(bool lessonFiles) => Task.FromResult(Read!(lessonFiles));
+        public Task<RemoteState> ReadAsync(bool lessonFiles) => Reading?.Invoke(lessonFiles) ?? Task.FromResult(Read!(lessonFiles));
 
         public Task<(bool Ok, string Detail, string Turma)> CreateAsync(string name) => throw new NotSupportedException();
 

@@ -28,9 +28,11 @@ namespace Midview.Master;
 // is always in the teacher's words, never an exception's own message.
 //
 // The handshake and the request must be in within ReadTimeout, however they
-// trickle in; a command may then run for CommandTimeout (a lesson's end brings
-// the last files in first), after which the colleague is told it is still
-// running. At most MaxConnections at once, MaxPerAddress from one PC. Nothing a
+// trickle in. A state is then read within about ReadTimeout too; a command may
+// run for CommandTimeout (a lesson's end brings the last files in first), after
+// which the colleague is told it is still running. isTrusted is told the
+// address too, so ColleagueTrust asks the room about one teacher at a time from
+// it. At most MaxConnections at once, MaxPerAddress from one PC. Nothing a
 // client does (nonsense, hanging up, never finishing) stops the host: the next
 // connection is served. In two files: this one (the connections) and
 // ClassFolderHost.Answers.cs (what each request gets).
@@ -51,7 +53,7 @@ public sealed partial class ClassFolderHost : IDisposable
 
     private readonly X509Certificate2 _certificate;
     private readonly IClassFolderController _local;
-    private readonly Func<string, Task<bool>> _isTrusted;
+    private readonly Func<string, IPAddress, Task<bool>> _isTrusted;
     private readonly Action<string> _log;
     private readonly TcpListener _tcp;
     private readonly CancellationTokenSource _stop = new();
@@ -62,7 +64,7 @@ public sealed partial class ClassFolderHost : IDisposable
     private int _connections;
 
     private ClassFolderHost(
-        X509Certificate2 certificate, IClassFolderController local, Func<string, Task<bool>> isTrusted, Action<string> log,
+        X509Certificate2 certificate, IClassFolderController local, Func<string, IPAddress, Task<bool>> isTrusted, Action<string> log,
         TcpListener tcp)
     {
         _certificate = certificate;
@@ -83,11 +85,12 @@ public sealed partial class ClassFolderHost : IDisposable
 
     // Starts listening on every address (address: one only, for the tests)
     // and serving on the thread pool, never on the caller's context (Master
-    // calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync.
+    // calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync
+    // (the client's thumbprint and the address it came from).
     // Null when the port can't be had (another program holds it): logged, in
     // English, by default to System.Diagnostics.Trace.
     public static ClassFolderHost? Open(
-        X509Certificate2 certificate, IClassFolderController local, Func<string, Task<bool>> isTrusted,
+        X509Certificate2 certificate, IClassFolderController local, Func<string, IPAddress, Task<bool>> isTrusted,
         int port = ClassFolderRemote.Port, Action<string>? log = null, IPAddress? address = null)
     {
         log ??= message => System.Diagnostics.Trace.WriteLine("ClassFolderHost: " + message);
@@ -155,7 +158,7 @@ public sealed partial class ClassFolderHost : IDisposable
                 {
                     try
                     {
-                        Handle(client);
+                        Handle(client, address);
                     }
                     finally
                     {
@@ -212,7 +215,7 @@ public sealed partial class ClassFolderHost : IDisposable
         }
     }
 
-    private void Handle(TcpClient client)
+    private void Handle(TcpClient client, IPAddress address)
     {
         var timeout = (int)ReadTimeout.TotalMilliseconds;
         client.ReceiveTimeout = timeout;
@@ -231,7 +234,7 @@ public sealed partial class ClassFolderHost : IDisposable
                 channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _certificate);
                 request = channel.Receive(MaxRequestBytes);
             }
-            channel.Send(IsColleague(channel.RemoteThumbprint) ? Answer(request) : Refusal(ClassFolderRemote.NotTrustedText));
+            channel.Send(IsColleague(channel.RemoteThumbprint, address) ? Answer(request) : Refusal(ClassFolderRemote.NotTrustedText));
         }
         catch (Exception ex) when (ex is IOException or SocketException or AuthenticationException or InvalidDataException
             or ObjectDisposedException)
@@ -248,7 +251,7 @@ public sealed partial class ClassFolderHost : IDisposable
         }
     }
 
-    private bool IsColleague(string thumbprint)
+    private bool IsColleague(string thumbprint, IPAddress address)
     {
         if (thumbprint.Length == 0)
         {
@@ -260,7 +263,7 @@ public sealed partial class ClassFolderHost : IDisposable
         }
         try
         {
-            var trusted = _isTrusted(thumbprint);
+            var trusted = _isTrusted(thumbprint, address);
             return trusted.Wait(TrustWait) && trusted.Result;
         }
         catch (Exception ex)
