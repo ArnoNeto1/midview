@@ -19,8 +19,12 @@ internal interface IHandOverSwap
     // Where this PC's own earlier store went (its files root's new name); null when it had none.
     string? OwnStoreAside { get; }
 
-    // Puts the received store back where it was received and this PC's own back in place.
-    void Undo();
+    // Puts the received store back where it was received and this PC's own
+    // back in place, the files root first. False when something couldn't move
+    // back (a file of it open in another program): it stops there, so what
+    // didn't move stays whole where it is (this PC's own store aside, at
+    // OwnStoreAside).
+    bool Undo();
 }
 
 // ClassStore: the whole store passing to another teacher PC ("Guardar as pastas
@@ -150,8 +154,9 @@ public sealed partial class ClassStore
     }
 
     // The store received into Staging, in place of this PC's own, which goes
-    // aside. Throws IOException or UnauthorizedAccessException when it can't,
-    // with everything put back as it was (the received store in Staging).
+    // aside; the files root goes in last, so it is the first to go back.
+    // Throws IOException or UnauthorizedAccessException when it can't, with
+    // everything that could be put back as it was (the received store in Staging).
     internal IHandOverSwap SwapIn(string why)
     {
         var staging = Staging;
@@ -161,7 +166,6 @@ public sealed partial class ClassStore
             try
             {
                 var aside = PutAside(moves, why);
-                moves.Folder(staging.Files, FilesRootPath);
                 if (Directory.Exists(staging.Index))
                 {
                     moves.Folder(staging.Index, IndexRootPath);
@@ -170,6 +174,7 @@ public sealed partial class ClassStore
                 {
                     moves.File(staging.Lessons, _lessons.Path);
                 }
+                moves.Folder(staging.Files, FilesRootPath);
                 return new Swap(this, moves, aside);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -277,17 +282,24 @@ public sealed partial class ClassStore
 
         public string? OwnStoreAside { get; }
 
-        public void Undo()
+        public bool Undo()
         {
             lock (_store._gate)
             {
-                _moves.Undo();
-                _store.ForgetAll();
+                try
+                {
+                    return _moves.Undo();
+                }
+                finally
+                {
+                    _store.ForgetAll();
+                }
             }
         }
     }
 
-    // The renames (and empty folders removed) done so far, undone in reverse.
+    // The renames (and empty folders removed) done so far, undone in reverse,
+    // up to the first that can't be (Undo says whether all were).
     private sealed class Moves
     {
         private readonly Action<string> _log;
@@ -323,9 +335,9 @@ public sealed partial class ClassStore
             }
         }
 
-        public void Undo()
+        public bool Undo()
         {
-            while (_done.TryPop(out var move))
+            while (_done.TryPeek(out var move))
             {
                 try
                 {
@@ -345,8 +357,11 @@ public sealed partial class ClassStore
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     _log($"{move.To} could not be put back as {move.From}: {ex.Message}");
+                    return false;
                 }
+                _done.Pop();
             }
+            return true;
         }
     }
 }

@@ -97,16 +97,31 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertNoStaging();
     }
 
-    // Ruling 17 (b, h): what the old home answered RemoteHandOverDone is in the
-    // result line: the folder its copy went to (numbered, say), why it couldn't
-    // go aside, that it had none, or that it keeps the folders until its lesson ends.
+    private const string LessonOnThere =
+        "O PC PROF-1 está com a aula do 3º A em andamento: ele deixa de guardar as pastas quando essa aula acabar, "
+        + "e a cópia dele continua na pasta Turmas dele.";
+
+    // What the old home answers RemoteHandOverDone (stood down, detail), and the end of the result line.
+    public static TheoryData<bool, string, string> OldHomeAnswers => new()
+    {
+        { true, "Turmas (passadas para PROF-2) (2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2) (2)\"." },
+        { true, "|acesso negado", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (acesso negado): ela continua na pasta Turmas dele." },
+        { true, "", "O PC PROF-1 não tinha turmas para guardar à parte." },
+        { false, LessonOnThere, LessonOnThere },
+        { false, "", "O PC PROF-1 ainda não confirmou a troca: a cópia dele continua na pasta Turmas dele." },
+        // Whatever that PC says goes on one line, of at most 200 characters.
+        { false, "uma linha\r\noutra\tlinha\u0007", "uma linha outra linha" },
+        { false, new string('x', 300), new string('x', 200) + "…" },
+        { true, "Turmas (passadas\npara PROF-2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2)\"." },
+    };
+
+    // Ruling 17 (b, h), Ruling 18 (6): what the old home answered
+    // RemoteHandOverDone is in the result line: the folder its copy went to
+    // (numbered, say), why it couldn't go aside, that it had none, or that it
+    // keeps the folders until its lesson ends.
     [Theory]
-    [InlineData(true, "Turmas (passadas para PROF-2) (2)")]
-    [InlineData(true, "|acesso negado")]
-    [InlineData(true, "")]
-    [InlineData(false, "O PC PROF-1 está com a aula do 3º A em andamento: ele deixa de guardar as pastas quando essa aula acabar, e a cópia dele continua na pasta Turmas dele.")]
-    [InlineData(false, "")]
-    public async Task WhatTheOldHomeAnswered_IsInTheResultLine(bool stoodDown, string detail)
+    [MemberData(nameof(OldHomeAnswers))]
+    public async Task WhatTheOldHomeAnswered_IsInTheResultLine(bool stoodDown, string detail, string expected)
     {
         using var rig = new ClassSyncRig(pcs: 1, homes: 1);
         using var lab = new HandOverLab(rig, openHost: false);
@@ -121,12 +136,7 @@ public sealed partial class ClassFolderHandOverTests
         var result = await lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port });
 
         Assert.True(result.Ok, result.Detail);
-        var expected = !stoodDown
-            ? detail.Length > 0 ? detail : ClassFolderText.OldHomeDidNotConfirm(OldHome)
-            : detail.Length == 0 ? ClassFolderText.OldHadNoClasses(OldHome)
-            : detail[0] == '|' ? ClassFolderText.OldCopyNotMoved(OldHome, detail[1..])
-            : ClassFolderText.OldCopyAside(OldHome, detail);
-        Assert.EndsWith(" " + expected, result.Detail);
+        Assert.Equal("As pastas das turmas agora ficam neste computador: 1 turma com 0 arquivos. " + expected, result.Detail);
     }
 
     // The home's Master doesn't answer (that PC is gone): after the window's
@@ -330,7 +340,7 @@ public sealed partial class ClassFolderHandOverTests
             _script = script;
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-            _serving = Task.Run(Serve);
+            _serving = OwnThread(Serve);
         }
 
         public int Port { get; }

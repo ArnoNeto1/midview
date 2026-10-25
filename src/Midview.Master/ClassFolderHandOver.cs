@@ -13,7 +13,9 @@ namespace Midview.Master;
 public sealed record HandOverResult(bool Ok, string Detail);
 
 // How far a copy has come: the files and bytes that arrived, of all of them.
-public readonly record struct HandOverProgress(int Files, int TotalFiles, long Bytes, long TotalBytes);
+// InPlace: the copy is whole and in place, and the room's PCs are being told;
+// from here on the take-over can't be cancelled.
+public readonly record struct HandOverProgress(int Files, int TotalFiles, long Bytes, long TotalBytes, bool InPlace = false);
 
 // "Guardar as pastas das turmas neste computador" ("Two teacher PCs in one
 // lab", docs/superpowers/specs/2026-10-20-class-folder-design.md; plan
@@ -267,12 +269,16 @@ public sealed partial class ClassFolderHandOver
         }
 
         stage.Value = Stage.Claiming;
+        progress?.Report(new HandOverProgress(received.Files, received.Files, 0, 0, InPlace: true));
         var (ok, detail, generation) = Claim();
         if (!ok)
         {
-            swap.Undo();
+            var putBack = swap.Undo();
             _store.DiscardStaging();
-            return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, detail));
+            return new HandOverResult(false, putBack
+                ? ClassFolderText.TakeOverFailed(name, detail)
+                : ClassFolderText.TakeOverNotPutBack(
+                    name, detail, swap.OwnStoreAside is { } ownAside ? Path.GetFileName(ownAside) : null));
         }
         stage.Value = Stage.Claimed;
         KeepGeneration(generation);
@@ -286,7 +292,8 @@ public sealed partial class ClassFolderHandOver
         return new HandOverResult(true, text.Append(' ').Append(WhatTheOldHomeSaid(home, name)).ToString());
     }
 
-    // RemoteHandOverDone to the old home, and its answer in the teacher's words.
+    // RemoteHandOverDone to the old home, and its answer in the teacher's
+    // words; what that PC said goes on one short line, whatever it was.
     private string WhatTheOldHomeSaid(ClassHome home, string name)
     {
         if (TellTheOldHome(home) is not { } answer)
@@ -294,10 +301,11 @@ public sealed partial class ClassFolderHandOver
             return ClassFolderText.OldHomeDidNotConfirm(name);
         }
         var (stoodDown, detail) = answer;
-        return !stoodDown ? detail.Length > 0 ? detail : ClassFolderText.OldHomeDidNotConfirm(name)
-            : detail.Length == 0 ? ClassFolderText.OldHadNoClasses(name)
-            : detail[0] == NotMovedMark ? ClassFolderText.OldCopyNotMoved(name, detail[1..])
-            : ClassFolderText.OldCopyAside(name, detail);
+        var said = ClassFolderText.OneLine(detail.Length > 0 && detail[0] == NotMovedMark ? detail[1..] : detail);
+        return !stoodDown ? said.Length > 0 ? said : ClassFolderText.OldHomeDidNotConfirm(name)
+            : said.Length == 0 ? ClassFolderText.OldHadNoClasses(name)
+            : detail[0] == NotMovedMark ? ClassFolderText.OldCopyNotMoved(name, said)
+            : ClassFolderText.OldCopyAside(name, said);
     }
 
     // Where this PC's own earlier store goes: "antes de 20-10-2026 1330".

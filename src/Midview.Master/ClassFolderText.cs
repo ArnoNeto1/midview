@@ -242,9 +242,10 @@ public static class ClassFolderText
         $"O PC {home} não responde. Guardar as pastas neste computador assim mesmo? As turmas que estão nele não vêm junto; "
         + "os arquivos que ainda estão nos PCs dos alunos vêm na próxima aula.";
 
-    // While the copy runs (progress: what arrived of it so far).
-    public static string TakeOverProgress(string home, HandOverProgress progress) => progress.TotalFiles == 0
-        ? $"Trazendo as pastas das turmas do PC {home}..."
+    // While the copy runs (progress: what arrived of it so far), then while the room's PCs are told.
+    public static string TakeOverProgress(string home, HandOverProgress progress) =>
+        progress.InPlace ? $"As pastas do PC {home} chegaram. Avisando os PCs da sala..."
+        : progress.TotalFiles == 0 ? $"Trazendo as pastas das turmas do PC {home}..."
         : $"Trazendo as pastas das turmas do PC {home}: {Count(progress.Files)} de {Files(progress.TotalFiles)} "
             + $"({Size(progress.Bytes)} de {Size(progress.TotalBytes)})...";
 
@@ -300,6 +301,32 @@ public static class ClassFolderText
     // A copy that an earlier take-over left half done, still there: nothing of it may be taken in.
     public static string StagingLeft(string folder) =>
         $"Uma cópia anterior que não terminou não pôde ser apagada. Apague a pasta \"{folder}\" e tente de novo.";
+
+    // The room's PCs were busy with their students' folders and took no claim (ClassHomeClaim.BusyText).
+    public const string PcsBusy = "Os PCs da sala estão ocupados agora. Tente de novo em instantes.";
+
+    // A take-over the room's PCs didn't take, whose copy couldn't all be put
+    // back (reason: why they didn't take it): this PC's own classes are aside,
+    // in that folder (null: it had none), and what came from the home stayed.
+    public static string TakeOverNotPutBack(string home, string reason, string? aside) =>
+        $"As pastas não passaram do PC {home} para este computador, e nem tudo voltou ao lugar aqui: "
+        + (aside is null
+            ? "a pasta Turmas deste computador ficou com as turmas copiadas dele. "
+            : $"as turmas que já estavam neste computador estão na pasta \"{aside}\". ")
+        + Sentence(reason);
+
+    // What another PC said, as one line of at most max characters (it can say anything).
+    public static string OneLine(string text, int max = 200)
+    {
+        var spaced = new string(text.Select(c => char.IsControl(c) ? ' ' : c).ToArray());
+        var line = string.Join(' ', spaced.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (line.Length <= max)
+        {
+            return line;
+        }
+        var cut = char.IsHighSurrogate(line[max - 1]) ? max - 1 : max;
+        return line[..cut] + "…";
+    }
 
     // The teacher cancelled the copy ("Cancelar"), before anything changed.
     public const string CopyCancelled = "A cópia foi cancelada.";

@@ -30,6 +30,11 @@ public sealed class ClassLessonHandler
     // ClassLesson.FolderName makes it.
     internal const string FolderPrefix = "Pasta da turma – ";
 
+    // How long a claim on the class folders' home waits for the lesson's lock:
+    // well under a Master's read timeout (20 s), so a claim it gets no answer
+    // to was refused, never applied later (Ruling 18).
+    public static readonly TimeSpan DefaultClaimWait = TimeSpan.FromSeconds(10);
+
     private readonly string _statePath;
     private readonly Func<(string? Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
     private readonly Func<SecurityIdentifier, RegistryKey?> _openUserSoftware;
@@ -38,6 +43,7 @@ public sealed class ClassLessonHandler
     private readonly Func<DateTime> _localNow;
     private readonly Action<string> _log;
     private readonly ClassHomeState? _home;
+    private readonly TimeSpan _claimWait;
     private readonly object _gate = new();
     private ClassLesson _lesson;
 
@@ -67,12 +73,14 @@ public sealed class ClassLessonHandler
     // the tests. localNow: the local time, for a lesson from an earlier day.
     // home: the class folders' home PC, the only one that may start a lesson
     // or change the class (null: anyone may, as before two teacher PCs).
+    // claimWait: how long a claim waits for the lesson's lock (DefaultClaimWait).
     public ClassLessonHandler(
         string statePath, Func<(string? Desktop, SecurityIdentifier Student)?> loggedOnStudent,
         Func<SecurityIdentifier, RegistryKey?> openUserSoftware, AppBlockEnforcer enforcer,
         SecurityIdentifier folderOwner, Func<DateTime> localNow, Action<string>? log = null,
-        ClassHomeState? home = null)
+        ClassHomeState? home = null, TimeSpan? claimWait = null)
     {
+        _claimWait = claimWait ?? DefaultClaimWait;
         _statePath = statePath;
         _loggedOnStudent = loggedOnStudent;
         _openUserSoftware = openUserSoftware;
@@ -96,16 +104,28 @@ public sealed class ClassLessonHandler
 
     // A teacher PC saying it is the home, decided under the lesson's lock: a
     // start and a claim never cross, and the folders don't move to another
-    // PC while a lesson is on.
+    // PC while a lesson is on. A look at the student's folders can hold that
+    // lock a long time (closing the browsers, the registry): a claim that
+    // can't have it within the claim wait is refused as busy
+    // (ClassHomeClaim.BusyText) and is never applied later (Ruling 18), so a
+    // Master that got no answer finds the home as it is when it asks again.
     public (bool Ok, string Detail) ClaimHome(string senderThumbprint, string senderAddress, ClassHomeClaim claim)
     {
         if (_home is null)
         {
             return (false, "esta máquina não guarda o PC das pastas");
         }
-        lock (_gate)
+        if (!Monitor.TryEnter(_gate, _claimWait))
+        {
+            return (false, ClassHomeClaim.BusyText);
+        }
+        try
         {
             return _home.Claim(senderThumbprint, senderAddress, claim, lessonOn: _lesson.IsOn);
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
         }
     }
 

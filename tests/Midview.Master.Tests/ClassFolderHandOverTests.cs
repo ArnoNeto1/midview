@@ -235,6 +235,11 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "dados", "turmas (passadas para PROF-2) (2)")));
     }
 
+    // Work that blocks for a long time, on a thread of its own: never the
+    // pool's, which the tests running alongside need (their bounds are short).
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     // A progress report that runs where it is reported (a Progress<T> would post it).
     private sealed class Inline : IProgress<HandOverProgress>
     {

@@ -334,8 +334,10 @@ public partial class ClassFolderWindow : Window
         LowSpaceBorder.Visibility = warning is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    // A copy of the class folders not in place yet is cancelled (ClassFolderWindow.TakeOver.cs).
     private void OnClosed(object? sender, EventArgs e)
     {
+        _takeOverCancel?.Cancel();
         _refreshTimer.Stop();
         _controller.Changed -= _onChanged;
     }

@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using Midview.Agent;
 using Midview.Protocol;
 using Xunit;
@@ -172,6 +173,62 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal((false, "Encerre a aula antes de passar as pastas."), during);
         Assert.Equal((true, "as pastas passaram para este PC"), after);
         Assert.Equal(new ClassHome(OtherPc, "PROF-2", "10.0.0.7", ClassFolderRemote.Port, 200), home.Current);
+    }
+
+    // Ruling 18: a claim that can't have the lesson's lock within the claim
+    // wait (a look at the student's folders holds it: closing the browsers, the
+    // registry) is refused as busy, quickly, and never applied later. A Master
+    // whose answer timed out reads the home again, and must find it as it is.
+    [Fact]
+    public async Task ClaimHome_HeldBehindTheLessonsLock_IsRefusedAsBusy_AndNeverAppliedLater()
+    {
+        var home = new ClassHomeState(_homePath, _log.Add);
+        using var holding = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var hold = 0;
+        var handler = new ClassLessonHandler(
+            _statePath,
+            () =>
+            {
+                if (Volatile.Read(ref hold) == 1)
+                {
+                    holding.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+                return (_desktop, Me);
+            },
+            _ => Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), new AppBlockEnforcer(_inspector), Me, () => _now,
+            _log.Add, home, claimWait: TimeSpan.FromMilliseconds(300));
+        Assert.True(handler.ClaimHome(HomePc, "10.0.0.5", ClaimOf("PROF-1")).Ok);
+        var before = home.Current;
+        Volatile.Write(ref hold, 1);
+        var reconciling = Task.Run(handler.Reconcile);
+        Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (ok, detail) = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: 200));
+        clock.Stop();
+        Volatile.Write(ref hold, 0);
+        release.Set();
+        await reconciling.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(ok);
+        Assert.Equal(ClassHomeClaim.BusyText, detail);
+        Assert.False(detail.StartsWith(ClassHomeClaim.OtherHomeText, StringComparison.Ordinal));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        Assert.Equal(before, handler.CurrentHome);
+        Assert.Equal(before, new ClassHomeState(_homePath, _log.Add).Current);
+        // With the lock free, the same claim is taken.
+        Assert.True(handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: 200)).Ok);
+        Assert.Equal("PROF-2", handler.CurrentHome!.Name);
+    }
+
+    // The claim waits well under a Master's read timeout (20 s) by default.
+    [Fact]
+    public void TheClaimWait_IsWellUnderTheMastersReadTimeout()
+    {
+        Assert.True(ClassLessonHandler.DefaultClaimWait <= TimeSpan.FromSeconds(10));
+        Assert.True(ClassLessonHandler.DefaultClaimWait > TimeSpan.Zero);
     }
 
     [Fact]

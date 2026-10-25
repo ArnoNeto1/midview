@@ -147,6 +147,11 @@ public sealed record ClassHomeClaim(string Name, int Port, bool TakeOver, long G
     // the home's name follows. The Master recognises it with StartsWith.
     public const string OtherHomeText = "As pastas das turmas ficam no PC ";
 
+    // An Agent's whole refusal of a claim it couldn't look at in time (it was
+    // busy with the student's folders): nothing was recorded, and nothing will
+    // be. Not another home: the Master takes it as an Agent that didn't answer.
+    public const string BusyText = "ocupado agora, tente de novo em instantes";
+
     private const byte TakeOverFlag = 1;
 
     // What Encode writes and TryDecode accept.

@@ -58,7 +58,9 @@ public static class ClassFolderClient
     // "This PC is the class folders' home" (two teacher PCs in one lab,
     // ClassHomeClaim), sent before a lesson starts. Not Ok, with the Agent's
     // reason, when it keeps another PC as the home (the reason starts with
-    // ClassHomeClaim.OtherHomeText) or takes no take-over now. OldAgent: an
+    // ClassHomeClaim.OtherHomeText) or takes no take-over now; or, busy with
+    // its student's folders, ClassHomeClaim.BusyText: it took nothing, as if it
+    // hadn't answered (never another home). OldAgent: an
     // Agent from before two teacher PCs, which keeps no home and takes any
     // start (a bare no, which a newer Agent never answers).
     public static (bool Ok, string Detail, bool OldAgent) ClaimHome(

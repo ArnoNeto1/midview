@@ -7,8 +7,10 @@ namespace Midview.Master;
 // colleague's PC (ClassFolderHandOver, through RemoteClassFolderController):
 // a confirmation naming the home PC and what comes from it (or, with that PC's
 // Midview not answering, the agreed question saying its classes don't come),
-// the copy's progress with "Cancelar", and the result line. Never while a
-// lesson is on; and only from the home the teacher was asked about.
+// the copy's progress with "Cancelar" (until the copy is in place: from then
+// on it goes to the end), and the result line. Closing the window cancels a
+// copy not in place yet. Never while a lesson is on; and only from the home
+// the teacher was asked about.
 public partial class ClassFolderWindow
 {
     // The copy running, for "Cancelar" (null when none is).
@@ -70,6 +72,12 @@ public partial class ClassFolderWindow
         // Reported on the copy's thread, shown here; never over "Cancelando" or the result.
         var progress = new Progress<HandOverProgress>(step =>
         {
+            if (step.InPlace)
+            {
+                // Too late to cancel: the room's PCs are being told.
+                CancelTakeOverButton.Visibility = Visibility.Collapsed;
+                _takeOverCancel = null;
+            }
             if (_busy && !cancel.IsCancellationRequested)
             {
                 ShowResults(ClassFolderText.TakeOverProgress(home, step), Array.Empty<string>());

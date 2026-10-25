@@ -9,7 +9,9 @@ namespace Midview.Master;
 // be lost after it took the claim (its lesson lock held it past the read
 // timeout, a network blip): so when no answer said yes and some didn't come,
 // the Agents are asked which home they keep before anything is put back, and
-// one that keeps this PC at that generation took it.
+// one that keeps this PC at that generation took it. An Agent busy with its
+// student's folders refuses at once (ClassHomeClaim.BusyText) and never
+// applies the claim later (Ruling 18): not taken, so asking again is conclusive.
 public sealed partial class ClassFolderHandOver
 {
     // How a claim reaches a machine's Agent: ClassFolderClient.ClaimHome when
@@ -53,9 +55,10 @@ public sealed partial class ClassFolderHandOver
             _log("An Agent whose answer was lost took this PC as the class folders' home.");
             return (true, string.Empty, generation);
         }
-        var why = answers.Where(answer => answer.Answer == Answer.Refused).Select(answer => answer.Detail)
-            .FirstOrDefault(detail => detail.Length > 0);
-        return (false, why ?? ClassFolderText.NoPcTookIt, generation);
+        var refusals = answers.Where(answer => answer.Answer == Answer.Refused).Select(answer => answer.Detail).ToList();
+        var why = refusals.FirstOrDefault(detail => detail.Length > 0 && detail != ClassHomeClaim.BusyText)
+            ?? (refusals.Contains(ClassHomeClaim.BusyText) ? ClassFolderText.PcsBusy : ClassFolderText.NoPcTookIt);
+        return (false, why, generation);
     }
 
     // The home an Agent keeps is this PC, at the generation it just claimed with.

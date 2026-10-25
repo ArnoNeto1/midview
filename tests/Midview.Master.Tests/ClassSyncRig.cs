@@ -219,8 +219,14 @@ internal sealed class StudentPc : IDisposable
 
         var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }) : null;
         Agent = new ClassLessonHandler(
-            Path.Combine(Root, "class-lesson.json"), () => null, _ => null, new AppBlockEnforcer(new NoProcesses()),
-            WindowsIdentity.GetCurrent().User!, () => rig.Now, _ => { }, home);
+            Path.Combine(Root, "class-lesson.json"),
+            () =>
+            {
+                WhileLooking?.Invoke();
+                return null;
+            },
+            _ => null, new AppBlockEnforcer(new NoProcesses()), WindowsIdentity.GetCurrent().User!, () => rig.Now, _ => { }, home,
+            claimWait: ClaimWait);
         _agentListener = new TcpListener(address, rig.AgentPort);
         _agentListener.Start();
         var siteBlock = new SiteBlockCommandHandler(
@@ -236,9 +242,16 @@ internal sealed class StudentPc : IDisposable
         Machine = new KnownMachine(Name, address.ToString(), _sessionCertificate.Thumbprint, _agentCertificate.Thumbprint);
     }
 
+    // How long a claim waits for the Agent's lesson lock (the Agent's own is 10 s).
+    public static readonly TimeSpan ClaimWait = TimeSpan.FromSeconds(1);
+
     public string Name { get; }
 
     public string Root { get; }
+
+    // Runs while the Agent looks at the student's folders, holding its lesson
+    // lock (Reconcile, a lesson set): a test holds the lock with it.
+    public Action? WhileLooking { get; set; }
 
     public string Desktop { get; }
 
