@@ -40,6 +40,11 @@
             </StackPanel>
         </Border>
 
+        <!-- On a colleague's PC: the class folders to this PC (ClassFolderWindow.TakeOver.cs; its text is
+             ClassFolderText.TakeOverButton). Disabled while a lesson is on, with the tooltip saying why. -->
+        <Button x:Name="TakeOverButton" DockPanel.Dock="Top" HorizontalAlignment="Right" Visibility="Collapsed" Margin="0,0,0,10"
+                ToolTipService.ShowOnDisabled="True" Click="OnTakeOverClicked" />
+
         <!-- Shown in both views when the teacher's disk is filling (ClassFolderText.LowSpaceWarning). -->
         <Border x:Name="LowSpaceBorder" DockPanel.Dock="Top" Visibility="Collapsed" Background="#FDECEA" BorderBrush="#F2B8B5"
                 BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">

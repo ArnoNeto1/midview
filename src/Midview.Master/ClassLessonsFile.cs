@@ -32,6 +32,20 @@ internal sealed class ClassLessonsFile
         _log = log;
     }
 
+    // Where the map is (or would be).
+    public string Path => _path;
+
+    // The file was replaced or moved away (a hand-over of the class folders,
+    // ClassStore.HandOver.cs): what is in memory is forgotten, and the file is
+    // read again at the next use.
+    public void Reload()
+    {
+        lock (_gate)
+        {
+            _lessons = null;
+        }
+    }
+
     public string? TurmaOf(Guid lessonId)
     {
         lock (_gate)
@@ -213,7 +227,7 @@ internal sealed class ClassLessonsFile
     {
         try
         {
-            var directory = Path.GetDirectoryName(_path);
+            var directory = System.IO.Path.GetDirectoryName(_path);
             if (!string.IsNullOrEmpty(directory))
             {
                 Directory.CreateDirectory(directory);

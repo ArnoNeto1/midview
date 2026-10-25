@@ -20,7 +20,9 @@ namespace Midview.Master;
 // access with "Dar acesso a um colega"). Anyone else, and any message that
 // isn't RemoteClassFolderState or RemoteClassFolderCommand, gets one
 // CommandAck with a CommandResult saying no (ClassFolderRemote's texts), after
-// their request was read. What the messages can't carry is left out or cut
+// their request was read. RemoteHandOver and RemoteHandOverDone (a colleague's
+// PC taking the class folders over) are served only with a ClassFolderHandOver
+// (ClassFolderHost.HandOver.cs). What the messages can't carry is left out or cut
 // (Ruling 4): a class folder made by hand with a name over
 // ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
 // ClassHome.MaxNameLength. What a colleague's PC sends as a class is taken only
@@ -34,8 +36,9 @@ namespace Midview.Master;
 // address too, so ColleagueTrust asks the room about one teacher at a time from
 // it. At most MaxConnections at once, MaxPerAddress from one PC. Nothing a
 // client does (nonsense, hanging up, never finishing) stops the host: the next
-// connection is served. In two files: this one (the connections) and
-// ClassFolderHost.Answers.cs (what each request gets).
+// connection is served. In three files: this one (the connections),
+// ClassFolderHost.Answers.cs (what each request gets) and
+// ClassFolderHost.HandOver.cs (the class folders taken over).
 public sealed partial class ClassFolderHost : IDisposable
 {
     // Requests are a few names at most; anything longer is refused before it is read.
@@ -54,6 +57,7 @@ public sealed partial class ClassFolderHost : IDisposable
     private readonly X509Certificate2 _certificate;
     private readonly IClassFolderController _local;
     private readonly Func<string, IPAddress, Task<bool>> _isTrusted;
+    private readonly ClassFolderHandOver? _handOver;
     private readonly Action<string> _log;
     private readonly TcpListener _tcp;
     private readonly CancellationTokenSource _stop = new();
@@ -64,12 +68,13 @@ public sealed partial class ClassFolderHost : IDisposable
     private int _connections;
 
     private ClassFolderHost(
-        X509Certificate2 certificate, IClassFolderController local, Func<string, IPAddress, Task<bool>> isTrusted, Action<string> log,
-        TcpListener tcp)
+        X509Certificate2 certificate, IClassFolderController local, Func<string, IPAddress, Task<bool>> isTrusted,
+        ClassFolderHandOver? handOver, Action<string> log, TcpListener tcp)
     {
         _certificate = certificate;
         _local = local;
         _isTrusted = isTrusted;
+        _handOver = handOver;
         _log = log;
         _tcp = tcp;
         Port = ((IPEndPoint)tcp.LocalEndpoint).Port;
@@ -86,12 +91,15 @@ public sealed partial class ClassFolderHost : IDisposable
     // Starts listening on every address (address: one only, for the tests)
     // and serving on the thread pool, never on the caller's context (Master
     // calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync
-    // (the client's thumbprint and the address it came from).
+    // (the client's thumbprint and the address it came from). handOver: this
+    // PC's, to give the class folders to a colleague's PC taking them over
+    // (none: that is refused as a request it doesn't know).
     // Null when the port can't be had (another program holds it): logged, in
     // English, by default to System.Diagnostics.Trace.
     public static ClassFolderHost? Open(
         X509Certificate2 certificate, IClassFolderController local, Func<string, IPAddress, Task<bool>> isTrusted,
-        int port = ClassFolderRemote.Port, Action<string>? log = null, IPAddress? address = null)
+        int port = ClassFolderRemote.Port, Action<string>? log = null, IPAddress? address = null,
+        ClassFolderHandOver? handOver = null)
     {
         log ??= message => System.Diagnostics.Trace.WriteLine("ClassFolderHost: " + message);
         var tcp = new TcpListener(address ?? IPAddress.Any, port);
@@ -107,13 +115,14 @@ public sealed partial class ClassFolderHost : IDisposable
             return null;
         }
 
-        var host = new ClassFolderHost(certificate, local, isTrusted, log, tcp);
+        var host = new ClassFolderHost(certificate, local, isTrusted, handOver, log, tcp);
         _ = Task.Run(host.AcceptAsync);
         return host;
     }
 
     // Stops listening. A request already being served is answered, and a
-    // command already running on the home goes on.
+    // command already running on the home goes on; a copy of the class folders
+    // being sent breaks off (the colleague's PC throws its copy away).
     public void Dispose()
     {
         _stop.Cancel();
@@ -234,7 +243,22 @@ public sealed partial class ClassFolderHost : IDisposable
                 channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _certificate);
                 request = channel.Receive(MaxRequestBytes);
             }
-            channel.Send(IsColleague(channel.RemoteThumbprint, address) ? Answer(request) : Refusal(ClassFolderRemote.NotTrustedText));
+            if (!IsColleague(channel.RemoteThumbprint, address))
+            {
+                channel.Send(Refusal(ClassFolderRemote.NotTrustedText));
+            }
+            else if (request.Type == MessageType.RemoteHandOver)
+            {
+                SendTheFolders(client, channel);
+            }
+            else if (request.Type == MessageType.RemoteHandOverDone)
+            {
+                channel.Send(HandedOver(request, channel.RemoteThumbprint));
+            }
+            else
+            {
+                channel.Send(Answer(request));
+            }
         }
         catch (Exception ex) when (ex is IOException or SocketException or AuthenticationException or InvalidDataException
             or ObjectDisposedException)

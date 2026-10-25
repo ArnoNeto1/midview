@@ -40,9 +40,10 @@ namespace Midview.Master;
 //
 // Changed is raised on background threads, never while a lock is held. machines
 // and isOnline (this PC's classroom list and grid) are called from background
-// threads too. In three files: this one (the home's state),
+// threads too. In four files: this one (the home's state),
 // RemoteClassFolderController.Commands.cs (the teacher's commands, and each
-// request on the wire) and RemoteClassFolderController.Closed.cs (the home closed).
+// request on the wire), RemoteClassFolderController.Closed.cs (the home closed)
+// and RemoteClassFolderController.TakeOver.cs (the folders taken over).
 public sealed partial class RemoteClassFolderController : IClassFolderController, IDisposable
 {
     public static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(2);

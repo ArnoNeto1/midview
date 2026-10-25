@@ -220,6 +220,83 @@ public static class ClassFolderText
     // The PC at the home's address answered with another certificate than the one the room knows for it.
     public static string HomeOtherIdentity(string name) => $"O PC {name} respondeu com outra identidade; ele foi reinstalado?";
 
+    // --- Taking the class folders over (ClassFolderHandOver) ---
+
+    // On a colleague's PC, for when the wrong teacher PC became the home.
+    public const string TakeOverButton = "Guardar as pastas das turmas neste computador";
+
+    // Why not while a lesson is on (what the room's Agents answer too): the button's tooltip, and a refusal.
+    public const string EndLessonFirst = "Encerre a aula antes de passar as pastas.";
+
+    // Asked before copying from the home PC: what its window lists (classes,
+    // files, their size), where its copy goes on it (named after this PC,
+    // thisPc), and, when this PC has classes of its own (ownClasses), where they go.
+    public static string TakeOverQuestion(string home, int classes, int files, long bytes, string thisPc, bool ownClasses) =>
+        $"Trazer as pastas das turmas do PC {home} para este computador?\n\n"
+        + $"Vêm {Classes(classes)} com {Files(files)} ({Size(bytes)}), e este computador passa a guardar as pastas. "
+        + $"O PC {home} guarda a cópia dele à parte, na pasta \"Turmas (passadas para {thisPc})\"."
+        + (ownClasses ? "\n\nAs turmas que já estão neste computador ficam guardadas à parte, na pasta \"Turmas (antes de …)\"." : string.Empty);
+
+    // Asked when the home PC's Midview doesn't answer: its classes stay on it.
+    public static string TakeOverUnreachableQuestion(string home) =>
+        $"O PC {home} não responde. Guardar as pastas neste computador assim mesmo? As turmas que estão nele não vêm junto; "
+        + "os arquivos que ainda estão nos PCs dos alunos vêm na próxima aula.";
+
+    // While the copy runs (progress: what arrived of it so far).
+    public static string TakeOverProgress(string home, HandOverProgress progress) => progress.TotalFiles == 0
+        ? $"Trazendo as pastas das turmas do PC {home}..."
+        : $"Trazendo as pastas das turmas do PC {home}: {Count(progress.Files)} de {Files(progress.TotalFiles)} "
+            + $"({Size(progress.Bytes)} de {Size(progress.TotalBytes)})...";
+
+    public static string TakeOverUnreachableProgress(string home) => $"Guardando as pastas neste computador no lugar do PC {home}...";
+
+    // After the copy: this PC keeps the folders now.
+    public static string TookOver(int classes, int files) =>
+        $"As pastas das turmas agora ficam neste computador: {Classes(classes)} com {Files(files)}.";
+
+    // After an unreachable home's take-over: this PC's own classes (if any) are the ones now.
+    public const string TookOverUnreachable = "As pastas das turmas agora ficam neste computador.";
+
+    // aside: the folder this PC's own earlier classes went to.
+    public static string OwnClassesAside(string aside) => $"As turmas que já estavam neste computador foram para a pasta \"{aside}\".";
+
+    // The old home put its copy aside, named after this PC.
+    public static string OldCopyAside(string home, string thisPc) =>
+        $"A cópia do PC {home} ficou nele, na pasta \"Turmas (passadas para {thisPc})\".";
+
+    // The old home stood down, but its copy couldn't go aside (reason: ErrorText's words, from that PC).
+    public static string OldCopyNotMoved(string home, string reason) =>
+        $"O PC {home} não conseguiu pôr a cópia dele à parte ({reason}): ela continua na pasta Turmas dele.";
+
+    // The old home didn't say it took the change in: it will by itself (its Midview asks the PCs every 30 s).
+    public static string OldHomeDidNotConfirm(string home) =>
+        $"O PC {home} ainda não confirmou a troca: a cópia dele continua na pasta Turmas dele.";
+
+    // A take-over that didn't happen; reason is made a whole sentence.
+    public static string TakeOverFailed(string home, string reason) =>
+        $"As pastas não foram trazidas do PC {home}; nada mudou. {Sentence(reason)}".TrimEnd();
+
+    public static string TakeOverUnreachableFailed(string reason) =>
+        $"As pastas não passaram para este computador; nada mudou. {Sentence(reason)}".TrimEnd();
+
+    // Why a take-over didn't happen, from this PC's side.
+    public static string CopyDropped(string home) => $"A cópia parou no meio: a conexão com o PC {home} caiu.";
+
+    public static string CopyMismatch(string home) => $"O que veio do PC {home} não confere com as pastas das turmas.";
+
+    public static string CopyNoRoom(long bytes, long freeBytes) =>
+        $"Não há espaço neste computador: as pastas ocupam {Size(bytes)} e o disco tem {Size(freeBytes)} livres (é preciso sobrar 1 GB).";
+
+    public static string CopyNotSaved(string reason) => $"Não foi possível gravar as pastas neste computador: {reason}";
+
+    public const string TakeOverRunning = "As pastas já estão sendo trazidas para este computador.";
+
+    // No PC of the room took this PC as the home (none answered).
+    public const string NoPcTookIt = "Nenhum PC da sala respondeu.";
+
+    // The home PC's Midview answers again since the window asked about it closed: asked again, its classes can come.
+    public static string HomeAnswersAgain(string name) => $"O Midview do PC {name} voltou a responder. Tente de novo.";
+
     // --- Changes to the list ---
 
     public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";
@@ -245,6 +322,17 @@ public static class ClassFolderText
     private static string Yours(string? home) => home is null ? "do seu PC" : $"do PC {home}";
 
     private static string Files(int count) => count == 1 ? "1 arquivo" : $"{Count(count)} arquivos";
+
+    private static string Classes(int count) => count switch
+    {
+        0 => "nenhuma turma",
+        1 => "1 turma",
+        _ => $"{Count(count)} turmas",
+    };
+
+    // A detail made a sentence: ending with a full stop (an Agent's refusal may not).
+    private static string Sentence(string text) =>
+        text.Length == 0 || text.EndsWith('.') || text.EndsWith('?') || text.EndsWith('!') ? text : text + ".";
 
     private static string Count(int count) => count.ToString("N0", PtBr);
 

@@ -30,15 +30,17 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 // only ever passed on to the UI thread with BeginInvoke; and every read and
 // command runs off the UI thread, so the window never freezes.
 //
-// In three files: this one (the two views and what keeps them current),
-// ClassFolderWindow.Classes.cs (the class list) and ClassFolderWindow.Lesson.cs
-// (starting, ending, and what each PC answered).
+// In four files: this one (the two views and what keeps them current),
+// ClassFolderWindow.Classes.cs (the class list), ClassFolderWindow.Lesson.cs
+// (starting, ending, and what each PC answered) and ClassFolderWindow.TakeOver.cs
+// ("Guardar as pastas das turmas neste computador", on a colleague's PC).
 public partial class ClassFolderWindow : Window
 {
     // How often the views read the disk again (the files, the free space).
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
 
     private readonly IClassFolderController _controller;
+    private readonly ClassFolderHandOver? _handOver;
     private readonly DispatcherTimer _refreshTimer;
     private readonly Action _onChanged;
 
@@ -68,11 +70,15 @@ public partial class ClassFolderWindow : Window
     // What the Recycle Bin holds on the disk of the classes, as last read: for "Excluir".
     private long _binBytes;
 
-    public ClassFolderWindow(IClassFolderController controller)
+    // handOver: this PC's, for "Guardar as pastas das turmas neste computador"
+    // on a colleague's PC (none: the button isn't shown).
+    public ClassFolderWindow(IClassFolderController controller, ClassFolderHandOver? handOver = null)
     {
         InitializeComponent();
         _controller = controller;
+        _handOver = handOver;
         NameTextBox.MaxLength = ClassLesson.MaxTurmaLength;
+        TakeOverButton.Content = ClassFolderText.TakeOverButton;
 
         _shownLesson = _controller.Lesson;
         _shownClosed = _controller.HomeClosed;
@@ -244,6 +250,7 @@ public partial class ClassFolderWindow : Window
         ClosedEndButton.IsEnabled = !_busy;
         ClosedEndButton.Visibility = Lesson.IsOn ? Visibility.Visible : Visibility.Collapsed;
         KeepChoice.IsEnabled = DeleteTodayChoice.IsEnabled = DeleteAllChoice.IsEnabled = !_busy;
+        UpdateTakeOverButton();
     }
 
     // What the views need from the disk, read off the UI thread: the class

@@ -44,10 +44,11 @@ public enum EndChoice
 // filesRoot. Paths inside a class are '/'-separated, compare ignoring case,
 // and each of their segments must be a name FileNames.Safe leaves alone.
 //
-// In four files, to stay readable: this one (the classes and their files),
+// In five files, to stay readable: this one (the classes and their files),
 // ClassStore.Incoming.cs (what the index knows, receiving a file, the teacher's
-// changes in Explorer, arrival days), ClassStore.Lesson.cs (ending a lesson) and
-// ClassStore.LessonMap.cs (which class each lesson was of).
+// changes in Explorer, arrival days), ClassStore.Lesson.cs (ending a lesson),
+// ClassStore.LessonMap.cs (which class each lesson was of) and
+// ClassStore.HandOver.cs (the whole store passing to another teacher PC).
 public sealed partial class ClassStore
 {
     // Under this much free space the Master warns the teacher.
@@ -122,6 +123,24 @@ public sealed partial class ClassStore
 
     // --- Classes ---
 
+    // The names of the classes List shows, in its order, without reading what is in them.
+    public IReadOnlyList<string> ClassNames()
+    {
+        var names = new List<string>();
+        if (Directory.Exists(_filesRoot))
+        {
+            foreach (var directory in new DirectoryInfo(_filesRoot).EnumerateDirectories("*", ListedDirectories))
+            {
+                if (IsValidName(directory.Name) && !ClassFolderRules.IsLink(directory))
+                {
+                    names.Add(directory.Name);
+                }
+            }
+        }
+        names.Sort(NaturalOrder.Instance);
+        return names;
+    }
+
     // Whether the name is one a class can have (see the class comment).
     public static bool IsValidName(string name) => NameRefusal(name) is null;
 
@@ -137,21 +156,8 @@ public sealed partial class ClassStore
     // a lesson couldn't be started with them.
     public IReadOnlyList<ClassSummary> List()
     {
-        var names = new List<string>();
-        if (Directory.Exists(_filesRoot))
-        {
-            foreach (var directory in new DirectoryInfo(_filesRoot).EnumerateDirectories("*", ListedDirectories))
-            {
-                if (IsValidName(directory.Name) && !ClassFolderRules.IsLink(directory))
-                {
-                    names.Add(directory.Name);
-                }
-            }
-        }
-        names.Sort(NaturalOrder.Instance);
-
         var summaries = new List<ClassSummary>();
-        foreach (var name in names)
+        foreach (var name in ClassNames())
         {
             // What can be read of it: a summary for the window, not for the sync.
             var files = Scan(new DirectoryInfo(FolderOf(name)), strict: false);
