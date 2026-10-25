@@ -29,6 +29,17 @@
     </Window.Resources>
 
     <DockPanel Margin="18,14,18,16">
+        <!-- On a colleague's PC: which teacher PC keeps the class folders (ClassFolderText.RemoteBanner),
+             and what that PC said instead of its state (the controller's Note). -->
+        <Border x:Name="RemoteBorder" DockPanel.Dock="Top" Visibility="Collapsed" Background="{StaticResource SelectedFillBrush}"
+                BorderBrush="{StaticResource SelectedLineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock x:Name="RemoteText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkBrush}" />
+                <TextBlock x:Name="RemoteNoteText" TextWrapping="Wrap" FontSize="12" Foreground="#B3261E" Margin="0,4,0,0"
+                           Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+
         <!-- Shown in both views when the teacher's disk is filling (ClassFolderText.LowSpaceWarning). -->
         <Border x:Name="LowSpaceBorder" DockPanel.Dock="Top" Visibility="Collapsed" Background="#FDECEA" BorderBrush="#F2B8B5"
                 BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
@@ -44,6 +55,15 @@
         </StackPanel>
 
         <Grid>
+            <!-- On a colleague's PC, the home PC's Midview not answering: only the end of the lesson, keeping the files. -->
+            <StackPanel x:Name="ClosedView" Visibility="Collapsed" VerticalAlignment="Center" Margin="24,0">
+                <TextBlock x:Name="ClosedText" TextWrapping="Wrap" TextAlignment="Center" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{StaticResource InkBrush}" />
+                <TextBlock x:Name="ClosedHintText" Style="{StaticResource Note}" TextAlignment="Center" Margin="0,8,0,0" />
+                <Button x:Name="ClosedEndButton" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}"
+                        HorizontalAlignment="Center" Margin="0,18,0,0" Click="OnEndClicked" />
+            </StackPanel>
+
             <!-- Before a lesson. -->
             <DockPanel x:Name="ClassesView">
                 <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10"

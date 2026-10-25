@@ -372,6 +372,8 @@ public sealed partial class ClassFolderHostTests
 
         public bool HomeClosed => false;
 
+        public string? Note => null;
+
         public event Action? Changed
         {
             add { }

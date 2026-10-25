@@ -184,6 +184,23 @@ public static class ClassFolderText
     // An end asked for a lesson that is no longer on.
     public static string LessonAlreadyOver(string turma) => $"A aula do {turma} já foi encerrada.";
 
+    // --- The class folders on another teacher PC (RemoteClassFolderController) ---
+
+    // Above the window on a colleague's PC.
+    public static string RemoteBanner(string name) => $"As pastas das turmas ficam no PC {name}. O que você fizer aqui acontece nele.";
+
+    // The home PC's Midview doesn't answer; then only "Encerrar a aula" works (keeping the files).
+    public static string HomeClosed(string name) => $"O Midview do PC {name}, que guarda as pastas das turmas, está fechado.";
+
+    public const string HomeClosedHint =
+        "Se ele está aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador (regra do firewall).";
+
+    // The home took the connection but gave no answer (it may have done what was asked).
+    public static string HomeNoAnswer(string name) => $"O Midview do PC {name} não respondeu. Tente de novo em instantes.";
+
+    // EndFailed's reason when, with the home closed, no PC of the room said which lesson it follows.
+    public const string NoPcAnswered = "nenhum PC da sala respondeu";
+
     // --- Changes to the list ---
 
     public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";

@@ -67,13 +67,17 @@ public partial class ClassFolderWindow
             ShowView();
             return;
         }
-        var choice = SelectedChoice();
+        // With the home PC closed, the end goes straight to the PCs and always keeps the files.
+        var closed = _controller.HomeClosed;
+        var choice = closed ? EndChoice.Keep : SelectedChoice();
         if (choice != EndChoice.Keep && !await ConfirmEndAsync(lesson, choice))
         {
             return;
         }
 
-        SetBusy(true, $"Encerrando a aula do {lesson.Turma}: trazendo os últimos arquivos dos PCs...");
+        SetBusy(true, closed
+            ? $"Encerrando a aula do {lesson.Turma}..."
+            : $"Encerrando a aula do {lesson.Turma}: trazendo os últimos arquivos dos PCs...");
         string headline;
         var lines = new List<string>();
         try
@@ -140,9 +144,12 @@ public partial class ClassFolderWindow
     private static int Offline(IReadOnlyList<ResultLineDto> results) =>
         results.Count(result => !result.Ok && result.Detail == FailureText.Offline);
 
-    // What the end couldn't do with the class's files on this PC.
-    private IEnumerable<string> EndProblems() =>
-        _controller.LastEndProblems.Select(problem => $"✗ Neste PC: {problem}");
+    // What the end couldn't do with the class's files on the PC that keeps them.
+    private IEnumerable<string> EndProblems()
+    {
+        var where = _controller.HomeName is { } home ? $"No PC {home}" : "Neste PC";
+        return _controller.LastEndProblems.Select(problem => $"✗ {where}: {problem}");
+    }
 
     private void SetBusy(bool busy, string? progress = null)
     {

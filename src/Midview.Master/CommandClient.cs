@@ -79,7 +79,7 @@ public static class CommandClient
     // unplugged midway shows as "Sem resposta" in about a minute and a half,
     // not at the end of the whole wait. An older Windows that lacks the finer
     // settings keeps its defaults, and the timeout still ends the wait.
-    private static void EnableKeepAlive(Socket socket)
+    internal static void EnableKeepAlive(Socket socket)
     {
         try
         {

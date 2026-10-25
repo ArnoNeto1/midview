@@ -21,7 +21,11 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 //
 // What it shows and asks goes through its controller (IClassFolderController):
 // on the class folders' home PC, MainWindow's LocalClassFolderController over
-// its store and sync, for its whole life. The controller's Changed comes on
+// its store and sync, for its whole life; on a colleague's teacher PC, a
+// RemoteClassFolderController, and then a banner above says which PC keeps the
+// folders (with what that PC said instead of its state, if anything), and with
+// that PC's Midview closed a third view has only "Encerrar a aula", which keeps
+// the files (the end choices are not shown). The controller's Changed comes on
 // background threads (sometimes while the sync holds its lesson lock), so it is
 // only ever passed on to the UI thread with BeginInvoke; and every read and
 // command runs off the UI thread, so the window never freezes.
@@ -41,15 +45,18 @@ public partial class ClassFolderWindow : Window
     // A change was queued for the UI thread and not shown yet: the next one waits for it.
     private int _changeQueued;
 
-    // The lesson as OnLessonChanged last saw it: a change to it is a lesson
-    // started or ended; any other change is a PC's state.
+    // The lesson as OnLessonChanged last saw it, and whether the home PC was
+    // closed: a change to either is a lesson started or ended, or the view
+    // changing; any other change is a PC's state (or, from a colleague's PC,
+    // anything else the home shows).
     private ClassLesson _shownLesson;
+    private bool _shownClosed;
 
     // A start, an end or a change to the list is running: the buttons wait for it.
     private bool _busy;
 
-    // Which view was shown last (null before the first): moving to the other clears the results.
-    private bool? _shownLessonView;
+    // Which view was shown last (null before the first): moving to another clears the results.
+    private View? _shownView;
 
     // The disk is being read for the views (RefreshFromDisk), and asked for again meanwhile.
     private bool _reading;
@@ -68,6 +75,8 @@ public partial class ClassFolderWindow : Window
         NameTextBox.MaxLength = ClassLesson.MaxTurmaLength;
 
         _shownLesson = _controller.Lesson;
+        _shownClosed = _controller.HomeClosed;
+        ClosedHintText.Text = ClassFolderText.HomeClosedHint;
         _onChanged = () =>
         {
             if (Interlocked.Exchange(ref _changeQueued, 1) == 0)
@@ -87,27 +96,36 @@ public partial class ClassFolderWindow : Window
 
     private ClassLesson Lesson => _controller.Lesson;
 
-    // The lesson view while a lesson is on, the list otherwise.
-    private bool InLessonView => Lesson.IsOn;
+    // The lesson view while a lesson is on, the list otherwise; neither with the home PC closed.
+    private bool InLessonView => !_controller.HomeClosed && Lesson.IsOn;
 
-    // The lesson, or the PCs' states.
+    // The lesson or the home PC's being closed, or the PCs' states. From a
+    // colleague's PC, what else the home shows (its classes, the lesson's
+    // files, its note) is read again too.
     private void OnChanged()
     {
         Volatile.Write(ref _changeQueued, 0);
-        if (Lesson != _shownLesson)
+        if (Lesson != _shownLesson || _controller.HomeClosed != _shownClosed)
         {
             OnLessonChanged();
         }
         else
         {
             ShowPcs();
+            ShowRemote();
+            if (_controller.HomeName is not null)
+            {
+                RefreshFromDisk();
+            }
         }
     }
 
-    // Started or ended, here or by the sync itself (a lesson left from an earlier day).
+    // Started or ended, here or by the sync itself (a lesson left from an
+    // earlier day) or from the other teacher PC; or the home PC closed or back.
     private void OnLessonChanged()
     {
         _shownLesson = Lesson;
+        _shownClosed = _controller.HomeClosed;
         // Every lesson's end starts as "Manter os arquivos".
         KeepChoice.IsChecked = true;
         _lessonFiles = null;
@@ -116,19 +134,28 @@ public partial class ClassFolderWindow : Window
     }
 
     // Which view, and everything in it that doesn't need the disk. Moving to
-    // the other view clears the results: they were about the one left.
+    // another view clears the results: they were about the one left.
     private void ShowView()
     {
         var lesson = Lesson;
         var inLesson = InLessonView;
-        if (_shownLessonView is { } shown && shown != inLesson)
+        var view = _controller.HomeClosed ? View.Closed : inLesson ? View.Lesson : View.Classes;
+        if (_shownView is { } shown && shown != view)
         {
             ShowResults(string.Empty, Array.Empty<string>());
         }
-        _shownLessonView = inLesson;
-        ClassesView.Visibility = inLesson ? Visibility.Collapsed : Visibility.Visible;
-        LessonView.Visibility = inLesson ? Visibility.Visible : Visibility.Collapsed;
+        _shownView = view;
+        ClassesView.Visibility = view == View.Classes ? Visibility.Visible : Visibility.Collapsed;
+        LessonView.Visibility = view == View.Lesson ? Visibility.Visible : Visibility.Collapsed;
+        ClosedView.Visibility = view == View.Closed ? Visibility.Visible : Visibility.Collapsed;
+        ShowRemote();
 
+        if (view == View.Closed)
+        {
+            ClosedText.Text = ClassFolderText.HomeClosed(_controller.HomeName ?? ClassHome.UnnamedText);
+            // The free space last read was the home's, which nothing here is about now.
+            LowSpaceBorder.Visibility = Visibility.Collapsed;
+        }
         if (inLesson)
         {
             LessonTitleText.Text = $"Pasta da turma: {lesson.Turma}";
@@ -174,6 +201,23 @@ public partial class ClassFolderWindow : Window
             .ToList();
     }
 
+    // From a colleague's PC (HomeName): where the class folders are, and what
+    // the home said instead of its state. Not with the home closed: that view
+    // says it all.
+    private void ShowRemote()
+    {
+        if (_controller.HomeName is not { } home || _controller.HomeClosed)
+        {
+            RemoteBorder.Visibility = Visibility.Collapsed;
+            return;
+        }
+        RemoteText.Text = ClassFolderText.RemoteBanner(home);
+        var note = _controller.Note;
+        RemoteNoteText.Text = note ?? string.Empty;
+        RemoteNoteText.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
+        RemoteBorder.Visibility = Visibility.Visible;
+    }
+
     // A PC's line as the texts take it (they only use its name); a state this
     // Midview doesn't know shows as a failure, with its detail.
     private static PcStatus StatusOf(PcLineDto line) => new(
@@ -193,6 +237,9 @@ public partial class ClassFolderWindow : Window
         DeleteButton.IsEnabled = !_busy && selected is not null && !IsLessonClass(selected.Turma);
         EndButton.IsEnabled = !_busy;
         SwitchButton.IsEnabled = !_busy;
+        // With the home PC closed: only while the Agents say a lesson is on.
+        ClosedEndButton.IsEnabled = !_busy;
+        ClosedEndButton.Visibility = Lesson.IsOn ? Visibility.Visible : Visibility.Collapsed;
         KeepChoice.IsEnabled = DeleteTodayChoice.IsEnabled = DeleteAllChoice.IsEnabled = !_busy;
     }
 
@@ -283,6 +330,13 @@ public partial class ClassFolderWindow : Window
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
+
+    private enum View
+    {
+        Classes,
+        Lesson,
+        Closed,
+    }
 
     // The class's files as last read (all, and those that arrived today), the free
     // space on the disk that holds them, and what the Recycle Bin holds there.

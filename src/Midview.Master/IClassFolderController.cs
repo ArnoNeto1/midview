@@ -30,6 +30,11 @@ public interface IClassFolderController
     // The home PC's Midview doesn't answer (only ever true on a colleague's PC).
     bool HomeClosed { get; }
 
+    // What the home PC said instead of its state, in the teacher's words: it
+    // can't read its class folders just now, or it doesn't take this PC's
+    // requests. Null when it said nothing of the kind (always, on the home).
+    string? Note { get; }
+
     // The lesson, a PC's state or the home itself changed.
     event Action? Changed;
 

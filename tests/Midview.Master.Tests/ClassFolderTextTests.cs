@@ -188,6 +188,33 @@ public class ClassFolderTextTests
     public void Outcome_CountsThePcsThatTookIt(bool started, int reached, int total, int offline, string expected) =>
         Assert.Equal(expected, ClassFolderText.Outcome(started, "3º A", reached, total, offline));
 
+    // --- The class folders on another teacher PC ---
+
+    [Fact]
+    public void RemoteBanner_SaysWhereTheFoldersAre() =>
+        Assert.Equal(
+            "As pastas das turmas ficam no PC PROF-1. O que você fizer aqui acontece nele.", ClassFolderText.RemoteBanner("PROF-1"));
+
+    [Fact]
+    public void HomeClosed_NamesTheHomePc() =>
+        Assert.Equal("O Midview do PC PROF-1, que guarda as pastas das turmas, está fechado.", ClassFolderText.HomeClosed("PROF-1"));
+
+    [Fact]
+    public void HomeClosedHint_PointsAtTheFirewallRule() =>
+        Assert.Equal(
+            "Se ele está aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador (regra do firewall).",
+            ClassFolderText.HomeClosedHint);
+
+    [Fact]
+    public void HomeNoAnswer_NamesTheHomePc() =>
+        Assert.Equal("O Midview do PC PROF-1 não respondeu. Tente de novo em instantes.", ClassFolderText.HomeNoAnswer("PROF-1"));
+
+    [Fact]
+    public void AnEndNoPcAnswered_SaysSo() =>
+        Assert.Equal(
+            "Não foi possível encerrar a aula do 3º A: nenhum PC da sala respondeu",
+            ClassFolderText.EndFailed("3º A", ClassFolderText.NoPcAnswered));
+
     // --- Changes to the list ---
 
     [Fact]
