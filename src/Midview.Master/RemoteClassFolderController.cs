@@ -19,15 +19,19 @@ namespace Midview.Master;
 // each on its own connection, and each is followed by a fresh state before it
 // returns (the window looks at Lesson right after a start). A connection the
 // home turns away before the request goes (its cap on one PC's connections) is
-// tried again shortly, and never counts against the home.
+// tried again shortly.
 //
-// The home is closed (HomeClosed) only once ClosedAfter polls in a row found
-// nobody there: the connection refused or never answered (its Master closed,
-// the PC off, or the firewall rule of its setup missing). The first connection
-// it takes again opens it. Closed, Lesson is the lesson the room's online
-// Agents follow, and only "Encerrar a aula", keeping the files, works: straight
-// on the Agents (RemoteClassFolderController.Closed.cs). Anything else is
-// refused with ClassFolderText.HomeClosed.
+// The home is closed (HomeClosed) only once ClosedAfter polls found nobody
+// there, with nothing but neutral polls between them: the connection refused
+// or never taken (its Master closed, the PC off, or the firewall rule of its
+// setup missing). Only the home's answer (a state, or a refusal) opens it
+// again. A poll that connects but gets no answer (turned away, a handshake
+// cut off, a home that hangs) is neutral: neither for nor against. So is a PC
+// at the home's address that answers with another certificate than the one
+// pinned, which Note says (Midview reinstalled there?). Closed, Lesson is the
+// lesson the room's online Agents follow, and only "Encerrar a aula", keeping
+// the files, works: straight on the Agents (RemoteClassFolderController.
+// Closed.cs). Anything else is refused with ClassFolderText.HomeClosed.
 //
 // A home that answers a state with a refusal: one that can't read its class
 // folders just now (ClassFolderRemote.UnreadableText) leaves the last view as
@@ -58,8 +62,9 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     // keep-alive notices a home switched off meanwhile.
     private static readonly TimeSpan CommandWait = TimeSpan.FromMinutes(6);
 
-    // A state younger than this is what the window's reads get.
-    private static readonly TimeSpan FreshFor = TimeSpan.FromSeconds(1);
+    // A state younger than the poll interval and this is what the window's
+    // reads get: the loop keeps it that fresh, so they add no requests.
+    private static readonly TimeSpan FreshMargin = TimeSpan.FromSeconds(1);
 
     // A request the home turned away is sent this many times in all, this far apart.
     private const int Attempts = 3;
@@ -214,18 +219,25 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     {
         lock (_runLock)
         {
-            _running?.Cancel();
-            _running = null;
+            StopLocked();
         }
     }
 
+    // Stops the loop. A request on its way finishes (a command's reply is
+    // still returned); any call after this throws ObjectDisposedException.
     public void Dispose()
     {
         lock (_runLock)
         {
+            if (_disposed)
+            {
+                return;
+            }
             _disposed = true;
+            StopLocked();
         }
-        Stop();
+        _polling.Dispose();
+        _commands.Dispose();
     }
 
     // The last state when it is fresh, else a new one. Throws IOException when
@@ -234,7 +246,8 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     {
         lock (_lock)
         {
-            if (!_closed && _note is null && _state is { } state && Environment.TickCount64 - _stateAt < FreshFor.TotalMilliseconds)
+            if (!_closed && _note is null && _state is { } state
+                && Environment.TickCount64 - _stateAt < (_pollInterval + FreshMargin).TotalMilliseconds)
             {
                 return state;
             }
@@ -253,8 +266,17 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
 
     private string ClosedText => ClassFolderText.HomeClosed(Name);
 
-    private ClassLesson LessonLocked() =>
-        _closed && _agentsLesson is { } agents ? agents : _state?.Lesson.ToLesson() ?? ClassLesson.None(0);
+    private ClassLesson LessonLocked() => _closed && _agentsLesson is { } agents ? agents : HomesLessonLocked();
+
+    private void StopLocked()
+    {
+        if (_running is { } running)
+        {
+            running.Cancel();
+            running.Dispose();
+            _running = null;
+        }
+    }
 
     private async Task LoopAsync(CancellationToken token)
     {
@@ -272,33 +294,45 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
         }
     }
 
-    // The state the home gave, or null. Never throws: what went wrong is the view's to show, or logged.
+    // The state the home gave, or null. Never throws: what went wrong is the
+    // view's to show, or logged; and whatever it changed is told (Changed).
     private async Task<RemoteState?> PollOnceAsync()
     {
+        try
+        {
+            await _polling.WaitAsync().ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+
         View before, after;
-        RemoteState? state;
-        await _polling.WaitAsync().ConfigureAwait(false);
+        RemoteState? state = null;
         try
         {
             before = Snapshot();
-            var exchanged = CurrentHome() is { } home
-                ? await RequestAsync(home, StateRequest, StateWait).ConfigureAwait(false)
-                : new Exchanged(Kind.Unreachable, null);
-            state = Take(exchanged);
-            if (AgentsLessonDue())
+            try
             {
-                await ReadAgentsLessonAsync().ConfigureAwait(false);
+                var exchanged = CurrentHome() is { } home
+                    ? await RequestAsync(home, StateRequest, StateWait).ConfigureAwait(false)
+                    : new Exchanged(Kind.Unreachable, null);
+                var otherIdentity = exchanged.Kind == Kind.WrongIdentity ? ClassFolderText.HomeOtherIdentity(Name) : null;
+                state = Take(exchanged, otherIdentity);
+                if (AgentsLessonDue())
+                {
+                    await ReadAgentsLessonAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _log($"Asking the class folders' home for its state failed: {ex}");
             }
             after = Snapshot();
         }
-        catch (Exception ex)
-        {
-            _log($"Asking the class folders' home for its state failed: {ex}");
-            return null;
-        }
         finally
         {
-            _polling.Release();
+            Release(_polling);
         }
 
         if (!before.IsSameAs(after))
@@ -309,36 +343,49 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     }
 
     // What one state request found, kept for the window; the state, or null.
-    private RemoteState? Take(Exchanged exchanged)
+    // otherIdentity: what Note says for a PC with another certificate.
+    private RemoteState? Take(Exchanged exchanged, string? otherIdentity)
     {
         lock (_lock)
         {
-            if (exchanged.Kind == Kind.Unreachable)
+            switch (exchanged.Kind)
             {
-                if (++_unreachable >= ClosedAfter && !_closed)
-                {
-                    // The Agents are asked at once (AgentsLessonDue); until then, the lesson the home last had.
-                    _closed = true;
-                    _agentsLesson = null;
-                    _agentsReadAt = null;
-                }
-                return null;
+                case Kind.Unreachable:
+                    if (++_unreachable >= ClosedAfter && !_closed)
+                    {
+                        // The Agents are asked at once (AgentsLessonDue); until then, the lesson the home last had.
+                        _closed = true;
+                        _agentsLesson = null;
+                        _agentsReadAt = null;
+                    }
+                    return null;
+
+                case Kind.WrongIdentity:
+                    // Neutral, but said: that PC is not the home this PC knows.
+                    _note = otherIdentity;
+                    return null;
+
+                case Kind.TurnedAway or Kind.Lost:
+                    return null;
             }
 
-            // Someone took the connection: the home's Master is there.
-            _unreachable = 0;
-            _closed = false;
             var reply = exchanged.Reply;
             if (reply?.Type == MessageType.RemoteClassFolderStateReply && ClassFolderRemote.DecodeJson<RemoteState>(reply.Payload) is { } state)
             {
+                Answered();
                 _state = state;
                 _signature = ClassFolderRemote.EncodeJson(state with { FreeBytes = 0, RecycleBinBytes = 0 });
                 _stateAt = Environment.TickCount64;
                 _note = null;
+                if (_endedHere is { } ended && (ended.LessonId != state.Lesson.LessonId || state.Lesson.SavedAt >= ended.SavedAt))
+                {
+                    _endedHere = null; // the home has taken that end in, or moved on
+                }
                 return state;
             }
             if (reply?.Type == MessageType.CommandAck && CommandResult.Decode(reply.Payload).Detail is { Length: > 0 } refusal)
             {
+                Answered();
                 _note = refusal;
                 if (!refusal.StartsWith(ClassFolderRemote.UnreadableText, StringComparison.Ordinal))
                 {
@@ -347,8 +394,27 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
                     _signature = null;
                 }
             }
-            // Otherwise (turned away, no answer, nonsense) the view stays as it was.
+            // Otherwise (an answer that is neither) the view stays as it was.
             return null;
+        }
+    }
+
+    // The home's Master answered: it is there. Under _lock.
+    private void Answered()
+    {
+        _unreachable = 0;
+        _closed = false;
+    }
+
+    // A command or a poll still on its way when the controller was disposed.
+    private static void Release(SemaphoreSlim gate)
+    {
+        try
+        {
+            gate.Release();
+        }
+        catch (ObjectDisposedException)
+        {
         }
     }
 

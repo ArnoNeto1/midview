@@ -210,6 +210,69 @@ public class ClassFolderTextTests
         Assert.Equal("O Midview do PC PROF-1 não respondeu. Tente de novo em instantes.", ClassFolderText.HomeNoAnswer("PROF-1"));
 
     [Fact]
+    public void HomeOtherIdentity_AsksWhetherItWasReinstalled() =>
+        Assert.Equal("O PC PROF-1 respondeu com outra identidade; ele foi reinstalado?", ClassFolderText.HomeOtherIdentity("PROF-1"));
+
+    // On another teacher PC, the disk and the Recycle Bin are the home PC's: the texts name it.
+    [Fact]
+    public void FromAnotherTeacherPc_TheHomesDiskAndRecycleBinAreNamed()
+    {
+        const string Home = "PROF-1";
+        var summary = new ClassSummary("3º A", 38, 38 * KB, null);
+        var lesson = LessonStartedAt(13, 30);
+
+        Assert.Equal(
+            "Excluir a turma 3º A? Os 38 arquivos dela vão para a Lixeira do PC PROF-1.",
+            ClassFolderText.DeleteQuestion(summary, tooBigForTheBin: false, Home));
+        Assert.Equal(
+            "Excluir a turma 3º A? Os 38 arquivos dela (38 KB) não cabem na Lixeira do PC PROF-1 e serão apagados de vez.",
+            ClassFolderText.DeleteQuestion(summary, tooBigForTheBin: true, Home));
+        Assert.Equal(
+            "Turma 3º A excluída. Os 38 arquivos dela estão na Lixeira do PC PROF-1.",
+            ClassFolderText.Deleted(summary, tooBigForTheBin: false, Home));
+        Assert.Equal(
+            "Turma 3º A excluída. O arquivo dela foi apagado de vez: não cabia na Lixeira do PC PROF-1.",
+            ClassFolderText.Deleted(new ClassSummary("3º A", 1, KB, null), tooBigForTheBin: true, Home));
+        Assert.EndsWith("· disco do PC PROF-1 com 180 GB livres", ClassFolderText.Header(lesson, 214, GB, 180 * GB, Home));
+        Assert.Equal(
+            "O disco do PC PROF-1 está ficando cheio (1 GB livres). Apague turmas antigas para continuar guardando arquivos.",
+            ClassFolderText.LowSpaceWarning(GB, Home));
+        Assert.Equal(
+            "Os 3 arquivos desta aula saem; os das aulas anteriores ficam. Os desta aula não cabem na Lixeira do PC PROF-1: serão apagados de vez.",
+            ClassFolderText.EndChoiceHint(EndChoice.DeleteToday, "3º A", 3, 10, tooBigForTheBin: true, Home));
+        Assert.Equal(
+            "Os 10 arquivos saem do PC PROF-1 e de todos os PCs. Vão para a Lixeira do PC PROF-1.",
+            ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, "3º A", 3, 10, tooBigForTheBin: false, Home));
+        Assert.Equal(
+            "Encerrar a aula do 3º A e apagar tudo do 3º A?\n\nO arquivo sai do PC PROF-1 e de todos os PCs. Não cabe na Lixeira do PC PROF-1: será apagado de vez.",
+            ClassFolderText.EndQuestion(EndChoice.DeleteAll, "3º A", 1, 1, tooBigForTheBin: true, Home));
+        Assert.Equal(
+            "A pasta da turma do PC PROF-1 não pôde ser lida agora. Tente de novo em instantes.",
+            ClassFolderText.LessonFilesUnreadable(Home));
+    }
+
+    // On the home itself, as before.
+    [Fact]
+    public void OnTheHome_ItsOwnDiskAndRecycleBinAreThisPcs()
+    {
+        Assert.Equal(
+            "Os 10 arquivos saem do seu PC e de todos os PCs. Vão para a Lixeira deste PC.",
+            ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, "3º A", 3, 10, tooBigForTheBin: false));
+        Assert.Equal(
+            "A pasta da turma deste PC não pôde ser lida agora. Tente de novo em instantes.", ClassFolderText.LessonFilesUnreadable());
+        Assert.StartsWith("O disco deste computador está ficando cheio", ClassFolderText.LowSpaceWarning(GB));
+    }
+
+    // Ended straight on the PCs with the home's Midview closed: nothing hands
+    // the end to the PCs that were off until it opens, or the day ends.
+    [Theory]
+    [InlineData(2, 3, 1, "A aula do 3º A foi encerrada em 2 de 3 PCs; os desligados continuam na aula até o Midview do PC PROF-1 abrir ou o dia acabar.")]
+    [InlineData(3, 3, 0, "A aula do 3º A foi encerrada em todos os 3 PCs.")]
+    [InlineData(1, 3, 1, "A aula do 3º A foi encerrada em 1 de 3 PCs.")]
+    public void Outcome_OfAnEndWithTheHomeClosed_DoesNotPromiseTheOffPcs(int reached, int total, int offline, string expected) =>
+        Assert.Equal(expected, ClassFolderText.Outcome(started: false, "3º A", reached, total, offline, closedHome: "PROF-1"));
+
+    [Fact]
     public void AnEndNoPcAnswered_SaysSo() =>
         Assert.Equal(
             "Não foi possível encerrar a aula do 3º A: nenhum PC da sala respondeu",

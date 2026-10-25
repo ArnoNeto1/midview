@@ -83,7 +83,9 @@ public partial class ClassFolderWindow
         try
         {
             var ended = await Task.Run(() => _controller.EndAsync(lesson.Turma, choice));
-            headline = ClassFolderText.Outcome(started: false, lesson.Turma, ended.Count(result => result.Ok), ended.Count, Offline(ended));
+            headline = ClassFolderText.Outcome(
+                started: false, lesson.Turma, ended.Count(result => result.Ok), ended.Count, Offline(ended),
+                closed ? _controller.HomeName ?? ClassHome.UnnamedText : null);
             if (nextClass)
             {
                 headline += " " + ClassFolderText.ChooseNextClass;
@@ -129,10 +131,11 @@ public partial class ClassFolderWindow
                 : null;
         if (files is null)
         {
-            ShowResults("A pasta da turma deste PC não pôde ser lida agora. Tente de novo em instantes.", Array.Empty<string>());
+            ShowResults(ClassFolderText.LessonFilesUnreadable(_controller.HomeName), Array.Empty<string>());
             return false;
         }
-        var question = ClassFolderText.EndQuestion(choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice));
+        var question = ClassFolderText.EndQuestion(
+            choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice), _controller.HomeName);
         return question is null || MessageBox.Show(this, question, "Encerrar a aula", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }

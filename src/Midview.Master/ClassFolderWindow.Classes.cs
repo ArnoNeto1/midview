@@ -173,7 +173,7 @@ public partial class ClassFolderWindow
             return;
         }
         var tooBigForTheBin = row.Class.Bytes > _binBytes;
-        if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin), "Excluir turma",
+        if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin, _controller.HomeName), "Excluir turma",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
         {
             return;
@@ -194,7 +194,7 @@ public partial class ClassFolderWindow
         {
             SetBusy(false);
         }
-        ShowResults(deleted.Ok ? ClassFolderText.Deleted(row.Class, tooBigForTheBin) : deleted.Detail, Array.Empty<string>());
+        ShowResults(deleted.Ok ? ClassFolderText.Deleted(row.Class, tooBigForTheBin, _controller.HomeName) : deleted.Detail, Array.Empty<string>());
         RefreshFromDisk();
     }
 }

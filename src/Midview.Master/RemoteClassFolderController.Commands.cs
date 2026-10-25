@@ -81,6 +81,10 @@ public sealed partial class RemoteClassFolderController
         {
             answer = new RemoteReply(false, ClosedText, none, command.Turma);
         }
+        else if (exchanged.Kind == Kind.WrongIdentity)
+        {
+            answer = new RemoteReply(false, ClassFolderText.HomeOtherIdentity(Name), none, command.Turma);
+        }
         else if (reply?.Type == MessageType.RemoteClassFolderCommandReply
             && ClassFolderRemote.DecodeJson<RemoteReply>(reply.Payload) is { } decoded)
         {
@@ -108,7 +112,7 @@ public sealed partial class RemoteClassFolderController
         }
         finally
         {
-            _commands.Release();
+            Release(_commands);
         }
     }
 
@@ -120,12 +124,14 @@ public sealed partial class RemoteClassFolderController
         _ => throw new ArgumentOutOfRangeException(nameof(choice)),
     };
 
-    // The request, sent again (off the caller's thread) while the home turns it away.
+    // The request, sent again while the home turns it away. Each exchange on
+    // its own thread, not the pool's: it blocks on the network, a command for
+    // minutes.
     private async Task<Exchanged> RequestAsync(ClassHome home, Message request, TimeSpan wait)
     {
         for (var attempt = 1; ; attempt++)
         {
-            var exchanged = await Task.Run(() => Exchange(home, request, wait)).ConfigureAwait(false);
+            var exchanged = await OwnThread(() => Exchange(home, request, wait)).ConfigureAwait(false);
             if (exchanged.Kind != Kind.TurnedAway || attempt == Attempts)
             {
                 return exchanged;
@@ -135,9 +141,13 @@ public sealed partial class RemoteClassFolderController
     }
 
     // One request on its own connection. Unreachable: nobody took the
-    // connection. TurnedAway: it was closed (or the home's certificate wasn't
-    // the one pinned) before the request went, so it wasn't done. Lost: the
-    // request went and no answer came back (it may have been done).
+    // connection. TurnedAway: it was closed, or the handshake failed or hung,
+    // before the request went, so it wasn't done. WrongIdentity: the PC there
+    // holds another certificate than the home's, and is told nothing. Lost:
+    // the request went and no answer came back (it may have been done). The
+    // home's certificate is checked here, after the handshake (which proves the
+    // other end holds that certificate's key), so a PC with another one is told
+    // apart from a connection cut off; the request never goes to it.
     private Exchanged Exchange(ClassHome home, Message request, TimeSpan wait)
     {
         TcpClient tcp;
@@ -157,7 +167,7 @@ public sealed partial class RemoteClassFolderController
             {
                 tcp.ReceiveTimeout = (int)StateWait.TotalMilliseconds;
                 tcp.SendTimeout = (int)StateWait.TotalMilliseconds;
-                channel = SecureChannel.AuthenticateAsClient(tcp, home.Address, _certificate, new TrustStore(new[] { home.Thumbprint }));
+                channel = SecureChannel.AuthenticateAsClientAcceptingAnyServer(tcp, home.Address, _certificate);
             }
             catch (Exception ex) when (IsNetwork(ex))
             {
@@ -166,6 +176,10 @@ public sealed partial class RemoteClassFolderController
 
             using (channel)
             {
+                if (!string.Equals(channel.RemoteThumbprint, home.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new Exchanged(Kind.WrongIdentity, null);
+                }
                 try
                 {
                     channel.Send(request);
@@ -184,6 +198,10 @@ public sealed partial class RemoteClassFolderController
         }
     }
 
+    // Blocking network work, off the thread pool.
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     private static bool IsNetwork(Exception ex) =>
         ex is IOException or SocketException or AuthenticationException or InvalidDataException or ObjectDisposedException;
 
@@ -192,6 +210,7 @@ public sealed partial class RemoteClassFolderController
         Answered,
         Unreachable,
         TurnedAway,
+        WrongIdentity,
         Lost,
     }
 

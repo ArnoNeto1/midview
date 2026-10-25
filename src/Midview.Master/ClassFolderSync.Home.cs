@@ -1,6 +1,4 @@
 using System.IO;
-using System.Net.Sockets;
-using System.Security.Authentication;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -14,9 +12,6 @@ public sealed partial class ClassFolderSync
 {
     // How often, while a lesson is on, the Agents are asked whether another PC ended it.
     private static readonly TimeSpan AdoptInterval = TimeSpan.FromSeconds(30);
-
-    // An end saved further ahead of this PC's clock than this is not believed.
-    private static readonly TimeSpan AdoptHorizon = TimeSpan.FromDays(1);
 
     // A start's answer on every PC when this PC's own file (ClassHomeFileMaster)
     // is there but can't be read; the reason follows.
@@ -77,10 +72,9 @@ public sealed partial class ClassFolderSync
             return;
         }
 
-        var lessons = await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(() => LessonOf(machine), token)))
-            .ConfigureAwait(false);
-        var horizon = UnixNow() + (long)AdoptHorizon.TotalSeconds;
-        var newest = lessons.OfType<ClassLesson>().Where(lesson => lesson.SavedAt <= horizon).MaxBy(lesson => lesson.SavedAt);
+        var lessons = await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(
+            () => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token))).ConfigureAwait(false);
+        var newest = ClassLessonOnAgents.Newest(lessons, UnixNow());
         if (newest is null || newest.LessonId != ours.LessonId || !newest.Ended || newest.SavedAt <= ours.SavedAt)
         {
             return;
@@ -246,33 +240,12 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // The lesson the machine's Agent follows; null when it gave no answer or
-    // is from before the class folder.
-    private ClassLesson? LessonOf(KnownMachine machine)
-    {
-        try
-        {
-            return ClassFolderClient.GetLesson(machine, _masterCertificate, _agentPort).Lesson;
-        }
-        catch (Exception ex)
-        {
-            LogUnexpected(ex, $"Reading the lesson of {machine.Name} failed");
-            return null;
-        }
-    }
-
     // The online machines whose Agent the classroom list knows.
     private List<KnownMachine> AgentsOnline() =>
         Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
 
     // A machine off, unreachable or not trusting this teacher is no news.
-    private void LogUnexpected(Exception ex, string what)
-    {
-        if (ex is not (SocketException or IOException or AuthenticationException or OperationCanceledException))
-        {
-            _log($"{what}: {ex}");
-        }
-    }
+    private void LogUnexpected(Exception ex, string what) => ClassLessonOnAgents.LogUnexpected(_log, ex, what);
 
     // At construction, then every AdoptInterval (AdoptAgentsEndAsync does
     // nothing with no lesson on).

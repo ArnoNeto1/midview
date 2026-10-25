@@ -93,6 +93,69 @@ public sealed partial class RemoteClassFolderControllerTests
         Assert.Equal(readsSoFar, scripted.Reads);
     }
 
+    // A PC at the home's address with another certificate (Midview reinstalled
+    // there, say): told nothing, never taken for closed, and said.
+    [Fact]
+    public async Task APcWithAnotherIdentity_AtTheHomesAddress_IsToldNothing_AndSaid()
+    {
+        var certificates = Certificates.Shared;
+        var scripted = new ScriptedHome();
+        using var host = Open(certificates.Colleague, scripted, (_, _) => Task.FromResult(true)); // not the home's certificate
+        using var remote = certificates.Remote(host);
+
+        for (var poll = 0; poll < RemoteClassFolderController.ClosedAfter; poll++)
+        {
+            await remote.PollAsync();
+        }
+
+        var otherIdentity = ClassFolderText.HomeOtherIdentity("PROF-1");
+        Assert.Equal(otherIdentity, remote.Note);
+        Assert.False(remote.HomeClosed);
+        Assert.Equal((false, otherIdentity, string.Empty), await remote.CreateAsync("9º A"));
+        Assert.Equal(0, scripted.Reads);
+        Assert.Equal(0, scripted.MostCommandsAtOnce);
+    }
+
+    // The window's reads between two polls take the last state: they add no requests.
+    [Fact]
+    public async Task TheWindowsReads_BetweenTwoPolls_TakeTheLastState()
+    {
+        var certificates = Certificates.Shared;
+        var scripted = new ScriptedHome();
+        using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
+        using var remote = certificates.Remote(host, RemoteClassFolderController.DefaultPollInterval);
+        await remote.PollAsync();
+
+        for (var read = 0; read < 5; read++)
+        {
+            Assert.Equal(OnNow, (await remote.ReadAsync(lessonFiles: true)).Lesson.ToLesson());
+        }
+
+        Assert.Equal(1, scripted.Reads);
+    }
+
+    // Disposed, it asks nothing more, a poll still asked for is a no-op, and a command is refused.
+    [Fact]
+    public async Task Disposed_ItAsksNoMore()
+    {
+        var certificates = Certificates.Shared;
+        var scripted = new ScriptedHome();
+        using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
+        var remote = certificates.Remote(host, TimeSpan.FromMilliseconds(20));
+        remote.Start();
+        await Until(() => Task.FromResult(scripted.Reads > 0));
+
+        remote.Dispose();
+        remote.Dispose();
+        await remote.PollAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => remote.CreateAsync("9º A"));
+        await Task.Delay(300);
+        var reads = scripted.Reads;
+        await Task.Delay(300);
+        Assert.Equal(reads, scripted.Reads);
+    }
+
     // The home PC's certificate and a colleague's, and the colleague's remote
     // for a host on loopback (no Agents: these homes never close). One pair
     // for these tests (made once: RSA keys are slow to make, and the suite runs

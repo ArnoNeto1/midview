@@ -330,9 +330,9 @@ public sealed partial class RemoteClassFolderControllerTests
                 rig.AgentPort, () => rig.Now);
         }
 
-        public ClassFolderSync Sync { get; }
+        public ClassFolderSync Sync { get; private set; }
 
-        public LocalClassFolderController Home { get; }
+        public LocalClassFolderController Home { get; private set; }
 
         public ClassFolderHost Host { get; private set; }
 
@@ -345,12 +345,26 @@ public sealed partial class RemoteClassFolderControllerTests
             Sync.Dispose();
         }
 
-        // The home's Master listening again (on another port here; the Agents would say where).
+        // The home's Master listening again (on another port here; the Agents
+        // would say where), its controller as it was when it closed.
         public void ReopenHost()
         {
             Host.Dispose();
             Host = OpenHost();
         }
+
+        // The home's Master opened again: a new sync from its files, its controller, its host.
+        public LocalClassFolderController ReopenHome()
+        {
+            Host.Dispose();
+            Sync = _rig.NewSync();
+            Home = LocalClassFolderControllerTests.NewController(_rig, Sync);
+            Host = OpenHost();
+            return Home;
+        }
+
+        // Where the room says the home is, from now on.
+        public void PointHomeAt(int port) => _homePort = port;
 
         public void Dispose()
         {
@@ -373,6 +387,16 @@ public sealed partial class RemoteClassFolderControllerTests
 
     private static Func<string, IPAddress, Task<bool>> Trusting(X509Certificate2 colleague) =>
         (thumbprint, _) => Task.FromResult(string.Equals(thumbprint, colleague.Thumbprint, StringComparison.OrdinalIgnoreCase));
+
+    // As many polls as it takes to find a home that is gone closed.
+    private static async Task PollUntilClosed(RemoteClassFolderController remote)
+    {
+        for (var poll = 0; poll < RemoteClassFolderController.ClosedAfter; poll++)
+        {
+            await remote.PollAsync();
+        }
+        Assert.True(remote.HomeClosed);
+    }
 
     private static async Task Until(Func<Task<bool>> condition)
     {

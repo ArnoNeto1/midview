@@ -170,19 +170,22 @@ public partial class ClassFolderWindow : Window
     private void ShowLessonFiles()
     {
         var lesson = Lesson;
+        var home = _controller.HomeName;
         var files = _lessonFiles is { } read && string.Equals(read.Turma, lesson.Turma, StringComparison.OrdinalIgnoreCase)
             ? read
             : null;
         HeaderText.Text = files is null
             ? string.Empty
-            : ClassFolderText.Header(lesson, files.Files, files.Bytes, files.FreeBytes);
+            : ClassFolderText.Header(lesson, files.Files, files.Bytes, files.FreeBytes, home);
         KeepHint.Text = ClassFolderText.EndChoiceHint(EndChoice.Keep, lesson.Turma, 0, 0, tooBigForTheBin: false);
         DeleteTodayHint.Text = files is null
             ? string.Empty
-            : ClassFolderText.EndChoiceHint(EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteToday));
+            : ClassFolderText.EndChoiceHint(
+                EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteToday), home);
         DeleteAllHint.Text = files is null
             ? string.Empty
-            : ClassFolderText.EndChoiceHint(EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll));
+            : ClassFolderText.EndChoiceHint(
+                EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll), home);
     }
 
     // Every PC of the classroom list, as the controller says each stands.
@@ -316,9 +319,10 @@ public partial class ClassFolderWindow : Window
         ? new LessonFiles(files.Turma, files.Files, files.Bytes, files.Today, files.TodayBytes, read.FreeBytes, read.RecycleBinBytes)
         : null;
 
+    // Never with the home PC closed: that view is about nothing on its disk.
     private void ShowLowSpace(long freeBytes)
     {
-        var warning = ClassFolderText.LowSpaceWarning(freeBytes);
+        var warning = _controller.HomeClosed ? null : ClassFolderText.LowSpaceWarning(freeBytes, _controller.HomeName);
         LowSpaceText.Text = warning ?? string.Empty;
         LowSpaceBorder.Visibility = warning is null ? Visibility.Collapsed : Visibility.Visible;
     }

@@ -404,26 +404,15 @@ public sealed partial class ClassFolderSync : IDisposable
         return await Task.WhenAll(machines.Select(machine => Task.Run(() => SendLesson(machine, lesson)))).ConfigureAwait(false);
     }
 
+    // An Agent that keeps a newer lesson didn't take this one (ClassLessonOnAgents.Send),
+    // and the PC's status says why rather than "atualizando a aula".
     private (KnownMachine Machine, bool Ok, string Detail) SendLesson(KnownMachine machine, ClassLesson lesson)
     {
-        try
+        var (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
+        if (succeeded)
         {
-            var (succeeded, detail) = ClassFolderClient.SetLesson(machine, _masterCertificate, lesson, _agentPort);
-            // An Agent that keeps a newer lesson answers yes, saying so: it didn't take
-            // this one, and the PC's status says why rather than "atualizando a aula".
-            if (succeeded && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal))
-            {
-                succeeded = false;
-            }
-            if (succeeded)
-            {
-                _delivered[Key(machine)] = lesson.SavedAt;
-            }
-            return (machine, succeeded, detail);
+            _delivered[Key(machine)] = lesson.SavedAt;
         }
-        catch (Exception ex)
-        {
-            return (machine, false, FailureText.DescribeAgent(ex));
-        }
+        return (machine, succeeded, detail);
     }
 }
