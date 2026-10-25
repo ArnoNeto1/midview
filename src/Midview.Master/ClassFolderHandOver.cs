@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -16,24 +17,27 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 
 // "Guardar as pastas das turmas neste computador" ("Two teacher PCs in one
 // lab", docs/superpowers/specs/2026-10-20-class-folder-design.md; plan
-// decision 7, Rulings 4 and 9, Review Focus 5): this teacher PC takes the class
-// folders over from the PC that keeps them (the home), or, as that home, gives
-// them. One per Master, for its store (ClassStore) and sync (ClassFolderSync).
+// decision 7, Rulings 4, 9 and 17, Review Focus 5): this teacher PC takes the
+// class folders over from the PC that keeps them (the home), or, as that home,
+// gives them. One per Master, for its store (ClassStore) and sync (ClassFolderSync).
 //
 // Taking them over from a home that answers (TakeOverAsync): the home's whole
-// store comes over its ClassFolderHost into Staging, every path checked to stay
-// inside it and every size against what was announced, and all of it must fit
-// on this PC's disk with KeepFreeBytes to spare. Nothing changes on either PC or
-// on the Agents until all of it is there and checks out; any failure before
-// then throws the copy away. Then this PC's own earlier store goes aside to
-// "Turmas (antes de <dd-MM-yyyy HHmm>)", the copy goes in its place, and every
-// online Agent is claimed with a take-over (ClassHomeClaim, a generation newer
-// than now and than any home they keep). When none of them takes it (a lesson
-// on, say), everything is put back as it was. When one does, this PC's
-// generation is kept (ClassHomeFileMaster), and the old home is told
-// (MessageType.RemoteHandOverDone): it stands down and moves its copy aside to
-// "Turmas (passadas para <this PC>)". An old home that doesn't answer that
-// finds out by itself (ClassHomeTracker) and keeps its copy where it is.
+// store comes over its ClassFolderHost into Staging (which must be gone first:
+// what an earlier take-over left there is never taken in), every path checked
+// to stay inside it and every size against what was announced, and all of it
+// must fit on this PC's disk with KeepFreeBytes to spare. Nothing changes on
+// either PC or on the Agents until all of it is there and checks out; any
+// failure before then, or the teacher cancelling, throws the copy away. Then
+// this PC's own earlier store goes aside to "Turmas (antes de <dd-MM-yyyy
+// HHmm>)", the copy goes in its place (from here on, cancelling does nothing),
+// and every online Agent is claimed with a take-over (ClassFolderHandOver.
+// Claim.cs). When none of them took it (a lesson on, say), everything is put
+// back as it was. When one did, this PC's generation is kept
+// (ClassHomeFileMaster), and the old home is told (MessageType.
+// RemoteHandOverDone): it stands down and moves its copy aside to "Turmas
+// (passadas para <this PC>)", or, with a lesson on, keeps the folders until
+// that lesson ends. An old home that doesn't answer that finds out by itself
+// (ClassHomeTracker) and keeps its copy where it is.
 //
 // Taking them over from a home that doesn't answer (TakeOverUnreachableAsync,
 // after the window's confirmation): the Agents are claimed the same way, and
@@ -52,16 +56,22 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 // FileChunks adding up to exactly that size, and last one CommandAck (true,
 // "<n> arquivos"). A CommandAck in the middle says why the rest won't come.
 // RemoteHandOverDone (the new home's computer name, UTF-8) is answered with one
-// CommandAck: true once the old home stood down (its detail says why its copy
-// couldn't go aside, if it couldn't), false when the room's Agents don't keep
-// the sender as the home.
+// CommandAck: true once the old home stood down, its detail the folder its copy
+// went to (empty: it had none; NotMovedMark and why: it couldn't go aside);
+// false, with why in the teacher's words, when it doesn't stand down (the
+// room's Agents don't keep the sender as the home, or a lesson is on there).
 //
-// In three files: this one (taking over), ClassFolderHandOver.Send.cs (giving,
-// on the home) and ClassFolderHandOver.Receive.cs (the copy arriving, checked).
+// In four files: this one (taking over), ClassFolderHandOver.Claim.cs (the
+// Agents), ClassFolderHandOver.Send.cs (giving, on the home) and
+// ClassFolderHandOver.Receive.cs (the copy arriving, checked).
 public sealed partial class ClassFolderHandOver
 {
     // What a take-over leaves free on this PC's disk at least: Windows and the PCs' files need room too.
     public const long KeepFreeBytes = 1L << 30;
+
+    // Starts RemoteHandOverDone's detail when the old home's copy couldn't go
+    // aside (never in a folder name); ErrorText's words follow.
+    internal const char NotMovedMark = '|';
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
@@ -112,6 +122,19 @@ public sealed partial class ClassFolderHandOver
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderHandOver: " + message));
     }
 
+    // How far a take-over got, for what to say when it breaks off.
+    private enum Stage
+    {
+        // Nothing has changed yet (the copy is still arriving, or being checked).
+        Copying,
+
+        // The copy is in place, and the room's Agents are being claimed.
+        Claiming,
+
+        // The Agents took this PC as the home; the old home is being told.
+        Claimed,
+    }
+
     // This PC's computer name, which the old home's copy is named after.
     public string MachineName => _machineName;
 
@@ -133,26 +156,47 @@ public sealed partial class ClassFolderHandOver
 
     // The home's class folders, to this PC (see the class comment). home: where
     // the room's Agents say it is, its certificate pinned. progress: as the copy
-    // arrives, on the copy's thread. Never throws.
-    public Task<HandOverResult> TakeOverAsync(ClassHome home, IProgress<HandOverProgress>? progress = null) =>
-        Alone(() => TakeOver(home, progress));
+    // arrives, on the copy's thread. cancel: stops the copy, and changes
+    // nothing, until it goes in place; ignored after. Never throws.
+    public Task<HandOverResult> TakeOverAsync(
+        ClassHome home, IProgress<HandOverProgress>? progress = null, CancellationToken cancel = default)
+    {
+        var name = home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;
+        return Alone(
+            stage => TakeOver(home, name, progress, cancel, stage),
+            (stage, reason) => stage.Value switch
+            {
+                Stage.Copying => new HandOverResult(false, ClassFolderText.TakeOverFailed(name, reason)),
+                Stage.Claiming => new HandOverResult(false, ClassFolderText.TakeOverBrokeOffClaiming(name, reason)),
+                _ => new HandOverResult(true, ClassFolderText.TakeOverBrokeOffTellingTheOldHome(name, reason)),
+            });
+    }
 
     // The home PC (named home in the texts) doesn't answer: the Agents take
     // this PC as the home, and its own store (or none) is the one now. Never throws.
-    public Task<HandOverResult> TakeOverUnreachableAsync(string home) => Alone(() =>
-    {
-        var (ok, detail, generation) = Claim();
-        if (!ok)
+    public Task<HandOverResult> TakeOverUnreachableAsync(string home) => Alone(
+        stage =>
         {
-            return new HandOverResult(false, ClassFolderText.TakeOverUnreachableFailed(detail));
-        }
-        KeepGeneration(generation);
-        _log($"This PC took the class folders over from {home}, which didn't answer, with generation {generation}.");
-        return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
-    });
+            stage.Value = Stage.Claiming;
+            var (ok, detail, generation) = Claim();
+            if (!ok)
+            {
+                return new HandOverResult(false, ClassFolderText.TakeOverUnreachableFailed(detail));
+            }
+            stage.Value = Stage.Claimed;
+            KeepGeneration(generation);
+            _log($"This PC took the class folders over from {home}, which didn't answer, with generation {generation}.");
+            return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
+        },
+        (stage, reason) => stage.Value == Stage.Copying
+            ? new HandOverResult(false, ClassFolderText.TakeOverUnreachableFailed(reason))
+            : new HandOverResult(stage.Value == Stage.Claimed, ClassFolderText.TakeOverUnreachableBrokeOff(reason)));
 
-    // One take-over at a time, on its own thread (it blocks on the network and the disk).
-    private Task<HandOverResult> Alone(Func<HandOverResult> takeOver)
+    // One take-over at a time, on its own thread (it blocks on the network and
+    // the disk). brokeOff: what to say when it throws (a mistake in the code:
+    // nothing in it throws for what the network, the disk or a PC does), by the
+    // stage it got to; a copy not in place yet is thrown away.
+    private Task<HandOverResult> Alone(Func<StrongBox<Stage>, HandOverResult> takeOver, Func<StrongBox<Stage>, string, HandOverResult> brokeOff)
     {
         if (Interlocked.Exchange(ref _taking, 1) == 1)
         {
@@ -161,16 +205,26 @@ public sealed partial class ClassFolderHandOver
         return Task.Factory.StartNew(
             () =>
             {
+                var stage = new StrongBox<Stage>(Stage.Copying);
                 try
                 {
-                    return takeOver();
+                    return takeOver(stage);
                 }
                 catch (Exception ex)
                 {
-                    // A mistake in the code: nothing above throws for what the network, the disk or a PC does.
-                    _log($"Taking the class folders over failed: {ex}");
-                    _store.DiscardStaging();
-                    return new HandOverResult(false, ClassFolderText.TakeOverUnreachableFailed(ErrorText.Describe(ex)));
+                    if (stage.Value == Stage.Copying)
+                    {
+                        _store.DiscardStaging();
+                    }
+                    try
+                    {
+                        _log($"Taking the class folders over broke off ({stage.Value}): {ex}");
+                    }
+                    catch (Exception)
+                    {
+                        // What went wrong may be the log itself.
+                    }
+                    return brokeOff(stage, ErrorText.Describe(ex));
                 }
                 finally
                 {
@@ -180,11 +234,20 @@ public sealed partial class ClassFolderHandOver
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    private HandOverResult TakeOver(ClassHome home, IProgress<HandOverProgress>? progress)
+    private HandOverResult TakeOver(
+        ClassHome home, string name, IProgress<HandOverProgress>? progress, CancellationToken cancel, StrongBox<Stage> stage)
     {
-        var name = home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;
         _store.DiscardStaging();
-        var received = Receive(home, name, progress);
+        if (_store.StagingLeft() is { } left)
+        {
+            return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, ClassFolderText.StagingLeft(Path.GetFileName(left))));
+        }
+
+        var received = Receive(home, name, progress, cancel);
+        if (received.Failure is null && cancel.IsCancellationRequested)
+        {
+            received = Received.Failed(ClassFolderText.CopyCancelled);
+        }
         if (received.Failure is { } failure)
         {
             _store.DiscardStaging();
@@ -203,6 +266,7 @@ public sealed partial class ClassFolderHandOver
             return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, ClassFolderText.CopyNotSaved(ErrorText.Describe(ex))));
         }
 
+        stage.Value = Stage.Claiming;
         var (ok, detail, generation) = Claim();
         if (!ok)
         {
@@ -210,6 +274,7 @@ public sealed partial class ClassFolderHandOver
             _store.DiscardStaging();
             return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, detail));
         }
+        stage.Value = Stage.Claimed;
         KeepGeneration(generation);
         _log($"This PC took the class folders over from {name} with generation {generation}.");
 
@@ -218,91 +283,37 @@ public sealed partial class ClassFolderHandOver
         {
             text.Append(' ').Append(ClassFolderText.OwnClassesAside(Path.GetFileName(aside)));
         }
-        var (answered, stoodDown, why) = TellTheOldHome(home);
-        text.Append(' ').Append(
-            !answered || !stoodDown ? ClassFolderText.OldHomeDidNotConfirm(name)
-            : why.Length > 0 ? ClassFolderText.OldCopyNotMoved(name, why)
-            : ClassFolderText.OldCopyAside(name, _machineName));
-        return new HandOverResult(true, text.ToString());
+        return new HandOverResult(true, text.Append(' ').Append(WhatTheOldHomeSaid(home, name)).ToString());
+    }
+
+    // RemoteHandOverDone to the old home, and its answer in the teacher's words.
+    private string WhatTheOldHomeSaid(ClassHome home, string name)
+    {
+        if (TellTheOldHome(home) is not { } answer)
+        {
+            return ClassFolderText.OldHomeDidNotConfirm(name);
+        }
+        var (stoodDown, detail) = answer;
+        return !stoodDown ? detail.Length > 0 ? detail : ClassFolderText.OldHomeDidNotConfirm(name)
+            : detail.Length == 0 ? ClassFolderText.OldHadNoClasses(name)
+            : detail[0] == NotMovedMark ? ClassFolderText.OldCopyNotMoved(name, detail[1..])
+            : ClassFolderText.OldCopyAside(name, detail);
     }
 
     // Where this PC's own earlier store goes: "antes de 20-10-2026 1330".
     private string BeforeWhy() => "antes de " + _localNow().ToString("dd-MM-yyyy HHmm", CultureInfo.InvariantCulture);
 
-    // Where the old home's copy goes on it: "passadas para PROF-2".
-    private static string PassedToWhy(string name) => "passadas para " + FileNames.Safe(name);
-
-    // Every online Agent claimed with a take-over and a generation newer than
-    // now and than any home they keep (Ruling 9). Ok when at least one took it
-    // (the others are taken back at this PC's next start); otherwise why not,
-    // as an Agent said it (a lesson on), or that none answered.
-    private (bool Ok, string Detail, long Generation) Claim()
+    // Where the old home's copy goes on it: "passadas para PROF-2" (name: as
+    // the room's Agents recorded the new home; never empty).
+    private static string PassedToWhy(string name)
     {
-        var online = AgentsOnline();
-        var homes = Homes(online);
-        var generation = ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes);
-        var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
-        var answers = AskEach(online, machine => ClaimOn(machine, claim)).OfType<ClaimAnswer>().ToList();
-        foreach (var refused in answers.Where(answer => !answer.Ok))
-        {
-            _log($"{refused.Machine.Name} didn't take this PC as the class folders' home: {refused.Detail}");
-        }
-        if (answers.Any(answer => answer.Ok))
-        {
-            return (true, string.Empty, generation);
-        }
-        var why = answers.Select(answer => answer.Detail).FirstOrDefault(detail => detail.Length > 0);
-        return (false, why ?? ClassFolderText.NoPcTookIt, generation);
+        var safe = FileNames.Safe(name.Trim());
+        return "passadas para " + (safe.Length > 0 && ClassFolderRules.IsAddressable(safe) ? safe : "outro PC");
     }
 
-    // What the machine's Agent answered the claim; null for one from before
-    // two teacher PCs (it keeps no home) or one that gave no answer.
-    private ClaimAnswer? ClaimOn(KnownMachine machine, ClassHomeClaim claim)
-    {
-        try
-        {
-            var (ok, detail, oldAgent) = ClassFolderClient.ClaimHome(machine, _certificate, claim, _agentPort);
-            return oldAgent ? null : new ClaimAnswer(machine, ok, detail);
-        }
-        catch (Exception ex)
-        {
-            ClassLessonOnAgents.LogUnexpected(_log, ex, $"Claiming the class folders' home on {machine.Name} failed");
-            return null;
-        }
-    }
-
-    // The homes the machines' Agents keep (none from one that keeps none, is
-    // from before two teacher PCs, or doesn't answer).
-    private List<ClassHome> Homes(IReadOnlyList<KnownMachine> machines) =>
-        AskEach(machines, machine =>
-        {
-            try
-            {
-                return ClassFolderClient.GetHome(machine, _certificate, _agentPort).Home;
-            }
-            catch (Exception ex)
-            {
-                ClassLessonOnAgents.LogUnexpected(_log, ex, $"Reading the class folders' home of {machine.Name} failed");
-                return null;
-            }
-        }).OfType<ClassHome>().ToList();
-
-    private void KeepGeneration(long generation)
-    {
-        try
-        {
-            ClassHomeFileMaster.Write(generation, _homePath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // The Agents keep it: this PC's next start finds itself among them as the home.
-            _log($"This PC's generation as the class folders' home could not be saved: {ex.Message}");
-        }
-    }
-
-    // RemoteHandOverDone to the old home: whether it answered, whether it
-    // stood down, and why its copy couldn't go aside (empty when it went).
-    private (bool Answered, bool StoodDown, string Why) TellTheOldHome(ClassHome home)
+    // RemoteHandOverDone to the old home: what it answered (whether it stood
+    // down, and its detail), or null when it gave no answer.
+    private (bool StoodDown, string Detail)? TellTheOldHome(ClassHome home)
     {
         try
         {
@@ -311,58 +322,19 @@ public sealed partial class ClassFolderHandOver
             using var channel = SecureChannel.AuthenticateAsClientAcceptingAnyServer(tcp, home.Address, _certificate);
             if (!string.Equals(channel.RemoteThumbprint, home.Thumbprint, StringComparison.OrdinalIgnoreCase))
             {
-                return (false, false, string.Empty);
+                return null;
             }
             channel.Send(new Message(MessageType.RemoteHandOverDone, Encoding.UTF8.GetBytes(_machineName)));
             var reply = channel.Receive(ClassFolderRemote.MaxJsonBytes);
-            if (reply.Type != MessageType.CommandAck)
-            {
-                return (false, false, string.Empty);
-            }
-            var (stoodDown, why) = CommandResult.Decode(reply.Payload);
-            return (true, stoodDown, why);
+            return reply.Type == MessageType.CommandAck ? CommandResult.Decode(reply.Payload) : null;
         }
         catch (Exception ex) when (IsNetwork(ex) || ex is OperationCanceledException)
         {
             _log($"The old class folders' home {home.Name} wasn't told of the take-over: {ex.Message}");
-            return (false, false, string.Empty);
+            return null;
         }
     }
-
-    // The online machines whose Agent the classroom list knows (one whose state can't be told is off).
-    private List<KnownMachine> AgentsOnline()
-    {
-        IReadOnlyList<KnownMachine> machines;
-        try
-        {
-            machines = _machines();
-        }
-        catch (Exception ex)
-        {
-            _log($"Reading the classroom list failed: {ex}");
-            return new List<KnownMachine>();
-        }
-        return machines.Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
-    }
-
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    // Each machine at once, each on its own pool thread.
-    private static T[] AskEach<T>(IReadOnlyList<KnownMachine> machines, Func<KnownMachine, T> ask) =>
-        Task.WhenAll(machines.Select(machine => Task.Run(() => ask(machine)))).GetAwaiter().GetResult();
 
     private static bool IsNetwork(Exception ex) =>
         ex is IOException or SocketException or AuthenticationException or InvalidDataException or ObjectDisposedException;
-
-    private sealed record ClaimAnswer(KnownMachine Machine, bool Ok, string Detail);
 }

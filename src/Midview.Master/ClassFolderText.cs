@@ -260,9 +260,55 @@ public static class ClassFolderText
     // aside: the folder this PC's own earlier classes went to.
     public static string OwnClassesAside(string aside) => $"As turmas que já estavam neste computador foram para a pasta \"{aside}\".";
 
-    // The old home put its copy aside, named after this PC.
-    public static string OldCopyAside(string home, string thisPc) =>
-        $"A cópia do PC {home} ficou nele, na pasta \"Turmas (passadas para {thisPc})\".";
+    // The old home put its copy aside, in that folder (its own answer: "Turmas (passadas para PROF-2) (2)", say).
+    public static string OldCopyAside(string home, string folder) => $"A cópia do PC {home} ficou nele, na pasta \"{folder}\".";
+
+    // The old home stood down with no classes to put aside.
+    public static string OldHadNoClasses(string home) => $"O PC {home} não tinha turmas para guardar à parte.";
+
+    // Built on the old home (pc: its own name) and shown on the new one: a
+    // lesson is on there (some of its PCs still follow it), so it goes on
+    // keeping the folders until that lesson ends.
+    public static string LetsGoAfterTheLesson(string pc, string turma) =>
+        $"O PC {pc} está com a aula do {turma} em andamento: ele deixa de guardar as pastas quando essa aula acabar, "
+        + "e a cópia dele continua na pasta Turmas dele.";
+
+    // Built on the old home and shown on the new one: the room's PCs don't keep newHome as the home.
+    public static string NotTheHomeYet(string newHome, string pc) =>
+        $"Os PCs da sala ainda não mostram o PC {newHome} como o que guarda as pastas; a cópia do PC {pc} continua na pasta Turmas dele.";
+
+    // A take-over that broke off (a mistake in the code, reason ErrorText's words)
+    // after the copy went in place, while the room's PCs were being told: which
+    // PC keeps the folders isn't known here.
+    public static string TakeOverBrokeOffClaiming(string home, string reason) =>
+        $"A troca das pastas com o PC {home} parou no meio ({reason}): as turmas dele já estão neste computador, "
+        + "mas os PCs da sala podem não ter sido avisados. Feche e abra esta janela para ver qual PC guarda as pastas.";
+
+    // ...after the room's PCs took this PC as the home, while the old home was being told.
+    public static string TakeOverBrokeOffTellingTheOldHome(string home, string reason) =>
+        $"As pastas das turmas agora ficam neste computador, mas a troca parou ao avisar o PC {home} ({reason}): "
+        + "a cópia dele pode continuar na pasta Turmas dele.";
+
+    // ...an unreachable home's take-over, while the room's PCs were being told.
+    public static string TakeOverUnreachableBrokeOff(string reason) =>
+        $"A troca das pastas parou enquanto os PCs da sala eram avisados ({reason}). Feche e abra esta janela para ver qual PC guarda as pastas.";
+
+    // The window couldn't tell how a take-over ended (reason: ErrorText's words).
+    public static string TakeOverUnknown(string reason) =>
+        $"Não foi possível saber como terminou a troca das pastas ({reason}). Feche e abra esta janela para ver qual PC guarda as pastas.";
+
+    // A copy that an earlier take-over left half done, still there: nothing of it may be taken in.
+    public static string StagingLeft(string folder) =>
+        $"Uma cópia anterior que não terminou não pôde ser apagada. Apague a pasta \"{folder}\" e tente de novo.";
+
+    // The teacher cancelled the copy ("Cancelar"), before anything changed.
+    public const string CopyCancelled = "A cópia foi cancelada.";
+
+    public static string TakeOverCancelling(string home) => $"Cancelando a cópia das pastas do PC {home}...";
+
+    // The room's PCs keep another home than the one the window asked about.
+    public static string HomeChanged(string confirmed, string now) =>
+        $"As pastas agora ficam no PC {now}, não no PC {confirmed}. Confira e tente de novo.";
 
     // The old home stood down, but its copy couldn't go aside (reason: ErrorText's words, from that PC).
     public static string OldCopyNotMoved(string home, string reason) =>

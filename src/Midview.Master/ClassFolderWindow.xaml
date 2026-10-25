@@ -54,6 +54,9 @@
         <!-- What a start, an end or a change to the list did: a line for the whole, then one per PC. -->
         <StackPanel x:Name="ResultsPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,12,0,0">
             <TextBlock x:Name="ProgressText" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+            <!-- While the class folders are being copied to this PC (ClassFolderWindow.TakeOver.cs). -->
+            <Button x:Name="CancelTakeOverButton" Content="Cancelar" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed"
+                    Click="OnCancelTakeOverClicked" />
             <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
                 <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
             </ScrollViewer>

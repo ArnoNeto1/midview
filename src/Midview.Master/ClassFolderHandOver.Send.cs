@@ -12,9 +12,6 @@ public sealed partial class ClassFolderHandOver
     // What the home answers when a file changed while it was being sent (the store is read again next time).
     public const string ChangedText = "Um arquivo das turmas mudou durante a cópia no PC que guarda as pastas. Tente de novo.";
 
-    // RemoteHandOverDone's refusal: the room's Agents don't keep the sender as the home.
-    public const string NotTheHomeText = "Os PCs da sala não mostram esse computador como o que guarda as pastas das turmas.";
-
     // Answers RemoteHandOver on channel (see the class comment), on the host's
     // thread. Refused while a lesson is on, before it starts and again before the
     // last answer (one started meanwhile), and when the store can't be read
@@ -68,7 +65,7 @@ public sealed partial class ClassFolderHandOver
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                channel.Send(Refusal(ex is FileNotFoundException or DirectoryNotFoundException
+                channel.Send(Stopped(ex is FileNotFoundException or DirectoryNotFoundException
                     ? ChangedText
                     : ClassFolderRemote.UnreadableText + ErrorText.Describe(ex)));
                 return;
@@ -79,7 +76,7 @@ public sealed partial class ClassFolderHandOver
                 // Shared for reading only: it can't change while it is sent, but it may have since the manifest.
                 if (content.Length != file.Size || File.GetLastWriteTimeUtc(file.FullPath).Ticks != file.LastWriteTicks)
                 {
-                    channel.Send(Refusal(ChangedText));
+                    channel.Send(Stopped(ChangedText));
                     return;
                 }
                 if (!SendOne(channel, file.WirePath, content, file.Size, stop))
@@ -100,12 +97,16 @@ public sealed partial class ClassFolderHandOver
 
     // The sender (its certificate's thumbprint, from the TLS channel) says it
     // took the folders over, as name. Only when one of the room's online Agents
-    // keeps it as the home, newer than this PC: this PC stands down
+    // keeps it as the home (that certificate, and that name: never a home
+    // recorded with none, which any name would match), newer than this PC, and
+    // no lesson is on here (Ruling 17: some PCs still follow it, and this PC
+    // keeps the folders until it ends): this PC stands down
     // (ClassFolderSync.StandDownAsync), keeps it as the other home seen
     // (ClassHomeFileMaster), and moves its store aside to "Turmas (passadas para
-    // <name>)". Ok then, with ErrorText's words for why the store couldn't go
-    // aside (it stays where it is), or empty. Not Ok, NotTheHomeText, otherwise:
-    // nothing changes.
+    // <the name the Agents recorded>)". Ok then, with the folder it went to
+    // (empty: there was nothing to move), or NotMovedMark and ErrorText's words
+    // for why it couldn't go (it stays where it is). Not Ok otherwise, saying
+    // why in the teacher's words: nothing changes.
     internal async Task<(bool Ok, string Detail)> HandedOverAsync(string name, string senderThumbprint)
     {
         long? own;
@@ -119,13 +120,20 @@ public sealed partial class ClassFolderHandOver
         }
 
         var homes = await Task.Run(() => Homes(AgentsOnline())).ConfigureAwait(false);
-        var newHome = homes.FirstOrDefault(home => home.IsSameIdentity(senderThumbprint, name)
+        var newHome = homes.FirstOrDefault(home => home.Name.Length > 0
+            && string.Equals(home.Name, name, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(home.Thumbprint, senderThumbprint, StringComparison.OrdinalIgnoreCase)
             && !home.IsSamePc(_certificate.Thumbprint, _machineName, own)
             && (own is not { } generation || home.Generation > generation));
         if (newHome is null)
         {
             _log($"{name} said it took the class folders over, but no Agent keeps it as the home.");
-            return (false, NotTheHomeText);
+            return (false, ClassFolderText.NotTheHomeYet(name, _machineName));
+        }
+        if (_sync.Lesson is { IsOn: true } lesson)
+        {
+            _log($"{name} took the class folders over with the lesson of {lesson.Turma} on here: kept until it ends.");
+            return (false, ClassFolderText.LetsGoAfterTheLesson(_machineName, lesson.Turma));
         }
 
         await _sync.StandDownAsync().ConfigureAwait(false);
@@ -140,14 +148,14 @@ public sealed partial class ClassFolderHandOver
 
         try
         {
-            var aside = await Task.Run(() => _store.MoveAside(PassedToWhy(name))).ConfigureAwait(false);
-            _log($"The class folders went to {name}; this PC's copy is now at {aside ?? "(none)"}.");
-            return (true, string.Empty);
+            var aside = await Task.Run(() => _store.MoveAside(PassedToWhy(newHome.Name))).ConfigureAwait(false);
+            _log($"The class folders went to {newHome.Name}; this PC's copy is now at {aside ?? "(none)"}.");
+            return (true, aside is null ? string.Empty : Path.GetFileName(aside));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _log($"The class folders went to {name}, but this PC's copy could not be put aside: {ex.Message}");
-            return (true, ErrorText.Describe(ex));
+            _log($"The class folders went to {newHome.Name}, but this PC's copy could not be put aside: {ex.Message}");
+            return (true, NotMovedMark + ErrorText.Describe(ex));
         }
     }
 
@@ -173,12 +181,12 @@ public sealed partial class ClassFolderHandOver
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                channel.Send(Refusal(ClassFolderRemote.UnreadableText + ErrorText.Describe(ex)));
+                channel.Send(Stopped(ClassFolderRemote.UnreadableText + ErrorText.Describe(ex)));
                 return false;
             }
             if (read == 0)
             {
-                channel.Send(Refusal(ChangedText));
+                channel.Send(Stopped(ChangedText));
                 return false;
             }
 
@@ -189,4 +197,8 @@ public sealed partial class ClassFolderHandOver
     }
 
     private static Message Refusal(string detail) => new(MessageType.CommandAck, CommandResult.Encode(false, detail));
+
+    // A copy stopped in the middle (why: a file changed or can't be read):
+    // a lesson started meanwhile, which changes the store, is the reason to give.
+    private Message Stopped(string why) => Refusal(_sync.Lesson.IsOn ? ClassFolderText.EndLessonFirst : why);
 }

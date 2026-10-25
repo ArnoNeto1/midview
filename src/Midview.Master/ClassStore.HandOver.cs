@@ -113,6 +113,17 @@ public sealed partial class ClassStore
         }
     }
 
+    // What of Staging is still there (after DiscardStaging couldn't remove it:
+    // a file of it open in another program, say), or null when none of it is.
+    internal string? StagingLeft()
+    {
+        var staging = Staging;
+        return Directory.Exists(staging.Files) ? staging.Files
+            : Directory.Exists(staging.Index) ? staging.Index
+            : File.Exists(staging.Lessons) ? staging.Lessons
+            : null;
+    }
+
     // This PC's store, all of it, aside (see the class comment), for the PC
     // that keeps the folders now: the store is empty after. The files root's
     // new name, or null when it had nothing. Throws IOException or

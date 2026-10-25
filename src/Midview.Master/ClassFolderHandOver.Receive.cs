@@ -59,8 +59,14 @@ public sealed partial class ClassFolderHandOver
             ManifestOptions);
 
     // The home's store into Staging (which the caller discards on a failure).
-    private Received Receive(ClassHome home, string name, IProgress<HandOverProgress>? progress)
+    // cancel closes the connection, whatever it is waiting for.
+    private Received Receive(ClassHome home, string name, IProgress<HandOverProgress>? progress, CancellationToken cancel)
     {
+        if (cancel.IsCancellationRequested)
+        {
+            return Received.Failed(ClassFolderText.CopyCancelled);
+        }
+
         System.Net.Sockets.TcpClient tcp;
         try
         {
@@ -72,6 +78,7 @@ public sealed partial class ClassFolderHandOver
         }
 
         using (tcp)
+        using (cancel.Register(tcp.Dispose))
         {
             SecureChannel channel;
             try
@@ -81,7 +88,7 @@ public sealed partial class ClassFolderHandOver
             }
             catch (Exception ex) when (IsNetwork(ex))
             {
-                return Received.Failed(ClassFolderText.HomeNoAnswer(name));
+                return Received.Failed(cancel.IsCancellationRequested ? ClassFolderText.CopyCancelled : ClassFolderText.HomeNoAnswer(name));
             }
 
             using (channel)
@@ -94,7 +101,11 @@ public sealed partial class ClassFolderHandOver
                 {
                     channel.Send(new Message(MessageType.RemoteHandOver, Array.Empty<byte>()));
                     CommandClient.EnableKeepAlive(tcp.Client);
-                    return new Copy(this, channel, name, progress).Run();
+                    return new Copy(this, channel, name, progress, cancel).Run();
+                }
+                catch (Exception ex) when (IsNetwork(ex) && cancel.IsCancellationRequested)
+                {
+                    return Received.Failed(ClassFolderText.CopyCancelled);
                 }
                 catch (InvalidDataException)
                 {
@@ -250,18 +261,21 @@ public sealed partial class ClassFolderHandOver
         private readonly SecureChannel _channel;
         private readonly string _name;
         private readonly IProgress<HandOverProgress>? _progress;
+        private readonly CancellationToken _cancel;
         private int _files;
         private int _totalFiles;
         private long _bytes;
         private long _totalBytes;
         private long _toldAt;
 
-        public Copy(ClassFolderHandOver owner, SecureChannel channel, string name, IProgress<HandOverProgress>? progress)
+        public Copy(
+            ClassFolderHandOver owner, SecureChannel channel, string name, IProgress<HandOverProgress>? progress, CancellationToken cancel)
         {
             _owner = owner;
             _channel = channel;
             _name = name;
             _progress = progress;
+            _cancel = cancel;
         }
 
         private string Mismatch => ClassFolderText.CopyMismatch(_name);
@@ -342,6 +356,10 @@ public sealed partial class ClassFolderHandOver
         // One file of the manifest: its header, then its bytes into target, with its time.
         private string? One(ManifestFile file, string target)
         {
+            if (_cancel.IsCancellationRequested)
+            {
+                return ClassFolderText.CopyCancelled;
+            }
             var header = _channel.Receive();
             if (Refusal(header) is { } refused)
             {
@@ -392,6 +410,10 @@ public sealed partial class ClassFolderHandOver
             long received = 0;
             while (received < size)
             {
+                if (_cancel.IsCancellationRequested)
+                {
+                    return ClassFolderText.CopyCancelled;
+                }
                 var chunk = _channel.Receive();
                 if (Refusal(chunk) is { } refused)
                 {

@@ -97,6 +97,38 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertNoStaging();
     }
 
+    // Ruling 17 (b, h): what the old home answered RemoteHandOverDone is in the
+    // result line: the folder its copy went to (numbered, say), why it couldn't
+    // go aside, that it had none, or that it keeps the folders until its lesson ends.
+    [Theory]
+    [InlineData(true, "Turmas (passadas para PROF-2) (2)")]
+    [InlineData(true, "|acesso negado")]
+    [InlineData(true, "")]
+    [InlineData(false, "O PC PROF-1 está com a aula do 3º A em andamento: ele deixa de guardar as pastas quando essa aula acabar, e a cópia dele continua na pasta Turmas dele.")]
+    [InlineData(false, "")]
+    public async Task WhatTheOldHomeAnswered_IsInTheResultLine(bool stoodDown, string detail)
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new HandOverLab(rig, openHost: false);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        using var home = new ScriptedHandOverHome(rig, channel =>
+        {
+            SendManifest(channel, new[] { Turma });
+            Done(channel);
+        });
+        home.DoneAnswer = (stoodDown, detail);
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port });
+
+        Assert.True(result.Ok, result.Detail);
+        var expected = !stoodDown
+            ? detail.Length > 0 ? detail : ClassFolderText.OldHomeDidNotConfirm(OldHome)
+            : detail.Length == 0 ? ClassFolderText.OldHadNoClasses(OldHome)
+            : detail[0] == '|' ? ClassFolderText.OldCopyNotMoved(OldHome, detail[1..])
+            : ClassFolderText.OldCopyAside(OldHome, detail);
+        Assert.EndsWith(" " + expected, result.Detail);
+    }
+
     // The home's Master doesn't answer (that PC is gone): after the window's
     // confirmation, this PC claims the Agents with a newer generation and
     // starts with its own classes, which stay where they are.
@@ -118,11 +150,11 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(remote.HomeClosed);
 
         // A window that asked about a home answering does nothing now that it is closed.
-        var mismatch = await remote.TakeOverAsync(lab.Taker, homeClosed: false);
+        var mismatch = await remote.TakeOverAsync(lab.Taker, remote.Home, homeClosed: false);
         Assert.False(mismatch.Ok);
         Assert.Equal(OldHome, rig.Pcs[0].Agent.CurrentHome!.Name);
 
-        var result = await remote.TakeOverAsync(lab.Taker, homeClosed: true);
+        var result = await remote.TakeOverAsync(lab.Taker, remote.Home, homeClosed: true);
 
         Assert.True(result.Ok, result.Detail);
         Assert.Equal(ClassFolderText.TookOverUnreachable, result.Detail);
@@ -303,6 +335,9 @@ public sealed partial class ClassFolderHandOverTests
 
         public int Port { get; }
 
+        // What it answers RemoteHandOverDone: stood down, with no classes to put aside, by default.
+        public (bool Ok, string Detail) DoneAnswer { get; set; } = (true, string.Empty);
+
         public void Dispose()
         {
             _listener.Stop();
@@ -331,7 +366,7 @@ public sealed partial class ClassFolderHandOverTests
                         var request = channel.Receive();
                         if (request.Type == MessageType.RemoteHandOverDone)
                         {
-                            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, string.Empty)));
+                            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(DoneAnswer.Ok, DoneAnswer.Detail)));
                             continue;
                         }
                         _script(channel);

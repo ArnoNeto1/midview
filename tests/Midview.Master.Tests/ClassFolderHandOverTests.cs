@@ -42,7 +42,10 @@ public sealed partial class ClassFolderHandOverTests
         var result = await lab.Taker.TakeOverAsync(lab.Home);
 
         Assert.True(result.Ok, result.Detail);
-        Assert.StartsWith("As pastas das turmas agora ficam neste computador", result.Detail);
+        Assert.Equal(
+            ClassFolderText.TookOver(3, 3) + " " + ClassFolderText.OwnClassesAside("Turmas (antes de 20-10-2026 1330)") + " "
+            + ClassFolderText.OldCopyAside(OldHome, "Turmas (passadas para PROF-2)"),
+            result.Detail);
         // Everything arrived, as it was.
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
         Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(lab.NewPath(Turma, "a.txt")));
@@ -184,7 +187,7 @@ public sealed partial class ClassFolderHandOverTests
             }
         });
 
-        var result = await remote.TakeOverAsync(lab.Taker, homeClosed: false, progress);
+        var result = await remote.TakeOverAsync(lab.Taker, remote.Home, homeClosed: false, progress);
 
         Assert.True(result.Ok, result.Detail);
         Assert.NotNull(seenDuring);
@@ -228,6 +231,7 @@ public sealed partial class ClassFolderHandOverTests
 
         Assert.True(result.Ok, result.Detail);
         Assert.True(File.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2) (2)", Turma, "a.txt")));
+        Assert.EndsWith(" " + ClassFolderText.OldCopyAside(OldHome, "Turmas (passadas para PROF-2) (2)"), result.Detail);
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "dados", "turmas (passadas para PROF-2) (2)")));
     }
 
@@ -243,7 +247,7 @@ public sealed partial class ClassFolderHandOverTests
 
     // The two teacher PCs of the lab (see the class comment). Host: the old
     // home's, serving the hand-over (none for a home that can't be reached).
-    private sealed class HandOverLab : IDisposable
+    private sealed partial class HandOverLab : IDisposable
     {
         public static readonly byte[] Video = Enumerable.Range(0, FileTransfer.ChunkSize + 1000).Select(i => (byte)i).ToArray();
 
@@ -268,7 +272,7 @@ public sealed partial class ClassFolderHandOverTests
                 homePath: NewHomePath);
             Taker = new ClassFolderHandOver(
                 NewStore, NewSync, rig.OtherMaster, NewHome, () => rig.Machines, IsOnline, () => rig.Now, rig.AgentPort,
-                homePath: NewHomePath, log: _ => { });
+                homePath: NewHomePath, log: message => TakerLog(message));
 
             if (openHost)
             {
@@ -298,6 +302,9 @@ public sealed partial class ClassFolderHandOverTests
         public ClassFolderHandOver Taker { get; }
 
         public long NewFreeSpace { get; set; } = long.MaxValue;
+
+        // What the taking PC logs (nothing by default).
+        public Action<string> TakerLog { get; set; } = _ => { };
 
         // The home as the room's Agents keep it, where its host listens (the
         // Agents keep the port its claims carried, ClassFolderRemote.Port).
