@@ -4,159 +4,12 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderHandOver: the claim on the room's Agents after the copy is in
-// place. An answer lost on the way back (the Agent may have taken the claim)
-// is found out by asking the Agents again before anything is put back; a
-// claim some PCs take and others don't is done; the old home lets go only
-// with no lesson on; and a take-over that breaks off after the swap says how
-// far it got (never "nada mudou").
+// place (lost answers are in ClassFolderHandOverTests.Lost.cs): busy Agents
+// take nothing; the old home lets go only with no lesson on, and names its
+// copy as the Agents name the new home; and a take-over that breaks off after
+// the swap says how far it got (never "nada mudou").
 public sealed partial class ClassFolderHandOverTests
 {
-    // An Agent that takes the claim (or not) and whose answer never comes back
-    // (its lesson lock held it past the read timeout, a network blip): this PC
-    // asks the Agents which home they keep before putting anything back.
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AClaimWhoseAnswersAreLost_IsDone_WhenTheAgentsTookIt(bool taken)
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        using var lab = new HandOverLab(rig);
-        await lab.MakeTheOldHomeTheHomeAsync();
-        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
-        lab.FillTheOldHome();
-        lab.GiveTheNewHomeAClassOfItsOwn();
-        var before = lab.Snapshot();
-        lab.Taker.SendClaim = (machine, claim) =>
-        {
-            if (taken)
-            {
-                ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort);
-            }
-            throw new IOException("the answer was lost");
-        };
-
-        var result = await lab.Taker.TakeOverAsync(lab.Home);
-
-        if (taken)
-        {
-            Assert.True(result.Ok, result.Detail);
-            Assert.All(rig.Pcs, pc => Assert.Equal((NewHome, generation + 1), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
-            Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
-            Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
-            Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
-            Assert.Equal(ClassLesson.None(0), lab.OldSync.Lesson);
-        }
-        else
-        {
-            Assert.False(result.Ok);
-            Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.NoPcTookIt), result.Detail);
-            lab.AssertUnchanged(before);
-        }
-    }
-
-    // No answer says yes: PC1 refuses (it still follows a lesson), PC2 took
-    // the claim and its answer was lost, PC3 is off. The Agents asked again
-    // say PC2 keeps this PC: the take-over is done, its generation kept, and
-    // the others are taken back at this PC's next start.
-    [Fact]
-    public async Task AClaimOnlyALostAnswerTook_IsDone()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        using var lab = new HandOverLab(rig);
-        await lab.MakeTheOldHomeTheHomeAsync();
-        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
-        lab.FillTheOldHome();
-        lab.PutALessonOnTheAgentOf(rig.Pcs[0]);
-        rig.Offline["PC3"] = true;
-        lab.Taker.SendClaim = (machine, claim) =>
-        {
-            var answer = ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort);
-            return machine.Name == "PC2" ? throw new IOException("the answer was lost") : answer;
-        };
-
-        var result = await lab.Taker.TakeOverAsync(lab.Home);
-
-        Assert.True(result.Ok, result.Detail);
-        Assert.Equal(OldHome, rig.Pcs[0].Agent.CurrentHome!.Name);
-        Assert.Equal((NewHome, generation + 1), (rig.Pcs[1].Agent.CurrentHome!.Name, rig.Pcs[1].Agent.CurrentHome!.Generation));
-        Assert.Equal(OldHome, rig.Pcs[2].Agent.CurrentHome!.Name);
-        Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
-        Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
-        Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
-    }
-
-    // Ruling 19 (a): the claim's connection breaks (a reset) while the Agent
-    // still waits for its lesson lock; the lock is free soon after, and the
-    // claim is taken then. This PC waits out the Agent's lock wait from when it
-    // sent the claim before asking which home the Agents keep, so it finds
-    // itself there: done, never the classes split between two PCs.
-    [Fact]
-    public async Task AClaimWhoseConnectionBreaksWhileTheAgentWaits_IsDoneWhenItIsTakenLater()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        using var lab = new HandOverLab(rig);
-        await lab.MakeTheOldHomeTheHomeAsync();
-        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
-        lab.FillTheOldHome();
-        var claims = new List<Task>();
-        HandOverResult result;
-        using (var busy = new BusyAgents(rig.Pcs))
-        {
-            lab.Taker.SendClaim = (machine, claim) =>
-            {
-                lock (claims)
-                {
-                    claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort)));
-                    if (claims.Count == 1)
-                    {
-                        // Free well after this PC would have asked again at once, well before the Agents give up.
-                        busy.FreeAfter(StudentPc.ClaimWait / 3);
-                    }
-                }
-                throw new IOException("the connection was reset");
-            };
-            result = await lab.Taker.TakeOverAsync(lab.Home);
-            Task[] sent;
-            lock (claims)
-            {
-                sent = claims.ToArray();
-            }
-            await Task.WhenAll(sent).WaitAsync(TimeSpan.FromSeconds(30));
-        }
-
-        Assert.True(result.Ok, result.Detail);
-        Assert.All(rig.Pcs, pc => Assert.Equal((NewHome, generation + 1), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
-        Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
-        Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
-        Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
-    }
-
-    // Ruling 19 (a): the wait runs from when the claim was sent: what the
-    // claims took already counts toward it (the clock and the wait are the test's).
-    [Fact]
-    public async Task ALostAnswer_IsWaitedOutFromWhenTheClaimWasSent()
-    {
-        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
-        using var lab = new HandOverLab(rig);
-        await lab.MakeTheOldHomeTheHomeAsync();
-        var now = 1_000L;
-        var slept = new List<TimeSpan>();
-        lab.Taker.LostAnswerWait = ClassFolderHandOver.DefaultLostAnswerWait;
-        lab.Taker.Milliseconds = () => Interlocked.Read(ref now);
-        lab.Taker.Sleep = wait => slept.Add(wait);
-        lab.Taker.SendClaim = (_, _) =>
-        {
-            Interlocked.Exchange(ref now, 4_000);
-            throw new IOException("the answer was lost");
-        };
-
-        var result = await lab.Taker.TakeOverAsync(lab.Home);
-
-        Assert.False(result.Ok);
-        Assert.Equal(ClassHomeClaim.MaxLockWait + TimeSpan.FromSeconds(2), ClassFolderHandOver.DefaultLostAnswerWait);
-        Assert.Equal(new[] { ClassFolderHandOver.DefaultLostAnswerWait - TimeSpan.FromSeconds(3) }, slept);
-    }
-
     // Ruling 19 (f): an Agent's lock wait, twice over, still fits in a Master's read timeout.
     [Fact]
     public void TheAgentsLockWait_FitsTwiceInTheMastersReadTimeout()
@@ -199,7 +52,7 @@ public sealed partial class ClassFolderHandOverTests
         lab.FillTheOldHome();
         lab.GiveTheNewHomeAClassOfItsOwn();
         FileStream? held = null;
-        lab.Taker.SendClaim = (_, _) =>
+        lab.Taker.SendClaim = (_, _, _) =>
         {
             // A file of the copy, now in place, open in another program: its folder can't move back.
             held ??= new FileStream(lab.NewPath(Turma, "a.txt"), FileMode.Open, FileAccess.Read, FileShare.Read);

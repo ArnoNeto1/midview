@@ -62,12 +62,16 @@ public static class ClassFolderClient
     // its student's folders, ClassHomeClaim.BusyText: it took nothing, as if it
     // hadn't answered (never another home). OldAgent: an
     // Agent from before two teacher PCs, which keeps no home and takes any
-    // start (a bare no, which a newer Agent never answers).
+    // start (a bare no, which a newer Agent never answers). sending: called just
+    // before the claim goes out (CommandClient.SendCommandForResult): a claim
+    // whose answer is lost after that may have been taken.
     public static (bool Ok, string Detail, bool OldAgent) ClaimHome(
-        KnownMachine machine, X509Certificate2 masterCertificate, ClassHomeClaim claim, int port = ConnectionClient.AgentPort)
+        KnownMachine machine, X509Certificate2 masterCertificate, ClassHomeClaim claim, int port = ConnectionClient.AgentPort,
+        Action? sending = null)
     {
         var (succeeded, detail) = CommandClient.SendCommandForResult(
-            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ClaimClassHome, claim.Encode());
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ClaimClassHome, claim.Encode(),
+            sending: sending);
         return (succeeded, detail, !succeeded && detail.Length == 0);
     }
 

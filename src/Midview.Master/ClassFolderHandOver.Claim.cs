@@ -5,25 +5,34 @@ namespace Midview.Master;
 
 // ClassFolderHandOver: the room's Agents taking this PC as the class folders'
 // home (Ruling 9). Every online Agent is claimed with a take-over and a
-// generation newer than now and than any home they keep. An Agent's answer can
-// be lost after it took the claim, or before (the connection reset while the
-// Agent still waits for its lesson lock, which it may get later): so when no
-// answer said yes and some didn't come, this PC waits until an Agent can no
-// longer take the claim (ClassHomeClaim.MaxLockWait, and a margin, since the
-// claim was sent: Ruling 19), then asks the Agents which home they keep before
-// anything is put back, and one that keeps this PC at that generation took it.
-// An Agent busy with its student's folders refuses at once
-// (ClassHomeClaim.BusyText) and never applies the claim later (Ruling 18): not
-// taken, so asking again is conclusive.
+// generation newer than now and than any home they keep.
+//
+// An Agent's answer can be lost once the claim went out (the connection reset
+// while the Agent still waits for its lesson lock, which it may get later; the
+// Agent's PC went off): the Agent may take the claim up to
+// ClassHomeClaim.MaxLockWait after it read it, which was before its answer
+// was lost. So when no answer said yes and some were lost, this PC waits that
+// long, and a margin, from the last of those losses (Rulings 19 and 20), then
+// asks the Agents which home they keep: one that keeps this PC at that
+// generation took it. One whose answer was lost and that doesn't answer that
+// either can't be told: the claim is neither done nor not (Unknown), and
+// nothing is put back. A claim that never went out (no connection, no
+// handshake) was taken by nobody and needs no wait. An Agent busy with its
+// student's folders refuses at once (ClassHomeClaim.BusyText) and never
+// applies the claim later (Ruling 18): not taken.
 public sealed partial class ClassFolderHandOver
 {
-    // How a claim reaches a machine's Agent: ClassFolderClient.ClaimHome when
-    // null. A test's stand-in for an Agent whose answer gets lost.
-    internal Func<KnownMachine, ClassHomeClaim, (bool Ok, string Detail, bool OldAgent)>? SendClaim { get; set; }
-
-    // How long after sending a claim it can still be taken: an Agent's lock
-    // wait, and a margin for the request on its way.
+    // How long after a claim's answer was lost the claim can still be taken:
+    // an Agent's lock wait, and a margin for the request on its way.
     internal static readonly TimeSpan DefaultLostAnswerWait = ClassHomeClaim.MaxLockWait + TimeSpan.FromSeconds(2);
+
+    // How a claim reaches a machine's Agent (ClassFolderClient.ClaimHome when
+    // null; the Action says the claim is going out), and how the home it keeps
+    // is read (ClassFolderClient.GetHome when null): a test's stand-ins for an
+    // Agent whose answer gets lost, or that goes off.
+    internal Func<KnownMachine, ClassHomeClaim, Action, (bool Ok, string Detail, bool OldAgent)>? SendClaim { get; set; }
+
+    internal Func<KnownMachine, (ClassHome? Home, bool OldAgent)>? ReadHome { get; set; }
 
     // DefaultLostAnswerWait, or a test's (whose Agents wait less for their lock).
     internal TimeSpan LostAnswerWait { get; set; } = DefaultLostAnswerWait;
@@ -41,48 +50,70 @@ public sealed partial class ClassFolderHandOver
         // An Agent from before two teacher PCs: it keeps no home.
         Old,
 
-        // No answer came: it may have taken the claim.
+        // No answer, and the claim never went out: nobody took it.
+        Unreached,
+
+        // No answer once the claim went out: it may be taken.
         Lost,
     }
 
-    // Ok when at least one Agent took it (the others are taken back at this
-    // PC's next start); otherwise why not, as an Agent said it (a lesson on), or
-    // that none answered. Generation: the one claimed.
-    private (bool Ok, string Detail, long Generation) Claim()
+    private enum Outcome
+    {
+        Taken,
+        NotTaken,
+
+        // Some Agent may have taken it, and doesn't say (Unknown names them).
+        Unknown,
+    }
+
+    // Taken when at least one Agent took it (the others are taken back at
+    // this PC's next start); NotTaken with why, as an Agent said it (a lesson
+    // on), or that they were busy or none answered; Unknown (see the class
+    // comment). Generation: the one claimed.
+    private ClaimResult Claim()
     {
         var online = AgentsOnline();
-        var homes = Homes(online);
+        var homes = Homes(online).Select(read => read.Home).OfType<ClassHome>();
         var generation = ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes);
         var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
-        var sent = Milliseconds();
         var answers = AskEach(online, machine => ClaimOn(machine, claim));
         foreach (var refused in answers.Where(answer => answer.Answer == Answer.Refused))
         {
             _log($"{refused.Machine.Name} didn't take this PC as the class folders' home: {refused.Detail}");
         }
-
         if (answers.Any(answer => answer.Answer == Answer.Took))
         {
-            return (true, string.Empty, generation);
+            return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>());
         }
-        if (answers.Any(answer => answer.Answer == Answer.Lost))
+
+        var lost = answers.Where(answer => answer.Answer == Answer.Lost).ToList();
+        if (lost.Count > 0)
         {
-            // Until no Agent can still take it, then what they keep is the answer.
-            var left = LostAnswerWait - TimeSpan.FromMilliseconds(Milliseconds() - sent);
+            // Until none of them can take it any more; then what they keep is the answer.
+            var left = LostAnswerWait - TimeSpan.FromMilliseconds(Milliseconds() - lost.Max(answer => answer.LostAt));
             if (left > TimeSpan.Zero)
             {
                 Sleep(left);
             }
-            if (Homes(online).Any(home => IsThisPcAt(home, generation)))
+            var reread = Homes(online);
+            if (reread.Any(read => read.Home is { } home && IsThisPcAt(home, generation)))
             {
                 _log("An Agent whose answer was lost took this PC as the class folders' home.");
-                return (true, string.Empty, generation);
+                return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>());
+            }
+            var silent = lost.Where(answer => !reread.Any(read => read.Machine == answer.Machine && read.Answered))
+                .Select(answer => answer.Machine.Name).ToList();
+            if (silent.Count > 0)
+            {
+                _log($"Whether {string.Join(", ", silent)} took this PC as the class folders' home can't be told: they don't answer.");
+                return new ClaimResult(Outcome.Unknown, string.Empty, generation, silent);
             }
         }
+
         var refusals = answers.Where(answer => answer.Answer == Answer.Refused).Select(answer => answer.Detail).ToList();
         var why = refusals.FirstOrDefault(detail => detail.Length > 0 && detail != ClassHomeClaim.BusyText)
             ?? (refusals.Contains(ClassHomeClaim.BusyText) ? ClassFolderText.PcsBusy : ClassFolderText.NoPcTookIt);
-        return (false, why, generation);
+        return new ClaimResult(Outcome.NotTaken, why, generation, Array.Empty<string>());
     }
 
     // The home an Agent keeps is this PC, at the generation it just claimed with.
@@ -91,38 +122,47 @@ public sealed partial class ClassFolderHandOver
         && string.Equals(home.Thumbprint, _certificate.Thumbprint, StringComparison.OrdinalIgnoreCase)
         && string.Equals(home.Name, _machineName, StringComparison.OrdinalIgnoreCase);
 
-    // What the machine's Agent answered the claim.
+    // What the machine's Agent answered the claim; with no answer, when it was
+    // lost if the claim had gone out by then.
     private ClaimAnswer ClaimOn(KnownMachine machine, ClassHomeClaim claim)
     {
+        var wentOut = 0;
+        void Sending() => Volatile.Write(ref wentOut, 1);
         try
         {
             var (ok, detail, oldAgent) = SendClaim is { } send
-                ? send(machine, claim)
-                : ClassFolderClient.ClaimHome(machine, _certificate, claim, _agentPort);
-            return new ClaimAnswer(machine, oldAgent ? Answer.Old : ok ? Answer.Took : Answer.Refused, detail);
+                ? send(machine, claim, Sending)
+                : ClassFolderClient.ClaimHome(machine, _certificate, claim, _agentPort, Sending);
+            return new ClaimAnswer(machine, oldAgent ? Answer.Old : ok ? Answer.Took : Answer.Refused, detail, 0);
         }
         catch (Exception ex)
         {
             ClassLessonOnAgents.LogUnexpected(_log, ex, $"Claiming the class folders' home on {machine.Name} failed");
-            return new ClaimAnswer(machine, Answer.Lost, string.Empty);
+            if (Volatile.Read(ref wentOut) == 0)
+            {
+                return new ClaimAnswer(machine, Answer.Unreached, string.Empty, 0);
+            }
+            _log($"{machine.Name}'s answer to the claim was lost after the claim went out: {ex.Message}");
+            return new ClaimAnswer(machine, Answer.Lost, string.Empty, Milliseconds());
         }
     }
 
-    // The homes the machines' Agents keep (none from one that keeps none, is
-    // from before two teacher PCs, or doesn't answer).
-    private List<ClassHome> Homes(IReadOnlyList<KnownMachine> machines) =>
+    // The home each machine's Agent keeps: Answered false for one that didn't
+    // answer; a null Home for one that keeps none or is from before two teacher PCs.
+    private List<HomeRead> Homes(IReadOnlyList<KnownMachine> machines) =>
         AskEach(machines, machine =>
         {
             try
             {
-                return ClassFolderClient.GetHome(machine, _certificate, _agentPort).Home;
+                var (home, _) = ReadHome is { } read ? read(machine) : ClassFolderClient.GetHome(machine, _certificate, _agentPort);
+                return new HomeRead(machine, true, home);
             }
             catch (Exception ex)
             {
                 ClassLessonOnAgents.LogUnexpected(_log, ex, $"Reading the class folders' home of {machine.Name} failed");
-                return null;
+                return new HomeRead(machine, false, null);
             }
-        }).OfType<ClassHome>().ToList();
+        }).ToList();
 
     private void KeepGeneration(long generation)
     {
@@ -165,9 +205,17 @@ public sealed partial class ClassFolderHandOver
         }
     }
 
-    // Each machine at once, each on its own pool thread.
+    // Each machine at once, each on a thread of its own: a claim can wait on
+    // an Agent's lock for MaxLockWait, and many of those mustn't queue behind
+    // each other on the pool (their claims would go out late).
     private static T[] AskEach<T>(IReadOnlyList<KnownMachine> machines, Func<KnownMachine, T> ask) =>
-        Task.WhenAll(machines.Select(machine => Task.Run(() => ask(machine)))).GetAwaiter().GetResult();
+        Task.WhenAll(machines.Select(machine => Task.Factory.StartNew(
+            () => ask(machine), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)))
+            .GetAwaiter().GetResult();
 
-    private sealed record ClaimAnswer(KnownMachine Machine, Answer Answer, string Detail);
+    private sealed record ClaimAnswer(KnownMachine Machine, Answer Answer, string Detail, long LostAt);
+
+    private sealed record HomeRead(KnownMachine Machine, bool Answered, ClassHome? Home);
+
+    private sealed record ClaimResult(Outcome Outcome, string Detail, long Generation, IReadOnlyList<string> Unknown);
 }

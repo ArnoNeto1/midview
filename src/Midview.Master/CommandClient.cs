@@ -36,12 +36,14 @@ public static class CommandClient
     // CommandResult), e.g. how many programs were asked to close. timeout is
     // for a command known to take longer than TimeoutMs on the other side
     // (uninstalling programs); a machine that's switched off midway is still
-    // noticed in a minute or two, by TCP keep-alive.
+    // noticed in a minute or two, by TCP keep-alive. sending: called once the
+    // connection and the handshake are done, just before the command goes out
+    // (from then on the other side may get it, whatever happens to the answer).
     public static (bool Succeeded, string Detail) SendCommandForResult(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
-        MessageType commandType, byte[] payload, TimeSpan? timeout = null)
+        MessageType commandType, byte[] payload, TimeSpan? timeout = null, Action? sending = null)
     {
-        var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload, timeout);
+        var ack = Exchange(hostAddress, port, targetThumbprint, masterCertificate, commandType, payload, timeout, sending);
         return ack.Type switch
         {
             MessageType.CommandAck => CommandResult.Decode(ack.Payload),
@@ -56,7 +58,7 @@ public static class CommandClient
 
     private static Message Exchange(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
-        MessageType commandType, byte[] payload, TimeSpan? timeout = null)
+        MessageType commandType, byte[] payload, TimeSpan? timeout = null, Action? sending = null)
     {
         using var tcpClient = TcpConnect.WithTimeout(hostAddress, port, ConnectTimeout);
         tcpClient.ReceiveTimeout = TimeoutMs;
@@ -64,6 +66,7 @@ public static class CommandClient
         using var channel = SecureChannel.AuthenticateAsClient(
             tcpClient, hostAddress, masterCertificate, new TrustStore(new[] { targetThumbprint }));
 
+        sending?.Invoke();
         channel.Send(new Message(commandType, payload));
         if (timeout is { } longWait)
         {

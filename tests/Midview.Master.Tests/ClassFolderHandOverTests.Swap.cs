@@ -59,7 +59,7 @@ public sealed partial class ClassFolderHandOverTests
         lab.FillTheOldHome();
         lab.GiveTheNewHomeAClassOfItsOwn();
         var index = Path.Combine(lab.NewRoot, "dados", "turmas");
-        lab.Taker.SendClaim = (_, _) => (false, ClassFolderText.EndLessonFirst, false);
+        lab.Taker.SendClaim = (_, _, _) => (false, ClassFolderText.EndLessonFirst, false);
         lab.NewStore.MoveHook = (from, to) =>
         {
             if (Same(from, index) && Same(to, index + " (recebendo)"))
@@ -77,6 +77,40 @@ public sealed partial class ClassFolderHandOverTests
         Assert.False(Directory.Exists(Path.Combine(lab.NewRoot, "Turmas")));
         Assert.True(File.Exists(Path.Combine(lab.NewRoot, OwnAside, "Antiga", "velho.txt")));
         Assert.Equal(OldHome, rig.Pcs[0].Agent.CurrentHome!.Name);
+    }
+
+    // Ruling 20 (d): the old home's copy can't all go aside (its index is in
+    // use), nor all come back (its classes stay aside): its answer says where
+    // its classes are, rather than that they are still in Turmas.
+    [Fact]
+    public async Task AnOldHomeWhoseCopyCantAllGoAsideNorBack_SaysWhereItIs()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
+        rig.Store.RecordSynced(Turma, "chave-do-pc1", "a.txt", new FileVersion(3, Earlier.Ticks));
+        rig.Store.SaveIndex(Turma);
+        Assert.True(ClassFolderClient.ClaimHome(
+            rig.Pcs[0].Machine, rig.OtherMaster, new ClassHomeClaim(NewHome, ClassFolderRemote.Port, true, generation + 1), rig.AgentPort).Ok);
+        var turmas = Path.Combine(rig.Root, "Turmas");
+        var aside = Path.Combine(rig.Root, "Turmas (passadas para PROF-2)");
+        var index = Path.Combine(rig.Root, "dados", "turmas");
+        rig.Store.MoveHook = (from, to) =>
+        {
+            if (Same(from, index) || (Same(from, aside) && Same(to, turmas)))
+            {
+                throw new IOException("em uso");
+            }
+        };
+
+        var (ok, detail) = lab.SendHandedOver(NewHome);
+
+        Assert.True(ok, detail);
+        Assert.Equal(ClassFolderHandOver.PartlyMovedMark + "Turmas (passadas para PROF-2)", detail);
+        Assert.True(Directory.Exists(Path.Combine(aside, Turma)));
+        Assert.False(Directory.Exists(turmas));
+        Assert.Equal(ClassLesson.None(0), lab.OldSync.Lesson);
     }
 
     // What the text says in each case: the copy left in Turmas or not, this PC's own classes aside or not.

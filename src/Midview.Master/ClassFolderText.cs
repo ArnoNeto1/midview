@@ -264,6 +264,38 @@ public static class ClassFolderText
     // The old home put its copy aside, in that folder (its own answer: "Turmas (passadas para PROF-2) (2)", say).
     public static string OldCopyAside(string home, string folder) => $"A cópia do PC {home} ficou nele, na pasta \"{folder}\".";
 
+    // ...its classes went to that folder (null: a name that can't be shown),
+    // but not all that goes with them, and couldn't come back.
+    public static string OldCopyPartlyAside(string home, string? folder) =>
+        $"A cópia do PC {home} ficou nele, {(folder is null ? "numa pasta à parte" : $"na pasta \"{folder}\"")}, "
+        + "mas nem tudo foi para lá: confira as turmas dele.";
+
+    // A take-over whose outcome can't be told yet: pcs (by name) may have taken
+    // this PC as the home and don't answer. Nothing was put back or deleted:
+    // the copy is in Turmas, this PC's own classes aside (ownAside; null: it
+    // had none); when those PCs are back, the room's PCs settle which PC keeps the folders.
+    public static string TakeOverUndecided(string home, IReadOnlyList<string> pcs, string? ownAside) =>
+        $"Ainda não dá para saber qual computador guarda as pastas: {MayHaveTaken(pcs)}. "
+        + $"As turmas copiadas do PC {home} estão na pasta Turmas deste computador"
+        + (ownAside is null ? "" : $", e as que já estavam aqui estão na pasta \"{ownAside}\"")
+        + $". Nada foi apagado: quando {(pcs.Count == 1 ? "esse PC voltar" : "esses PCs voltarem")}, "
+        + "os PCs da sala decidem qual computador guarda as pastas.";
+
+    // ...an unreachable home's take-over: this PC's own classes stay as they are.
+    public static string TakeOverUnreachableUndecided(IReadOnlyList<string> pcs) =>
+        $"Ainda não dá para saber qual computador guarda as pastas: {MayHaveTaken(pcs)}. "
+        + $"As turmas deste computador continuam onde estão. Quando {(pcs.Count == 1 ? "esse PC voltar" : "esses PCs voltarem")}, "
+        + "os PCs da sala decidem qual computador guarda as pastas.";
+
+    // "o PC LAB-03 pode ter aceitado este computador e não responde agora" (at most five names).
+    private static string MayHaveTaken(IReadOnlyList<string> pcs)
+    {
+        var names = string.Join(", ", pcs.Take(5)) + (pcs.Count > 5 ? $" e mais {Count(pcs.Count - 5)}" : string.Empty);
+        return pcs.Count == 1
+            ? $"o PC {names} pode ter aceitado este computador e não responde agora"
+            : $"os PCs {names} podem ter aceitado este computador e não respondem agora";
+    }
+
     // ...in a folder whose name it didn't give in a way that can be shown.
     public static string OldCopyAsideUnnamed(string home) => $"A cópia do PC {home} ficou nele, numa pasta à parte.";
 

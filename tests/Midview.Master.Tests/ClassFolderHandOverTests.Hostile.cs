@@ -118,6 +118,9 @@ public sealed partial class ClassFolderHandOverTests
         { true, "|\r\n ", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (motivo desconhecido): ela continua na pasta Turmas dele." },
         { true, "   ", "A cópia do PC PROF-1 ficou nele, numa pasta à parte." },
         { false, " \n ", "O PC PROF-1 ainda não confirmou a troca: a cópia dele continua na pasta Turmas dele." },
+        // Ruling 20 (d): its copy went aside but not all of it, and couldn't come back.
+        { true, "*Turmas (passadas para PROF-2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2)\", mas nem tudo foi para lá: confira as turmas dele." },
+        { true, "* \n", "A cópia do PC PROF-1 ficou nele, numa pasta à parte, mas nem tudo foi para lá: confira as turmas dele." },
     };
 
     // Ruling 17 (b, h), Ruling 18 (6): what the old home answered

@@ -104,9 +104,10 @@ public sealed partial class ClassFolderHandOver
     // (ClassFolderSync.StandDownAsync), keeps it as the other home seen
     // (ClassHomeFileMaster), and moves its store aside to "Turmas (passadas para
     // <the name the Agents recorded>)". Ok then, with the folder it went to
-    // (empty: there was nothing to move), or NotMovedMark and ErrorText's words
-    // for why it couldn't go (it stays where it is). Not Ok otherwise, saying
-    // why in the teacher's words: nothing changes.
+    // (empty: there was nothing to move), NotMovedMark and ErrorText's words for
+    // why it couldn't go (it stays where it is), or PartlyMovedMark and the
+    // folder its classes went to when the rest couldn't follow and they couldn't
+    // come back. Not Ok otherwise, saying why in the teacher's words: nothing changes.
     internal async Task<(bool Ok, string Detail)> HandedOverAsync(string name, string senderThumbprint)
     {
         long? own;
@@ -119,7 +120,8 @@ public sealed partial class ClassFolderHandOver
             own = null; // the Agents' word is what counts: the sender must be their home
         }
 
-        var homes = await Task.Run(() => Homes(AgentsOnline())).ConfigureAwait(false);
+        var homes = await Task.Run(() => Homes(AgentsOnline()).Select(read => read.Home).OfType<ClassHome>().ToList())
+            .ConfigureAwait(false);
         var newHome = homes.FirstOrDefault(home => home.Name.Length > 0
             && string.Equals(home.Name, name, StringComparison.OrdinalIgnoreCase)
             && string.Equals(home.Thumbprint, senderThumbprint, StringComparison.OrdinalIgnoreCase)
@@ -154,8 +156,13 @@ public sealed partial class ClassFolderHandOver
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _log($"The class folders went to {newHome.Name}, but this PC's copy could not be put aside: {ex.Message}");
-            return (true, NotMovedMark + ErrorText.Describe(ex));
+            // Where its classes are: still aside when they couldn't come back.
+            var stillAside = (ex as StoreMoveException)?.PutBack.OwnAside;
+            _log($"The class folders went to {newHome.Name}, but this PC's copy could not all be put aside "
+                + $"({ex.Message}); its classes are at {stillAside ?? "Turmas"}.");
+            return stillAside is not null
+                ? (true, PartlyMovedMark + Path.GetFileName(stillAside))
+                : (true, NotMovedMark + ErrorText.Describe(ex.InnerException ?? ex));
         }
     }
 

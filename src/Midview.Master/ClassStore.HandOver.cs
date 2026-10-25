@@ -32,11 +32,12 @@ internal interface IHandOverSwap
     PutBack Undo();
 }
 
-// SwapIn couldn't put the received store in place (InnerException says why),
-// and put back what it could (PutBack).
-internal sealed class SwapFailedException : IOException
+// SwapIn couldn't put the received store in place, or MoveAside this PC's
+// store aside (InnerException says why), and put back what it could
+// (PutBack; for MoveAside, OwnAside is where its files root still is).
+internal sealed class StoreMoveException : IOException
 {
-    public SwapFailedException(Exception inner, PutBack putBack)
+    public StoreMoveException(Exception inner, PutBack putBack)
         : base(inner.Message, inner)
     {
         PutBack = putBack;
@@ -152,8 +153,8 @@ public sealed partial class ClassStore
 
     // This PC's store, all of it, aside (see the class comment), for the PC
     // that keeps the folders now: the store is empty after. The files root's
-    // new name, or null when it had nothing. Throws IOException or
-    // UnauthorizedAccessException when it can't, with what was moved put back.
+    // new name, or null when it had nothing. Throws StoreMoveException when it
+    // can't, having put back what it could.
     internal string? MoveAside(string why)
     {
         lock (_gate)
@@ -165,8 +166,8 @@ public sealed partial class ClassStore
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                moves.Undo();
-                throw;
+                var all = moves.Undo();
+                throw new StoreMoveException(ex, new PutBack(all, false, all ? null : moves.DestinationOf(FilesRootPath)));
             }
             finally
             {
@@ -177,7 +178,7 @@ public sealed partial class ClassStore
 
     // The store received into Staging, in place of this PC's own, which goes
     // aside; the files root goes in last, so it is the first to go back.
-    // Throws SwapFailedException when it can't, having put back what it could
+    // Throws StoreMoveException when it can't, having put back what it could
     // (the received store in Staging, this PC's own in place).
     internal IHandOverSwap SwapIn(string why)
     {
@@ -201,7 +202,7 @@ public sealed partial class ClassStore
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                throw new SwapFailedException(ex, UndoSwap(moves, staging.Files));
+                throw new StoreMoveException(ex, UndoSwap(moves, staging.Files));
             }
             finally
             {
