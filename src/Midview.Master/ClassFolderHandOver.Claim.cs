@@ -6,17 +6,32 @@ namespace Midview.Master;
 // ClassFolderHandOver: the room's Agents taking this PC as the class folders'
 // home (Ruling 9). Every online Agent is claimed with a take-over and a
 // generation newer than now and than any home they keep. An Agent's answer can
-// be lost after it took the claim (its lesson lock held it past the read
-// timeout, a network blip): so when no answer said yes and some didn't come,
-// the Agents are asked which home they keep before anything is put back, and
-// one that keeps this PC at that generation took it. An Agent busy with its
-// student's folders refuses at once (ClassHomeClaim.BusyText) and never
-// applies the claim later (Ruling 18): not taken, so asking again is conclusive.
+// be lost after it took the claim, or before (the connection reset while the
+// Agent still waits for its lesson lock, which it may get later): so when no
+// answer said yes and some didn't come, this PC waits until an Agent can no
+// longer take the claim (ClassHomeClaim.MaxLockWait, and a margin, since the
+// claim was sent: Ruling 19), then asks the Agents which home they keep before
+// anything is put back, and one that keeps this PC at that generation took it.
+// An Agent busy with its student's folders refuses at once
+// (ClassHomeClaim.BusyText) and never applies the claim later (Ruling 18): not
+// taken, so asking again is conclusive.
 public sealed partial class ClassFolderHandOver
 {
     // How a claim reaches a machine's Agent: ClassFolderClient.ClaimHome when
     // null. A test's stand-in for an Agent whose answer gets lost.
     internal Func<KnownMachine, ClassHomeClaim, (bool Ok, string Detail, bool OldAgent)>? SendClaim { get; set; }
+
+    // How long after sending a claim it can still be taken: an Agent's lock
+    // wait, and a margin for the request on its way.
+    internal static readonly TimeSpan DefaultLostAnswerWait = ClassHomeClaim.MaxLockWait + TimeSpan.FromSeconds(2);
+
+    // DefaultLostAnswerWait, or a test's (whose Agents wait less for their lock).
+    internal TimeSpan LostAnswerWait { get; set; } = DefaultLostAnswerWait;
+
+    // The clock (milliseconds) and the wait the lost answers are waited out with: a test's, so it doesn't sleep.
+    internal Func<long> Milliseconds { get; set; } = () => Environment.TickCount64;
+
+    internal Action<TimeSpan> Sleep { get; set; } = Thread.Sleep;
 
     private enum Answer
     {
@@ -39,6 +54,7 @@ public sealed partial class ClassFolderHandOver
         var homes = Homes(online);
         var generation = ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes);
         var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
+        var sent = Milliseconds();
         var answers = AskEach(online, machine => ClaimOn(machine, claim));
         foreach (var refused in answers.Where(answer => answer.Answer == Answer.Refused))
         {
@@ -49,11 +65,19 @@ public sealed partial class ClassFolderHandOver
         {
             return (true, string.Empty, generation);
         }
-        if (answers.Any(answer => answer.Answer == Answer.Lost)
-            && Homes(online).Any(home => IsThisPcAt(home, generation)))
+        if (answers.Any(answer => answer.Answer == Answer.Lost))
         {
-            _log("An Agent whose answer was lost took this PC as the class folders' home.");
-            return (true, string.Empty, generation);
+            // Until no Agent can still take it, then what they keep is the answer.
+            var left = LostAnswerWait - TimeSpan.FromMilliseconds(Milliseconds() - sent);
+            if (left > TimeSpan.Zero)
+            {
+                Sleep(left);
+            }
+            if (Homes(online).Any(home => IsThisPcAt(home, generation)))
+            {
+                _log("An Agent whose answer was lost took this PC as the class folders' home.");
+                return (true, string.Empty, generation);
+            }
         }
         var refusals = answers.Where(answer => answer.Answer == Answer.Refused).Select(answer => answer.Detail).ToList();
         var why = refusals.FirstOrDefault(detail => detail.Length > 0 && detail != ClassHomeClaim.BusyText)

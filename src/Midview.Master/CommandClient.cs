@@ -15,7 +15,7 @@ public static class CommandClient
     // several netsh calls; forcing programs closed waits 10 s for them first)
     // while still failing -- instead of leaving the status on "Sending..."
     // forever -- if the other side never answers.
-    private const int TimeoutMs = 20_000;
+    internal const int TimeoutMs = 20_000;
 
     public static bool SendCommand(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,

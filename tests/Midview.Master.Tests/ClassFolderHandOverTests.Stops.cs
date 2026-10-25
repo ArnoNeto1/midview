@@ -47,18 +47,19 @@ public sealed partial class ClassFolderHandOverTests
         lab.FillTheOldHomeWithBigFiles();
         lab.GiveTheNewHomeAClassOfItsOwn();
         var before = lab.Snapshot();
-        using var cancel = new CancellationTokenSource();
+        var cancel = new HandOverCancel();
+        var stopped = false;
         var progress = new Inline(step =>
         {
-            if (step.Bytes > 0)
+            if (step.Bytes > 0 && !cancel.IsCancelled)
             {
-                cancel.Cancel();
+                stopped = cancel.Cancel();
             }
         });
 
-        var result = await lab.Taker.TakeOverAsync(lab.Home, progress, cancel.Token);
+        var result = await lab.Taker.TakeOverAsync(lab.Home, progress, cancel);
 
-        Assert.True(cancel.IsCancellationRequested);
+        Assert.True(stopped);
         Assert.False(result.Ok);
         Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.CopyCancelled), result.Detail);
         lab.AssertUnchanged(before);
@@ -85,12 +86,12 @@ public sealed partial class ClassFolderHandOverTests
             stall.Wait(TimeSpan.FromSeconds(60));
         }))
         {
-            using var cancel = new CancellationTokenSource();
-            var taking = lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port }, cancel: cancel.Token);
+            var cancel = new HandOverCancel();
+            var taking = lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port }, cancel: cancel);
             Assert.True(stalled.Wait(TimeSpan.FromSeconds(10)));
             await Task.Delay(200);
             clock.Restart();
-            _ = Task.Run(cancel.Cancel);
+            _ = Task.Run(() => cancel.Cancel());
             result = await taking;
             clock.Stop();
             stall.Set();
@@ -100,6 +101,53 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.CopyCancelled), result.Detail);
         Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), $"took {clock.Elapsed}");
         Assert.True(clock.Elapsed < lab.Taker.NetworkWait);
+        lab.AssertUnchanged(before);
+    }
+
+    // Ruling 19 (e): once the copy is going in place, "Cancelar" is too late,
+    // and says so at once (the window shows nothing of a cancel then); the
+    // take-over goes on to the end.
+    [Fact]
+    public async Task ACancelOnceTheCopyIsGoingInPlace_IsTooLate_AndTheTakeOverEnds()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        lab.FillTheOldHome();
+        var cancel = new HandOverCancel();
+        bool? cancelled = null;
+        var progress = new Inline(step =>
+        {
+            if (step.InPlace)
+            {
+                cancelled = cancel.Cancel();
+            }
+        });
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home, progress, cancel);
+
+        Assert.False(cancelled);
+        Assert.False(cancel.IsCancelled);
+        Assert.True(result.Ok, result.Detail);
+        Assert.Equal(NewHome, rig.Pcs[0].Agent.CurrentHome!.Name);
+    }
+
+    // A cancel before anything is received stops it there; asked again, it is still cancelled.
+    [Fact]
+    public async Task ACancelBeforeTheCopy_StopsIt()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        lab.FillTheOldHome();
+        var before = lab.Snapshot();
+        var cancel = new HandOverCancel();
+        Assert.True(cancel.Cancel());
+        Assert.True(cancel.Cancel());
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home, cancel: cancel);
+
+        Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.CopyCancelled), result.Detail);
         lab.AssertUnchanged(before);
     }
 

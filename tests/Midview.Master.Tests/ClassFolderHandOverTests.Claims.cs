@@ -85,6 +85,85 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
     }
 
+    // Ruling 19 (a): the claim's connection breaks (a reset) while the Agent
+    // still waits for its lesson lock; the lock is free soon after, and the
+    // claim is taken then. This PC waits out the Agent's lock wait from when it
+    // sent the claim before asking which home the Agents keep, so it finds
+    // itself there: done, never the classes split between two PCs.
+    [Fact]
+    public async Task AClaimWhoseConnectionBreaksWhileTheAgentWaits_IsDoneWhenItIsTakenLater()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
+        lab.FillTheOldHome();
+        var claims = new List<Task>();
+        HandOverResult result;
+        using (var busy = new BusyAgents(rig.Pcs))
+        {
+            lab.Taker.SendClaim = (machine, claim) =>
+            {
+                lock (claims)
+                {
+                    claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort)));
+                    if (claims.Count == 1)
+                    {
+                        // Free well after this PC would have asked again at once, well before the Agents give up.
+                        busy.FreeAfter(StudentPc.ClaimWait / 3);
+                    }
+                }
+                throw new IOException("the connection was reset");
+            };
+            result = await lab.Taker.TakeOverAsync(lab.Home);
+            Task[] sent;
+            lock (claims)
+            {
+                sent = claims.ToArray();
+            }
+            await Task.WhenAll(sent).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.All(rig.Pcs, pc => Assert.Equal((NewHome, generation + 1), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
+        Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
+        Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
+        Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
+    }
+
+    // Ruling 19 (a): the wait runs from when the claim was sent: what the
+    // claims took already counts toward it (the clock and the wait are the test's).
+    [Fact]
+    public async Task ALostAnswer_IsWaitedOutFromWhenTheClaimWasSent()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        var now = 1_000L;
+        var slept = new List<TimeSpan>();
+        lab.Taker.LostAnswerWait = ClassFolderHandOver.DefaultLostAnswerWait;
+        lab.Taker.Milliseconds = () => Interlocked.Read(ref now);
+        lab.Taker.Sleep = wait => slept.Add(wait);
+        lab.Taker.SendClaim = (_, _) =>
+        {
+            Interlocked.Exchange(ref now, 4_000);
+            throw new IOException("the answer was lost");
+        };
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home);
+
+        Assert.False(result.Ok);
+        Assert.Equal(ClassHomeClaim.MaxLockWait + TimeSpan.FromSeconds(2), ClassFolderHandOver.DefaultLostAnswerWait);
+        Assert.Equal(new[] { ClassFolderHandOver.DefaultLostAnswerWait - TimeSpan.FromSeconds(3) }, slept);
+    }
+
+    // Ruling 19 (f): an Agent's lock wait, twice over, still fits in a Master's read timeout.
+    [Fact]
+    public void TheAgentsLockWait_FitsTwiceInTheMastersReadTimeout()
+    {
+        Assert.True(ClassHomeClaim.MaxLockWait * 2 <= TimeSpan.FromMilliseconds(CommandClient.TimeoutMs));
+    }
+
     // Ruling 18: Agents busy with their students' folders refuse the claim as
     // busy, and never apply it later: not taken, so everything is put back,
     // and the teacher is told to try again.
@@ -107,48 +186,6 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.PcsBusy), result.Detail);
         lab.AssertUnchanged(before);
         Assert.Null(ClassHomeFileMaster.Read(lab.NewHomePath));
-    }
-
-    // Ruling 18, the start: a busy Agent is one that didn't answer the claim,
-    // never another home; the start goes on, and that PC gets the lesson once
-    // it is free.
-    [Fact]
-    public async Task AStartWithABusyAgent_GoesOn_AsWithOneThatDidntAnswer()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        var logged = new List<string>();
-        using var sync = new ClassFolderSync(
-            rig.Store, rig.Master, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
-            ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
-            lessonPath: rig.LessonPath, homePath: rig.HomePath, log: message =>
-            {
-                lock (logged)
-                {
-                    logged.Add(message);
-                }
-            });
-        await sync.StartAsync(Turma);
-        await sync.EndAsync(EndChoice.Keep);
-        var generation = ClassHomeFileMaster.Read(rig.HomePath);
-        var homes = rig.Pcs.Select(pc => pc.Agent.CurrentHome).ToList();
-        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> started;
-        using (var busy = new BusyAgents(rig.Pcs.Take(1)))
-        {
-            // Free again well after its claim was refused, while its lesson waits for the lock.
-            busy.FreeAfter(StudentPc.ClaimWait * 4);
-            started = await sync.StartAsync("3º B");
-        }
-
-        Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
-        Assert.True(sync.Lesson.IsOn);
-        Assert.Equal("3º B", sync.Lesson.Turma);
-        Assert.All(rig.Pcs, pc => Assert.Equal(sync.Lesson, pc.Agent.Current));
-        Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
-        Assert.Equal(homes, rig.Pcs.Select(pc => pc.Agent.CurrentHome));
-        lock (logged)
-        {
-            Assert.Contains(logged, message => message.Contains($"PC1 didn't take this PC as the class folders' home: {ClassHomeClaim.BusyText}"));
-        }
     }
 
     // Ruling 18 (5): what couldn't be put back is said, with where this PC's
@@ -181,7 +218,8 @@ public sealed partial class ClassFolderHandOverTests
         Assert.False(result.Ok);
         Assert.DoesNotContain("nada mudou", result.Detail);
         Assert.Equal(
-            ClassFolderText.TakeOverNotPutBack(OldHome, ClassFolderText.EndLessonFirst, "Turmas (antes de 20-10-2026 1330)"),
+            ClassFolderText.TakeOverNotPutBack(
+                OldHome, ClassFolderText.EndLessonFirst, copyStayed: true, ownAside: "Turmas (antes de 20-10-2026 1330)"),
             result.Detail);
         Assert.True(File.Exists(Path.Combine(lab.NewRoot, "Turmas (antes de 20-10-2026 1330)", "Antiga", "velho.txt")));
         // It stopped at the first thing that couldn't move back: the copy stays whole where it went.
@@ -289,41 +327,6 @@ public sealed partial class ClassFolderHandOverTests
             result.Detail);
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
         lab.AssertNoStaging();
-    }
-
-    // The PCs' Agents busy with their students' folders (holding their
-    // lesson locks) until disposed, or until FreeAfter's time.
-    private sealed class BusyAgents : IDisposable
-    {
-        private readonly List<StudentPc> _pcs;
-        private readonly ManualResetEventSlim _free = new();
-        private readonly List<Task> _looking = new();
-
-        public BusyAgents(IEnumerable<StudentPc> pcs)
-        {
-            _pcs = pcs.ToList();
-            foreach (var pc in _pcs)
-            {
-                using var holding = new ManualResetEventSlim();
-                pc.WhileLooking = () =>
-                {
-                    holding.Set();
-                    _free.Wait(TimeSpan.FromSeconds(60));
-                };
-                _looking.Add(OwnThread(pc.Agent.Reconcile));
-                Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
-                pc.WhileLooking = null;
-            }
-        }
-
-        public void FreeAfter(TimeSpan wait) => _ = Task.Delay(wait).ContinueWith(_ => _free.Set(), TaskScheduler.Default);
-
-        public void Dispose()
-        {
-            _free.Set();
-            Assert.True(Task.WaitAll(_looking.ToArray(), TimeSpan.FromSeconds(10)));
-            _free.Dispose();
-        }
     }
 
     private sealed partial class HandOverLab

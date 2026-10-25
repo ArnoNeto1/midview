@@ -223,12 +223,12 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal("PROF-2", handler.CurrentHome!.Name);
     }
 
-    // The claim waits well under a Master's read timeout (20 s) by default.
+    // Ruling 19: the Agent waits for its lock as long as the Master counts on
+    // (ClassHomeClaim.MaxLockWait; the Master's tests check it against its read timeout).
     [Fact]
-    public void TheClaimWait_IsWellUnderTheMastersReadTimeout()
+    public void TheClaimWait_IsTheOneTheMasterCountsOn()
     {
-        Assert.True(ClassLessonHandler.DefaultClaimWait <= TimeSpan.FromSeconds(10));
-        Assert.True(ClassLessonHandler.DefaultClaimWait > TimeSpan.Zero);
+        Assert.Equal(ClassHomeClaim.MaxLockWait, ClassLessonHandler.DefaultClaimWait);
     }
 
     [Fact]

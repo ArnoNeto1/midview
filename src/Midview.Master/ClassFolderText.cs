@@ -264,8 +264,14 @@ public static class ClassFolderText
     // The old home put its copy aside, in that folder (its own answer: "Turmas (passadas para PROF-2) (2)", say).
     public static string OldCopyAside(string home, string folder) => $"A cópia do PC {home} ficou nele, na pasta \"{folder}\".";
 
+    // ...in a folder whose name it didn't give in a way that can be shown.
+    public static string OldCopyAsideUnnamed(string home) => $"A cópia do PC {home} ficou nele, numa pasta à parte.";
+
     // The old home stood down with no classes to put aside.
     public static string OldHadNoClasses(string home) => $"O PC {home} não tinha turmas para guardar à parte.";
+
+    // Why the old home's copy couldn't go aside, when it didn't say.
+    public const string UnknownReason = "motivo desconhecido";
 
     // Built on the old home (pc: its own name) and shown on the new one: a
     // lesson is on there (some of its PCs still follow it), so it goes on
@@ -305,15 +311,28 @@ public static class ClassFolderText
     // The room's PCs were busy with their students' folders and took no claim (ClassHomeClaim.BusyText).
     public const string PcsBusy = "Os PCs da sala estão ocupados agora. Tente de novo em instantes.";
 
-    // A take-over the room's PCs didn't take, whose copy couldn't all be put
-    // back (reason: why they didn't take it): this PC's own classes are aside,
-    // in that folder (null: it had none), and what came from the home stayed.
-    public static string TakeOverNotPutBack(string home, string reason, string? aside) =>
-        $"As pastas não passaram do PC {home} para este computador, e nem tudo voltou ao lugar aqui: "
-        + (aside is null
-            ? "a pasta Turmas deste computador ficou com as turmas copiadas dele. "
-            : $"as turmas que já estavam neste computador estão na pasta \"{aside}\". ")
-        + Sentence(reason);
+    // A take-over that didn't stand (reason: why), whose moves couldn't all be
+    // put back: what is where, as it is. copyStayed: the copy from the home is
+    // still in this PC's Turmas folder; ownAside: the folder this PC's own
+    // classes are still in (null: they aren't aside).
+    public static string TakeOverNotPutBack(string home, string reason, bool copyStayed, string? ownAside)
+    {
+        var where = new List<string>();
+        if (copyStayed)
+        {
+            where.Add("a pasta Turmas deste computador ficou com as turmas copiadas dele");
+        }
+        if (ownAside is not null)
+        {
+            where.Add($"as turmas que já estavam neste computador estão na pasta \"{ownAside}\"");
+        }
+        if (where.Count == 0)
+        {
+            where.Add("confira a pasta Turmas deste computador");
+        }
+        return $"As pastas não passaram do PC {home} para este computador, e nem tudo voltou ao lugar aqui: "
+            + $"{string.Join(", e ", where)}. {Sentence(reason)}";
+    }
 
     // What another PC said, as one line of at most max characters (it can say anything).
     public static string OneLine(string text, int max = 200)

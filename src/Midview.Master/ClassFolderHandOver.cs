@@ -12,6 +12,41 @@ namespace Midview.Master;
 // What a take-over came to, in the teacher's words (the window shows Detail as it is).
 public sealed record HandOverResult(bool Ok, string Detail);
 
+// "Cancelar" for a copy of the class folders (ClassFolderHandOver.TakeOverAsync,
+// Ruling 19): a cancel and the copy going in place exclude each other, and
+// whichever comes first wins, at once, so the window knows right away whether
+// a click stopped anything.
+public sealed class HandOverCancel
+{
+    private const int Open = 0;
+    private const int Cancelled = 1;
+    private const int Committed = 2;
+
+    private readonly CancellationTokenSource _source = new();
+    private int _state;
+
+    // Whether a cancel stopped the copy.
+    public bool IsCancelled => Volatile.Read(ref _state) == Cancelled;
+
+    internal CancellationToken Token => _source.Token;
+
+    // Stops the copy: true when it stops (nothing changes, or nothing will),
+    // false when it is too late (the copy is going in place, and the take-over
+    // goes on to the end).
+    public bool Cancel()
+    {
+        var was = Interlocked.CompareExchange(ref _state, Cancelled, Open);
+        if (was == Open)
+        {
+            _source.Cancel();
+        }
+        return was != Committed;
+    }
+
+    // The copy goes in place, unless it was cancelled first (false).
+    internal bool Commit() => Interlocked.CompareExchange(ref _state, Committed, Open) != Cancelled;
+}
+
 // How far a copy has come: the files and bytes that arrived, of all of them.
 // InPlace: the copy is whole and in place, and the room's PCs are being told;
 // from here on the take-over can't be cancelled.
@@ -159,9 +194,9 @@ public sealed partial class ClassFolderHandOver
     // The home's class folders, to this PC (see the class comment). home: where
     // the room's Agents say it is, its certificate pinned. progress: as the copy
     // arrives, on the copy's thread. cancel: stops the copy, and changes
-    // nothing, until it goes in place; ignored after. Never throws.
+    // nothing, until it goes in place (HandOverCancel.Cancel says which). Never throws.
     public Task<HandOverResult> TakeOverAsync(
-        ClassHome home, IProgress<HandOverProgress>? progress = null, CancellationToken cancel = default)
+        ClassHome home, IProgress<HandOverProgress>? progress = null, HandOverCancel? cancel = null)
     {
         var name = home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;
         return Alone(
@@ -237,7 +272,7 @@ public sealed partial class ClassFolderHandOver
     }
 
     private HandOverResult TakeOver(
-        ClassHome home, string name, IProgress<HandOverProgress>? progress, CancellationToken cancel, StrongBox<Stage> stage)
+        ClassHome home, string name, IProgress<HandOverProgress>? progress, HandOverCancel? cancel, StrongBox<Stage> stage)
     {
         _store.DiscardStaging();
         if (_store.StagingLeft() is { } left)
@@ -245,8 +280,8 @@ public sealed partial class ClassFolderHandOver
             return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, ClassFolderText.StagingLeft(Path.GetFileName(left))));
         }
 
-        var received = Receive(home, name, progress, cancel);
-        if (received.Failure is null && cancel.IsCancellationRequested)
+        var received = Receive(home, name, progress, cancel?.Token ?? CancellationToken.None);
+        if (received.Failure is null && cancel is not null && !cancel.Commit())
         {
             received = Received.Failed(ClassFolderText.CopyCancelled);
         }
@@ -265,7 +300,9 @@ public sealed partial class ClassFolderHandOver
         {
             _log($"The class folders received could not be put in place: {ex.Message}");
             _store.DiscardStaging();
-            return new HandOverResult(false, ClassFolderText.TakeOverFailed(name, ClassFolderText.CopyNotSaved(ErrorText.Describe(ex))));
+            var putBack = (ex as SwapFailedException)?.PutBack ?? new PutBack(true, false, null);
+            return new HandOverResult(
+                false, NotTaken(name, ClassFolderText.CopyNotSaved(ErrorText.Describe(ex.InnerException ?? ex)), putBack));
         }
 
         stage.Value = Stage.Claiming;
@@ -275,10 +312,7 @@ public sealed partial class ClassFolderHandOver
         {
             var putBack = swap.Undo();
             _store.DiscardStaging();
-            return new HandOverResult(false, putBack
-                ? ClassFolderText.TakeOverFailed(name, detail)
-                : ClassFolderText.TakeOverNotPutBack(
-                    name, detail, swap.OwnStoreAside is { } ownAside ? Path.GetFileName(ownAside) : null));
+            return new HandOverResult(false, NotTaken(name, detail, putBack));
         }
         stage.Value = Stage.Claimed;
         KeepGeneration(generation);
@@ -292,8 +326,16 @@ public sealed partial class ClassFolderHandOver
         return new HandOverResult(true, text.Append(' ').Append(WhatTheOldHomeSaid(home, name)).ToString());
     }
 
+    // A take-over that didn't stand (why), with what was put back: "nada
+    // mudou" only when all of it was.
+    private static string NotTaken(string name, string why, PutBack putBack) => putBack.All
+        ? ClassFolderText.TakeOverFailed(name, why)
+        : ClassFolderText.TakeOverNotPutBack(
+            name, why, putBack.CopyStayed, putBack.OwnAside is { } aside ? Path.GetFileName(aside) : null);
+
     // RemoteHandOverDone to the old home, and its answer in the teacher's
-    // words; what that PC said goes on one short line, whatever it was.
+    // words. Which case it is goes by what that PC said; only what is shown of
+    // it is made one short line (it can say anything).
     private string WhatTheOldHomeSaid(ClassHome home, string name)
     {
         if (TellTheOldHome(home) is not { } answer)
@@ -301,11 +343,22 @@ public sealed partial class ClassFolderHandOver
             return ClassFolderText.OldHomeDidNotConfirm(name);
         }
         var (stoodDown, detail) = answer;
-        var said = ClassFolderText.OneLine(detail.Length > 0 && detail[0] == NotMovedMark ? detail[1..] : detail);
-        return !stoodDown ? said.Length > 0 ? said : ClassFolderText.OldHomeDidNotConfirm(name)
-            : said.Length == 0 ? ClassFolderText.OldHadNoClasses(name)
-            : detail[0] == NotMovedMark ? ClassFolderText.OldCopyNotMoved(name, said)
-            : ClassFolderText.OldCopyAside(name, said);
+        if (!stoodDown)
+        {
+            var said = ClassFolderText.OneLine(detail);
+            return said.Length > 0 ? said : ClassFolderText.OldHomeDidNotConfirm(name);
+        }
+        if (detail.Length == 0)
+        {
+            return ClassFolderText.OldHadNoClasses(name);
+        }
+        if (detail[0] == NotMovedMark)
+        {
+            var why = ClassFolderText.OneLine(detail[1..]);
+            return ClassFolderText.OldCopyNotMoved(name, why.Length > 0 ? why : ClassFolderText.UnknownReason);
+        }
+        var folder = ClassFolderText.OneLine(detail);
+        return folder.Length > 0 ? ClassFolderText.OldCopyAside(name, folder) : ClassFolderText.OldCopyAsideUnnamed(name);
     }
 
     // Where this PC's own earlier store goes: "antes de 20-10-2026 1330".

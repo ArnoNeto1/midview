@@ -13,8 +13,8 @@ namespace Midview.Master;
 // the teacher was asked about.
 public partial class ClassFolderWindow
 {
-    // The copy running, for "Cancelar" (null when none is).
-    private CancellationTokenSource? _takeOverCancel;
+    // The copy running, for "Cancelar" (null when none is, or it is going in place).
+    private HandOverCancel? _takeOverCancel;
 
     // Shown on a colleague's PC (a remote controller, and this PC's hand-over);
     // disabled while a lesson is on, its tooltip saying why.
@@ -65,7 +65,7 @@ public partial class ClassFolderWindow
 
         CloseNameRow();
         SetBusy(true, closed ? ClassFolderText.TakeOverUnreachableProgress(home) : ClassFolderText.TakeOverProgress(home, default));
-        using var cancel = new CancellationTokenSource();
+        var cancel = new HandOverCancel();
         _takeOverCancel = cancel;
         CancelTakeOverButton.IsEnabled = true;
         CancelTakeOverButton.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
@@ -78,7 +78,7 @@ public partial class ClassFolderWindow
                 CancelTakeOverButton.Visibility = Visibility.Collapsed;
                 _takeOverCancel = null;
             }
-            if (_busy && !cancel.IsCancellationRequested)
+            if (_busy && !cancel.IsCancelled)
             {
                 ShowResults(ClassFolderText.TakeOverProgress(home, step), Array.Empty<string>());
             }
@@ -86,7 +86,7 @@ public partial class ClassFolderWindow
         HandOverResult result;
         try
         {
-            result = await Task.Run(() => remote.TakeOverAsync(handOver, confirmed, closed, progress, cancel.Token));
+            result = await Task.Run(() => remote.TakeOverAsync(handOver, confirmed, closed, progress, cancel));
         }
         catch (Exception ex)
         {
@@ -104,15 +104,22 @@ public partial class ClassFolderWindow
         RefreshFromDisk();
     }
 
-    // Stops the copy; once it is in place the take-over goes on to the end (the result says how it ended).
+    // Stops the copy. Once it is going in place it is too late (HandOverCancel
+    // says so at once): the button goes, nothing says "Cancelando", and the
+    // take-over goes on to the end (the result says how it ended).
     private void OnCancelTakeOverClicked(object sender, RoutedEventArgs e)
     {
         if (_takeOverCancel is not { } cancel)
         {
             return;
         }
-        cancel.Cancel();
         CancelTakeOverButton.IsEnabled = false;
+        if (!cancel.Cancel())
+        {
+            CancelTakeOverButton.Visibility = Visibility.Collapsed;
+            _takeOverCancel = null;
+            return;
+        }
         ShowResults(ClassFolderText.TakeOverCancelling(_controller.HomeName ?? ClassHome.UnnamedText), Array.Empty<string>());
     }
 }

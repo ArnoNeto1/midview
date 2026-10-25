@@ -4,10 +4,14 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // ClassFolderSync: the class folders' home, with two teacher PCs in one lab
-// (plan decisions 2, 8 and 9, Rulings 9 and 10). A start first claims the home
-// on every online Agent, going by generations (ClassHome.Generation); a PC that
-// stops being the home stands down; and a lesson another PC ended straight on
-// the Agents, while this PC's Master was closed, is adopted.
+// (plan decisions 2, 8 and 9, Rulings 9, 10, 18 and 19). A start first claims
+// the home on every online Agent, going by generations (ClassHome.Generation);
+// a PC that stops being the home stands down; and a lesson another PC ended
+// straight on the Agents, while this PC's Master was closed, is adopted. An
+// Agent busy with its student's folders refuses a claim as busy
+// (ClassHomeClaim.BusyText): it took nothing, as one that didn't answer. It is
+// asked once more; still busy, and its lesson refused too (it still keeps an
+// older home), its line says it is busy rather than naming that home.
 public sealed partial class ClassFolderSync
 {
     // How often, while a lesson is on, the Agents are asked whether another PC ended it.
@@ -116,8 +120,8 @@ public sealed partial class ClassFolderSync
     // only by taking the folders over. And a file of this PC's that is there
     // but can't be read refuses the start too, saying so (Ruling 12): it isn't
     // taken for "never the home". A refusal of either kind has a line for
-    // every PC of the room.
-    private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>?> ClaimHomeAsync()
+    // every PC of the room. Busy: the PCs still busy after being asked twice.
+    private async Task<HomeClaim> ClaimHomeAsync()
     {
         long? onDisk;
         ClassHome? seen;
@@ -130,7 +134,7 @@ public sealed partial class ClassFolderSync
         {
             // Ruling 12: not "never the home", which would claim with now.
             _log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
-            return EveryPc(HomeFileUnreadableText + ErrorText.Describe(ex));
+            return HomeClaim.Refused(EveryPc(HomeFileUnreadableText + ErrorText.Describe(ex)));
         }
 
         var saved = onDisk ?? _generation;
@@ -146,7 +150,7 @@ public sealed partial class ClassFolderSync
         if (newer.Count > 0)
         {
             RememberOtherHome(newer.MaxBy(report => report.Home!.Generation)!.Home!);
-            return newer.Select(report => (report.Machine, false, report.Home!.RefusalText)).ToList();
+            return HomeClaim.Refused(newer.Select(report => (report.Machine, false, report.Home!.RefusalText)).ToList());
         }
 
         // Ruling 11: never the home, but it saw another PC as the home: as if
@@ -154,7 +158,7 @@ public sealed partial class ClassFolderSync
         // Agent answering).
         if (ours is null && seen is not null)
         {
-            return EveryPc(seen.RefusalText);
+            return HomeClaim.Refused(EveryPc(seen.RefusalText));
         }
 
         var claimed = ours ?? new DateTimeOffset(_localNow()).UtcTicks;
@@ -171,8 +175,18 @@ public sealed partial class ClassFolderSync
         {
             KeepGeneration(claimed);
         }
-        return null;
+        return new HomeClaim(
+            null, answers.OfType<ClaimAnswer>().Where(answer => answer.Busy).Select(answer => Key(answer.Machine)).ToHashSet());
     }
+
+    // A start's lines: a PC still busy at the claim whose lesson was refused
+    // too (it still keeps the home it would have given up) says it was busy.
+    private static IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> SayBusy(
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> lines, IReadOnlySet<string> busy) =>
+        busy.Count == 0
+            ? lines
+            : lines.Select(line => !line.Ok && busy.Contains(Key(line.Machine)) ? (line.Machine, false, ClassHomeClaim.BusyText) : line)
+                .ToList();
 
     // What a cancelled start answers: one line for every PC of the room, as a
     // start's lesson goes to every one (SendToEveryAgentAsync).
@@ -224,13 +238,19 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // What the machine's Agent answered the claim, or null when it gave no answer.
+    // What the machine's Agent answered the claim, or null when it gave no
+    // answer. Busy, it is asked once more (a busy Agent took nothing).
     private ClaimAnswer? Claim(KnownMachine machine, bool takeOver, long generation)
     {
         try
         {
-            var (ok, detail, oldAgent) = ClassFolderClient.ClaimHome(
-                machine, _masterCertificate, new ClassHomeClaim(_machineName, _homePort, takeOver, generation), _agentPort);
+            var claim = new ClassHomeClaim(_machineName, _homePort, takeOver, generation);
+            var (ok, detail, oldAgent) = ClassFolderClient.ClaimHome(machine, _masterCertificate, claim, _agentPort);
+            if (!ok && detail == ClassHomeClaim.BusyText)
+            {
+                _log($"{machine.Name} was busy ({detail}); asking it again.");
+                (ok, detail, oldAgent) = ClassFolderClient.ClaimHome(machine, _masterCertificate, claim, _agentPort);
+            }
             return new ClaimAnswer(machine, ok || oldAgent, detail);
         }
         catch (Exception ex)
@@ -280,5 +300,16 @@ public sealed partial class ClassFolderSync
 
     private sealed record HomeReport(KnownMachine Machine, ClassHome? Home);
 
-    private sealed record ClaimAnswer(KnownMachine Machine, bool Ok, string Detail);
+    private sealed record ClaimAnswer(KnownMachine Machine, bool Ok, string Detail)
+    {
+        public bool Busy => !Ok && Detail == ClassHomeClaim.BusyText;
+    }
+
+    // What a start's claim came to: the refusals when another PC is the home
+    // (nothing starts), and the PCs (by Key) still busy after two tries.
+    private sealed record HomeClaim(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? Refusals, IReadOnlySet<string> Busy)
+    {
+        public static HomeClaim Refused(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> refusals) =>
+            new(refusals, new HashSet<string>());
+    }
 }

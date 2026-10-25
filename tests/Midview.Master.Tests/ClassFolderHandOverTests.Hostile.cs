@@ -113,6 +113,11 @@ public sealed partial class ClassFolderHandOverTests
         { false, "uma linha\r\noutra\tlinha\u0007", "uma linha outra linha" },
         { false, new string('x', 300), new string('x', 200) + "…" },
         { true, "Turmas (passadas\npara PROF-2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2)\"." },
+        // Ruling 19 (d): the case goes by what that PC said, not by what is left of it to show.
+        { true, "|", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (motivo desconhecido): ela continua na pasta Turmas dele." },
+        { true, "|\r\n ", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (motivo desconhecido): ela continua na pasta Turmas dele." },
+        { true, "   ", "A cópia do PC PROF-1 ficou nele, numa pasta à parte." },
+        { false, " \n ", "O PC PROF-1 ainda não confirmou a troca: a cópia dele continua na pasta Turmas dele." },
     };
 
     // Ruling 17 (b, h), Ruling 18 (6): what the old home answered

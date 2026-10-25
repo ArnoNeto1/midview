@@ -152,6 +152,13 @@ public sealed record ClassHomeClaim(string Name, int Port, bool TakeOver, long G
     // be. Not another home: the Master takes it as an Agent that didn't answer.
     public const string BusyText = "ocupado agora, tente de novo em instantes";
 
+    // The most an Agent waits to look at a claim (its lesson's lock) before
+    // refusing it as busy (Ruling 18): well under a Master's read timeout. A
+    // Master whose claim got no answer waits at least this long after sending
+    // it before asking the Agents which home they keep (Ruling 19): by then the
+    // claim was taken, or never will be.
+    public static readonly TimeSpan MaxLockWait = TimeSpan.FromSeconds(10);
+
     private const byte TakeOverFlag = 1;
 
     // What Encode writes and TryDecode accept.

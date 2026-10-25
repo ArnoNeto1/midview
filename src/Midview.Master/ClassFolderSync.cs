@@ -208,7 +208,8 @@ public sealed partial class ClassFolderSync : IDisposable
         await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
         try
         {
-            if (await ClaimHomeAsync().ConfigureAwait(false) is { } otherHome)
+            var home = await ClaimHomeAsync().ConfigureAwait(false);
+            if (home.Refusals is { } otherHome)
             {
                 return otherHome;
             }
@@ -224,7 +225,7 @@ public sealed partial class ClassFolderSync : IDisposable
             var lesson = new ClassLesson(NextSavedAt(), Guid.NewGuid(), turma, UnixNow(), Ended: false);
             _store.RememberLesson(lesson.LessonId, turma);
             Adopt(lesson);
-            return await SendToEveryAgentAsync(lesson).ConfigureAwait(false);
+            return SayBusy(await SendToEveryAgentAsync(lesson).ConfigureAwait(false), home.Busy);
         }
         finally
         {

@@ -23,7 +23,7 @@ public sealed partial class RemoteClassFolderController
     // more at the end.
     public Task<HandOverResult> TakeOverAsync(
         ClassFolderHandOver handOver, ClassHome? confirmed, bool homeClosed, IProgress<HandOverProgress>? progress = null,
-        CancellationToken cancel = default) => OneAtATime(async () =>
+        HandOverCancel? cancel = null) => OneAtATime(async () =>
     {
         var home = CurrentHome();
         if (!IsSamePc(home, confirmed))

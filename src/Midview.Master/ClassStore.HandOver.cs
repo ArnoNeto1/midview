@@ -13,6 +13,13 @@ internal sealed record HandOverFile(string WirePath, string FullPath, long Size,
 // on that one's disk, so putting it in place is a rename.
 internal sealed record HandOverStaging(string Files, string Index, string Lessons);
 
+// What was put back after a swap (ClassStore.SwapIn) that didn't stand: All,
+// or, stopped at the first thing that couldn't move back (a file of it open in
+// another program), whether the received copy stayed in the files root
+// (CopyStayed) and where this PC's own classes still are (OwnAside: the files
+// root's aside, null when they aren't aside).
+internal sealed record PutBack(bool All, bool CopyStayed, string? OwnAside);
+
 // What ClassStore.SwapIn did, for when the room's PCs don't take this PC as the home after all.
 internal interface IHandOverSwap
 {
@@ -20,11 +27,22 @@ internal interface IHandOverSwap
     string? OwnStoreAside { get; }
 
     // Puts the received store back where it was received and this PC's own
-    // back in place, the files root first. False when something couldn't move
-    // back (a file of it open in another program): it stops there, so what
-    // didn't move stays whole where it is (this PC's own store aside, at
-    // OwnStoreAside).
-    bool Undo();
+    // back in place, the files root first, up to the first thing that can't
+    // move back: what didn't move stays whole where it is.
+    PutBack Undo();
+}
+
+// SwapIn couldn't put the received store in place (InnerException says why),
+// and put back what it could (PutBack).
+internal sealed class SwapFailedException : IOException
+{
+    public SwapFailedException(Exception inner, PutBack putBack)
+        : base(inner.Message, inner)
+    {
+        PutBack = putBack;
+    }
+
+    public PutBack PutBack { get; }
 }
 
 // ClassStore: the whole store passing to another teacher PC ("Guardar as pastas
@@ -44,6 +62,10 @@ public sealed partial class ClassStore
 
     // Names tried for an aside before giving up.
     private const int MaxAsideNumber = 1000;
+
+    // Runs before each rename of a hand-over (from, to), forward or back: a
+    // test's stand-in for a folder that can't move (it throws IOException).
+    internal Action<string, string>? MoveHook { get; set; }
 
     // Where a hand-over receives (HandOverStaging).
     internal HandOverStaging Staging => new(
@@ -136,7 +158,7 @@ public sealed partial class ClassStore
     {
         lock (_gate)
         {
-            var moves = new Moves(_log);
+            var moves = new Moves(_log, MoveHook);
             try
             {
                 return PutAside(moves, why);
@@ -155,14 +177,14 @@ public sealed partial class ClassStore
 
     // The store received into Staging, in place of this PC's own, which goes
     // aside; the files root goes in last, so it is the first to go back.
-    // Throws IOException or UnauthorizedAccessException when it can't, with
-    // everything that could be put back as it was (the received store in Staging).
+    // Throws SwapFailedException when it can't, having put back what it could
+    // (the received store in Staging, this PC's own in place).
     internal IHandOverSwap SwapIn(string why)
     {
         var staging = Staging;
         lock (_gate)
         {
-            var moves = new Moves(_log);
+            var moves = new Moves(_log, MoveHook);
             try
             {
                 var aside = PutAside(moves, why);
@@ -175,12 +197,11 @@ public sealed partial class ClassStore
                     moves.File(staging.Lessons, _lessons.Path);
                 }
                 moves.Folder(staging.Files, FilesRootPath);
-                return new Swap(this, moves, aside);
+                return new Swap(this, moves, aside, staging.Files);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                moves.Undo();
-                throw;
+                throw new SwapFailedException(ex, UndoSwap(moves, staging.Files));
             }
             finally
             {
@@ -260,6 +281,12 @@ public sealed partial class ClassStore
         return info.Exists ? new HandOverFile(wirePath, fullPath, info.Length, info.LastWriteTimeUtc.Ticks) : null;
     }
 
+    // With _gate held. What a swap's undo put back (see PutBack).
+    private PutBack UndoSwap(Moves moves, string stagingFiles) =>
+        moves.Undo()
+            ? new PutBack(true, false, null)
+            : new PutBack(false, moves.Holds(stagingFiles), moves.DestinationOf(FilesRootPath));
+
     // With _gate held: the folders and the map on disk are other ones now.
     private void ForgetAll()
     {
@@ -272,23 +299,25 @@ public sealed partial class ClassStore
     {
         private readonly ClassStore _store;
         private readonly Moves _moves;
+        private readonly string _stagingFiles;
 
-        public Swap(ClassStore store, Moves moves, string? ownStoreAside)
+        public Swap(ClassStore store, Moves moves, string? ownStoreAside, string stagingFiles)
         {
             _store = store;
             _moves = moves;
+            _stagingFiles = stagingFiles;
             OwnStoreAside = ownStoreAside;
         }
 
         public string? OwnStoreAside { get; }
 
-        public bool Undo()
+        public PutBack Undo()
         {
             lock (_store._gate)
             {
                 try
                 {
-                    return _moves.Undo();
+                    return _store.UndoSwap(_moves, _stagingFiles);
                 }
                 finally
                 {
@@ -303,9 +332,14 @@ public sealed partial class ClassStore
     private sealed class Moves
     {
         private readonly Action<string> _log;
+        private readonly Action<string, string>? _hook;
         private readonly Stack<(string From, string To, Kind Kind)> _done = new();
 
-        public Moves(Action<string> log) => _log = log;
+        public Moves(Action<string> log, Action<string, string>? hook)
+        {
+            _log = log;
+            _hook = hook;
+        }
 
         private enum Kind
         {
@@ -316,12 +350,14 @@ public sealed partial class ClassStore
 
         public void Folder(string from, string to)
         {
+            _hook?.Invoke(from, to);
             Directory.Move(from, to);
             _done.Push((from, to, Kind.Folder));
         }
 
         public void File(string from, string to)
         {
+            _hook?.Invoke(from, to);
             System.IO.File.Move(from, to);
             _done.Push((from, to, Kind.File));
         }
@@ -344,9 +380,11 @@ public sealed partial class ClassStore
                     switch (move.Kind)
                     {
                         case Kind.Folder:
+                            _hook?.Invoke(move.To, move.From);
                             Directory.Move(move.To, move.From);
                             break;
                         case Kind.File:
+                            _hook?.Invoke(move.To, move.From);
                             System.IO.File.Move(move.To, move.From);
                             break;
                         default:
@@ -363,5 +401,14 @@ public sealed partial class ClassStore
             }
             return true;
         }
+
+        // Whether a rename from there is still done (not undone).
+        public bool Holds(string from) => _done.Any(move => move.Kind != Kind.Removed && SamePath(move.From, from));
+
+        // Where a rename from there that is still done went; null for none.
+        public string? DestinationOf(string from) =>
+            _done.FirstOrDefault(move => move.Kind != Kind.Removed && SamePath(move.From, from)).To;
+
+        private static bool SamePath(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 }

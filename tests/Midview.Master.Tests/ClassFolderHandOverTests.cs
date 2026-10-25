@@ -278,6 +278,8 @@ public sealed partial class ClassFolderHandOverTests
             Taker = new ClassFolderHandOver(
                 NewStore, NewSync, rig.OtherMaster, NewHome, () => rig.Machines, IsOnline, () => rig.Now, rig.AgentPort,
                 homePath: NewHomePath, log: message => TakerLog(message));
+            // The rig's Agents wait StudentPc.ClaimWait for their lock, not ClassHomeClaim.MaxLockWait.
+            Taker.LostAnswerWait = StudentPc.ClaimWait + TimeSpan.FromMilliseconds(500);
 
             if (openHost)
             {

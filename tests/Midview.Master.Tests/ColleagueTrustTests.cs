@@ -247,7 +247,7 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
     {
         using var rig = new ClassSyncRig(pcs: 1);
         var controller = LocalClassFolderControllerTests.NewController(rig, rig.NewSync());
-        var trust = new ColleagueTrust(rig.Master, () => rig.Machines, _ => true, () => _now, rig.AgentPort);
+        var trust = new ColleagueTrust(rig.Master, () => rig.Machines, _ => true, () => _now, rig.AgentPort, Long);
         using var host = ClassFolderHost.Open(rig.Master, controller, trust.IsTrustedAsync, 0, _ => { }, IPAddress.Loopback)!;
 
         var colleague = Ask(host, rig.OtherMaster, rig.Master);

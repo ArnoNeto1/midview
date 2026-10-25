@@ -30,10 +30,10 @@ public sealed class ClassLessonHandler
     // ClassLesson.FolderName makes it.
     internal const string FolderPrefix = "Pasta da turma – ";
 
-    // How long a claim on the class folders' home waits for the lesson's lock:
-    // well under a Master's read timeout (20 s), so a claim it gets no answer
-    // to was refused, never applied later (Ruling 18).
-    public static readonly TimeSpan DefaultClaimWait = TimeSpan.FromSeconds(10);
+    // How long a claim on the class folders' home waits for the lesson's lock
+    // (Rulings 18 and 19): ClassHomeClaim.MaxLockWait, which the Master waits
+    // out before taking a claim it got no answer to as refused.
+    public static readonly TimeSpan DefaultClaimWait = ClassHomeClaim.MaxLockWait;
 
     private readonly string _statePath;
     private readonly Func<(string? Desktop, SecurityIdentifier Student)?> _loggedOnStudent;
