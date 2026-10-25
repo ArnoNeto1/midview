@@ -31,6 +31,38 @@ public sealed partial class ClassFolderHost
         _handOver.Send(channel, _stop.Token);
     }
 
+    // RemoteTakeBack: the colleague's PC gave up a take-over it can't tell done
+    // (the generation it claimed with), and this PC claims the room back if it
+    // is still the home (ClassFolderHandOver.TakeBackAsync).
+    private Message TakenBack(Message request)
+    {
+        if (_handOver is null)
+        {
+            return Refusal(ClassFolderRemote.UnknownRequestText);
+        }
+        if (!ClassFolderRemote.TryDecodeTakeBack(request.Payload, out var abandoned))
+        {
+            return Refusal(IncompleteText);
+        }
+
+        try
+        {
+            var takenBack = _handOver.TakeBackAsync(abandoned);
+            if (!takenBack.Wait(CommandTimeout))
+            {
+                return Refusal(StillRunningText);
+            }
+            var (ok, detail) = takenBack.Result;
+            return new Message(MessageType.CommandAck, CommandResult.Encode(ok, detail));
+        }
+        catch (Exception ex)
+        {
+            var cause = ex is AggregateException { InnerException: { } inner } ? inner : ex;
+            LogFailure("Taking the room back for a colleague's PC", cause);
+            return Refusal(Reason(cause));
+        }
+    }
+
     // RemoteHandOverDone: the colleague's PC (its computer name, UTF-8) took the
     // folders over, and this PC stands down if the room's Agents say so.
     private Message HandedOver(Message request, string thumbprint)

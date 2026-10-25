@@ -274,13 +274,18 @@ public enum MessageType : byte
     // carrying a CommandResult (false): ClassFolderRemote.NotTrustedText to a PC
     // it doesn't serve, UnknownRequestText to any other message, and, to
     // RemoteClassFolderState when it can't read the class folders just now, a
-    // detail starting with UnreadableText.
+    // detail starting with UnreadableText. RemoteTakeBack (the generation a
+    // take-over claimed with and gave up, ClassFolderRemote.EncodeTakeBack),
+    // from a PC whose take-over can't be told done (an Agent that may have
+    // taken it doesn't answer), asks the home to claim the room back with a
+    // newer generation; answered with one CommandAck carrying a CommandResult.
     RemoteClassFolderState = 79,
     RemoteClassFolderStateReply = 80,
     RemoteClassFolderCommand = 81,
     RemoteClassFolderCommandReply = 82,
     RemoteHandOver = 83,
     RemoteHandOverDone = 84,
+    RemoteTakeBack = 85,
 }
 
 public enum CloseAppsMode : byte

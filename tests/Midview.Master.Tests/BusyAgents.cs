@@ -29,19 +29,20 @@ internal sealed class BusyAgents : IDisposable
 
     public void Free() => _free.Set();
 
-    public void FreeAfter(TimeSpan wait) => _ = Task.Delay(wait).ContinueWith(
-        _ =>
+    // On a thread of its own: never the pool's, which may be busy with the claims themselves.
+    public void FreeAfter(TimeSpan wait) => new Thread(() =>
+    {
+        Thread.Sleep(wait);
+        try
         {
-            try
-            {
-                _free.Set();
-            }
-            catch (ObjectDisposedException)
-            {
-                // Freed and gone already.
-            }
-        },
-        TaskScheduler.Default);
+            _free.Set();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Freed and gone already.
+        }
+    })
+    { IsBackground = true }.Start();
 
     public void Dispose()
     {

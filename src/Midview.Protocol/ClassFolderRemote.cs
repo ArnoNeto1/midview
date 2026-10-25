@@ -63,6 +63,26 @@ public static class ClassFolderRemote
 
     public static byte[] EncodeJson<T>(T value) => JsonSerializer.SerializeToUtf8Bytes(value, Options);
 
+    // MessageType.RemoteTakeBack's payload: the generation given up (int64,
+    // big-endian), above 0.
+    public static byte[] EncodeTakeBack(long abandoned)
+    {
+        if (abandoned <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(abandoned));
+        }
+        var payload = new byte[8];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(payload, abandoned);
+        return payload;
+    }
+
+    // False for anything but eight bytes holding a generation above 0.
+    public static bool TryDecodeTakeBack(byte[] payload, out long abandoned)
+    {
+        abandoned = payload.Length == 8 ? System.Buffers.Binary.BinaryPrimitives.ReadInt64BigEndian(payload) : 0;
+        return abandoned > 0;
+    }
+
     // Null unless the payload is a valid T. T is one of the records below
     // (NotSupportedException for any other type: that is a mistake in the code,
     // whatever arrived).

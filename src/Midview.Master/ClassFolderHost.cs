@@ -20,8 +20,9 @@ namespace Midview.Master;
 // access with "Dar acesso a um colega"). Anyone else, and any message that
 // isn't RemoteClassFolderState or RemoteClassFolderCommand, gets one
 // CommandAck with a CommandResult saying no (ClassFolderRemote's texts), after
-// their request was read. RemoteHandOver and RemoteHandOverDone (a colleague's
-// PC taking the class folders over) are served only with a ClassFolderHandOver
+// their request was read. RemoteHandOver, RemoteHandOverDone and
+// RemoteTakeBack (a colleague's PC taking the class folders over, or giving an
+// undecided take-over back) are served only with a ClassFolderHandOver
 // (ClassFolderHost.HandOver.cs). What the messages can't carry is left out or cut
 // (Ruling 4): a class folder made by hand with a name over
 // ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
@@ -254,6 +255,10 @@ public sealed partial class ClassFolderHost : IDisposable
             else if (request.Type == MessageType.RemoteHandOverDone)
             {
                 channel.Send(HandedOver(request, channel.RemoteThumbprint));
+            }
+            else if (request.Type == MessageType.RemoteTakeBack)
+            {
+                channel.Send(TakenBack(request));
             }
             else
             {

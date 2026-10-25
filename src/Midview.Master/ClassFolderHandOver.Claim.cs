@@ -69,12 +69,15 @@ public sealed partial class ClassFolderHandOver
     // Taken when at least one Agent took it (the others are taken back at
     // this PC's next start); NotTaken with why, as an Agent said it (a lesson
     // on), or that they were busy or none answered; Unknown (see the class
-    // comment). Generation: the one claimed.
-    private ClaimResult Claim()
+    // comment). Generation: the one claimed, newer than now, than every home
+    // the Agents report and than above (a generation another PC gave up: Ruling 21).
+    private ClaimResult Claim(long above = 0)
     {
         var online = AgentsOnline();
         var homes = Homes(online).Select(read => read.Home).OfType<ClassHome>();
-        var generation = ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes);
+        var generation = Math.Max(
+            ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes),
+            above == long.MaxValue ? above : above + 1);
         var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
         var answers = AskEach(online, machine => ClaimOn(machine, claim));
         foreach (var refused in answers.Where(answer => answer.Answer == Answer.Refused))

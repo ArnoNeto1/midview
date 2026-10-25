@@ -101,16 +101,22 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 // the sender as the home, or a lesson is on there).
 //
 // A take-over whose claim can't be told taken or not (an Agent that may have
-// taken it doesn't answer: Claim's Unknown) leaves the copy in place and this
-// PC's own classes aside, tells the old home nothing, and keeps no generation
-// of its own: when that PC is back, what the room's Agents keep decides. One
-// naming this PC (its certificate and name) makes it the home with the copy
-// (ClassHomeTracker, and a start goes by the generation the Agents recorded
-// for it); all naming the old home leave it a remote, and a start of its own
-// is refused as one from a PC that was never the home (Ruling 20).
+// taken it doesn't answer: Claim's Unknown) asks the old home to take the room
+// back (ClassFolderHandOver.TakeBack.cs, Ruling 21), then puts this PC's own
+// classes back and throws the copy away. Only when the old home can't be
+// reached or refuses does the copy stay in place, this PC's own classes
+// aside, the old home untold and no generation of its own kept: when that PC
+// is back, what the room's Agents keep decides. One naming this PC (its
+// certificate and name) makes it the home with the copy (ClassHomeTracker, and
+// a start goes by the generation the Agents recorded for it); all naming the
+// old home leave it a remote, and a start of its own is refused as one from a
+// PC that was never the home (Ruling 20). An unreachable home's take-over has
+// no copy to give back and nobody to ask: undecided, it leaves this PC's own
+// classes as they are, keeps no generation, and the room's Agents decide.
 //
-// In four files: this one (taking over), ClassFolderHandOver.Claim.cs (the
-// Agents), ClassFolderHandOver.Send.cs (giving, on the home) and
+// In five files: this one (taking over), ClassFolderHandOver.Claim.cs (the
+// Agents), ClassFolderHandOver.TakeBack.cs (an undecided take-over given back),
+// ClassFolderHandOver.Send.cs (giving, on the home) and
 // ClassFolderHandOver.Receive.cs (the copy arriving, checked).
 public sealed partial class ClassFolderHandOver
 {
@@ -336,7 +342,19 @@ public sealed partial class ClassFolderHandOver
         }
         if (claimed.Outcome == Outcome.Unknown)
         {
-            // Nothing put back, nobody told, no generation of its own: see the class comment.
+            // The old home takes the room back, then this PC is as it was
+            // (ClassFolderHandOver.TakeBack.cs); if it can't, nothing is put
+            // back, nobody told, no generation of its own (see the class comment).
+            if (AskTheOldHomeToTakeBack(home, claimed.Generation))
+            {
+                var putBack = swap.Undo();
+                _store.DiscardStaging();
+                var takenBack = ClassFolderText.TakeOverTakenBack(name, claimed.Unknown);
+                return new HandOverResult(false, putBack.All
+                    ? takenBack
+                    : ClassFolderText.TakeOverNotPutBack(
+                        name, takenBack, putBack.CopyStayed, putBack.OwnAside is { } aside ? Path.GetFileName(aside) : null));
+            }
             _log($"The class folders from {name} stay in place until {string.Join(", ", claimed.Unknown)} can say which PC keeps them.");
             return new HandOverResult(false, ClassFolderText.TakeOverUndecided(name, claimed.Unknown, ownAside));
         }

@@ -144,8 +144,12 @@ public sealed partial class ClassFolderSync
         var thisPc = reports.Where(report => report.Home is { } home && IsThisPc(home, saved)).ToList();
         var others = reports.Where(report => report.Home is { } home && !IsThisPc(home, saved)).ToList();
 
-        // With none on file, the one the Agents recorded for this PC, if any.
-        var ours = saved ?? thisPc.Select(report => (long?)report.Home!.Generation).Where(generation => generation > 0).Max();
+        // The newest of the one on file and the ones the Agents recorded for
+        // this PC (Ruling 21: a take-over this PC made that its file doesn't
+        // have, an older generation kept from when it was the home before);
+        // never one an Agent keeps for another PC. Saved once an Agent takes the claim.
+        var recorded = thisPc.Select(report => (long?)report.Home!.Generation).Where(generation => generation > 0).Max();
+        var ours = saved is { } kept && recorded is { } fromAgents ? Math.Max(kept, fromAgents) : saved ?? recorded;
         var newer = others.Where(report => ours is not { } generation || report.Home!.Generation > generation).ToList();
         if (newer.Count > 0)
         {

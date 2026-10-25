@@ -94,6 +94,7 @@ public sealed partial class ClassFolderHandOverTests
         var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
         lab.FillTheOldHome();
         var claims = new List<Task>();
+        var missed = 0;
         HandOverResult result;
         using (var busy = new BusyAgents(rig.Pcs))
         {
@@ -105,7 +106,10 @@ public sealed partial class ClassFolderHandOverTests
                 {
                     claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, gone.Set)));
                 }
-                Assert.True(gone.Wait(TimeSpan.FromSeconds(10)));
+                if (!gone.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    Volatile.Write(ref missed, 1);
+                }
                 sending();
                 throw new IOException("the connection was reset");
             };
@@ -113,6 +117,7 @@ public sealed partial class ClassFolderHandOverTests
             await lab.WhenAll(claims);
         }
 
+        Assert.Equal(0, missed); // every claim went out
         Assert.True(result.Ok, result.Detail);
         Assert.All(rig.Pcs, pc => Assert.Equal((NewHome, generation + 1), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
         Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
@@ -132,6 +137,7 @@ public sealed partial class ClassFolderHandOverTests
         var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
         lab.FillTheOldHome();
         var claims = new List<Task>();
+        var missed = 0;
         HandOverResult result;
         using (var busy = new BusyAgents(rig.Pcs))
         {
@@ -144,7 +150,10 @@ public sealed partial class ClassFolderHandOverTests
                 {
                     claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, gone.Set)));
                 }
-                Assert.True(gone.Wait(TimeSpan.FromSeconds(10)));
+                if (!gone.Wait(TimeSpan.FromSeconds(10)))
+                {
+                    Volatile.Write(ref missed, 1);
+                }
                 sending();
                 throw new IOException("the connection was reset");
             };
@@ -152,15 +161,17 @@ public sealed partial class ClassFolderHandOverTests
             await lab.WhenAll(claims);
         }
 
+        Assert.Equal(0, missed); // every claim went out
         Assert.True(result.Ok, result.Detail);
         Assert.Equal((NewHome, generation + 1), (rig.Pcs[0].Agent.CurrentHome!.Name, rig.Pcs[0].Agent.CurrentHome!.Generation));
         Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
     }
 
-    // Ruling 20 (1): the wait runs from when the answer was lost (the clock and
-    // the wait are the test's), and a claim that never went out (no connection,
-    // no handshake) needs none.
+    // Ruling 20 (1): the wait runs from when the answer was lost, not from when
+    // the claim went out (3 s before, here: the clock and the wait are the
+    // test's), and a claim that never went out (no connection, no handshake)
+    // needs none.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -176,11 +187,12 @@ public sealed partial class ClassFolderHandOverTests
         lab.Taker.Sleep = wait => slept.Add(wait);
         lab.Taker.SendClaim = (_, _, sending) =>
         {
-            Interlocked.Exchange(ref now, 4_000);
+            Interlocked.Exchange(ref now, 2_000);
             if (wentOut)
             {
                 sending();
             }
+            Interlocked.Exchange(ref now, 5_000);
             throw new IOException("the answer was lost");
         };
 
@@ -191,17 +203,18 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(wentOut ? new[] { ClassFolderHandOver.DefaultLostAnswerWait } : Array.Empty<TimeSpan>(), slept);
     }
 
-    // Ruling 20 (2): PC1 may have taken the claim (its answer was lost), and
-    // doesn't answer when asked again (it went off). Nothing is put back (that
-    // could split the classes): the copy stays in Turmas, this PC's own
-    // classes aside, the old home isn't told, and this PC keeps no generation
-    // of its own. When PC1 is back, the room's PCs decide: naming this PC
-    // (it took the claim), this PC works as the home with the copy; naming the
-    // old home, this PC stays a remote, and its starts are refused.
+    // Ruling 20 (2), Ruling 21 (b): PC1 may have taken the claim (its answer
+    // was lost) and doesn't answer when asked again (it went off), and the old
+    // home's Master closed before it could be asked to take the room back.
+    // Nothing is put back (that could split the classes): the copy stays in
+    // Turmas, this PC's own classes aside, and this PC keeps no generation of
+    // its own. When PC1 is back, the room's PCs decide: naming this PC (it
+    // took the claim), this PC works as the home with the copy; naming the old
+    // home, this PC stays a remote, and its starts are refused.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ALostAnswerFromAPcThatIsGone_LeavesTheCopy_AndTheRoomDecidesWhenItIsBack(bool itTookTheClaim)
+    public async Task AnUndecidedTakeOverTheOldHomeCantTakeBack_LeavesTheCopy_AndTheRoomDecidesWhenPc1IsBack(bool itTookTheClaim)
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var lab = new HandOverLab(rig);
@@ -212,26 +225,10 @@ public sealed partial class ClassFolderHandOverTests
         lab.GiveTheNewHomeAClassOfItsOwn();
         lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
         lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
-        var gone = 0;
-        lab.Taker.SendClaim = (machine, claim, sending) =>
-        {
-            if (machine.Name != "PC1")
-            {
-                return ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, sending);
-            }
-            sending();
-            if (itTookTheClaim)
-            {
-                ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort);
-            }
-            Volatile.Write(ref gone, 1);
-            throw new IOException("PC1 went off before it answered");
-        };
-        lab.Taker.ReadHome = machine => machine.Name == "PC1" && Volatile.Read(ref gone) == 1
-            ? throw new IOException("PC1 is off")
-            : ClassFolderClient.GetHome(machine, rig.OtherMaster, rig.AgentPort);
+        lab.LetPc1TakeTheClaimAndGoOff(itTookTheClaim, whenGone: () => lab.Host!.Dispose());
 
         var result = await lab.Taker.TakeOverAsync(lab.Home);
+        rig.Offline.Clear(); // PC1 is back
 
         Assert.False(result.Ok);
         Assert.Equal(ClassFolderText.TakeOverUndecided(OldHome, new[] { "PC1" }, OwnAside), result.Detail);
@@ -242,16 +239,12 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Null(ClassHomeFileMaster.Read(lab.NewHomePath));
         lab.AssertNoStaging();
 
-        // PC1 is back.
-        using var tracker = new ClassHomeTracker(
-            rig.OtherMaster, NewHome, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), TimeSpan.FromHours(1),
-            rig.AgentPort, lab.NewHomePath);
+        using var tracker = lab.TrackerOf(rig.OtherMaster, NewHome, lab.NewHomePath);
         await tracker.RefreshAsync();
         if (itTookTheClaim)
         {
             Assert.Equal(ClassFolderMode.Local, tracker.Mode);
             Assert.Equal((NewHome, generation + 1), (tracker.Home!.Name, tracker.Home.Generation));
-            Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
         }
         else
         {
