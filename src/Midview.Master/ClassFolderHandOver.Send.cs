@@ -29,9 +29,10 @@ public sealed partial class ClassFolderHandOver
 
         IReadOnlyList<string> classes;
         IReadOnlyList<HandOverFile> files;
+        int leftOut;
         try
         {
-            (classes, files) = _store.HandOverContents();
+            (classes, files, leftOut) = _store.HandOverContents();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -47,7 +48,7 @@ public sealed partial class ClassFolderHandOver
             return;
         }
 
-        var manifest = EncodeManifest(classes, files.Select(file => (file.WirePath, file.Size, file.LastWriteTicks)).ToList());
+        var manifest = EncodeManifest(classes, files.Select(file => (file.WirePath, file.Size, file.LastWriteTicks)).ToList(), leftOut);
         using (var content = new MemoryStream(manifest))
         {
             if (!SendOne(channel, ManifestPath, content, manifest.Length, stop))
@@ -100,15 +101,32 @@ public sealed partial class ClassFolderHandOver
     // keeps it as the home (that certificate, and that name: never a home
     // recorded with none, which any name would match), newer than this PC, and
     // no lesson is on here (Ruling 17: some PCs still follow it, and this PC
-    // keeps the folders until it ends): this PC stands down
-    // (ClassFolderSync.StandDownAsync), keeps it as the other home seen
+    // keeps the folders until it ends; looked at and stood down in one step,
+    // ClassFolderSync.StandDownIfNoLessonAsync, Ruling 22): this PC stands
+    // down, keeps it as the other home seen
     // (ClassHomeFileMaster), and moves its store aside to "Turmas (passadas para
     // <the name the Agents recorded>)". Ok then, with the folder it went to
     // (empty: there was nothing to move), NotMovedMark and ErrorText's words for
     // why it couldn't go (it stays where it is), or PartlyMovedMark and the
     // folder its classes went to when the rest couldn't follow and they couldn't
-    // come back. Not Ok otherwise, saying why in the teacher's words: nothing changes.
+    // come back. Not Ok otherwise, saying why in the teacher's words: nothing
+    // changes. One at a time with a take-back (TakeBackAsync), which this PC
+    // refuses once it stood down here.
     internal async Task<(bool Ok, string Detail)> HandedOverAsync(string name, string senderThumbprint)
+    {
+        await _giving.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            return await HandOver(name, senderThumbprint).ConfigureAwait(false);
+        }
+        finally
+        {
+            _giving.Release();
+        }
+    }
+
+    // HandedOverAsync's work, under _giving.
+    private async Task<(bool Ok, string Detail)> HandOver(string name, string senderThumbprint)
     {
         long? own;
         try
@@ -132,13 +150,13 @@ public sealed partial class ClassFolderHandOver
             _log($"{name} said it took the class folders over, but no Agent keeps it as the home.");
             return (false, ClassFolderText.NotTheHomeYet(name, _machineName));
         }
-        if (_sync.Lesson is { IsOn: true } lesson)
+        if (await _sync.StandDownIfNoLessonAsync().ConfigureAwait(false) is { } lesson)
         {
             _log($"{name} took the class folders over with the lesson of {lesson.Turma} on here: kept until it ends.");
             return (false, ClassFolderText.LetsGoAfterTheLesson(_machineName, lesson.Turma));
         }
 
-        await _sync.StandDownAsync().ConfigureAwait(false);
+        _handedOver = true;
         try
         {
             ClassHomeFileMaster.WriteLastOtherHome(newHome, _homePath);

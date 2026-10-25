@@ -225,6 +225,8 @@ public sealed partial class ClassFolderHandOverTests
         lab.GiveTheNewHomeAClassOfItsOwn();
         lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
         lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        lab.TakerLog = logged.Enqueue;
         lab.LetPc1TakeTheClaimAndGoOff(itTookTheClaim, whenGone: () => lab.Host!.Dispose());
 
         var result = await lab.Taker.TakeOverAsync(lab.Home);
@@ -232,6 +234,9 @@ public sealed partial class ClassFolderHandOverTests
 
         Assert.False(result.Ok);
         Assert.Equal(ClassFolderText.TakeOverUndecided(OldHome, new[] { "PC1" }, OwnAside), result.Detail);
+        // Not asked at all (its Master closed), rather than asked and refusing.
+        Assert.Contains(logged, line => line.Contains("couldn't be asked to take the room back", StringComparison.Ordinal));
+        Assert.DoesNotContain(logged, line => line.Contains("didn't take the room back", StringComparison.Ordinal));
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
         Assert.True(File.Exists(Path.Combine(lab.NewRoot, OwnAside, "Antiga", "velho.txt")));
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, rig.Store.List().Select(summary => summary.Turma));

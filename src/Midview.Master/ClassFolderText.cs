@@ -147,6 +147,10 @@ public static partial class ClassFolderText
     public static string Result(string name, bool ok, string detail) =>
         $"{(ok ? "✓" : "✗")} {name}" + (detail.Length > 0 ? $": {detail}" : string.Empty);
 
+    // A PC busy with its student's folders when a start or an end reached it:
+    // this PC's poller hands it the lesson in a moment.
+    public const string LessonBusy = "ocupado agora; o Midview tenta de novo em instantes";
+
     // After a start (started) or an end: how many PCs took it. offline: how
     // many of the others were switched off, which get it from their poller
     // once they answer again; said only when that is all of them (any other
@@ -221,6 +225,32 @@ public static partial class ClassFolderText
     // The PC at the home's address answered with another certificate than the one the room knows for it.
     public static string HomeOtherIdentity(string name) => $"O PC {name} respondeu com outra identidade; ele foi reinstalado?";
 
+    // Lines the home builds about its own disk ("neste computador"), which a
+    // colleague's PC shows saying "no PC {home}" (Relayed). A PC's line when
+    // the class's folder there can't be read (ClassFolderSync's round):
+    public static string ClassFolderUnreadable(string reason, string? home = null) =>
+        $"a pasta da turma {Here(home)} não pôde ser lida: {reason}";
+
+    // ...and each PC's line of a start when what that PC knows of the class
+    // folders' home (ClassHomeFileMaster) can't be read.
+    public static string HomeFileUnreadable(string reason, string? home = null) =>
+        $"não foi possível ler, {Here(home)}, qual PC guarda as pastas das turmas: {reason}";
+
+    // A line the home built about itself, as a colleague's PC shows it (home:
+    // the home's name); any other line as it is.
+    public static string Relayed(string detail, string home)
+    {
+        foreach (var said in new Func<string, string?, string>[] { ClassFolderUnreadable, HomeFileUnreadable })
+        {
+            var here = said(string.Empty, null);
+            if (detail.StartsWith(here, StringComparison.Ordinal))
+            {
+                return said(detail[here.Length..], home);
+            }
+        }
+        return detail;
+    }
+
     // --- Changes to the list ---
 
     public static string Renamed(string turma, string newName) => $"Turma {turma} agora se chama {newName}.";
@@ -244,6 +274,9 @@ public static partial class ClassFolderText
 
     // "do seu PC", or "do PC PROF-1" from another teacher PC.
     private static string Yours(string? home) => home is null ? "do seu PC" : $"do PC {home}";
+
+    // "neste computador", or "no PC PROF-1" from another teacher PC.
+    private static string Here(string? home) => home is null ? "neste computador" : $"no PC {home}";
 
     private static string Files(int count) => count == 1 ? "1 arquivo" : $"{Count(count)} arquivos";
 

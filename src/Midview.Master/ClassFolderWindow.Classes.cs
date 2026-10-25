@@ -164,8 +164,10 @@ public partial class ClassFolderWindow
         NameErrorText.Visibility = Visibility.Visible;
     }
 
-    // Asks first, naming how many files go; they go to this PC's Recycle Bin, or
-    // for good when they are more than it holds (and then the question says so).
+    // Asks first, naming how many files go; they go to the Recycle Bin of the
+    // PC that keeps the class folders (this one, or the home a colleague's
+    // window names), or for good when they are more than it holds (and then
+    // the question says so).
     private async void OnDeleteClicked(object sender, RoutedEventArgs e)
     {
         if (SelectedClass is not { } row || IsLessonClass(row.Turma))

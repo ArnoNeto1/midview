@@ -104,11 +104,13 @@ public sealed partial class ClassStore
     // can't be told (a network folder), so that nothing warns.
     public long FreeBytes() => _freeBytes();
 
-    private long DiskFreeBytes()
+    private long DiskFreeBytes() => DriveFreeBytes(Path.GetPathRoot(_filesRoot) ?? string.Empty);
+
+    // What is left on the disk whose root that is; long.MaxValue when that can't be told.
+    private static long DriveFreeBytes(string root)
     {
         try
         {
-            var root = Path.GetPathRoot(_filesRoot);
             return string.IsNullOrEmpty(root) ? long.MaxValue : new DriveInfo(root).AvailableFreeSpace;
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)

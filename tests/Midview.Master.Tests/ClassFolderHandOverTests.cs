@@ -265,7 +265,7 @@ public sealed partial class ClassFolderHandOverTests
             OldController = LocalClassFolderControllerTests.NewController(rig, OldSync);
             Giver = new ClassFolderHandOver(
                 rig.Store, OldSync, rig.Master, OldHome, () => rig.Machines, IsOnline, () => rig.Now, rig.AgentPort,
-                homePath: rig.HomePath, log: _ => { });
+                homePath: rig.HomePath, log: message => GiverLog(message));
 
             NewRoot = Path.Combine(rig.Root, "prof-2");
             NewStore = new ClassStore(
@@ -310,8 +310,13 @@ public sealed partial class ClassFolderHandOverTests
 
         public long NewFreeSpace { get; set; } = long.MaxValue;
 
-        // What the taking PC logs (nothing by default).
+        // What the taking PC logs, and the old home (nothing by default).
         public Action<string> TakerLog { get; set; } = _ => { };
+
+        public Action<string> GiverLog { get; set; } = _ => { };
+
+        // What each of the rig's Agents keeps as the home.
+        public List<ClassHome?> Homes() => _rig.Pcs.Select(pc => pc.Agent.CurrentHome).ToList();
 
         // The home as the room's Agents keep it, where its host listens (the
         // Agents keep the port its claims carried, ClassFolderRemote.Port).

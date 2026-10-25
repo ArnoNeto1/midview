@@ -19,7 +19,8 @@ namespace Midview.Master;
 // each on its own connection, and each is followed by a fresh state before it
 // returns (the window looks at Lesson right after a start). A connection the
 // home turns away before the request goes (its cap on one PC's connections) is
-// tried again shortly.
+// tried again shortly; a handshake that hangs for the whole wait (the home's
+// Master hung) is not (Ruling 22: a poll costs one wait, not three).
 //
 // The home is closed (HomeClosed) only once ClosedAfter polls found nobody
 // there, with nothing but neutral polls between them: the connection refused
@@ -55,8 +56,8 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
 
     // For a state: the home's deadline for the handshake and the request
     // (10 s), whether this PC is a colleague (up to 10 s), and its read (about
-    // 10 s), with room to spare.
-    private static readonly TimeSpan StateWait = TimeSpan.FromSeconds(40);
+    // 10 s), with room to spare. Also how long a handshake may take.
+    private static readonly TimeSpan DefaultStateWait = TimeSpan.FromSeconds(40);
 
     // For a command: the home waits up to 5 minutes for it (a lesson's end
     // brings the last files in first), then says it is still running. TCP
@@ -82,9 +83,11 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     private readonly Func<DateTime> _localNow;
     private readonly Action<string> _log;
 
-    // One state request at a time, and one command.
+    // One state request at a time, and one command; what waits its turn stops
+    // waiting when the controller is disposed (_disposing).
     private readonly SemaphoreSlim _polling = new(1, 1);
     private readonly SemaphoreSlim _commands = new(1, 1);
+    private readonly CancellationTokenSource _disposing = new();
 
     // What the window is shown. Under _lock.
     private readonly object _lock = new();
@@ -137,14 +140,18 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
         }
     }
 
+    // As the home has them, its lines about its own disk said of it (ClassFolderText.Relayed).
     public IReadOnlyList<PcLineDto> Pcs
     {
         get
         {
+            var name = Name;
+            IReadOnlyList<PcLineDto> pcs;
             lock (_lock)
             {
-                return _state?.Pcs ?? Array.Empty<PcLineDto>();
+                pcs = _state?.Pcs ?? Array.Empty<PcLineDto>();
             }
+            return pcs.Select(pc => pc with { Detail = ClassFolderText.Relayed(pc.Detail, name) }).ToList();
         }
     }
 
@@ -200,6 +207,9 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
 
     public event Action? Changed;
 
+    // DefaultStateWait, or a test's.
+    internal TimeSpan StateWait { get; set; } = DefaultStateWait;
+
     // Asks the home for its state now and every pollInterval after, until Stop.
     public void Start()
     {
@@ -211,7 +221,9 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
             }
             var running = new CancellationTokenSource();
             _running = running;
-            _ = Task.Run(() => LoopAsync(running.Token));
+            // Read here: a Stop right after disposes the source before the loop would.
+            var token = running.Token;
+            _ = Task.Run(() => LoopAsync(token));
         }
     }
 
@@ -225,7 +237,11 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     }
 
     // Stops the loop. A request on its way finishes (a command's reply is
-    // still returned); any call after this throws ObjectDisposedException.
+    // still returned); one waiting its turn stops waiting (a command throws
+    // ObjectDisposedException), as any call after this does. The semaphores
+    // are left as they are: disposing one forgets its waiters, and a waiter
+    // whose cancellation is still on its way would then wait forever (they
+    // hold nothing to free, their wait handle never being asked for).
     public void Dispose()
     {
         lock (_runLock)
@@ -237,8 +253,8 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
             _disposed = true;
             StopLocked();
         }
-        _polling.Dispose();
-        _commands.Dispose();
+        _disposing.Cancel();
+        _disposing.Dispose();
     }
 
     // The last state when it is fresh, else a new one. Throws IOException when
@@ -301,9 +317,9 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     {
         try
         {
-            await _polling.WaitAsync().ConfigureAwait(false);
+            await _polling.WaitAsync(_disposing.Token).ConfigureAwait(false);
         }
-        catch (ObjectDisposedException)
+        catch (Exception ex) when (ex is ObjectDisposedException or OperationCanceledException)
         {
             return null;
         }
@@ -366,7 +382,7 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
                     _note = otherIdentity;
                     return null;
 
-                case Kind.TurnedAway or Kind.Lost:
+                case Kind.TurnedAway or Kind.Hung or Kind.Lost:
                     return null;
             }
 

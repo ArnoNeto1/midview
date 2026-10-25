@@ -70,16 +70,22 @@ public sealed partial class ClassFolderHandOver
     // this PC's next start); NotTaken with why, as an Agent said it (a lesson
     // on), or that they were busy or none answered; Unknown (see the class
     // comment). Generation: the one claimed, newer than now, than every home
-    // the Agents report and than above (a generation another PC gave up: Ruling 21).
-    private ClaimResult Claim(long above = 0)
+    // the Agents report (reported: as just read, else read now) or this PC
+    // saw (ClassHomeFileMaster: one that took the room back, say), and than
+    // above (a generation another PC gave up, or this PC's own: Rulings 21 and
+    // 22). retryBusy: an Agent busy with its student's folders is asked once
+    // more, as a start does (Ruling 19).
+    private ClaimResult Claim(long above = 0, bool retryBusy = false, IReadOnlyList<ClassHome>? reported = null)
     {
         var online = AgentsOnline();
-        var homes = Homes(online).Select(read => read.Home).OfType<ClassHome>();
+        var homes = reported ?? Homes(online).Select(read => read.Home).OfType<ClassHome>().ToList();
+        var seen = SeenHome();
         var generation = Math.Max(
-            ClassHomeFileMaster.TakeOverGeneration(new DateTimeOffset(_localNow()).UtcTicks, homes),
+            ClassHomeFileMaster.TakeOverGeneration(
+                new DateTimeOffset(_localNow()).UtcTicks, seen is null ? homes : homes.Append(seen)),
             above == long.MaxValue ? above : above + 1);
         var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
-        var answers = AskEach(online, machine => ClaimOn(machine, claim));
+        var answers = AskEach(online, machine => ClaimOn(machine, claim, retryBusy));
         foreach (var refused in answers.Where(answer => answer.Answer == Answer.Refused))
         {
             _log($"{refused.Machine.Name} didn't take this PC as the class folders' home: {refused.Detail}");
@@ -126,16 +132,22 @@ public sealed partial class ClassFolderHandOver
         && string.Equals(home.Name, _machineName, StringComparison.OrdinalIgnoreCase);
 
     // What the machine's Agent answered the claim; with no answer, when it was
-    // lost if the claim had gone out by then.
-    private ClaimAnswer ClaimOn(KnownMachine machine, ClassHomeClaim claim)
+    // lost if the claim had gone out by then. retryBusy: busy, it is asked once more.
+    private ClaimAnswer ClaimOn(KnownMachine machine, ClassHomeClaim claim, bool retryBusy)
     {
         var wentOut = 0;
         void Sending() => Volatile.Write(ref wentOut, 1);
+        (bool Ok, string Detail, bool OldAgent) Send() => SendClaim is { } send
+            ? send(machine, claim, Sending)
+            : ClassFolderClient.ClaimHome(machine, _certificate, claim, _agentPort, Sending);
         try
         {
-            var (ok, detail, oldAgent) = SendClaim is { } send
-                ? send(machine, claim, Sending)
-                : ClassFolderClient.ClaimHome(machine, _certificate, claim, _agentPort, Sending);
+            var (ok, detail, oldAgent) = Send();
+            if (retryBusy && !ok && !oldAgent && detail == ClassHomeClaim.BusyText)
+            {
+                _log($"{machine.Name} was busy ({detail}); asking it again.");
+                (ok, detail, oldAgent) = Send();
+            }
             return new ClaimAnswer(machine, oldAgent ? Answer.Old : ok ? Answer.Took : Answer.Refused, detail, 0);
         }
         catch (Exception ex)
@@ -166,6 +178,20 @@ public sealed partial class ClassFolderHandOver
                 return new HomeRead(machine, false, null);
             }
         }).ToList();
+
+    // The last other home this PC saw (ClassHomeFileMaster); null for none, or when it can't be read.
+    private ClassHome? SeenHome()
+    {
+        try
+        {
+            return ClassHomeFileMaster.ReadLastOtherHome(_homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"The class folders' home this PC saw could not be read: {ex.Message}");
+            return null;
+        }
+    }
 
     private void KeepGeneration(long generation)
     {

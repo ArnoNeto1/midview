@@ -30,9 +30,9 @@ public sealed class ClassLessonHandler
     // ClassLesson.FolderName makes it.
     internal const string FolderPrefix = "Pasta da turma – ";
 
-    // How long a claim on the class folders' home waits for the lesson's lock
-    // (Rulings 18 and 19): ClassHomeClaim.MaxLockWait, which the Master waits
-    // out before taking a claim it got no answer to as refused.
+    // How long a claim on the class folders' home, or a lesson set, waits for
+    // the lesson's lock (Rulings 18, 19 and 22): ClassHomeClaim.MaxLockWait,
+    // which the Master waits out before taking a claim it got no answer to as refused.
     public static readonly TimeSpan DefaultClaimWait = ClassHomeClaim.MaxLockWait;
 
     private readonly string _statePath;
@@ -73,7 +73,7 @@ public sealed class ClassLessonHandler
     // the tests. localNow: the local time, for a lesson from an earlier day.
     // home: the class folders' home PC, the only one that may start a lesson
     // or change the class (null: anyone may, as before two teacher PCs).
-    // claimWait: how long a claim waits for the lesson's lock (DefaultClaimWait).
+    // claimWait: how long a claim or a lesson set waits for the lesson's lock (DefaultClaimWait).
     public ClassLessonHandler(
         string statePath, Func<(string? Desktop, SecurityIdentifier Student)?> loggedOnStudent,
         Func<SecurityIdentifier, RegistryKey?> openUserSoftware, AppBlockEnforcer enforcer,
@@ -109,25 +109,10 @@ public sealed class ClassLessonHandler
     // can't have it within the claim wait is refused as busy
     // (ClassHomeClaim.BusyText) and is never applied later (Ruling 18), so a
     // Master that got no answer finds the home as it is when it asks again.
-    public (bool Ok, string Detail) ClaimHome(string senderThumbprint, string senderAddress, ClassHomeClaim claim)
-    {
-        if (_home is null)
-        {
-            return (false, "esta máquina não guarda o PC das pastas");
-        }
-        if (!Monitor.TryEnter(_gate, _claimWait))
-        {
-            return (false, ClassHomeClaim.BusyText);
-        }
-        try
-        {
-            return _home.Claim(senderThumbprint, senderAddress, claim, lessonOn: _lesson.IsOn);
-        }
-        finally
-        {
-            Monitor.Exit(_gate);
-        }
-    }
+    public (bool Ok, string Detail) ClaimHome(string senderThumbprint, string senderAddress, ClassHomeClaim claim) =>
+        _home is null
+            ? (false, "esta máquina não guarda o PC das pastas")
+            : Locked(() => _home.Claim(senderThumbprint, senderAddress, claim, lessonOn: _lesson.IsOn));
 
     // For the tests from before two teacher PCs (the Master's too): a sender
     // with no identity, which only a handler with no home lets start a lesson.
@@ -136,7 +121,9 @@ public sealed class ClassLessonHandler
     // senderThumbprint: the TLS channel's; senderAddress: the connection's.
     // A start or a class change from a PC that isn't the home is refused
     // with nothing touched; an end is taken from any teacher. With no home,
-    // the PC that starts a lesson becomes it.
+    // the PC that starts a lesson becomes it. Under the lesson's lock, had
+    // within the claim wait or refused as busy, as a claim (Ruling 22): the
+    // Master's poller sends the lesson again, and this one is never applied later.
     public (bool Succeeded, string Detail) Handle(byte[] payload, string senderThumbprint, string senderAddress)
     {
         if (!ClassLesson.TryDecode(payload, out var lesson))
@@ -147,45 +134,65 @@ public sealed class ClassLessonHandler
         {
             return (false, "nome de turma inválido");
         }
+        return Locked(() => Apply(lesson, senderThumbprint, senderAddress));
+    }
 
-        lock (_gate)
+    // Handle's work, with the lesson's lock held.
+    private (bool Succeeded, string Detail) Apply(ClassLesson lesson, string senderThumbprint, string senderAddress)
+    {
+        if (lesson.IsOn && _home is not null && !_home.TryStart(senderThumbprint, senderAddress, out var refusal))
         {
-            if (lesson.IsOn && _home is not null && !_home.TryStart(senderThumbprint, senderAddress, out var refusal))
-            {
-                return (false, refusal);
-            }
-            if (lesson.SavedAt < _lesson.SavedAt)
-            {
-                return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
-            }
-            if (lesson.SavedAt == _lesson.SavedAt && lesson != _lesson)
-            {
-                return (false, "outra aula foi salva no mesmo segundo; envie de novo");
-            }
+            return (false, refusal);
+        }
+        if (lesson.SavedAt < _lesson.SavedAt)
+        {
+            return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
+        }
+        if (lesson.SavedAt == _lesson.SavedAt && lesson != _lesson)
+        {
+            return (false, "outra aula foi salva no mesmo segundo; envie de novo");
+        }
 
-            if (lesson != _lesson)
+        if (lesson != _lesson)
+        {
+            try
             {
-                try
-                {
-                    ClassLessonFile.Write(_statePath, lesson);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    _log($"Couldn't save the class lesson: {ex.Message}");
-                    return (false, $"não foi possível gravar a aula: {ErrorText.Describe(ex)}");
-                }
-                Volatile.Write(ref _lesson, lesson);
+                ClassLessonFile.Write(_statePath, lesson);
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log($"Couldn't save the class lesson: {ex.Message}");
+                return (false, $"não foi possível gravar a aula: {ErrorText.Describe(ex)}");
+            }
+            Volatile.Write(ref _lesson, lesson);
+        }
 
-            // The teacher's own command: Chrome is closed if its folder changed.
-            var problems = ReconcileLocked(mayCloseBrowsers: true);
-            var detail = Describe(_lesson);
-            if (problems.Count == 0)
-            {
-                return (true, detail);
-            }
-            var what = _lesson.IsOn ? "preparar" : "liberar";
-            return (true, $"{detail}; não foi possível {what} a pasta agora: {string.Join("; ", problems)}");
+        // The teacher's own command: Chrome is closed if its folder changed.
+        var problems = ReconcileLocked(mayCloseBrowsers: true);
+        var detail = Describe(_lesson);
+        if (problems.Count == 0)
+        {
+            return (true, detail);
+        }
+        var what = _lesson.IsOn ? "preparar" : "liberar";
+        return (true, $"{detail}; não foi possível {what} a pasta agora: {string.Join("; ", problems)}");
+    }
+
+    // work with the lesson's lock held; busy (ClassHomeClaim.BusyText) when it
+    // can't be had within the claim wait (a look at the student's folders holds it).
+    private (bool, string) Locked(Func<(bool, string)> work)
+    {
+        if (!Monitor.TryEnter(_gate, _claimWait))
+        {
+            return (false, ClassHomeClaim.BusyText);
+        }
+        try
+        {
+            return work();
+        }
+        finally
+        {
+            Monitor.Exit(_gate);
         }
     }
 

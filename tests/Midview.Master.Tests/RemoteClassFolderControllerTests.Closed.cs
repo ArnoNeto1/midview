@@ -70,6 +70,34 @@ public sealed partial class RemoteClassFolderControllerTests
                 ended.Count(line => !line.Ok && line.Detail == FailureText.Offline), lab.Remote.HomeName));
     }
 
+    // Task 7a, item 12: whether an end was made straight on the Agents (the
+    // home closed) is the controller's to say once the end is over, so the
+    // window's headline follows what was done, not what it saw at the click.
+    [Fact]
+    public async Task AnEnd_SaysWhetherItWasMadeOnTheAgents()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var lab = new TwoMasters(rig);
+        await lab.Remote.StartAsync(Turma);
+        await lab.Remote.EndAsync(Turma, EndChoice.Keep);
+        Assert.False(lab.Remote.LastEndOnTheAgents);
+
+        await lab.Remote.StartAsync(Turma);
+        lab.CloseHome();
+        await PollUntilClosed(lab.Remote);
+        await lab.Remote.EndAsync(Turma, EndChoice.Keep);
+        Assert.True(lab.Remote.LastEndOnTheAgents);
+
+        // The home back: its next end is made by the home again.
+        var home = lab.ReopenHome();
+        await Until(() => Task.FromResult(!home.Lesson.IsOn)); // it takes the end in
+        await lab.Remote.PollAsync();
+        await home.StartAsync("3º B");
+        await lab.Remote.PollAsync();
+        await lab.Remote.EndAsync("3º B", EndChoice.Keep);
+        Assert.False(lab.Remote.LastEndOnTheAgents);
+    }
+
     // Something at the home's address that takes the connection and drops it
     // before any answer (a hung home, a reset handshake) is neutral: it doesn't
     // open a home found closed.

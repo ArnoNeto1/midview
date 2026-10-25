@@ -184,7 +184,7 @@ public sealed partial class ClassFolderSync
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Report(machine, PcSyncState.Failed, $"a pasta da turma neste computador não pôde ser lida: {ErrorText.Describe(ex)}");
+            Report(machine, PcSyncState.Failed, ClassFolderText.ClassFolderUnreadable(ErrorText.Describe(ex)));
             return null;
         }
 

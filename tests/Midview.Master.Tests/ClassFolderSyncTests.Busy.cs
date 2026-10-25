@@ -82,38 +82,108 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
+    // Ruling 22 (Task 7a, item 8): "no lesson on" and the stand-down are one
+    // step under the lesson lock. A start under way (held up by a busy PC)
+    // finishes first; the stand-down then finds its lesson on, says so, and
+    // leaves it as it is.
+    [Fact]
+    public async Task StandingDownIfNoLesson_WhileAStartIsUnderWay_KeepsThatLesson()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var log = new FreeingLog();
+        using var sync = SyncWithLog(rig, log);
+        await sync.StartAsync(Turma);
+        await sync.EndAsync(EndChoice.Keep);
+        Task<ClassLesson?> standingDown;
+        using (var busy = new BusyAgents(rig.Pcs.Take(1)))
+        {
+            using var claiming = new ManualResetEventSlim();
+            log.When("PC1 was busy", claiming.Set);
+            var starting = sync.StartAsync("3º B");
+            Assert.True(claiming.Wait(TimeSpan.FromSeconds(10))); // the start holds the lesson lock
+            standingDown = sync.StandDownIfNoLessonAsync();
+            busy.Free();
+            await starting;
+        }
+
+        var kept = await standingDown;
+        Assert.True(sync.Lesson.IsOn);
+        Assert.Equal("3º B", sync.Lesson.Turma);
+        Assert.Equal(sync.Lesson, kept);
+    }
+
+    // With no lesson on, it stands down: no lesson ever saved, as StandDownAsync.
+    [Fact]
+    public async Task StandingDownIfNoLesson_WithNoneOn_StandsDown()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        await sync.EndAsync(EndChoice.Keep);
+
+        Assert.Null(await sync.StandDownIfNoLessonAsync());
+        Assert.Equal(ClassLesson.None(0), sync.Lesson);
+        Assert.Equal(ClassLesson.None(0), ClassLessonFileMaster.Read(rig.LessonPath));
+    }
+
+    // Ruling 22 (Task 7a, item 9): an Agent busy with its student's folders
+    // when the lesson's end reaches it refuses it at once, never taking it
+    // later (this PC's poller hands it over then); its line says so, without
+    // asking the teacher to try again.
+    [Fact]
+    public async Task AnEnd_ToABusyAgent_IsRefusedAtOnce_AndItsLineSaysMidviewTriesAgain()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> ended;
+        using (new BusyAgents(rig.Pcs.Take(1)))
+        {
+            ended = await sync.EndAsync(EndChoice.Keep);
+        }
+
+        var pc1 = ended.Single(line => line.Machine.Name == "PC1");
+        Assert.Equal((false, "ocupado agora; o Midview tenta de novo em instantes"), (pc1.Ok, pc1.Detail));
+        Assert.All(ended.Where(line => line.Machine.Name != "PC1"), line => Assert.True(line.Ok, line.Detail));
+        Assert.True(rig.Pcs[0].Agent.Current.IsOn);
+        Assert.False(sync.Lesson.IsOn);
+    }
+
     private static ClassFolderSync SyncWithLog(ClassSyncRig rig, FreeingLog log) => new(
         rig.Store, rig.Master, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
         ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
         lessonPath: rig.LessonPath, homePath: rig.HomePath, log: log.Add);
 
-    // The sync's log, which frees busy Agents when a line says what the test waits for.
+    // The sync's log, which frees busy Agents (or does what else the test
+    // says) when a line says what the test waits for, once.
     private sealed class FreeingLog
     {
         private readonly List<string> _lines = new();
-        private (BusyAgents Busy, string Text)? _freeWhen;
+        private (string Text, Action Act)? _when;
 
-        public void FreeWhen(BusyAgents busy, string text)
+        public void FreeWhen(BusyAgents busy, string text) => When(text, busy.Free);
+
+        public void When(string text, Action act)
         {
             lock (_lines)
             {
-                _freeWhen = (busy, text);
+                _when = (text, act);
             }
         }
 
         public void Add(string line)
         {
-            BusyAgents? free = null;
+            Action? act = null;
             lock (_lines)
             {
                 _lines.Add(line);
-                if (_freeWhen is { } when && line.Contains(when.Text, StringComparison.Ordinal))
+                if (_when is { } when && line.Contains(when.Text, StringComparison.Ordinal))
                 {
-                    free = when.Busy;
-                    _freeWhen = null;
+                    act = when.Act;
+                    _when = null;
                 }
             }
-            free?.Free();
+            act?.Invoke();
         }
 
         public bool Has(string text)

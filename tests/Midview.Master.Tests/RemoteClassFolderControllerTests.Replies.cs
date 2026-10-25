@@ -156,6 +156,34 @@ public sealed partial class RemoteClassFolderControllerTests
         Assert.Equal(reads, scripted.Reads);
     }
 
+    // Task 7a, item 13: what the home says of its own disk ("neste
+    // computador"), relayed, is said of the home on this PC ("no PC PROF-1"):
+    // in a PC's line, and in a start's.
+    [Fact]
+    public async Task WhatTheHomeSaysOfItsOwnDisk_IsSaidOfTheHome_OnTheRemote()
+    {
+        var certificates = Certificates.Shared;
+        var unreadable = ClassFolderText.ClassFolderUnreadable("acesso negado");
+        var scripted = new ScriptedHome
+        {
+            Read = () => ScriptedHome.StateOf(OnNow) with { Pcs = new[] { new PcLineDto("PC1", nameof(PcSyncState.Failed), unreadable) } },
+            Start = _ => new[] { new ResultLineDto("PC1", false, ClassFolderText.HomeFileUnreadable("acesso negado")) },
+        };
+        using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
+        using var remote = certificates.Remote(host);
+
+        await remote.PollAsync();
+        var started = await remote.StartAsync(Turma);
+
+        Assert.Equal("a pasta da turma no PC PROF-1 não pôde ser lida: acesso negado", remote.Pcs.Single().Detail);
+        Assert.Equal("não foi possível ler, no PC PROF-1, qual PC guarda as pastas das turmas: acesso negado", started.Single().Detail);
+        // On the home itself, as it was.
+        Assert.Equal("a pasta da turma neste computador não pôde ser lida: acesso negado", unreadable);
+        Assert.Equal(
+            "não foi possível ler, neste computador, qual PC guarda as pastas das turmas: acesso negado",
+            ClassFolderText.HomeFileUnreadable("acesso negado"));
+    }
+
     // The home PC's certificate and a colleague's, and the colleague's remote
     // for a host on loopback (no Agents: these homes never close). One pair
     // for these tests (made once: RSA keys are slow to make, and the suite runs
@@ -193,6 +221,9 @@ public sealed partial class RemoteClassFolderControllerTests
         private int _reads;
 
         public Func<RemoteState> Read { get; set; } = () => StateOf(OnNow);
+
+        // What a start answers (none: a start isn't expected).
+        public Func<string, IReadOnlyList<ResultLineDto>>? Start { get; init; }
 
         public TimeSpan Hold { get; init; }
 
@@ -257,7 +288,8 @@ public sealed partial class RemoteClassFolderControllerTests
 
         public Task<(bool Ok, string Detail)> DeleteAsync(string turma) => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<ResultLineDto>> StartAsync(string turma) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ResultLineDto>> StartAsync(string turma) =>
+            Task.FromResult(Start?.Invoke(turma) ?? throw new NotSupportedException());
 
         public Task<IReadOnlyList<ResultLineDto>> EndAsync(string turma, EndChoice choice) => throw new NotSupportedException();
 

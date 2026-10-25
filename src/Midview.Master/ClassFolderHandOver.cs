@@ -247,6 +247,7 @@ public sealed partial class ClassFolderHandOver
             }
             stage.Value = Stage.Claimed;
             KeepGeneration(claimed.Generation);
+            _handedOver = false;
             _log($"This PC took the class folders over from {home}, which didn't answer, with generation {claimed.Generation}.");
             return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
         },
@@ -255,9 +256,12 @@ public sealed partial class ClassFolderHandOver
             : new HandOverResult(stage.Value == Stage.Claimed, ClassFolderText.TakeOverUnreachableBrokeOff(reason)));
 
     // One take-over at a time, on its own thread (it blocks on the network and
-    // the disk). brokeOff: what to say when it throws (a mistake in the code:
-    // nothing in it throws for what the network, the disk or a PC does), by the
-    // stage it got to; a copy not in place yet is thrown away.
+    // the disk), with no lesson starting on this PC meanwhile and none on when
+    // it begins (ClassFolderSync.BeginTakeOver; with one on, it is refused as
+    // nothing changed: brokeOff's words at Stage.Copying). brokeOff: what to
+    // say when it throws (a mistake in the code: nothing in it throws for what
+    // the network, the disk or a PC does), by the stage it got to; a copy not
+    // in place yet is thrown away.
     private Task<HandOverResult> Alone(Func<StrongBox<Stage>, HandOverResult> takeOver, Func<StrongBox<Stage>, string, HandOverResult> brokeOff)
     {
         if (Interlocked.Exchange(ref _taking, 1) == 1)
@@ -268,8 +272,14 @@ public sealed partial class ClassFolderHandOver
             () =>
             {
                 var stage = new StrongBox<Stage>(Stage.Copying);
+                var holding = false;
                 try
                 {
+                    if (!_sync.BeginTakeOver())
+                    {
+                        return brokeOff(stage, ClassFolderText.EndLessonFirst);
+                    }
+                    holding = true;
                     return takeOver(stage);
                 }
                 catch (Exception ex)
@@ -290,6 +300,10 @@ public sealed partial class ClassFolderHandOver
                 }
                 finally
                 {
+                    if (holding)
+                    {
+                        _sync.EndTakeOver();
+                    }
                     Volatile.Write(ref _taking, 0);
                 }
             },
@@ -345,8 +359,9 @@ public sealed partial class ClassFolderHandOver
             // The old home takes the room back, then this PC is as it was
             // (ClassFolderHandOver.TakeBack.cs); if it can't, nothing is put
             // back, nobody told, no generation of its own (see the class comment).
-            if (AskTheOldHomeToTakeBack(home, claimed.Generation))
+            if (AskTheOldHomeToTakeBack(home, claimed.Generation) is { } takenBackAt)
             {
+                RememberTheOldHome(home with { Generation = takenBackAt });
                 var putBack = swap.Undo();
                 _store.DiscardStaging();
                 var takenBack = ClassFolderText.TakeOverTakenBack(name, claimed.Unknown);
@@ -360,6 +375,7 @@ public sealed partial class ClassFolderHandOver
         }
         stage.Value = Stage.Claimed;
         KeepGeneration(claimed.Generation);
+        _handedOver = false;
         _log($"This PC took the class folders over from {name} with generation {claimed.Generation}.");
 
         var text = new StringBuilder(ClassFolderText.TookOver(received.Classes, received.Files));
@@ -367,7 +383,14 @@ public sealed partial class ClassFolderHandOver
         {
             text.Append(' ').Append(ClassFolderText.OwnClassesAside(ownAside));
         }
-        return new HandOverResult(true, text.Append(' ').Append(WhatTheOldHomeSaid(home, name)).ToString());
+        var (said, where) = WhatTheOldHomeSaid(home, name);
+        text.Append(' ').Append(said);
+        if (received.LeftOut > 0)
+        {
+            // The files its store doesn't list (Ruling 22): only in its copy, wherever that is.
+            text.Append(' ').Append(ClassFolderText.LeftOnTheOldHome(name, received.LeftOut, where));
+        }
+        return new HandOverResult(true, text.ToString());
     }
 
     // A take-over that didn't stand (why), with what was put back: "nada
@@ -378,36 +401,41 @@ public sealed partial class ClassFolderHandOver
             name, why, putBack.CopyStayed, putBack.OwnAside is { } aside ? Path.GetFileName(aside) : null);
 
     // RemoteHandOverDone to the old home, and its answer in the teacher's
-    // words. Which case it is goes by what that PC said; only what is shown of
-    // it is made one short line (it can say anything).
-    private string WhatTheOldHomeSaid(ClassHome home, string name)
+    // words (Said), with the folder its copy is in there (Where: "Turmas"
+    // when it stayed; null for one whose name can't be shown). Which case it
+    // is goes by what that PC said; only what is shown of it is made one
+    // short line (it can say anything).
+    private (string Said, string? Where) WhatTheOldHomeSaid(ClassHome home, string name)
     {
+        const string Stayed = "Turmas";
         if (TellTheOldHome(home) is not { } answer)
         {
-            return ClassFolderText.OldHomeDidNotConfirm(name);
+            return (ClassFolderText.OldHomeDidNotConfirm(name), Stayed);
         }
         var (stoodDown, detail) = answer;
         if (!stoodDown)
         {
             var said = ClassFolderText.OneLine(detail);
-            return said.Length > 0 ? said : ClassFolderText.OldHomeDidNotConfirm(name);
+            return (said.Length > 0 ? said : ClassFolderText.OldHomeDidNotConfirm(name), Stayed);
         }
         if (detail.Length == 0)
         {
-            return ClassFolderText.OldHadNoClasses(name);
+            return (ClassFolderText.OldHadNoClasses(name), Stayed);
         }
         if (detail[0] == NotMovedMark)
         {
             var why = ClassFolderText.OneLine(detail[1..]);
-            return ClassFolderText.OldCopyNotMoved(name, why.Length > 0 ? why : ClassFolderText.UnknownReason);
+            return (ClassFolderText.OldCopyNotMoved(name, why.Length > 0 ? why : ClassFolderText.UnknownReason), Stayed);
         }
         if (detail[0] == PartlyMovedMark)
         {
             var partly = ClassFolderText.OneLine(detail[1..]);
-            return ClassFolderText.OldCopyPartlyAside(name, partly.Length > 0 ? partly : null);
+            return (ClassFolderText.OldCopyPartlyAside(name, partly.Length > 0 ? partly : null), partly.Length > 0 ? partly : null);
         }
         var folder = ClassFolderText.OneLine(detail);
-        return folder.Length > 0 ? ClassFolderText.OldCopyAside(name, folder) : ClassFolderText.OldCopyAsideUnnamed(name);
+        return folder.Length > 0
+            ? (ClassFolderText.OldCopyAside(name, folder), folder)
+            : (ClassFolderText.OldCopyAsideUnnamed(name), null);
     }
 
     // Where this PC's own earlier store goes: "antes de 20-10-2026 1330".

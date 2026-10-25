@@ -258,7 +258,7 @@ public sealed partial class ClassFolderHost : IDisposable
             }
             else if (request.Type == MessageType.RemoteTakeBack)
             {
-                channel.Send(TakenBack(request));
+                channel.Send(TakenBack(request, channel.RemoteThumbprint));
             }
             else
             {

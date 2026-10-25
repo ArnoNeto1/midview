@@ -223,6 +223,49 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal("PROF-2", handler.CurrentHome!.Name);
     }
 
+    // Ruling 22 (Task 7a, item 9): a lesson set waits for the lesson's lock no
+    // longer than a claim does, and is refused the same way (the Master's
+    // poller sends it again), never applied later.
+    [Fact]
+    public async Task Handle_HeldBehindTheLessonsLock_IsRefusedAsBusy_AndNeverAppliedLater()
+    {
+        using var holding = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var hold = 0;
+        var handler = new ClassLessonHandler(
+            _statePath,
+            () =>
+            {
+                if (Volatile.Read(ref hold) == 1)
+                {
+                    holding.Set();
+                    release.Wait(TimeSpan.FromSeconds(30));
+                }
+                return (_desktop, Me);
+            },
+            _ => Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), new AppBlockEnforcer(_inspector), Me, () => _now,
+            _log.Add, claimWait: TimeSpan.FromMilliseconds(300));
+        Volatile.Write(ref hold, 1);
+        var reconciling = Task.Run(handler.Reconcile);
+        Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var (ok, detail) = handler.Handle(Lesson("3º A", 100).Encode(), HomePc, "10.0.0.5");
+        clock.Stop();
+        Volatile.Write(ref hold, 0);
+        release.Set();
+        await reconciling.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(ok);
+        Assert.Equal(ClassHomeClaim.BusyText, detail);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), $"took {clock.Elapsed}");
+        Assert.False(handler.Current.IsOn);
+        Assert.False(File.Exists(_statePath));
+        // With the lock free, the same lesson is taken.
+        Assert.True(handler.Handle(Lesson("3º A", 100).Encode(), HomePc, "10.0.0.5").Succeeded);
+        Assert.Equal("3º A", handler.Current.Turma);
+    }
+
     // Ruling 19: the Agent waits for its lock as long as the Master counts on
     // (ClassHomeClaim.MaxLockWait; the Master's tests check it against its read timeout).
     [Fact]

@@ -55,28 +55,35 @@ public sealed partial class ClassFolderHandOverTests
     }
 
     // The old home refuses to take the room back when it isn't the home any
-    // more (its own generation gone, here): Ruling 20's way, the copy stays.
+    // more (no Agent it reaches names it, here): Ruling 20's way, the copy
+    // stays. Told apart from a take-back that couldn't be asked: the old home
+    // answered, saying why.
     [Fact]
     public async Task ATakeBackTheOldHomeRefuses_LeavesTheCopyInPlace()
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
-        var homes = rig.Pcs.Select(pc => pc.Agent.CurrentHome).ToList();
+        var homes = lab.Homes();
         lab.FillTheOldHome();
         lab.GiveTheNewHomeAClassOfItsOwn();
         lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
         lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
-        lab.LetPc1TakeTheClaimAndGoOff(takes: false, whenGone: () => File.Delete(rig.HomePath));
+        var logged = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        lab.TakerLog = logged.Enqueue;
+        lab.LetPc1TakeTheClaimAndGoOff(
+            takes: false, whenGone: () => lab.Giver.ReadHome = _ => throw new IOException("the old home reaches no Agent"));
 
         var result = await lab.Taker.TakeOverAsync(lab.Home);
 
         Assert.False(result.Ok);
         Assert.Equal(ClassFolderText.TakeOverUndecided(OldHome, new[] { "PC1" }, OwnAside), result.Detail);
+        Assert.Contains(logged, line => line.EndsWith("didn't take the room back: O PC PROF-1 não guarda mais as pastas das turmas.", StringComparison.Ordinal));
+        Assert.DoesNotContain(logged, line => line.Contains("couldn't be asked to take the room back", StringComparison.Ordinal));
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
         Assert.True(File.Exists(Path.Combine(lab.NewRoot, OwnAside, "Antiga", "velho.txt")));
         Assert.Null(ClassHomeFileMaster.Read(lab.NewHomePath));
-        Assert.Equal(homes, rig.Pcs.Select(pc => pc.Agent.CurrentHome));
+        Assert.Equal(homes, lab.Homes());
     }
 
     // RemoteTakeBack from a PC the home doesn't serve, with no generation, or
@@ -165,6 +172,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(
             "As pastas das turmas continuam no PC PROF-1: os PCs PC1, PC2 não confirmaram a troca. Tente de novo.",
             ClassFolderText.TakeOverTakenBack("PROF-1", new[] { "PC1", "PC2" }));
+        Assert.Equal("O PC PROF-1 não guarda mais as pastas das turmas.", ClassFolderText.NotTheHomeAnyMore("PROF-1"));
     }
 
     private sealed partial class HandOverLab

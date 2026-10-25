@@ -32,6 +32,49 @@ internal static class ClassFolderDisk
         IgnoreInaccessible = false,
     };
 
+    // Everything, hidden and system entries included; what can't be read is skipped: for counting.
+    private static readonly EnumerationOptions CountedOptions = new()
+    {
+        RecurseSubdirectories = false,
+        AttributesToSkip = 0,
+        IgnoreInaccessible = true,
+    };
+
+    // How many files there are under the folder, at any depth, hidden and
+    // system ones too; never through a link (one that is a file counts as a
+    // file). A folder that can't be read counts as none.
+    public static int CountFiles(string folder)
+    {
+        var count = 0;
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(new DirectoryInfo(folder));
+        while (pending.Count > 0)
+        {
+            List<FileSystemInfo> entries;
+            try
+            {
+                entries = pending.Pop().EnumerateFileSystemInfos("*", CountedOptions).ToList();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue; // gone, or closed to us
+            }
+
+            foreach (var entry in entries)
+            {
+                if (entry is not DirectoryInfo directory)
+                {
+                    count++;
+                }
+                else if (!ClassFolderRules.IsLink(directory))
+                {
+                    pending.Push(directory);
+                }
+            }
+        }
+        return count;
+    }
+
     // The files the Session would list for that folder, by '/'-separated
     // path, each with its version. Manual recursion to stop at
     // FileCollection.MaxDepth (the class folder is depth 1), as

@@ -17,13 +17,14 @@ public sealed partial class ClassFolderSync
     // How often, while a lesson is on, the Agents are asked whether another PC ended it.
     private static readonly TimeSpan AdoptInterval = TimeSpan.FromSeconds(30);
 
-    // A start's answer on every PC when this PC's own file (ClassHomeFileMaster)
-    // is there but can't be read; the reason follows.
-    private const string HomeFileUnreadableText = "não foi possível ler, neste computador, qual PC guarda as pastas das turmas: ";
-
     // The generation this run claimed with, for when its file (ClassHomeFileMaster)
     // couldn't be saved or read back. Under the lesson lock.
     private long? _generation;
+
+    // How many take-overs of the class folders run on this PC (BeginTakeOver):
+    // no lesson starts while any does. Raised under the lesson lock, so a
+    // start in progress finishes first.
+    private int _takingOver;
 
     // For a PC that stopped being the home (another one took the class folders
     // over): rounds in progress are waited for, as for a lesson change, then the
@@ -40,22 +41,79 @@ public sealed partial class ClassFolderSync
         await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
         try
         {
-            var lesson = Lesson;
-            if (lesson == ClassLesson.None(0))
-            {
-                return;
-            }
-
-            _changingLesson = true;
-            await RunningRounds().ConfigureAwait(false);
-            RaiseSavedAtFloor(lesson.SavedAt);
-            Adopt(ClassLesson.None(0));
+            await ClearLessonLocked().ConfigureAwait(false);
         }
         finally
         {
             _changingLesson = false;
             _lessonGate.Release();
         }
+    }
+
+    // StandDownAsync, unless a lesson is on: then nothing changes, and that
+    // lesson is the answer (null once stood down, or with no lesson to clear).
+    // The look and the stand-down are one step under the lesson lock (Ruling
+    // 22): a lesson starting meanwhile is either on when it looks, or starts
+    // after (and the Agents that keep the new home refuse it), never cleared.
+    public async Task<ClassLesson?> StandDownIfNoLessonAsync()
+    {
+        await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
+        try
+        {
+            if (Lesson is { IsOn: true } on)
+            {
+                return on;
+            }
+            await ClearLessonLocked().ConfigureAwait(false);
+            return null;
+        }
+        finally
+        {
+            _changingLesson = false;
+            _lessonGate.Release();
+        }
+    }
+
+    // A take-over of the class folders begins on this PC (ClassFolderHandOver):
+    // no lesson starts until EndTakeOver (a start says why, on every PC's
+    // line), so what the take-over puts back or throws away never holds files a
+    // lesson here brought in (Ruling 22). False, and nothing held, while a
+    // lesson is on here (it may be bringing files in): the take-over doesn't
+    // begin. Waits for a start or an end in progress; on the caller's thread.
+    internal bool BeginTakeOver()
+    {
+        _lessonGate.Wait(_stop.Token);
+        try
+        {
+            if (Lesson.IsOn)
+            {
+                return false;
+            }
+            Interlocked.Increment(ref _takingOver);
+            return true;
+        }
+        finally
+        {
+            _lessonGate.Release();
+        }
+    }
+
+    internal void EndTakeOver() => Interlocked.Decrement(ref _takingOver);
+
+    // With the lesson lock held: the lesson cleared to ClassLesson.None(0)
+    // (StandDownAsync), after the rounds in progress; nothing when it is already.
+    private async Task ClearLessonLocked()
+    {
+        var lesson = Lesson;
+        if (lesson == ClassLesson.None(0))
+        {
+            return;
+        }
+
+        _changingLesson = true;
+        await RunningRounds().ConfigureAwait(false);
+        RaiseSavedAtFloor(lesson.SavedAt);
+        Adopt(ClassLesson.None(0));
     }
 
     // A lesson another teacher PC ended straight on the Agents (this PC's
@@ -117,7 +175,8 @@ public sealed partial class ClassFolderSync
     // with now's; either is kept once an Agent took the claim. But a PC that
     // was never the home and saw another one as the home (ClassHomeFileMaster,
     // Ruling 11) is refused as if every PC still kept it: it becomes the home
-    // only by taking the folders over. And a file of this PC's that is there
+    // only by taking the folders over; so is one whose generation is older
+    // than another home it saw (Ruling 22). And a file of this PC's that is there
     // but can't be read refuses the start too, saying so (Ruling 12): it isn't
     // taken for "never the home". A refusal of either kind has a line for
     // every PC of the room. Busy: the PCs still busy after being asked twice.
@@ -134,7 +193,7 @@ public sealed partial class ClassFolderSync
         {
             // Ruling 12: not "never the home", which would claim with now.
             _log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
-            return HomeClaim.Refused(EveryPc(HomeFileUnreadableText + ErrorText.Describe(ex)));
+            return HomeClaim.Refused(EveryPc(ClassFolderText.HomeFileUnreadable(ErrorText.Describe(ex))));
         }
 
         var saved = onDisk ?? _generation;
@@ -159,8 +218,11 @@ public sealed partial class ClassFolderSync
 
         // Ruling 11: never the home, but it saw another PC as the home: as if
         // every PC still said so (Ruling 12: every PC's line, even with no
-        // Agent answering).
-        if (ours is null && seen is not null)
+        // Agent answering). Ruling 22: the same for another home seen newer
+        // than this PC's own (one that took the room back after this PC gave
+        // a take-over up, or that this PC handed the folders to), even with
+        // only Agents naming this PC on (stragglers, older).
+        if (seen is not null && (ours is null || (seen.Generation > ours && !IsThisPc(seen, ours))))
         {
             return HomeClaim.Refused(EveryPc(seen.RefusalText));
         }

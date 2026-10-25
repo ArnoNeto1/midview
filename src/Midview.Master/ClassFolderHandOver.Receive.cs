@@ -12,8 +12,9 @@ namespace Midview.Master;
 // name, each path one FileCollection.SafeRelativePath leaves as it is and that
 // stays inside its class's folder in Staging, no path twice, no file where
 // another needs a folder, sizes and times that can be, an index or lessons map
-// no bigger than MaxDataFileBytes, and all of it fitting on the disk with
-// KeepFreeBytes to spare); then each file must come in the manifest's order,
+// no bigger than MaxDataFileBytes, no negative count of files left behind, and
+// all of it fitting with KeepFreeBytes to spare on each disk it goes to:
+// ClassStore.ShortOfRoom); then each file must come in the manifest's order,
 // with its path and size, and exactly that many bytes; and at the end each file
 // written must have the size announced.
 public sealed partial class ClassFolderHandOver
@@ -52,10 +53,11 @@ public sealed partial class ClassFolderHandOver
 
     internal static string IndexWirePath(string turma) => IndexPrefix + turma + IndexSuffix;
 
+    // leftOut: how many files of the home's files root don't come (ClassStore.HandOverContents).
     internal static byte[] EncodeManifest(
-        IReadOnlyList<string> classes, IReadOnlyList<(string Path, long Size, long LastWriteTicks)> files) =>
+        IReadOnlyList<string> classes, IReadOnlyList<(string Path, long Size, long LastWriteTicks)> files, int leftOut = 0) =>
         JsonSerializer.SerializeToUtf8Bytes(
-            new Manifest(classes, files.Select(file => new ManifestFile(file.Path, file.Size, file.LastWriteTicks)).ToList()),
+            new Manifest(classes, files.Select(file => new ManifestFile(file.Path, file.Size, file.LastWriteTicks)).ToList(), leftOut),
             ManifestOptions);
 
     // The home's store into Staging (which the caller discards on a failure).
@@ -123,7 +125,8 @@ public sealed partial class ClassFolderHandOver
     // The manifest's files, each with where it goes in staging, or null when anything in it can't be (see the class comment).
     private static List<(ManifestFile File, string Target)>? Plan(Manifest? manifest, HandOverStaging staging)
     {
-        if (manifest?.Classes is not { Count: <= MaxClasses } classList || manifest.Files is not { Count: <= MaxFiles } fileList)
+        if (manifest?.Classes is not { Count: <= MaxClasses } classList || manifest.Files is not { Count: <= MaxFiles } fileList
+            || manifest.LeftOut < 0)
         {
             return null;
         }
@@ -240,7 +243,8 @@ public sealed partial class ClassFolderHandOver
         return size is >= 0 and <= FileTransfer.MaxFileSize;
     }
 
-    private sealed record Manifest(IReadOnlyList<string> Classes, IReadOnlyList<ManifestFile> Files);
+    // LeftOut: how many files of the home's files root don't come (not listed by its store).
+    private sealed record Manifest(IReadOnlyList<string> Classes, IReadOnlyList<ManifestFile> Files, int LeftOut = 0);
 
     private sealed record ManifestFile(string Path, long Size, long LastWriteTicks);
 
@@ -248,8 +252,9 @@ public sealed partial class ClassFolderHandOver
     private static bool IsClassFile(ManifestFile file) => file.Path.StartsWith(FilesPrefix, StringComparison.Ordinal);
 
     // What arrived: the classes and their files (not counting indexes and the
-    // lessons map), or why it didn't, in the teacher's words.
-    private sealed record Received(string? Failure, int Classes, int Files)
+    // lessons map), and how many files stayed on the home, or why it didn't
+    // arrive, in the teacher's words.
+    private sealed record Received(string? Failure, int Classes, int Files, int LeftOut = 0)
     {
         public static Received Failed(string why) => new(why, 0, 0);
     }
@@ -305,10 +310,9 @@ public sealed partial class ClassFolderHandOver
             }
             _totalFiles = plan.Count(entry => IsClassFile(entry.File));
             _totalBytes = plan.Sum(entry => entry.File.Size);
-            var free = _owner._store.FreeBytes();
-            if (free != long.MaxValue && _totalBytes > free - KeepFreeBytes)
+            if (_owner._store.ShortOfRoom(plan.Select(entry => (entry.Target, entry.File.Size)), KeepFreeBytes) is { } room)
             {
-                return Received.Failed(ClassFolderText.CopyNoRoom(_totalBytes, free));
+                return Received.Failed(ClassFolderText.CopyNoRoom(room.Needed, room.Free));
             }
 
             try
@@ -350,7 +354,7 @@ public sealed partial class ClassFolderHandOver
             {
                 return Received.Failed(Mismatch);
             }
-            return new Received(null, manifest.Classes.Count, _totalFiles);
+            return new Received(null, manifest.Classes.Count, _totalFiles, manifest.LeftOut);
         }
 
         // One file of the manifest: its header, then its bytes into target, with its time.

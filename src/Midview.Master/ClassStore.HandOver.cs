@@ -74,10 +74,13 @@ public sealed partial class ClassStore
 
     // The classes as ClassNames has them, then every file of each as Files lists
     // it (what the PCs get), then each class's index (records not saved yet are
-    // saved first) and the lessons map, the ones that are there. Throws
+    // saved first) and the lessons map, the ones that are there. LeftOut: how
+    // many other files the files root holds (hidden or system ones, files too
+    // big, too deep or with a name that can't be used, files outside a class:
+    // what the PCs never get either), which stay only in this PC's copy. Throws
     // IOException or UnauthorizedAccessException when a class's folder can't be
     // read whole, or an index can't be saved.
-    internal (IReadOnlyList<string> Classes, IReadOnlyList<HandOverFile> Files) HandOverContents()
+    internal (IReadOnlyList<string> Classes, IReadOnlyList<HandOverFile> Files, int LeftOut) HandOverContents()
     {
         var classes = ClassNames();
         var files = new List<HandOverFile>();
@@ -89,6 +92,7 @@ public sealed partial class ClassStore
                     ClassFolderHandOver.FileWirePath(turma, path), PathOf(turma, path), version.Size, version.LastWriteTicks));
             }
         }
+        var leftOut = Math.Max(0, ClassFolderDisk.CountFiles(FilesRootPath) - files.Count);
 
         lock (_gate)
         {
@@ -108,7 +112,33 @@ public sealed partial class ClassStore
         {
             files.Add(lessons);
         }
-        return (classes, files);
+        return (classes, files, leftOut);
+    }
+
+    // The disk a path is on (its root, "C:\"), and what one has free
+    // (long.MaxValue when that can't be told): a test's stand-ins for disks it doesn't have.
+    internal Func<string, string> DiskOf { get; set; } = path => Path.GetPathRoot(Path.GetFullPath(path)) ?? string.Empty;
+
+    internal Func<string, long> FreeBytesOnDisk { get; set; } = DriveFreeBytes;
+
+    // A hand-over's files by where they go in Staging (and their sizes), on
+    // each disk they go to: the first disk where they don't fit with keepFree
+    // to spare (what they need there, what it has free), or null when they
+    // fit on every one. The files root's disk goes by FreeBytes; the index
+    // root's and the lessons map's, when they are on another one, by theirs.
+    internal (long Needed, long Free)? ShortOfRoom(IEnumerable<(string Target, long Size)> files, long keepFree)
+    {
+        var filesDisk = DiskOf(_filesRoot);
+        foreach (var disk in files.GroupBy(file => DiskOf(file.Target), StringComparer.OrdinalIgnoreCase))
+        {
+            var needed = disk.Sum(file => file.Size);
+            var free = string.Equals(disk.Key, filesDisk, StringComparison.OrdinalIgnoreCase) ? FreeBytes() : FreeBytesOnDisk(disk.Key);
+            if (free != long.MaxValue && needed > free - keepFree)
+            {
+                return (needed, free);
+            }
+        }
+        return null;
     }
 
     // What an earlier hand-over left half received, if anything. Never throws: what can't be removed is logged.

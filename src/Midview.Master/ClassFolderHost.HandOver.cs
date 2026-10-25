@@ -31,10 +31,12 @@ public sealed partial class ClassFolderHost
         _handOver.Send(channel, _stop.Token);
     }
 
-    // RemoteTakeBack: the colleague's PC gave up a take-over it can't tell done
-    // (the generation it claimed with), and this PC claims the room back if it
-    // is still the home (ClassFolderHandOver.TakeBackAsync).
-    private Message TakenBack(Message request)
+    // RemoteTakeBack: the colleague's PC (its certificate's thumbprint) gave up
+    // a take-over it can't tell done (the generation it claimed with), and this
+    // PC claims the room back if it is still the home
+    // (ClassFolderHandOver.TakeBackAsync, which starts claiming within a
+    // minute or not at all, so its answer comes well before CommandTimeout).
+    private Message TakenBack(Message request, string thumbprint)
     {
         if (_handOver is null)
         {
@@ -47,7 +49,7 @@ public sealed partial class ClassFolderHost
 
         try
         {
-            var takenBack = _handOver.TakeBackAsync(abandoned);
+            var takenBack = _handOver.TakeBackAsync(abandoned, thumbprint);
             if (!takenBack.Wait(CommandTimeout))
             {
                 return Refusal(StillRunningText);

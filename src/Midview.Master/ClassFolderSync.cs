@@ -197,7 +197,8 @@ public sealed partial class ClassFolderSync : IDisposable
     // Agent (ClaimHomeAsync). When an Agent keeps another PC as home with a
     // newer generation, nothing starts: nothing is saved or sent, and the
     // answer is those Agents' refusals, each naming that PC (the lesson stays
-    // as it was: the caller looks at Lesson).
+    // as it was: the caller looks at Lesson). Nor while this PC takes the class
+    // folders over (BeginTakeOver): every PC's line says so.
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> StartAsync(string turma)
     {
         if (!_store.Exists(turma))
@@ -208,6 +209,11 @@ public sealed partial class ClassFolderSync : IDisposable
         await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
         try
         {
+            if (Volatile.Read(ref _takingOver) > 0)
+            {
+                return EveryPc(ClassFolderText.TakeOverRunningHere);
+            }
+
             var home = await ClaimHomeAsync().ConfigureAwait(false);
             if (home.Refusals is { } otherHome)
             {
@@ -406,7 +412,10 @@ public sealed partial class ClassFolderSync : IDisposable
     }
 
     // An Agent that keeps a newer lesson didn't take this one (ClassLessonOnAgents.Send),
-    // and the PC's status says why rather than "atualizando a aula".
+    // and the PC's status says why rather than "atualizando a aula". One busy
+    // with its student's folders took nothing (ClassHomeClaim.BusyText): this
+    // PC's poller hands it the lesson later, so its line doesn't ask the
+    // teacher to try again (Ruling 22).
     private (KnownMachine Machine, bool Ok, string Detail) SendLesson(KnownMachine machine, ClassLesson lesson)
     {
         var (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
@@ -414,6 +423,6 @@ public sealed partial class ClassFolderSync : IDisposable
         {
             _delivered[Key(machine)] = lesson.SavedAt;
         }
-        return (machine, succeeded, detail);
+        return (machine, succeeded, !succeeded && detail == ClassHomeClaim.BusyText ? ClassFolderText.LessonBusy : detail);
     }
 }

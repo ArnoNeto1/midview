@@ -37,7 +37,9 @@ public enum ClassFolderMode
 //
 // Another PC seen as the home is kept on file (ClassHomeFileMaster, Ruling 11),
 // and with no home reported, a PC that was never the home but saw one goes by
-// it (Ruling 12): Remote, as its starts are refused for it.
+// it (Ruling 12): Remote, as its starts are refused for it. So does a PC whose
+// own generation is older than the one seen, whatever Agents naming it say
+// (Ruling 22: stragglers).
 //
 // machines and isOnline are called from background threads, and Changed is
 // raised on them. Nothing an Agent does escapes as an exception.
@@ -118,6 +120,13 @@ public sealed class ClassHomeTracker : IDisposable
                 // Ruling 12: never the home, but it saw another PC as the home.
                 home = seen;
             }
+            else if (fileRead && seen is not null && IsNewerThanThisPc(seen, home, generation))
+            {
+                // Ruling 22: another home seen newer than this PC is (one that
+                // took the room back after this PC gave a take-over up, say),
+                // even with only Agents naming this PC, or none, answering.
+                home = seen;
+            }
             var state = new State(
                 home, home is not null && !IsThisPc(home, generation) ? ClassFolderMode.Remote : ClassFolderMode.Local);
             changed = Interlocked.Exchange(ref _state, state) != state;
@@ -185,6 +194,18 @@ public sealed class ClassHomeTracker : IDisposable
 
     private bool IsThisPc(ClassHome home, long? generation) =>
         home.IsSamePc(_masterCertificate.Thumbprint, _machineName, generation);
+
+    // Whether another PC seen as the home is newer than this PC: the home
+    // chosen is this PC, or none, and seen's generation is above both this
+    // PC's own (generation, on file) and the one the Agents give it.
+    private bool IsNewerThanThisPc(ClassHome seen, ClassHome? home, long? generation)
+    {
+        if (IsThisPc(seen, generation) || (home is not null && !IsThisPc(home, generation)))
+        {
+            return false;
+        }
+        return seen.Generation > Math.Max(generation ?? 0, home?.Generation ?? 0);
+    }
 
     private (bool Read, long? Generation, ClassHome? Seen) ReadFile()
     {

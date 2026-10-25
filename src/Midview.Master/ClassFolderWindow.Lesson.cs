@@ -83,9 +83,11 @@ public partial class ClassFolderWindow
         try
         {
             var ended = await Task.Run(() => _controller.EndAsync(lesson.Turma, choice));
+            // As the end was made (the home may have closed, or answered again, since the click).
+            var onTheAgents = _controller is RemoteClassFolderController { LastEndOnTheAgents: true };
             headline = ClassFolderText.Outcome(
                 started: false, lesson.Turma, ended.Count(result => result.Ok), ended.Count, Offline(ended),
-                closed ? _controller.HomeName ?? ClassHome.UnnamedText : null);
+                onTheAgents ? _controller.HomeName ?? ClassHome.UnnamedText : null);
             if (nextClass)
             {
                 headline += " " + ClassFolderText.ChooseNextClass;

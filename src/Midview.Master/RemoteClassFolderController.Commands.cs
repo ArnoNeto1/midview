@@ -51,13 +51,23 @@ public sealed partial class RemoteClassFolderController
         return reply.Ok || reply.Lines.Count > 0 ? reply.Lines : throw new ClassFolderRefusedException(reply.Detail);
     });
 
+    // Whether the last EndAsync ended the lesson straight on the Agents (the
+    // home closed: RemoteClassFolderController.Closed.cs) rather than through
+    // the home, decided as it ran: what the window's headline goes by (Ruling 22).
+    public bool LastEndOnTheAgents { get; private set; }
+
     public Task<IReadOnlyList<ResultLineDto>> EndAsync(string turma, EndChoice choice) => OneAtATime(async () =>
     {
+        LastEndOnTheAgents = false;
         if (HomeClosed)
         {
-            return choice == EndChoice.Keep
-                ? await EndOnTheAgentsAsync(turma).ConfigureAwait(false)
-                : throw new ClassFolderRefusedException(ClosedText);
+            if (choice != EndChoice.Keep)
+            {
+                throw new ClassFolderRefusedException(ClosedText);
+            }
+            var lines = await EndOnTheAgentsAsync(turma).ConfigureAwait(false);
+            LastEndOnTheAgents = true;
+            return lines;
         }
         var reply = await CommandAsync(new RemoteCommand(RemoteCommand.End, turma, null, ChoiceOf(choice))).ConfigureAwait(false);
         return reply.Ok ? reply.Lines : throw new ClassFolderRefusedException(reply.Detail);
@@ -88,7 +98,12 @@ public sealed partial class RemoteClassFolderController
         else if (reply?.Type == MessageType.RemoteClassFolderCommandReply
             && ClassFolderRemote.DecodeJson<RemoteReply>(reply.Payload) is { } decoded)
         {
-            answer = decoded;
+            // Its lines about its own disk said of it (ClassFolderText.Relayed).
+            var name = Name;
+            answer = decoded with
+            {
+                Lines = decoded.Lines.Select(line => line with { Detail = ClassFolderText.Relayed(line.Detail, name) }).ToList(),
+            };
         }
         else if (reply?.Type == MessageType.CommandAck && CommandResult.Decode(reply.Payload).Detail is { Length: > 0 } refusal)
         {
@@ -103,9 +118,17 @@ public sealed partial class RemoteClassFolderController
         return answer;
     }
 
+    // Disposed while waiting its turn (the window closed meanwhile): ObjectDisposedException.
     private async Task<T> OneAtATime<T>(Func<Task<T>> command)
     {
-        await _commands.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _commands.WaitAsync(_disposing.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new ObjectDisposedException(nameof(RemoteClassFolderController));
+        }
         try
         {
             return await command().ConfigureAwait(false);
@@ -124,9 +147,9 @@ public sealed partial class RemoteClassFolderController
         _ => throw new ArgumentOutOfRangeException(nameof(choice)),
     };
 
-    // The request, sent again while the home turns it away. Each exchange on
-    // its own thread, not the pool's: it blocks on the network, a command for
-    // minutes.
+    // The request, sent again while the home turns it away (never after a
+    // handshake that hung: Hung). Each exchange on its own thread, not the
+    // pool's: it blocks on the network, a command for minutes.
     private async Task<Exchanged> RequestAsync(ClassHome home, Message request, TimeSpan wait)
     {
         for (var attempt = 1; ; attempt++)
@@ -141,8 +164,10 @@ public sealed partial class RemoteClassFolderController
     }
 
     // One request on its own connection. Unreachable: nobody took the
-    // connection. TurnedAway: it was closed, or the handshake failed or hung,
-    // before the request went, so it wasn't done. WrongIdentity: the PC there
+    // connection. TurnedAway: it was closed, or the handshake failed, before
+    // the request went, so it wasn't done; Hung: the same, but the handshake
+    // got no answer for the whole wait (this PC's read timed out), which isn't
+    // worth trying again at once. WrongIdentity: the PC there
     // holds another certificate than the home's, and is told nothing. Lost:
     // the request went and no answer came back (it may have been done). The
     // home's certificate is checked here, after the handshake (which proves the
@@ -171,7 +196,7 @@ public sealed partial class RemoteClassFolderController
             }
             catch (Exception ex) when (IsNetwork(ex))
             {
-                return new Exchanged(Kind.TurnedAway, null);
+                return new Exchanged(TimedOut(ex) ? Kind.Hung : Kind.TurnedAway, null);
             }
 
             using (channel)
@@ -205,11 +230,25 @@ public sealed partial class RemoteClassFolderController
     private static bool IsNetwork(Exception ex) =>
         ex is IOException or SocketException or AuthenticationException or InvalidDataException or ObjectDisposedException;
 
+    // This PC's read gave up waiting (the socket's timeout), whatever wraps it.
+    private static bool TimedOut(Exception ex)
+    {
+        for (Exception? cause = ex; cause is not null; cause = cause.InnerException)
+        {
+            if (cause is SocketException { SocketErrorCode: SocketError.TimedOut })
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private enum Kind
     {
         Answered,
         Unreachable,
         TurnedAway,
+        Hung,
         WrongIdentity,
         Lost,
     }

@@ -79,6 +79,14 @@ public static partial class ClassFolderText
     // Built on the old home: it isn't the home any more, so it doesn't take the room back.
     public static string NotTheHomeAnyMore(string pc) => $"O PC {pc} não guarda mais as pastas das turmas.";
 
+    // ...the take-over given up has a generation from too far ahead of its clock.
+    public static string TakeBackFromTooFarAhead(string pc) =>
+        $"O PC {pc} não pegou as pastas de volta: a data da troca desfeita está adiantada demais em relação ao relógio dele.";
+
+    // ...it couldn't start in time (the room's PCs slow to answer, say).
+    public static string TakeBackTooSlow(string pc) =>
+        $"O PC {pc} demorou demais para conferir os PCs da sala e não pegou as pastas de volta.";
+
     // "o PC LAB-03 pode ter aceitado este computador e não responde agora".
     private static string MayHaveTaken(IReadOnlyList<string> pcs) => pcs.Count == 1
         ? $"o PC {PcNames(pcs)} pode ter aceitado este computador e não responde agora"
@@ -90,6 +98,14 @@ public static partial class ClassFolderText
 
     // ...in a folder whose name it didn't give in a way that can be shown.
     public static string OldCopyAsideUnnamed(string home) => $"A cópia do PC {home} ficou nele, numa pasta à parte.";
+
+    // files: how many files of the old home's class folders weren't copied
+    // (what its store doesn't list, which the PCs never get either), so they
+    // are only in its copy, in that folder there (null: one whose name can't be shown).
+    public static string LeftOnTheOldHome(string home, int files, string? folder) =>
+        (files == 1 ? "1 arquivo ficou" : $"{Count(files)} arquivos ficaram")
+        + (folder is null ? $" só no PC {home}, numa pasta à parte" : $" só na pasta \"{folder}\" do PC {home}")
+        + " (arquivos ocultos, grandes demais, com nomes que não servem ou fora de uma turma não passam para outro computador).";
 
     // The old home stood down with no classes to put aside.
     public static string OldHadNoClasses(string home) => $"O PC {home} não tinha turmas para guardar à parte.";
@@ -206,6 +222,9 @@ public static partial class ClassFolderText
     public static string CopyNotSaved(string reason) => $"Não foi possível gravar as pastas neste computador: {reason}";
 
     public const string TakeOverRunning = "As pastas já estão sendo trazidas para este computador.";
+
+    // Each PC's line of a start on this PC while it takes the folders over (no lesson starts meanwhile).
+    public const string TakeOverRunningHere = "este computador está recebendo as pastas das turmas; espere a troca terminar";
 
     // No PC of the room took this PC as the home (none answered).
     public const string NoPcTookIt = "Nenhum PC da sala respondeu.";
