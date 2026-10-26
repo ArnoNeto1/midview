@@ -343,8 +343,10 @@ public sealed partial class ClassLessonHandlerTests
         Assert.True(handler.ClaimHome(HomePc, "10.0.0.5", ClaimOf("PROF-1")).Ok);
         var before = home.Current;
         Volatile.Write(ref hold, 1);
-        var reconciling = Task.Run(handler.Reconcile);
-        Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
+        // Its own thread: a busy test run's pool can hold a queued one back for seconds.
+        var reconciling = Task.Factory.StartNew(
+            handler.Reconcile, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Assert.True(holding.Wait(TimeSpan.FromSeconds(30)));
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var (ok, detail) = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: 200));
@@ -387,8 +389,10 @@ public sealed partial class ClassLessonHandlerTests
             _ => Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), new AppBlockEnforcer(_inspector), Me, () => _now,
             _log.Add, claimWait: TimeSpan.FromMilliseconds(300));
         Volatile.Write(ref hold, 1);
-        var reconciling = Task.Run(handler.Reconcile);
-        Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
+        // Its own thread: a busy test run's pool can hold a queued one back for seconds.
+        var reconciling = Task.Factory.StartNew(
+            handler.Reconcile, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Assert.True(holding.Wait(TimeSpan.FromSeconds(30)));
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var (ok, detail) = handler.Handle(Lesson("3º A", 100).Encode(), HomePc, "10.0.0.5");
