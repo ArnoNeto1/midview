@@ -436,7 +436,8 @@ public sealed class ClassFolderClientScriptedTests
             MasterCertificate = SelfSignedCertificate.Create("master-under-test");
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-            Task.Run(() =>
+            // Its own thread: a busy test run's pool can hold a blocking accept back past the Master's timeouts.
+            Task.Factory.StartNew(() =>
             {
                 try
                 {
@@ -450,7 +451,7 @@ public sealed class ClassFolderClientScriptedTests
                 {
                     // The Master hung up, or Dispose stopped the listener.
                 }
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         public int Port { get; }

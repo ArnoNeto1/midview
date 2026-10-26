@@ -283,7 +283,9 @@ public sealed class ClassFolderClientTests : IDisposable
         var server = new AgentServer(
             listener, agentCert, new TrustStore(new[] { _masterCert.Thumbprint }), siteBlock, classLesson: handler);
         var stop = new CancellationTokenSource();
-        var served = Task.Run(() => server.Run(stop.Token));
+        // Its own thread: a busy test run's pool can hold the accept loop back past the Master's read timeout.
+        var served = Task.Factory.StartNew(
+            () => server.Run(stop.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         _cleanup.Add(() => { stop.Cancel(); try { served.Wait(TimeSpan.FromSeconds(5)); } catch { } });
 
         return (new KnownMachine("Aluno-Teste", "127.0.0.1", "unused-session-thumb", agentCert.Thumbprint), port, handler);

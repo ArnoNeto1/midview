@@ -61,20 +61,29 @@ public sealed partial class RemoteClassFolderControllerTests
         var scripted = new ScriptedHome { Gate = held.Task };
         using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
         var remote = certificates.Remote(host);
-        var first = remote.CreateAsync("9º A");
-        var reading = remote.PollAsync();
-        await Until(() => Task.FromResult(scripted.MostCommandsAtOnce > 0 && scripted.Reads > 0));
-        var second = remote.CreateAsync("9º B");
-        var secondRead = remote.PollAsync();
+        try
+        {
+            var first = remote.CreateAsync("9º A");
+            var reading = remote.PollAsync();
+            await Until(() => Task.FromResult(scripted.MostCommandsAtOnce > 0 && scripted.Reads > 0));
+            var second = remote.CreateAsync("9º B");
+            var secondRead = remote.PollAsync();
 
-        remote.Dispose();
+            remote.Dispose();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => second.WaitAsync(Wait));
-        await secondRead.WaitAsync(Wait);
-        Assert.False(first.IsCompleted);
-        held.SetResult();
-        Assert.True((await first.WaitAsync(Wait)).Ok);
-        await reading.WaitAsync(Wait);
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => second.WaitAsync(Wait));
+            await secondRead.WaitAsync(Wait);
+            Assert.False(first.IsCompleted);
+            held.SetResult();
+            Assert.True((await first.WaitAsync(Wait)).Ok);
+            await reading.WaitAsync(Wait);
+        }
+        finally
+        {
+            // A failed assertion above must not leave the home's handler threads held.
+            held.TrySetResult();
+            remote.Dispose();
+        }
     }
 
     // A home that takes the connection and never answers the

@@ -354,7 +354,8 @@ public sealed partial class ClassFolderSyncTests
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
             var masters = new TrustStore(new[] { master.Thumbprint });
-            Task.Run(() =>
+            // Its own thread: a busy test run's pool can hold a blocking accept loop back.
+            Task.Factory.StartNew(() =>
             {
                 while (true)
                 {
@@ -382,7 +383,7 @@ public sealed partial class ClassFolderSyncTests
                         }
                     }
                 }
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         public int Port { get; }
