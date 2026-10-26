@@ -37,20 +37,24 @@ public class DiscoveryClientTests
     public async Task Search_FindsAMachineThatAnswers()
     {
         using var agentSide = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        agentSide.Client.ReceiveTimeout = 30_000;
         var port = ((IPEndPoint)agentSide.Client.LocalEndPoint!).Port;
-        var answering = Task.Run(async () =>
+        // The Agent's side answers at once, from a thread of its own: an answer
+        // that waited for one of a busy test run's pool threads could come after
+        // the listening time, and the search would rightly miss it.
+        var answering = Task.Factory.StartNew(() =>
         {
-            var received = await agentSide.ReceiveAsync();
-            var probe = Discovery.ParseProbe(received.Buffer)!;
+            IPEndPoint? from = null;
+            var probe = Discovery.ParseProbe(agentSide.Receive(ref from))!;
             Assert.Equal(Master, probe.MasterThumbprint);
             var reply = Discovery.Encode(new DiscoveryReply(probe.Id, "ALUNO-07", X, TeacherStatus.None, false));
-            await agentSide.SendAsync(reply, reply.Length, received.RemoteEndPoint);
-        });
+            agentSide.Send(reply, reply.Length, from);
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         var found = await Task.Run(() =>
             DiscoveryClient.Search(Master, new[] { new IPEndPoint(IPAddress.Loopback, port) }, TimeSpan.FromSeconds(2)));
 
-        await answering.WaitAsync(TimeSpan.FromSeconds(10));
+        await answering.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(new[] { new FoundMachine("ALUNO-07", "127.0.0.1", X, TeacherStatus.None, false) }, found);
     }
 
