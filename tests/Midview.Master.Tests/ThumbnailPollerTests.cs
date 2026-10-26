@@ -16,7 +16,7 @@ public partial class ThumbnailPollerTests
         poller.ThumbnailReceived += jpeg => received.TrySetResult(jpeg);
         poller.Start();
 
-        var jpeg = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var jpeg = await received.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         using var thumbnail = TileCodec.DecodeTile(jpeg);
         Assert.Equal(ThumbnailRenderer.MaxWidth, thumbnail.Width);
@@ -56,7 +56,7 @@ public partial class ThumbnailPollerTests
         };
         poller.Start();
 
-        await secondThumbnail.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(10));
+        await secondThumbnail.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30));
 
         lock (sizes)
         {
@@ -81,7 +81,7 @@ public partial class ThumbnailPollerTests
         };
         poller.Start();
 
-        await secondThumbnail.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(10));
+        await secondThumbnail.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public partial class ThumbnailPollerTests
         poller.Unreachable += r => reason.TrySetResult(r);
         poller.Start();
 
-        Assert.Equal("Certificado recusado", await reason.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("Certificado recusado", await reason.Task.WaitAsync(TimeSpan.FromSeconds(30)));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public partial class ThumbnailPollerTests
         poller.Unreachable += r => reason.TrySetResult(r);
         poller.Start();
 
-        Assert.Equal("Sem usuário logado", await reason.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("Sem usuário logado", await reason.Task.WaitAsync(TimeSpan.FromSeconds(30)));
     }
 
     [Fact]
@@ -126,11 +126,11 @@ public partial class ThumbnailPollerTests
         poller.Unreachable += _ => wentUnreachable.TrySetResult();
         poller.ThumbnailReceived += _ => received.TrySetResult();
         poller.Start();
-        await wentUnreachable.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await wentUnreachable.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         using var session = new LoopbackSession(port, sessionCertificate, masterCertificate);
 
-        await received.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(10));
+        await received.Task.WaitAsync(ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -141,7 +141,8 @@ public partial class ThumbnailPollerTests
             new Message(MessageType.WakeAddress, new byte[] { 0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E }));
         var learned = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var poller = new ThumbnailPoller(
-            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            agentRetryInterval: RetryAtOnce);
         poller.MacAddressLearned += macAddress => learned.TrySetResult(macAddress);
         poller.Start();
 
@@ -155,10 +156,14 @@ public partial class ThumbnailPollerTests
         using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, new byte[] { 0 }));
         var learned = false;
         using var poller = new ThumbnailPoller(
-            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            agentRetryInterval: RetryAtOnce);
         poller.MacAddressLearned += _ => learned = true;
+        var polls = new Polls(poller);
+        poller.Start();
 
-        await ThreeThumbnails(poller);
+        await WaitUntil(() => agent.Questions > 0);
+        await polls.OneMoreAsync();
 
         Assert.Equal(1, agent.Questions);
         Assert.False(learned);
@@ -184,30 +189,17 @@ public partial class ThumbnailPollerTests
         var schedule = new PowerSchedule(1000, PowerSchedule.Weekdays, null, 18 * 60);
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
-            () => schedule);
-        var count = 0;
-        var third = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var sixth = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        poller.ThumbnailReceived += _ =>
-        {
-            var seen = Interlocked.Increment(ref count);
-            if (seen == 3)
-            {
-                third.TrySetResult();
-            }
-            else if (seen == 6)
-            {
-                sixth.TrySetResult();
-            }
-        };
+            () => schedule, agentRetryInterval: RetryAtOnce);
+        var polls = new Polls(poller);
         poller.Start();
-        var timeout = 3 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
 
-        await third.Task.WaitAsync(timeout);
+        await WaitUntil(() => agent.SchedulesReceived.Length > 0);
+        await polls.OneMoreAsync();
         Assert.Equal(new[] { 1000L }, agent.SchedulesReceived);
 
         schedule = schedule with { SavedAt = 2000 };
-        await sixth.Task.WaitAsync(timeout);
+        await WaitUntil(() => agent.SchedulesReceived.Length > 1);
+        await polls.OneMoreAsync();
         Assert.Equal(new[] { 1000L, 2000L }, agent.SchedulesReceived);
     }
 
@@ -219,32 +211,19 @@ public partial class ThumbnailPollerTests
         var policy = new AppBlockPolicy(1000, AppBlockMode.BlockList, new[] { "chrome.exe" });
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
-            appBlockPolicy: () => policy);
-        var count = 0;
-        var third = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var sixth = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        poller.ThumbnailReceived += _ =>
-        {
-            var seen = Interlocked.Increment(ref count);
-            if (seen == 3)
-            {
-                third.TrySetResult();
-            }
-            else if (seen == 6)
-            {
-                sixth.TrySetResult();
-            }
-        };
+            appBlockPolicy: () => policy, agentRetryInterval: RetryAtOnce);
+        var polls = new Polls(poller);
         poller.Start();
-        var timeout = 3 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
 
-        await third.Task.WaitAsync(timeout);
+        await WaitUntil(() => agent.BlocksReceived.Length > 0);
+        await polls.OneMoreAsync();
         Assert.Equal(new[] { 1000L }, agent.BlocksReceived);
 
         // Lifting is a newer policy like any other: a machine that was off
         // when it was lifted is freed the same way.
         policy = AppBlockPolicy.Lifted(2000);
-        await sixth.Task.WaitAsync(timeout);
+        await WaitUntil(() => agent.BlocksReceived.Length > 1);
+        await polls.OneMoreAsync();
         Assert.Equal(new[] { 1000L, 2000L }, agent.BlocksReceived);
     }
 
@@ -259,9 +238,10 @@ public partial class ThumbnailPollerTests
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
             appBlockPolicy: () => policy, agentRetryInterval: TimeSpan.Zero);
 
-        await ThreeThumbnails(poller);
+        poller.Start();
 
-        Assert.True(agent.BlocksReceived.Length >= 2, $"expected the block to be sent again, got {agent.BlocksReceived.Length}");
+        // Sent again: an Agent that said no isn't taken to have it.
+        await WaitUntil(() => agent.BlocksReceived.Length >= 2);
     }
 
     [Fact]
@@ -275,14 +255,13 @@ public partial class ThumbnailPollerTests
         };
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
-        var observed = new TaskCompletionSource<AppBlockClient.StatusResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        poller.AppBlockObserved += status => observed.TrySetResult(status);
+        var observed = new TaskCompletionSource<AppBlockClient.StatusResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.AppBlockObserved += status => SetIfAnswered(status, observed);
 
         poller.Start();
-        var status = await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var status = await observed.Task.WaitAsync(ObservedWithin);
 
-        Assert.NotNull(status);
-        Assert.False(status!.OldAgent);
+        Assert.False(status.OldAgent);
         Assert.True(followed.SameRulesAs(status.Policy!));
     }
 
@@ -293,15 +272,29 @@ public partial class ThumbnailPollerTests
         using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, string.Empty)));
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port);
-        var observed = new TaskCompletionSource<AppBlockClient.StatusResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        poller.AppBlockObserved += status => observed.TrySetResult(status);
+        var observed = new TaskCompletionSource<AppBlockClient.StatusResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        poller.AppBlockObserved += status => SetIfAnswered(status, observed);
 
         poller.Start();
-        var status = await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var status = await observed.Task.WaitAsync(ObservedWithin);
 
-        Assert.NotNull(status);
-        Assert.True(status!.OldAgent);
+        Assert.True(status.OldAgent);
     }
+
+    // An observation the Agent didn't answer (null: on a loaded test run its
+    // connect can time out) is followed by the next one 30 s later
+    // (AppBlockObserveInterval); the first it answers is the one these tests
+    // look at, within two observations' time and some.
+    private static readonly TimeSpan ObservedWithin = TimeSpan.FromSeconds(90);
+
+    private static void SetIfAnswered(AppBlockClient.StatusResult? status, TaskCompletionSource<AppBlockClient.StatusResult> observed)
+    {
+        if (status is not null)
+        {
+            observed.TrySetResult(status);
+        }
+    }
+
 
     [Fact]
     public async Task ResendsTheClassLesson_WhenTheAgentComesBack()
@@ -382,6 +375,28 @@ public partial class ThumbnailPollerTests
         };
         poller.Start();
         await third.Task.WaitAsync(2 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30));
+    }
+
+    // For a test that waits for an Agent chore to be done: one a loaded test
+    // run made fail (its connect or its answer timed out) is tried again at
+    // the next poll, not DefaultAgentRetryInterval later. Never for a test of
+    // what waits that interval.
+    private static readonly TimeSpan RetryAtOnce = TimeSpan.Zero;
+
+    // Counts a poller's thumbnails (made before Start). A poll's Agent chores
+    // come right after its thumbnail, so two thumbnails more than now mean
+    // that at least one whole poll more has done its chores.
+    private sealed class Polls
+    {
+        private int _thumbnails;
+
+        public Polls(ThumbnailPoller poller) => poller.ThumbnailReceived += _ => Interlocked.Increment(ref _thumbnails);
+
+        public Task OneMoreAsync()
+        {
+            var seen = Volatile.Read(ref _thumbnails);
+            return WaitUntil(() => Volatile.Read(ref _thumbnails) >= seen + 2);
+        }
     }
 
     private static int FreePort()

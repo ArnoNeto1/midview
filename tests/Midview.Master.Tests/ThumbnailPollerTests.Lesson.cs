@@ -35,7 +35,9 @@ public partial class ThumbnailPollerTests
         }
         else
         {
-            await WaitUntil(() => Volatile.Read(ref thumbnails) >= 4);
+            await WaitUntil(() => agent.LessonsReceived.Length > 0);
+            var seen = Volatile.Read(ref thumbnails);
+            await WaitUntil(() => Volatile.Read(ref thumbnails) >= seen + 3);
             Assert.Equal(new[] { 1000L }, agent.LessonsReceived);
         }
     }

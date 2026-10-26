@@ -41,7 +41,7 @@ public partial class ThumbnailPollerTests
         var sync = rig.NewSync();
         Assert.Equal(last, sync.Lesson);
         using var poller = new ThumbnailPoller(
-            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => sync.Lesson,
+            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce, classLesson: () => sync.Lesson,
             classLessonOver: sync.EndOfLessonOver);
 
         poller.Start();
@@ -78,8 +78,8 @@ public partial class ThumbnailPollerTests
         Assert.True(sync.Lesson.IsOn);
         Assert.Equal(old, pc.Agent.Current);
         using var poller = new ThumbnailPoller(
-            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => sync.Lesson, classHomeClaim: HomeClaim,
-            classLessonOver: sync.EndOfLessonOver);
+            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce, classLesson: () => sync.Lesson,
+            classHomeClaim: HomeClaim, classLessonOver: sync.EndOfLessonOver);
 
         poller.Start();
 
@@ -107,13 +107,15 @@ public partial class ThumbnailPollerTests
         Assert.True(ClassFolderClient.SetLesson(inIt.Machine, rig.Master, held, rig.AgentPort).Succeeded);
         var ended = held with { SavedAt = held.SavedAt + 1, Ended = true };
         using var toIt = new ThumbnailPoller(
-            inIt.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: _ => true);
+            inIt.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce,
+            classLesson: () => ended, classLessonHeldEnd: _ => true);
         using var toNone = new ThumbnailPoller(
-            none.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: _ => true);
+            none.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce,
+            classLesson: () => ended, classLessonHeldEnd: _ => true);
 
         await Task.WhenAll(ThreeThumbnails(toIt), ThreeThumbnails(toNone));
 
-        Assert.Equal(ended, inIt.Agent.Current);
+        await WaitUntil(() => inIt.Agent.Current == ended);
         Assert.Equal(ClassLesson.None(0), none.Agent.Current);
     }
 

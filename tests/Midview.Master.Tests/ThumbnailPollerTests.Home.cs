@@ -25,7 +25,8 @@ public partial class ThumbnailPollerTests
         using var rig = new ClassSyncRig(pcs: 1, homes: 1);
         var pc = rig.Pcs[0];
         ClaimFor(rig, pc, keeps == ClassSyncRig.MachineName ? rig.Master : rig.OtherMaster, keeps, HomeGeneration - 1_000);
-        using var poller = new ThumbnailPoller(pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classHomeClaim: HomeClaim);
+        using var poller = new ThumbnailPoller(
+            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce, classHomeClaim: HomeClaim);
 
         poller.Start();
 
@@ -49,16 +50,18 @@ public partial class ThumbnailPollerTests
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
             agentRetryInterval: TimeSpan.Zero, classHomeClaim: HomeClaim);
+        var polls = new Polls(poller);
 
-        await ThreeThumbnails(poller);
+        poller.Start();
 
-        Assert.True(agent.HomesAsked > 0);
+        await WaitUntil(() => agent.HomesAsked > 0);
         if (claimed)
         {
-            Assert.True(agent.Claims > 0);
+            await WaitUntil(() => agent.Claims > 0);
         }
         else
         {
+            await polls.OneMoreAsync();
             Assert.Equal(0, agent.Claims);
         }
     }
@@ -125,14 +128,14 @@ public partial class ThumbnailPollerTests
         await tracker.RefreshAsync();
         Assert.Equal(("127.0.0.9", host.Port + 1), (tracker.Home?.Address, tracker.Home?.Port));
         var claim = new ClassHomeClaim(ClassSyncRig.MachineName, host.Port, TakeOver: true, HomeGeneration);
+        var refreshed = new ClassHome(rig.Master.Thumbprint.ToUpperInvariant(), ClassSyncRig.MachineName, "127.0.0.1", host.Port, HomeGeneration);
 
-        using (var poller = new ThumbnailPoller(pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classHomeClaim: () => claim))
+        using (var poller = new ThumbnailPoller(
+            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: RetryAtOnce, classHomeClaim: () => claim))
         {
-            await ThreeThumbnails(poller);
+            poller.Start();
+            await WaitUntil(() => pc.Agent.CurrentHome == refreshed);
         }
-
-        Assert.Equal(new ClassHome(rig.Master.Thumbprint.ToUpperInvariant(), ClassSyncRig.MachineName, "127.0.0.1", host.Port, HomeGeneration),
-            pc.Agent.CurrentHome);
         await tracker.RefreshAsync();
         using var remote = new RemoteClassFolderController(
             rig.OtherMaster, () => tracker.Home, () => rig.Machines, _ => true, TimeSpan.FromHours(1), rig.AgentPort, () => rig.Now);
