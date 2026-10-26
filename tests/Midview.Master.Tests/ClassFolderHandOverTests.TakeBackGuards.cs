@@ -381,7 +381,7 @@ public sealed partial class ClassFolderHandOverTests
     [Fact]
     public async Task ATakeBack_AsksABusyAgentOnceMore()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
         var generation = ClassHomeFileMaster.Read(rig.HomePath)!.Value;

@@ -22,6 +22,12 @@ using Xunit;
 // folders' home, for two teacher PCs in one lab (ClassHomeState, in a temp
 // file); the others answer the home's messages as an Agent from before it.
 // Every Agent trusts two teachers: Master and OtherMaster.
+//
+// claimWait: how long the Agents wait for their lesson lock before a claim or
+// a lesson set is refused as busy. The Agent's own by default: a claim or a
+// start behind another one (two teacher PCs at once) must not come back busy
+// because a loaded test run held the first one up a moment. BusyAgents.ClaimWait
+// for a rig whose Agents a test holds busy, so their busy answers come quickly.
 internal sealed class ClassSyncRig : IDisposable
 {
     public const string Turma = "3º A";
@@ -31,9 +37,10 @@ internal sealed class ClassSyncRig : IDisposable
 
     private readonly List<ClassFolderSync> _syncs = new();
 
-    public ClassSyncRig(int pcs = 3, int homes = 0)
+    public ClassSyncRig(int pcs = 3, int homes = 0, TimeSpan? claimWait = null)
     {
         Homes = homes;
+        ClaimWait = claimWait ?? ClassLessonHandler.DefaultClaimWait;
         Root = Path.Combine(Path.GetTempPath(), $"midview-sync-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Root);
         TeacherBin = new FolderBin(Path.Combine(Root, "lixeira-professor"));
@@ -66,6 +73,9 @@ internal sealed class ClassSyncRig : IDisposable
     public X509Certificate2 OtherMaster { get; } = SelfSignedCertificate.Create("other-master-under-test");
 
     public int Homes { get; }
+
+    // How long the Agents wait for their lesson lock (see the class comment).
+    public TimeSpan ClaimWait { get; }
 
     public ClassStore Store { get; }
 
@@ -225,6 +235,7 @@ internal sealed class StudentPc : IDisposable
     public StudentPc(ClassSyncRig rig, int number, IPAddress address)
     {
         Name = $"PC{number}";
+        ClaimWait = rig.ClaimWait;
         Root = Path.Combine(rig.Root, Name);
         Desktop = Path.Combine(Root, "Desktop");
         Directory.CreateDirectory(Desktop);
@@ -239,7 +250,7 @@ internal sealed class StudentPc : IDisposable
                 return null;
             },
             _ => null, new AppBlockEnforcer(new NoProcesses()), WindowsIdentity.GetCurrent().User!, () => rig.Now, _ => { }, home,
-            claimWait: ClaimWait);
+            claimWait: rig.ClaimWait);
         _agentListener = new TcpListener(address, rig.AgentPort);
         _agentListener.Start();
         var siteBlock = new SiteBlockCommandHandler(
@@ -247,7 +258,12 @@ internal sealed class StudentPc : IDisposable
         var agent = new AgentServer(
             _agentListener, _agentCertificate, new TrustStore(new[] { rig.Master.Thumbprint, rig.OtherMaster.Thumbprint }),
             siteBlock, classLesson: Agent);
-        _agentRun = Task.Run(() => agent.Run(_stopAgent.Token));
+        // Its accept loop blocks for the rig's whole life, on a thread of its
+        // own: on the pool's, a loaded test run can leave it unstarted for
+        // longer than a Master waits for an answer, and every rig's loops
+        // would hold pool threads the code under test needs.
+        _agentRun = Task.Factory.StartNew(
+            () => agent.Run(_stopAgent.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         Folder = new ClassFolder(Desktop, Path.Combine(Root, "guardada"), SessionLesson, Bin, Path.Combine(Root, "session.json"));
         _session = new ThumbnailPollerTests.LoopbackSession(
@@ -255,10 +271,10 @@ internal sealed class StudentPc : IDisposable
         Machine = new KnownMachine(Name, address.ToString(), _sessionCertificate.Thumbprint, _agentCertificate.Thumbprint);
     }
 
-    // How long a claim waits for the Agent's lesson lock (the Agent's own is 10 s).
-    public static readonly TimeSpan ClaimWait = TimeSpan.FromSeconds(1);
-
     public string Name { get; }
+
+    // How long its Agent waits for its lesson lock (the rig's ClaimWait).
+    public TimeSpan ClaimWait { get; }
 
     public string Root { get; }
 

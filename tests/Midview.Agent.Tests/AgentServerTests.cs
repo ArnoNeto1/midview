@@ -361,7 +361,9 @@ public class AgentServerTests
         }
 
         using var stopServer = new CancellationTokenSource();
-        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        // The accept loop on a thread of its own: a busy test run's pool may be slow to start it.
+        var serverTask = Task.Factory.StartNew(
+            () => server.Run(stopServer.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             var answers = new List<Message>();
@@ -374,7 +376,7 @@ public class AgentServerTests
         finally
         {
             stopServer.Cancel();
-            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(30));
         }
     }
 

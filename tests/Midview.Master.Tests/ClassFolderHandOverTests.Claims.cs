@@ -23,7 +23,7 @@ public sealed partial class ClassFolderHandOverTests
     [Fact]
     public async Task AClaimTheBusyAgentsRefuse_IsNotTaken_AndEverythingIsPutBack()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
         lab.FillTheOldHome();

@@ -383,7 +383,10 @@ public sealed class ColleagueTrustRoom : IDisposable
         var siteBlock = new SiteBlockCommandHandler(new SiteBlockState(), "unused", "unused-hosts", new NoFirewall());
         var server = new AgentServer(listener, certificate, new TrustStore(trusted), siteBlock);
         var stop = new CancellationTokenSource();
-        var run = Task.Run(() => server.Run(stop.Token));
+        // Its accept loop blocks for every test's life, on a thread of its own:
+        // never one the pool may be slow to give, or the tests running alongside need.
+        var run = Task.Factory.StartNew(
+            () => server.Run(stop.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         _cleanup.Add(() =>
         {
             stop.Cancel();

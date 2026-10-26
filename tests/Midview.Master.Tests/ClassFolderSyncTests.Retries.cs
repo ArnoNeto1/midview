@@ -187,7 +187,7 @@ public sealed partial class ClassFolderSyncTests
     [Fact]
     public async Task ARetryWhoseTakeOversFindTheOtherPcsPcsBusy_IsRefused()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         var seen = rig.Machines.Skip(1).ToList();
         using var one = ProfOneSeeing(rig, seen);
         var (two, lesson) = await MeetTheOtherPcsLessonAsync(rig, one);

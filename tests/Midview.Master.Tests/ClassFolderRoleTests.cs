@@ -121,7 +121,7 @@ public sealed partial class ClassFolderRoleTests
     [Fact]
     public async Task ALessonOfThisPcTheRoomFollows_KeepsItLocal_UntilItEnds()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         using var prof1 = new TeacherPc(rig, Prof1, rig.Master);
         await prof1.Sync.StartAsync(Turma);
         await prof1.Sync.EndAsync(EndChoice.Keep);

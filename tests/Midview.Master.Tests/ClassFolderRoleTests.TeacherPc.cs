@@ -42,8 +42,10 @@ public sealed partial class ClassFolderRoleTests
             HandOver = new ClassFolderHandOver(
                 Store, Sync, certificate, name, Machines, IsOnline, () => rig.Now, rig.AgentPort, HostPort, homePath)
             {
-                // The rig's Agents wait StudentPc.ClaimWait for their lock, not ClassHomeClaim.MaxLockWait.
-                LostAnswerWait = StudentPc.ClaimWait + TimeSpan.FromMilliseconds(500),
+                // As in ClassFolderHandOverTests' lab: a claim waits for an Agent's lock
+                // only behind BusyAgents (BusyAgents.ClaimWait), and the answers these
+                // tests lose were given before they were lost.
+                LostAnswerWait = BusyAgents.ClaimWait + TimeSpan.FromMilliseconds(500),
             };
             var tracker = Tracker = new ClassHomeTracker(
                 certificate, name, Machines, IsOnline, trackerInterval ?? TimeSpan.FromHours(1), rig.AgentPort, homePath);

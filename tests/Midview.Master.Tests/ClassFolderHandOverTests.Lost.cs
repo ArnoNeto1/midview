@@ -88,7 +88,7 @@ public sealed partial class ClassFolderHandOverTests
     [Fact]
     public async Task AClaimWhoseConnectionBreaksWhileTheAgentWaits_IsDoneWhenItIsTakenLater()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
         var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
@@ -131,7 +131,7 @@ public sealed partial class ClassFolderHandOverTests
     [Fact]
     public async Task AClaimThatReachesTheAgentLate_AndIsLost_IsDoneWhenItIsTaken()
     {
-        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1, claimWait: BusyAgents.ClaimWait);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
         var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
@@ -268,7 +268,7 @@ public sealed partial class ClassFolderHandOverTests
     private sealed partial class HandOverLab
     {
         // The busy Agents are freed a moment after the taking PC logs text
-        // (once): their claims wait for the lock StudentPc.ClaimWait, five
+        // (once): their claims wait for the lock BusyAgents.ClaimWait, five
         // times this moment, so the claim is taken well after its answer was lost.
         public void FreeWhenLogged(BusyAgents busy, string text)
         {
@@ -277,7 +277,7 @@ public sealed partial class ClassFolderHandOverTests
             {
                 if (message.Contains(text, StringComparison.Ordinal) && Interlocked.Exchange(ref freed, 1) == 0)
                 {
-                    busy.FreeAfter(StudentPc.ClaimWait / 5);
+                    busy.FreeAfter(BusyAgents.ClaimWait / 5);
                 }
             };
         }

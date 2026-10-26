@@ -14,7 +14,7 @@ public sealed partial class ClassFolderSyncTests
     [Fact]
     public async Task AStartWithABusyAgent_GoesOn_AsWithOneThatDidntAnswer()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         var log = new FreeingLog();
         using var sync = SyncWithLog(rig, log);
         await sync.StartAsync(Turma);
@@ -44,7 +44,7 @@ public sealed partial class ClassFolderSyncTests
     [Fact]
     public async Task ASwitchOfClassWithABusyAgent_InThisPcsOwnLesson_GoesOn()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         var log = new FreeingLog();
         using var sync = SyncWithLog(rig, log);
         await sync.StartAsync(Turma);
@@ -71,7 +71,7 @@ public sealed partial class ClassFolderSyncTests
     [InlineData(true)]
     public async Task AStragglerBusyAtTheStart_IsAskedAgain_AndItsLineSaysBusy(bool stillBusy)
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         var log = new FreeingLog();
         using var sync = SyncWithLog(rig, log);
         Assert.True(ClassFolderClient.ClaimHome(
@@ -113,7 +113,7 @@ public sealed partial class ClassFolderSyncTests
     [Fact]
     public async Task StandingDownIfNoLesson_WhileAStartIsUnderWay_KeepsThatLesson()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         var log = new FreeingLog();
         using var sync = SyncWithLog(rig, log);
         await sync.StartAsync(Turma);
@@ -159,7 +159,7 @@ public sealed partial class ClassFolderSyncTests
     [Fact]
     public async Task AnEnd_ToABusyAgent_IsRefusedAtOnce_AndThePollerHandsItOverSecondsAfter()
     {
-        using var rig = new ClassSyncRig(homes: 3);
+        using var rig = new ClassSyncRig(homes: 3, claimWait: BusyAgents.ClaimWait);
         using var sync = rig.NewSync();
         await sync.StartAsync(Turma);
         using var busy = new BusyAgents(rig.Pcs.Take(1));

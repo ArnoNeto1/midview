@@ -278,8 +278,10 @@ public sealed partial class ClassFolderHandOverTests
             Taker = new ClassFolderHandOver(
                 NewStore, NewSync, rig.OtherMaster, NewHome, () => rig.Machines, IsOnline, () => rig.Now, rig.AgentPort,
                 homePath: NewHomePath, log: message => TakerLog(message));
-            // The rig's Agents wait StudentPc.ClaimWait for their lock, not ClassHomeClaim.MaxLockWait.
-            Taker.LostAnswerWait = StudentPc.ClaimWait + TimeSpan.FromMilliseconds(500);
+            // A claim here waits for an Agent's lock only behind BusyAgents, whose
+            // rigs' Agents wait BusyAgents.ClaimWait, not ClassHomeClaim.MaxLockWait;
+            // any other answer these tests lose was given before it was lost.
+            Taker.LostAnswerWait = BusyAgents.ClaimWait + TimeSpan.FromMilliseconds(500);
 
             if (openHost)
             {
@@ -336,10 +338,14 @@ public sealed partial class ClassFolderHandOverTests
         // home, and the lessons map has the lesson.
         public async Task<Guid> MakeTheOldHomeTheHomeAsync()
         {
-            await OldSync.StartAsync(Turma);
+            var started = await OldSync.StartAsync(Turma);
             var lessonId = OldSync.Lesson.LessonId;
             await OldSync.EndAsync(EndChoice.Keep);
-            Assert.All(_rig.Pcs.Take(_rig.Homes), pc => Assert.Equal(OldHome, pc.Agent.CurrentHome?.Name));
+            // What the start said of each PC, should one not keep the old home.
+            var said = string.Join("; ", started.Select(line => $"{line.Machine.Name} {line.Ok} {line.Detail}"));
+            Assert.All(_rig.Pcs.Take(_rig.Homes), pc => Assert.True(
+                pc.Agent.CurrentHome?.Name == OldHome,
+                $"{pc.Name} keeps {pc.Agent.CurrentHome?.Name}@{pc.Agent.CurrentHome?.Generation}; the start said {said}"));
             return lessonId;
         }
 

@@ -10,6 +10,13 @@ using Midview.Session;
 // Session runs with.
 public partial class ThumbnailPollerTests
 {
+    // An accept loop, which blocks until its listener stops, on a thread of its
+    // own: on the pool's, a loaded test run can leave it unstarted for longer
+    // than a Master waits for an answer, and a rig's many loops would hold
+    // pool threads the code under test needs.
+    private static void OwnThread(Action loop) =>
+        Task.Factory.StartNew(loop, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     // A real SessionServer on a loopback port, with a fixed-size fake screen.
     internal sealed class LoopbackSession : IDisposable
     {
@@ -46,7 +53,7 @@ public partial class ThumbnailPollerTests
                 new FixedSizeCapture(), new NoInput(),
                 new InputLockManager(new NoDevices(), new SystemClock(), TimeSpan.FromSeconds(5)),
                 messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, screenLock: screenLock, classFolder: classFolder);
-            Task.Run(() =>
+            OwnThread(() =>
             {
                 try
                 {
@@ -99,7 +106,7 @@ public partial class ThumbnailPollerTests
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
             var masters = new TrustStore(new[] { masterCertificate.Thumbprint });
-            Task.Run(() =>
+            OwnThread(() =>
             {
                 while (true)
                 {

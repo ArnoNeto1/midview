@@ -2,11 +2,14 @@ using Xunit;
 
 // Rig PCs whose Agents are busy with their students' folders: each one's
 // lesson lock is held (a Reconcile that waits, on a thread of its own) until
-// Free, FreeAfter's time, or Dispose. A claim then waits StudentPc.ClaimWait
+// Free, FreeAfter's time, or Dispose. A claim then waits the rig's ClaimWait
 // and is refused as busy (ClassHomeClaim.BusyText); a lesson sent meanwhile
-// waits for the lock.
+// waits for the lock. Their rig is made with ClaimWait, so that comes quickly.
 internal sealed class BusyAgents : IDisposable
 {
+    // The lock wait of a rig whose Agents a test holds busy.
+    public static readonly TimeSpan ClaimWait = TimeSpan.FromSeconds(1);
+
     private readonly ManualResetEventSlim _free = new();
     private readonly List<Task> _looking = new();
 
@@ -14,6 +17,7 @@ internal sealed class BusyAgents : IDisposable
     {
         foreach (var pc in pcs)
         {
+            Assert.Equal(ClaimWait, pc.ClaimWait);
             using var holding = new ManualResetEventSlim();
             pc.WhileLooking = () =>
             {
@@ -22,7 +26,7 @@ internal sealed class BusyAgents : IDisposable
             };
             _looking.Add(Task.Factory.StartNew(
                 pc.Agent.Reconcile, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default));
-            Assert.True(holding.Wait(TimeSpan.FromSeconds(10)));
+            Assert.True(holding.Wait(TimeSpan.FromSeconds(30)));
             pc.WhileLooking = null;
         }
     }
@@ -47,7 +51,7 @@ internal sealed class BusyAgents : IDisposable
     public void Dispose()
     {
         _free.Set();
-        Assert.True(Task.WaitAll(_looking.ToArray(), TimeSpan.FromSeconds(10)));
+        Assert.True(Task.WaitAll(_looking.ToArray(), TimeSpan.FromSeconds(30)));
         _free.Dispose();
     }
 }
