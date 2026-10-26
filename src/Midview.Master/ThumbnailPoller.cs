@@ -24,6 +24,11 @@ public sealed class ThumbnailPoller : IDisposable
     // running); an answer, even "don't know", isn't asked for again.
     private static readonly TimeSpan DefaultAgentRetryInterval = TimeSpan.FromMinutes(5);
 
+    // After the Agent refused the class folder's lesson as busy with its
+    // student's folders (ClassHomeClaim.BusyText): it took nothing and is
+    // asked again in a moment, as the line the teacher saw says (Ruling 23).
+    public static readonly TimeSpan DefaultBusyRetryInterval = TimeSpan.FromSeconds(10);
+
     // How often a machine is asked what program block it follows, for its tile.
     private static readonly TimeSpan AppBlockObserveInterval = TimeSpan.FromSeconds(30);
 
@@ -89,6 +94,9 @@ public sealed class ThumbnailPoller : IDisposable
     // badge: every so often while the machine is on. Null when the Agent
     // didn't answer (not running).
     public event Action<AppBlockClient.StatusResult?>? AppBlockObserved;
+
+    // DefaultBusyRetryInterval, or a test's.
+    internal TimeSpan BusyRetryInterval { get; init; } = DefaultBusyRetryInterval;
 
     public void Start() => _thread.Start();
 
@@ -246,7 +254,9 @@ public sealed class ThumbnailPoller : IDisposable
 
     // The same for the class folder's lesson: a machine that was off when the
     // teacher started or ended it gets it the next time it's on, and the Agent
-    // keeps an older one out by SavedAt. A lesson never saved (SavedAt 0: the
+    // keeps an older one out by SavedAt; one that was busy (it waits for its
+    // lesson lock no longer than ClassHomeClaim.MaxLockWait) gets it after
+    // BusyRetryInterval, not the usual retry interval. A lesson never saved (SavedAt 0: the
     // Master hasn't had one yet) is nothing to hand over, nor is no lesson at
     // all (a Master that stood down, however saved), which an Agent would take
     // for a newer end of the lesson another teacher PC runs.
@@ -262,7 +272,7 @@ public sealed class ThumbnailPoller : IDisposable
 
         try
         {
-            var (succeeded, _) = CommandClient.SendCommandForResult(
+            var (succeeded, detail) = CommandClient.SendCommandForResult(
                 _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
                 MessageType.SetClassLesson, lesson.Encode());
             if (succeeded)
@@ -271,7 +281,10 @@ public sealed class ThumbnailPoller : IDisposable
             }
             else
             {
-                _nextClassLessonAttempt = DateTime.UtcNow + _agentRetryInterval;
+                // Busy with its student's folders, it is asked again in a moment (an end
+                // that waited minutes would leave that PC in the lesson meanwhile).
+                _nextClassLessonAttempt = DateTime.UtcNow
+                    + (detail == ClassHomeClaim.BusyText ? BusyRetryInterval : _agentRetryInterval);
             }
         }
         catch (Exception)

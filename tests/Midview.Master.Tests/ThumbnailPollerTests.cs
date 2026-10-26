@@ -6,7 +6,7 @@ using Midview.Protocol;
 using Midview.Session;
 using Xunit;
 
-public class ThumbnailPollerTests
+public partial class ThumbnailPollerTests
 {
     [Fact]
     public async Task SessionRunning_ReceivesAThumbnailJpeg()

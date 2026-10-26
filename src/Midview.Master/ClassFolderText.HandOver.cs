@@ -216,8 +216,12 @@ public static partial class ClassFolderText
 
     public static string CopyMismatch(string home) => $"O que veio do PC {home} não confere com as pastas das turmas.";
 
-    public static string CopyNoRoom(long bytes, long freeBytes) =>
-        $"Não há espaço neste computador: as pastas ocupam {Size(bytes)} e o disco tem {Size(freeBytes)} livres (é preciso sobrar 1 GB).";
+    // bytes: what goes on a disk that has freeBytes; dataDisk: that disk's
+    // root ("D:\") when it isn't the classes' one but the one their indexes
+    // and lessons map go on (null: the classes' disk).
+    public static string CopyNoRoom(long bytes, long freeBytes, string? dataDisk = null) =>
+        $"Não há espaço neste computador: {(dataDisk is null ? "as pastas ocupam" : "os dados das turmas ocupam")} {Size(bytes)} "
+        + $"e o disco {(dataDisk is null ? "" : dataDisk.TrimEnd('\\', '/') + " ")}tem {Size(freeBytes)} livres (é preciso sobrar 1 GB).";
 
     public static string CopyNotSaved(string reason) => $"Não foi possível gravar as pastas neste computador: {reason}";
 

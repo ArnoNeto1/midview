@@ -100,11 +100,26 @@ public sealed partial class ClassFolderHandOverTests
 
         var result = await lab.Taker.TakeOverAsync(lab.Home);
 
+        // What doesn't fit there (Ruling 23): the indexes and the lessons map, as the old home sent them.
+        var oldData = Path.Combine(rig.Root, "dados");
+        var dataBytes = Directory.GetFiles(Path.Combine(oldData, "turmas"), "*.json").Sum(file => new FileInfo(file).Length)
+            + new FileInfo(Path.Combine(oldData, "class-lessons.json")).Length;
         Assert.False(result.Ok);
-        Assert.StartsWith(
-            "As pastas não foram trazidas do PC PROF-1; nada mudou. Não há espaço neste computador: as pastas ocupam ", result.Detail);
-        Assert.EndsWith($"e o disco tem {ClassFolderText.Size(ClassFolderHandOver.KeepFreeBytes + 10)} livres (é preciso sobrar 1 GB).", result.Detail);
+        Assert.Equal(
+            ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.CopyNoRoom(dataBytes, ClassFolderHandOver.KeepFreeBytes + 10, @"Y:\")),
+            result.Detail);
         Assert.Equal(new[] { @"Y:\" }, asked); // the classes' disk goes by FreeBytes (NewFreeSpace: plenty)
         lab.AssertUnchanged(before);
+    }
+
+    [Fact]
+    public void TheNoRoomTexts_AreTheOnesAgreed()
+    {
+        Assert.Equal(
+            "Não há espaço neste computador: as pastas ocupam 2 GB e o disco tem 1,5 GB livres (é preciso sobrar 1 GB).",
+            ClassFolderText.CopyNoRoom(2L << 30, 3L << 29));
+        Assert.Equal(
+            "Não há espaço neste computador: os dados das turmas ocupam 120 KB e o disco D: tem 1 GB livres (é preciso sobrar 1 GB).",
+            ClassFolderText.CopyNoRoom(120 * 1024, 1L << 30, @"D:\"));
     }
 }

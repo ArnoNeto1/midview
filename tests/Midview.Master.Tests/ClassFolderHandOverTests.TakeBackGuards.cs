@@ -166,6 +166,56 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
+    // Ruling 23 (2): a room whose generations are ahead of this PC's clock
+    // (the clock was set back since it became the home) is still taken back:
+    // "too far ahead" counts from the later of the clock and its own generation.
+    [Fact]
+    public async Task ATakeBack_InARoomAheadOfThisPcsClock_IsTakenBack()
+    {
+        using var rig = new ClassSyncRig(homes: 2, pcs: 2);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        var generation = ClassHomeFileMaster.Read(rig.HomePath)!.Value;
+        rig.Now = rig.Now.AddDays(-3);
+
+        var (ok, detail) = lab.SendTakeBack(rig.OtherMaster, ClassFolderRemote.EncodeTakeBack(generation + 1));
+
+        Assert.True(ok, detail);
+        var takenBack = ClassHomeFileMaster.Read(rig.HomePath)!.Value;
+        Assert.Equal(takenBack.ToString(CultureInfo.InvariantCulture), detail);
+        Assert.True(takenBack > generation + 1);
+        Assert.All(rig.Pcs, pc => Assert.Equal((OldHome, takenBack), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
+    }
+
+    // Ruling 23 (1): an old home's yes naming a generation from more than a
+    // day ahead isn't believed: this PC keeps that home at what it gave up
+    // + 1, so a bogus answer can't put every later take-over out of reach.
+    [Fact]
+    public async Task ATakeBackAnswer_FromTooFarAhead_IsKeptAsWhatWasGivenUpPlusOne()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig, openHost: false);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        var generation = rig.Pcs[0].Agent.CurrentHome!.Generation;
+        lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
+        lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
+        lab.LetPc1TakeTheClaimAndGoOff(takes: true);
+        using var home = new ScriptedHandOverHome(rig, channel =>
+        {
+            SendManifest(channel, new[] { Turma });
+            Done(channel);
+        })
+        {
+            TakeBackAnswer = (true, long.MaxValue.ToString(CultureInfo.InvariantCulture)),
+        };
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port });
+
+        Assert.Equal(ClassFolderText.TakeOverTakenBack(OldHome, new[] { "PC1" }), result.Detail);
+        var seen = ClassHomeFileMaster.ReadLastOtherHome(lab.NewHomePath)!;
+        Assert.Equal((OldHome, generation + 2), (seen.Name, seen.Generation));
+    }
+
     // Item 3: the old home takes longer than one network wait to take the room
     // back (its Agents slow to answer): this PC waits for its answer, and says
     // the folders stayed there, not that it can't tell.

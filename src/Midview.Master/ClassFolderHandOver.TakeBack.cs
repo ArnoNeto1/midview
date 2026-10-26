@@ -20,8 +20,10 @@ namespace Midview.Master;
 // The old home is still the home (Ruling 22) while it handed nothing over
 // since it was, an online Agent names it, and neither an online Agent nor the
 // last other home it saw names another PC newer than it (the PC asking, only
-// when newer than what it gave up). It believes
-// a generation given up no further ahead of its own clock than a day. It
+// when newer than what it gave up). It believes a generation given up no
+// further ahead than a day of its clock, or of its own generation when the
+// room is ahead of the clock; the PC asking believes the same of the one it
+// is answered with (Ruling 23). It
 // takes the room back one thing at a time with a hand-over (never both), and
 // starts claiming within TakeBackClaimBy of being asked or not at all, so the
 // PC asking always gets its answer (it waits TakeBackWait).
@@ -73,9 +75,14 @@ public sealed partial class ClassFolderHandOver
                 _log($"The class folders' home {home.Name} didn't take the room back: {why}");
                 return null;
             }
-            // Newer than what this PC gave up, whatever it says.
+            // Newer than what this PC gave up, whatever it says, and no further
+            // ahead than a day (of this PC's clock, or of what it gave up when
+            // that is later): a bogus answer kept as the home seen would put
+            // every later take-over out of reach (Ruling 23).
             var floor = abandoned == long.MaxValue ? abandoned : abandoned + 1;
-            return long.TryParse(why, NumberStyles.None, CultureInfo.InvariantCulture, out var generation) && generation > floor
+            var ceiling = Plus(Math.Max(new DateTimeOffset(_localNow()).UtcTicks, abandoned), TakeBackHorizon);
+            return long.TryParse(why, NumberStyles.None, CultureInfo.InvariantCulture, out var generation)
+                && generation > floor && generation <= ceiling
                 ? generation
                 : floor;
         }
@@ -108,7 +115,9 @@ public sealed partial class ClassFolderHandOver
     internal async Task<(bool Ok, string Detail)> TakeBackAsync(long abandoned, string sender)
     {
         var askedAt = Milliseconds();
-        if (abandoned > new DateTimeOffset(_localNow()).UtcTicks + TakeBackHorizon.Ticks)
+        var saved = await Task.Run(SavedGeneration).ConfigureAwait(false);
+        // A day past this PC's clock, or past its own generation when the room is ahead of the clock (Ruling 23).
+        if (abandoned > Plus(Math.Max(new DateTimeOffset(_localNow()).UtcTicks, saved ?? 0), TakeBackHorizon))
         {
             _log($"A colleague's PC asked this PC to take the class folders back from generation {abandoned}, too far ahead of its clock.");
             return (false, ClassFolderText.TakeBackFromTooFarAhead(_machineName));
@@ -131,15 +140,7 @@ public sealed partial class ClassFolderHandOver
     // TakeBackAsync's work, under _giving, on a thread of its own.
     private (bool Ok, string Detail) TakeBack(long abandoned, string sender, long askedAt)
     {
-        long? saved;
-        try
-        {
-            saved = ClassHomeFileMaster.Read(_homePath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            saved = null;
-        }
+        var saved = SavedGeneration();
         var homes = Homes(AgentsOnline()).Select(read => read.Home).OfType<ClassHome>().ToList();
 
         // The newest of the one on file and the ones the Agents keep for this PC (as a start goes by: Ruling 21).
@@ -174,4 +175,20 @@ public sealed partial class ClassFolderHandOver
         _log($"This PC took the class folders' room back with generation {claimed.Generation} (a take-over at {abandoned} was given up).");
         return (true, claimed.Generation.ToString(CultureInfo.InvariantCulture));
     }
+
+    // This PC's generation on file; null for none, or one that can't be read.
+    private long? SavedGeneration()
+    {
+        try
+        {
+            return ClassHomeFileMaster.Read(_homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // ticks later by span, at most long.MaxValue.
+    private static long Plus(long ticks, TimeSpan span) => ticks > long.MaxValue - span.Ticks ? long.MaxValue : ticks + span.Ticks;
 }

@@ -126,27 +126,46 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(ClassLesson.None(0), ClassLessonFileMaster.Read(rig.LessonPath));
     }
 
-    // Ruling 22 (Task 7a, item 9): an Agent busy with its student's folders
-    // when the lesson's end reaches it refuses it at once, never taking it
-    // later (this PC's poller hands it over then); its line says so, without
-    // asking the teacher to try again.
+    // Ruling 22 (Task 7a, item 9) and Ruling 23: an Agent busy with its
+    // student's folders when the lesson's end reaches it refuses it at once,
+    // never taking it later; its line says Midview tries again in a moment,
+    // which is true: this PC's poller of it (as MainWindow makes it, the usual
+    // five minutes between tries of anything else) hands the end over seconds
+    // after the Agent is free, not minutes.
     [Fact]
-    public async Task AnEnd_ToABusyAgent_IsRefusedAtOnce_AndItsLineSaysMidviewTriesAgain()
+    public async Task AnEnd_ToABusyAgent_IsRefusedAtOnce_AndThePollerHandsItOverSecondsAfter()
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var sync = rig.NewSync();
         await sync.StartAsync(Turma);
-        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> ended;
-        using (new BusyAgents(rig.Pcs.Take(1)))
-        {
-            ended = await sync.EndAsync(EndChoice.Keep);
-        }
+        using var busy = new BusyAgents(rig.Pcs.Take(1));
+        var ended = await sync.EndAsync(EndChoice.Keep);
 
         var pc1 = ended.Single(line => line.Machine.Name == "PC1");
         Assert.Equal((false, "ocupado agora; o Midview tenta de novo em instantes"), (pc1.Ok, pc1.Detail));
         Assert.All(ended.Where(line => line.Machine.Name != "PC1"), line => Assert.True(line.Ok, line.Detail));
         Assert.True(rig.Pcs[0].Agent.Current.IsOn);
         Assert.False(sync.Lesson.IsOn);
+
+        using var poller = new ThumbnailPoller(
+            rig.Pcs[0].Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => sync.Lesson);
+        var thumbnails = 0;
+        poller.ThumbnailReceived += _ => Interlocked.Increment(ref thumbnails);
+        poller.Start();
+        await WaitUntil(() => Volatile.Read(ref thumbnails) >= 2); // its first try met the busy Agent
+        Assert.True(rig.Pcs[0].Agent.Current.IsOn);
+
+        busy.Free();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (rig.Pcs[0].Agent.Current.IsOn)
+        {
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30), "the end didn't reach PC1");
+            await Task.Delay(50);
+        }
+
+        Assert.Equal(sync.Lesson, rig.Pcs[0].Agent.Current);
+        Assert.True(clock.Elapsed < ThumbnailPoller.DefaultBusyRetryInterval + ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(5));
+        Assert.True(ThumbnailPoller.DefaultBusyRetryInterval <= TimeSpan.FromSeconds(15));
     }
 
     private static ClassFolderSync SyncWithLog(ClassSyncRig rig, FreeingLog log) => new(

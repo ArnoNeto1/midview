@@ -8,7 +8,7 @@ using Xunit;
 // whether this Master works the folders itself (Local) or through that PC
 // (Remote). Also the Agent messages it and the sync go by (ClassFolderClient),
 // and this PC's generation as the home (ClassHomeFileMaster), in temp files.
-public sealed class ClassHomeTrackerTests
+public sealed partial class ClassHomeTrackerTests
 {
     private const string ThisPc = ClassSyncRig.MachineName;
     private const string OtherPc = "PROF-2";

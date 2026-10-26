@@ -148,7 +148,7 @@ public static partial class ClassFolderText
         $"{(ok ? "✓" : "✗")} {name}" + (detail.Length > 0 ? $": {detail}" : string.Empty);
 
     // A PC busy with its student's folders when a start or an end reached it:
-    // this PC's poller hands it the lesson in a moment.
+    // this PC's poller hands it the lesson in a moment (ThumbnailPoller.DefaultBusyRetryInterval).
     public const string LessonBusy = "ocupado agora; o Midview tenta de novo em instantes";
 
     // After a start (started) or an end: how many PCs took it. offline: how
@@ -237,7 +237,9 @@ public static partial class ClassFolderText
         $"não foi possível ler, {Here(home)}, qual PC guarda as pastas das turmas: {reason}";
 
     // A line the home built about itself, as a colleague's PC shows it (home:
-    // the home's name); any other line as it is.
+    // the home's name); any other line as it is. Also a file a round couldn't
+    // bring in for the home's full disk: "a.docx (não há espaço livre
+    // suficiente neste computador)", and maybe " e mais 2" (Ruling 23).
     public static string Relayed(string detail, string home)
     {
         foreach (var said in new Func<string, string?, string>[] { ClassFolderUnreadable, HomeFileUnreadable })
@@ -248,7 +250,13 @@ public static partial class ClassFolderText
                 return said(detail[here.Length..], home);
             }
         }
-        return detail;
+
+        var full = $"({FileCollector.NoSpaceText})";
+        var at = detail.LastIndexOf(full, StringComparison.Ordinal);
+        var after = at < 0 ? string.Empty : detail[(at + full.Length)..];
+        return at >= 0 && (after.Length == 0 || after.StartsWith(" e mais ", StringComparison.Ordinal))
+            ? detail[..at] + $"({FileCollector.NoSpaceText.Replace(Here(null), Here(home), StringComparison.Ordinal)})" + after
+            : detail;
     }
 
     // --- Changes to the list ---

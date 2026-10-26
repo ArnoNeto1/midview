@@ -123,19 +123,21 @@ public sealed partial class ClassStore
 
     // A hand-over's files by where they go in Staging (and their sizes), on
     // each disk they go to: the first disk where they don't fit with keepFree
-    // to spare (what they need there, what it has free), or null when they
-    // fit on every one. The files root's disk goes by FreeBytes; the index
-    // root's and the lessons map's, when they are on another one, by theirs.
-    internal (long Needed, long Free)? ShortOfRoom(IEnumerable<(string Target, long Size)> files, long keepFree)
+    // to spare (what they need there, what it has free, and which disk when it
+    // isn't the files root's), or null when they fit on every one. The files
+    // root's disk goes by FreeBytes; the index root's and the lessons map's,
+    // when they are on another one, by theirs.
+    internal (long Needed, long Free, string? OtherDisk)? ShortOfRoom(IEnumerable<(string Target, long Size)> files, long keepFree)
     {
         var filesDisk = DiskOf(_filesRoot);
         foreach (var disk in files.GroupBy(file => DiskOf(file.Target), StringComparer.OrdinalIgnoreCase))
         {
             var needed = disk.Sum(file => file.Size);
-            var free = string.Equals(disk.Key, filesDisk, StringComparison.OrdinalIgnoreCase) ? FreeBytes() : FreeBytesOnDisk(disk.Key);
+            var isFilesDisk = string.Equals(disk.Key, filesDisk, StringComparison.OrdinalIgnoreCase);
+            var free = isFilesDisk ? FreeBytes() : FreeBytesOnDisk(disk.Key);
             if (free != long.MaxValue && needed > free - keepFree)
             {
-                return (needed, free);
+                return (needed, free, isFilesDisk ? null : disk.Key);
             }
         }
         return null;

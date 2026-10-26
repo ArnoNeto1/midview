@@ -312,7 +312,7 @@ public sealed partial class ClassFolderHandOver
             _totalBytes = plan.Sum(entry => entry.File.Size);
             if (_owner._store.ShortOfRoom(plan.Select(entry => (entry.Target, entry.File.Size)), KeepFreeBytes) is { } room)
             {
-                return Received.Failed(ClassFolderText.CopyNoRoom(room.Needed, room.Free));
+                return Received.Failed(ClassFolderText.CopyNoRoom(room.Needed, room.Free, room.OtherDisk));
             }
 
             try

@@ -34,7 +34,7 @@ public static class ClassHomeFileMaster
     public static ClassHome? ReadLastOtherHome(string? path = null) =>
         Load(path ?? Path).LastOtherHome is { } stored && stored.ToHome() is { } home && IsHome(home) ? home : null;
 
-    // Keeps the last other home seen. Throws if it can't be read or written.
+    // Keeps this PC's generation. Throws if it can't be read or written.
     public static void Write(long generation, string? path = null)
     {
         if (generation <= 0)
@@ -49,8 +49,11 @@ public static class ClassHomeFileMaster
         }
     }
 
-    // Keeps this PC's generation; writes nothing when that home is already
-    // the one on file. Throws if it can't be read or written.
+    // Keeps the last other home seen; writes nothing when that home is
+    // already the one on file. The same PC (its certificate and name) never
+    // goes back to an older generation (Ruling 23: a tracker's refresh that
+    // read the Agents before that PC took the room back, writing after): its
+    // generation stays, the rest is taken. Throws if it can't be read or written.
     public static void WriteLastOtherHome(ClassHome home, string? path = null)
     {
         if (!IsHome(home))
@@ -59,10 +62,12 @@ public static class ClassHomeFileMaster
         }
 
         path ??= Path;
-        var stored = StoredHome.Of(home);
         lock (Gate)
         {
             var file = Load(path);
+            var stored = StoredHome.Of(file.LastOtherHome is { } kept && IsSamePc(kept, home) && kept.Generation > home.Generation
+                ? home with { Generation = kept.Generation }
+                : home);
             if (file.LastOtherHome != stored)
             {
                 Save(path, file with { LastOtherHome = stored });
@@ -115,6 +120,10 @@ public static class ClassHomeFileMaster
     }
 
     private static readonly Stored None = new(null, null);
+
+    private static bool IsSamePc(StoredHome stored, ClassHome home) =>
+        string.Equals(stored.Thumbprint, home.Thumbprint, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(stored.Name, home.Name, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsHome(ClassHome home)
     {

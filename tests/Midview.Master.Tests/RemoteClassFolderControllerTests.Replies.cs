@@ -164,9 +164,19 @@ public sealed partial class RemoteClassFolderControllerTests
     {
         var certificates = Certificates.Shared;
         var unreadable = ClassFolderText.ClassFolderUnreadable("acesso negado");
+        // A file that couldn't come in for the home's full disk, as a round says it (Ruling 23).
+        var full = "a.docx (não há espaço livre suficiente neste computador) e mais 2";
         var scripted = new ScriptedHome
         {
-            Read = () => ScriptedHome.StateOf(OnNow) with { Pcs = new[] { new PcLineDto("PC1", nameof(PcSyncState.Failed), unreadable) } },
+            Read = () => ScriptedHome.StateOf(OnNow) with
+            {
+                Pcs = new[]
+                {
+                    new PcLineDto("PC1", nameof(PcSyncState.Failed), unreadable),
+                    new PcLineDto("PC2", nameof(PcSyncState.Failed), full),
+                    new PcLineDto("PC3", nameof(PcSyncState.Failed), "neste computador (não há espaço livre suficiente neste computador)"),
+                },
+            },
             Start = _ => new[] { new ResultLineDto("PC1", false, ClassFolderText.HomeFileUnreadable("acesso negado")) },
         };
         using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
@@ -175,7 +185,15 @@ public sealed partial class RemoteClassFolderControllerTests
         await remote.PollAsync();
         var started = await remote.StartAsync(Turma);
 
-        Assert.Equal("a pasta da turma no PC PROF-1 não pôde ser lida: acesso negado", remote.Pcs.Single().Detail);
+        Assert.Equal(
+            new[]
+            {
+                "a pasta da turma no PC PROF-1 não pôde ser lida: acesso negado",
+                "a.docx (não há espaço livre suficiente no PC PROF-1) e mais 2",
+                "neste computador (não há espaço livre suficiente no PC PROF-1)",
+            },
+            remote.Pcs.Select(pc => pc.Detail));
+        Assert.Contains($"({FileCollector.NoSpaceText})", full);
         Assert.Equal("não foi possível ler, no PC PROF-1, qual PC guarda as pastas das turmas: acesso negado", started.Single().Detail);
         // On the home itself, as it was.
         Assert.Equal("a pasta da turma neste computador não pôde ser lida: acesso negado", unreadable);

@@ -356,6 +356,9 @@ public sealed partial class ClassFolderHandOverTests
         // What it answers RemoteHandOverDone: stood down, with no classes to put aside, by default.
         public (bool Ok, string Detail) DoneAnswer { get; set; } = (true, string.Empty);
 
+        // What it answers RemoteTakeBack: refused, by default.
+        public (bool Ok, string Detail) TakeBackAnswer { get; set; } = (false, string.Empty);
+
         public void Dispose()
         {
             _listener.Stop();
@@ -382,9 +385,10 @@ public sealed partial class ClassFolderHandOverTests
                     {
                         using var channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _rig.Master);
                         var request = channel.Receive();
-                        if (request.Type == MessageType.RemoteHandOverDone)
+                        if (request.Type is MessageType.RemoteHandOverDone or MessageType.RemoteTakeBack)
                         {
-                            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(DoneAnswer.Ok, DoneAnswer.Detail)));
+                            var (ok, detail) = request.Type == MessageType.RemoteTakeBack ? TakeBackAnswer : DoneAnswer;
+                            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(ok, detail)));
                             continue;
                         }
                         _script(channel);
