@@ -35,13 +35,16 @@ public sealed partial class ClassFolderHost
     }
 
     // The name RemoteHandOver gives, to show the teacher: a computer name
-    // (NameIn) on one line, with no control or formatting character (a line
-    // break, a tab, a mark that turns text around); empty for anything else.
+    // (NameIn) on one line, with no control, formatting or separator
+    // character (a line break, a tab, a mark that turns text around); empty
+    // for anything else.
     internal static string TakerName(byte[] payload) =>
-        NameIn(payload)?.Trim() is { Length: > 0 } name
-        && !name.Any(c => char.IsControl(c) || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)
-            ? name
-            : string.Empty;
+        NameIn(payload)?.Trim() is { Length: > 0 } name && !name.Any(IsNotForOneLine) ? name : string.Empty;
+
+    private static bool IsNotForOneLine(char c) =>
+        char.IsControl(c)
+        || CharUnicodeInfo.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator;
 
     // A computer name in UTF-8 (1 to ClassHome.MaxNameLength characters); null for anything else.
     private static string? NameIn(byte[] payload)

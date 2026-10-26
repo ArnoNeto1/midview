@@ -196,7 +196,9 @@ public sealed partial class ClassFolderSync
     // isn't taken for "never the home". A refusal of either kind has a line for
     // every PC of the room. Busy: the PCs still busy after being asked twice.
     // Claims refused for another home (another PC claimed the room at the
-    // same moment) are settled before anything starts (SettleWithAnotherClaimAsync).
+    // same moment) are settled before anything starts (SettleWithAnotherClaimAsync),
+    // and take-overs refused for another home's lesson on there weighed
+    // against the room's newest lesson (AnotherHomesLessonOnAsync).
     private async Task<HomeClaim> ClaimHomeAsync()
     {
         long? onDisk;
@@ -263,9 +265,9 @@ public sealed partial class ClassFolderSync
         {
             KeepGeneration(claimed);
         }
-        if (await RivalsLessonStillOnAsync(answers).ConfigureAwait(false) is { } rival)
+        if (await AnotherHomesLessonOnAsync(reports, answers).ConfigureAwait(false) is { } otherHome)
         {
-            return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonOn(NameOf(rival))));
+            return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonOn(otherHome)));
         }
         return new HomeClaim(null, busy, claimed);
     }

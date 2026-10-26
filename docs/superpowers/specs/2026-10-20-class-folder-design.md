@@ -351,16 +351,16 @@ settled what this section left open; the reviews changed some of it:
   claim (never past the last tick a clock can show; no student PC's clock
   counts); a take-over must bring a newer one. The same PC is known under a
   new name (same certificate and generation) or a new certificate (same name).
-  Masters ask the Agents every 30 s and go by the newest, then the last name.
+  Masters ask every 30 s and when the window opens: newest, then last name.
 - **Becoming the home.** The first start in a lab makes its PC the home. A
-  PC that has seen another PC as the home never becomes it by starting a
-  lesson, only with "Guardar as pastas das turmas neste computador"; nor
-  does one whose own generation is older than a home it has seen. Two PCs
-  claiming at once settle it before any lesson goes out: the newer
-  generation (then the name that sorts last) takes the other's PCs back,
-  unless the other's lesson is on there (then nothing starts until it ends);
-  the other, or a PC holding none, starts nothing. A lesson a PC refuses for
-  a home outranking this one is ended on the PCs that took it, a second after.
+  PC that saw another as the home becomes it only with "Guardar as pastas
+  das turmas neste computador", as does one whose generation is older than
+  a home it saw. Two PCs claiming at once settle it before any lesson goes
+  out: the newer generation (then the last name) takes the other's PCs back;
+  the other, or a PC holding none, starts nothing. A start that finds another
+  home's lesson on a PC starts nothing while that lesson is the room's newest
+  (or can't be read); an older one only leaves that PC out. A lesson a PC
+  refuses for a home outranking this one is ended on the PCs that took it.
 - **Stragglers and refreshes.** A PC off during a take-over still names the
   old home: the home's next start, and its Master once per connection, claim
   it back (a lesson that came with the copied classes is ended there first),
@@ -371,7 +371,8 @@ settled what this section left open; the reviews changed some of it:
   home that never saw another, any lesson it doesn't know) is handed that
   end first. A lesson held while another PC is, or may be, the home (seen,
   named, or a PC's lesson newer) ends only on the PCs still in it, a second
-  after it; an Agent takes its home's start of that second, or the one before.
+  after it; an Agent takes its home's start of that second, or the one
+  before, over such an end.
 - **Set-aside files.** Those of a lesson the Master doesn't know stay on the
   PC (usually the other home's) until 60 days after it first saw them, then
   go to the student's Recycle Bin; a known lesson's come in, or are cleared
@@ -380,24 +381,24 @@ settled what this section left open; the reviews changed some of it:
 - **Busy Agents.** An Agent waits at most 10 s for its lesson lock, then says
   "busy" and applies nothing later; the Master asks again (at once, or in 10 s).
 - **Colleagues.** The home serves its window to a PC with its certificate or
-  one an online Agent trusts ("Dar acesso a um colega"): a yes kept 10
-  minutes, a no 30 seconds (a colleague's yes goes last); one round of the
-  room per teacher and per address at a time.
+  one an online Agent trusts ("Dar acesso a um colega"): a yes is kept 10 min,
+  a no 30 s, a yes last to go; one round per teacher and per address at once.
 - **The remote window.** The home is closed after three polls in a row found
   nobody (off, a new address or no firewall rule, the window says). Then only
   "Encerrar a aula" works, keeping the files, sent straight to the Agents; the
   home adopts it when it opens. Texts about its disk say "do PC <nome>".
 - **Taking the folders over.** Only with no lesson on, on either PC; none
-  starts on the old home from its copy until that settles. The copy arrives
-  into a staging folder and is checked (paths, sizes, free space) before
-  anything changes; "Cancelar" works until it goes in place. This PC's own
-  classes go to `Turmas (antes de <data>)`, the old home's to `Turmas
-  (passadas para <PC>)`; an old home with a lesson on lets go when it ends.
-  A lost claim answer is waited out; one that can't be told has the old home
-  take the room back, and only if that fails does the copy stay until the
-  Agents decide. Files the store doesn't list stay in the old home's copy.
-- **Switching modes.** A Master switches only when two readings in a row say
-  so (at once when the Agents name it, or it handed the folders over). It
+  starts on the old home from its copy until that settles. The copy is
+  checked in a staging folder (paths, sizes, free space) before anything
+  changes; "Cancelar" works until it goes in place. This PC's own classes go
+  to `Turmas (antes de <data>)`, the old home's to `Turmas (passadas para
+  <PC>)`; an old home with a lesson on lets go when it ends. A lost claim
+  answer is waited out; one that can't be told has the old home take the room
+  back, and only if that fails does the copy stay until the Agents decide.
+  Files the store doesn't list stay in the old home's copy.
+- **Switching modes.** A Master switches between working its own folders and
+  the home's only when two readings in a row say so (at once when the Agents
+  name it, or it handed the folders over). It
   never stands down while a lesson of its own is on that the room follows;
   once it ends (or a start backs out) it switches, its end handed a few
   minutes more to the PCs still in it. One the room left behind is ended,
@@ -415,12 +416,11 @@ settled what this section left open; the reviews changed some of it:
   fall outside the same-second rule; a hostile trusted teacher can push the
   generations to the ceiling (`class-home.json` on the Agents recovers). A
   start whose claims all found the Agents busy, and whose lesson every PC then
-  refuses, leaves a lesson on here with no PC in it until it is ended. A PC
-  that met the other's lesson at a contest starts nothing while it is on: if
-  that PC goes off with the lesson on, until its PCs end it with the day.
-  Closing a Master anyway while its copy awaits the taking PC can leave that
-  take-over undecided: the copy stays, nothing is deleted, the room decides
-  later, and the window says where the classes are.
+  refuses, leaves a lesson on here with no PC in it until it is ended. If the
+  other teacher PC goes off with its lesson on, this PC's starts are refused
+  until the PCs end that lesson with the day. Closing a Master anyway while
+  its copy awaits the taker can leave that take-over undecided: the copy
+  stays (nothing deleted; the window says where) until the room decides.
 
 ### Classes
 

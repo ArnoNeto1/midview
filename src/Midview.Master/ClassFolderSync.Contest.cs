@@ -18,11 +18,6 @@ namespace Midview.Master;
 // refuses it for a home that outranks this one.
 public sealed partial class ClassFolderSync
 {
-    // The PC whose lesson was on where this PC couldn't take its PCs back
-    // (SettleWithAnotherClaimAsync), and that lesson (the ones those PCs
-    // followed), until it is over. Under the lesson lock.
-    private (ClassHome Home, IReadOnlySet<Guid> Lessons)? _contestRival;
-
     // A start's claims were refused for another home (ClaimHomeAsync): the
     // Agents are asked again which home they keep. When that PC outranks
     // this one (Outranks), or no Agent keeps this PC, nothing starts: every
@@ -67,45 +62,52 @@ public sealed partial class ClassFolderSync
         {
             KeepGeneration(generation);
         }
-        var inItsLesson = answers.Where(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst)
-            .Select(answer => answer.Machine).ToList();
-        if (inItsLesson.Count > 0)
+        if (answers.Any(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst))
         {
             _log($"{rival.Name}'s lesson is on before this PC took its PCs back: nothing starts here until it ends.");
-            var lessons = await Task.WhenAll(inItsLesson.Select(machine => Task.Run(
-                () => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log)))).ConfigureAwait(false);
-            var on = lessons.Where(lesson => lesson is { IsOn: true }).Select(lesson => lesson!.LessonId).ToHashSet();
-            _contestRival = on.Count > 0 ? (rival, on) : null;
             return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonFirst(NameOf(rival))));
         }
         return new HomeClaim(
             null, busy.Union(answers.Where(answer => answer.Busy).Select(answer => Key(answer.Machine))).ToHashSet(), generation);
     }
 
-    // A start after one that met the rival's lesson (_contestRival): while a
-    // PC refuses a take-over for that lesson, still on there, and no online
-    // Agent says it ended, no lesson starts here (that PC never heard of this
-    // one, so the rival's lesson goes on): the rival, and every PC's line says
-    // to try once it ends. Null otherwise, and the rival forgotten: once that
-    // lesson ended, a PC still in it (off for its end) is a straggler of an
-    // older home, which leaves only that PC out.
-    private async Task<ClassHome?> RivalsLessonStillOnAsync(IReadOnlyList<ClaimAnswer> answers)
+    // A start some of whose take-overs were refused for a lesson on there
+    // ("Encerre a aula…": another home's, which never heard of this start):
+    // while the room's newest lesson, by SavedAt, is on and a PC that refused
+    // so follows it (the other teacher PC's lesson, or its next one), nothing
+    // starts here, as a second lesson would split the room; nor while such a
+    // PC's lesson can't be read (no start beside what can't be seen). The name
+    // of the home that PC keeps then, for every PC's line. Null otherwise: a
+    // lesson older than the room's newest, still on a PC that was off for its
+    // end, leaves only that PC out, as any PC still in an older home's lesson;
+    // so does one this PC knows is over (EndOfLessonOver: it came with the
+    // folders), which its pollers end there.
+    private async Task<string?> AnotherHomesLessonOnAsync(IReadOnlyList<HomeReport> reports, IReadOnlyList<ClaimAnswer> answers)
     {
-        if (_contestRival is not { } rival)
+        var refusing = answers.Where(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst)
+            .Select(answer => Key(answer.Machine)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (refusing.Count == 0)
         {
             return null;
         }
-        var followed = (await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false))
-            .Where(read => read.Lesson is { } lesson && rival.Lessons.Contains(lesson.LessonId)).ToList();
-        if (!followed.Any(read => !read.Lesson!.IsOn)
-            && answers.Any(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst
-                && followed.Any(read => read.Machine == answer.Machine)))
+        ClassHome? KeptBy(string key) =>
+            reports.FirstOrDefault(report => string.Equals(Key(report.Machine), key, StringComparison.OrdinalIgnoreCase))?.Home;
+        var lessons = (await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false))
+            .GroupBy(read => Key(read.Machine), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Lesson is { } followed ? EndOfLessonOver(followed, KeptBy(group.Key)) ?? followed : null,
+                StringComparer.OrdinalIgnoreCase);
+        var newest = ClassLessonOnAgents.Newest(lessons.Values, UnixNow());
+        var holding = refusing.FirstOrDefault(key => lessons.GetValueOrDefault(key) is not { } followed
+            || (newest is { IsOn: true } && followed.IsOn && followed.LessonId == newest.LessonId));
+        if (holding is null)
         {
-            _log($"{rival.Home.Name}'s lesson is still on where this PC couldn't take its PCs back: nothing starts here.");
-            return rival.Home;
+            return null;
         }
-        _contestRival = null;
-        return null;
+        var home = KeptBy(holding);
+        _log($"Another home's lesson is on where this PC couldn't take a PC back ({home?.Name}): nothing starts here.");
+        return home is null ? ClassHome.UnnamedText : NameOf(home);
     }
 
     private static string NameOf(ClassHome home) => home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;

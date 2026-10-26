@@ -282,8 +282,10 @@ public sealed partial class ClassFolderHostTests
     [Theory]
     [InlineData("PROF-2\r\nO PC LAB-01 confirmou")]
     [InlineData("PROF\t2")]
-    [InlineData("PROF-‮2")]
-    [InlineData("PROF-​2")]
+    [InlineData("PROF-\u202E2")]
+    [InlineData("PROF-\u200B2")]
+    [InlineData("PROF-2\u2028LAB-01")]
+    [InlineData("PROF-2\u2029LAB-01")]
     public void ATakersNameWithControlOrFormattingCharacters_IsNone(string name) =>
         Assert.Equal(string.Empty, ClassFolderHost.TakerName(Encoding.UTF8.GetBytes(name)));
 
