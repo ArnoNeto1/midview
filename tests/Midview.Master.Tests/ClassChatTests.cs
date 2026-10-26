@@ -8,6 +8,15 @@ using Xunit;
 
 public class ClassChatTests
 {
+    // For what only has to happen at some point: the chat opens and sends on
+    // the thread pool, which a loaded test run can be slow to give.
+    private static readonly TimeSpan Eventually = TimeSpan.FromSeconds(30);
+
+    // How long a held opening or line waits to be let go: longer than
+    // Eventually, so a chat that waited for one before going on to the
+    // others is still caught.
+    private static readonly TimeSpan HeldFor = TimeSpan.FromSeconds(60);
+
     [Fact]
     public async Task ConnectAsync_OpensTheChatOnEveryMachine()
     {
@@ -25,7 +34,7 @@ public class ClassChatTests
     [Fact]
     public async Task WhileConnecting_TheStatusSaysHowManyAreStillComing()
     {
-        var fakes = new FakeConnections();
+        using var fakes = new FakeConnections();
         // The first in the list is slow too: the others don't wait for it.
         var aluno1 = fakes.Hold("Aluno-1");
         var aluno3 = fakes.Hold("Aluno-3");
@@ -170,7 +179,7 @@ public class ClassChatTests
     [Fact]
     public async Task ALine_GoesToEveryMachineAtOnce()
     {
-        var fakes = new FakeConnections();
+        using var fakes = new FakeConnections();
         using var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
         await chat.ConnectAsync();
         foreach (var connection in fakes.Opened.Values)
@@ -206,7 +215,7 @@ public class ClassChatTests
     [Fact]
     public async Task Lines_ReachEachMachineInTheOrderTheyWereTyped()
     {
-        var fakes = new FakeConnections();
+        using var fakes = new FakeConnections();
         using var chat = new ClassChat(Machines("Aluno-1"), fakes.Open);
         await chat.ConnectAsync();
         var slow = fakes.Opened["Aluno-1"];
@@ -255,7 +264,7 @@ public class ClassChatTests
     [Fact]
     public async Task AMachineThatConnectsAfterDispose_IsClosedAtOnce()
     {
-        var fakes = new FakeConnections();
+        using var fakes = new FakeConnections();
         var aluno2 = fakes.Hold("Aluno-2");
         var chat = new ClassChat(Machines("Aluno-1", "Aluno-2"), fakes.Open);
         var connecting = chat.ConnectAsync();
@@ -290,10 +299,10 @@ public class ClassChatTests
         using var chat = new ClassChat(machines, machine => ChatConnection.Open(machine, masterCertificate, ports[machine.Name]));
         chat.LineReceived += replies.Enqueue;
 
-        await chat.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await chat.ConnectAsync().WaitAsync(Eventually);
         Assert.Equal("Conectado a 2 de 2 máquinas.", chat.Status);
 
-        Assert.Equal(2, await chat.SendAsync("Abram o exercício 2").WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(2, await chat.SendAsync("Abram o exercício 2").WaitAsync(Eventually));
         await WaitUntil(() => windows1.Window?.TeacherLines.Count == 1 && windows2.Window?.TeacherLines.Count == 1);
         Assert.Equal("Abram o exercício 2", windows1.Window!.TeacherLines[0]);
         Assert.Equal("Abram o exercício 2", windows2.Window!.TeacherLines[0]);
@@ -311,7 +320,7 @@ public class ClassChatTests
 
     private static async Task WaitUntil(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + Eventually;
         while (!condition())
         {
             Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the condition");
@@ -320,7 +329,9 @@ public class ClassChatTests
     }
 
     // Opens a FakeConnection per machine, from several threads at once.
-    private sealed class FakeConnections
+    // Dispose lets go of whatever is still held, so a test that fails first
+    // doesn't keep pool threads waiting.
+    private sealed class FakeConnections : IDisposable
     {
         private readonly ConcurrentDictionary<string, FakeConnection> _opened = new();
         private readonly ConcurrentDictionary<string, bool> _opening = new();
@@ -341,13 +352,25 @@ public class ClassChatTests
             _opening[machine.Name] = true;
             if (_held.TryGetValue(machine.Name, out var gate))
             {
-                gate.Wait(TimeSpan.FromSeconds(10));
+                gate.Wait(HeldFor);
             }
             if (Unreachable.TryGetValue(machine.Name, out var failure))
             {
                 throw failure;
             }
             return _opened[machine.Name] = new FakeConnection();
+        }
+
+        public void Dispose()
+        {
+            foreach (var gate in _held.Values)
+            {
+                gate.Set();
+            }
+            foreach (var connection in _opened.Values)
+            {
+                connection.SendReleased.Set();
+            }
         }
     }
 
@@ -393,7 +416,7 @@ public class ClassChatTests
             if (text == HeldLine)
             {
                 Holding = true;
-                SendReleased.Wait(TimeSpan.FromSeconds(10));
+                SendReleased.Wait(HeldFor);
             }
             if (Broken)
             {
