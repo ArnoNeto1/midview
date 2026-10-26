@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -239,7 +240,8 @@ public static partial class ClassFolderText
     // A line the home built about itself, as a colleague's PC shows it (home:
     // the home's name); any other line as it is. Also a file a round couldn't
     // bring in for the home's full disk: "a.docx (não há espaço livre
-    // suficiente neste computador)", and maybe " e mais 2" (Ruling 23).
+    // suficiente neste computador)", and maybe " e mais 2" (Ruling 23), with
+    // nothing else after it.
     public static string Relayed(string detail, string home)
     {
         foreach (var said in new Func<string, string?, string>[] { ClassFolderUnreadable, HomeFileUnreadable })
@@ -254,10 +256,13 @@ public static partial class ClassFolderText
         var full = $"({FileCollector.NoSpaceText})";
         var at = detail.LastIndexOf(full, StringComparison.Ordinal);
         var after = at < 0 ? string.Empty : detail[(at + full.Length)..];
-        return at >= 0 && (after.Length == 0 || after.StartsWith(" e mais ", StringComparison.Ordinal))
+        return at >= 0 && (after.Length == 0 || MoreFiles.IsMatch(after))
             ? detail[..at] + $"({FileCollector.NoSpaceText.Replace(Here(null), Here(home), StringComparison.Ordinal)})" + after
             : detail;
     }
+
+    // What a round's failure line ends with when more files failed (ClassFolderSync.Round.cs).
+    private static readonly Regex MoreFiles = new(@"^ e mais [0-9]+\z", RegexOptions.CultureInvariant);
 
     // --- Changes to the list ---
 

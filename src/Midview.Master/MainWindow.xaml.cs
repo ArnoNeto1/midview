@@ -94,6 +94,7 @@ public partial class MainWindow : Window
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
         _classSync = StartClassFolder();
+        StartClassHome();
 
         foreach (var machine in LoadRoster())
         {
@@ -1209,7 +1210,7 @@ public partial class MainWindow : Window
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
             appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
             thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
-            classLesson: () => _classSync.Lesson);
+            classLesson: LessonForPollers, classHomeClaim: StragglerClaim);
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>
@@ -1325,7 +1326,9 @@ public partial class MainWindow : Window
         }
         _pollers.Clear();
 
-        // The lesson goes on: the next Master to open carries on with it.
+        // The lesson goes on: the next Master to open carries on with it. The
+        // host closes first, so no colleague's command reaches a sync stopping.
+        _classRole.Dispose();
         _classSync.Dispose();
     }
 }

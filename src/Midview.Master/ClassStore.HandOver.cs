@@ -143,6 +143,30 @@ public sealed partial class ClassStore
         return null;
     }
 
+    // The folders a take-over left beside the files root, by name in order:
+    // this PC's own earlier classes ("Turmas (antes de …)", which a take-over
+    // killed midway or left undecided may also leave) and a copy it gave to
+    // another PC ("Turmas (passadas para …)"). The window doesn't show them;
+    // the Master says where they are. None when they can't be listed.
+    public IReadOnlyList<string> AsideFolders()
+    {
+        var root = Path.GetFileName(FilesRootPath);
+        var starts = new[] { ClassFolderHandOver.BeforeWhyStart, ClassFolderHandOver.PassedToWhyStart }
+            .Select(why => $"{root} ({why}").ToList();
+        try
+        {
+            return Directory.EnumerateDirectories(Path.GetDirectoryName(FilesRootPath) ?? FilesRootPath)
+                .Select(Path.GetFileName).OfType<string>()
+                .Where(name => starts.Any(start => name.StartsWith(start, StringComparison.OrdinalIgnoreCase)))
+                .Order(StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
     // What an earlier hand-over left half received, if anything. Never throws: what can't be removed is logged.
     internal void DiscardStaging()
     {

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO;
 using System.Windows;
 using Midview.Protocol;
 
@@ -8,6 +9,9 @@ namespace Midview.Master;
 // One store and one sync for the window's whole life: the sync keeps the
 // class folder the same on every PC while a lesson is on, whether or not its
 // window is open, and the toolbar button shows the class under its label.
+// Which teacher PC keeps the class folders, and so what the window works
+// (this PC's own store, or the home's through a remote controller), is
+// ClassFolderRole's (MainWindow.ClassHome.cs).
 public partial class MainWindow
 {
     private readonly ClassStore _classStore = new(
@@ -21,6 +25,13 @@ public partial class MainWindow
     // tiles themselves are the UI thread's only).
     private IReadOnlyList<KnownMachine> _roster = Array.Empty<KnownMachine>();
     private readonly ConcurrentDictionary<string, bool> _online = new(StringComparer.OrdinalIgnoreCase);
+
+    // The window while it is open (one at a time: ShowOnce). UI thread only.
+    private ClassFolderWindow? _classWindow;
+
+    // Where the classes a take-over left aside are (ClassFolderText.AsideNote),
+    // read once at the start, said in the window; null for none.
+    private string? _classAsideNote;
 
     // Before the tiles: their pollers hand the lesson to each machine's Agent.
     private ClassFolderSync StartClassFolder()
@@ -36,29 +47,81 @@ public partial class MainWindow
     private bool IsOnline(KnownMachine machine) =>
         _online.TryGetValue(machine.SessionThumbprint, out var online) && online;
 
-    // The class of the lesson on, under the button's label.
+    // The class of the lesson on, under the button's label: this PC's, or,
+    // when another teacher PC keeps the class folders, that PC's.
     private void ShowClassLesson()
     {
-        var lesson = _classSync.Lesson;
+        var lesson = _classRole.ShownLesson;
         ClassFolderButton.Caption = lesson.IsOn ? lesson.Turma : string.Empty;
     }
 
     // After every change to _tiles.
     private void PublishRoster() => Volatile.Write(ref _roster, _tiles.Select(tile => tile.Machine).ToList());
 
-    private void PublishPresence(MachineTile tile) =>
-        _online[tile.Machine.SessionThumbprint] = tile.Presence == TilePresence.Online;
-
-    // What the window works: this PC's store and sync. One for the window's
-    // whole life, like them, so every command goes through its one-at-a-time
-    // gate whichever window asks. Made on the UI thread, at the first opening.
-    private LocalClassFolderController? _classController;
-
-    // For the whole room, whichever machines are in it, like "Agendar".
-    private void OnClassFolderClicked(object sender, RoutedEventArgs e) =>
-        ShowOnce("pasta-da-turma", Array.Empty<KnownMachine>(), () => new ClassFolderWindow(
-            _classController ??= new LocalClassFolderController(_classStore, _classSync, () => Volatile.Read(ref _roster), IsOnline))
+    // A machine answering: until the room has been asked, it is asked again soon (ClassFolderRole).
+    private void PublishPresence(MachineTile tile)
+    {
+        var online = tile.Presence == TilePresence.Online;
+        _online[tile.Machine.SessionThumbprint] = online;
+        if (online)
         {
-            Owner = this,
+            _classRole.MachineAnswered();
+        }
+    }
+
+    // For the whole room, whichever machines are in it, like "Agendar". The
+    // window works what ClassFolderRole says now; a remote controller asks the
+    // home for its state only while a window shows it.
+    private void OnClassFolderClicked(object sender, RoutedEventArgs e) =>
+        ShowOnce("pasta-da-turma", Array.Empty<KnownMachine>(), () =>
+        {
+            var controller = _classRole.Controller;
+            var window = new ClassFolderWindow(controller, _classHandOver, _classAsideNote) { Owner = this };
+            (controller as RemoteClassFolderController)?.Start();
+            _classWindow = window;
+            window.Closed += (_, _) => OnClassFolderWindowClosed(window);
+            // Plan decision 8: the room is asked again as the window opens.
+            _classRole.RefreshSoon();
+            return window;
         });
+
+    // Closed: no remote controller polls for it, and those given up meanwhile go (Task 5 note: only now).
+    private void OnClassFolderWindowClosed(ClassFolderWindow window)
+    {
+        (window.Controller as RemoteClassFolderController)?.Stop();
+        (_classRole.Controller as RemoteClassFolderController)?.Stop();
+        if (ReferenceEquals(_classWindow, window))
+        {
+            _classWindow = null;
+        }
+        _classRole.ReleaseRetired();
+    }
+
+    // Every change of ClassFolderRole: the lesson under the button, and the
+    // window, when open, given what to work now (it takes it once nothing it
+    // started is running); the remote controller it gives up stops asking.
+    private void OnClassRoleChanged()
+    {
+        ShowClassLesson();
+        if (_classWindow is not { } window)
+        {
+            _classRole.ReleaseRetired();
+            return;
+        }
+        var controller = _classRole.Controller;
+        if (!ReferenceEquals(window.Controller, controller))
+        {
+            (window.Controller as RemoteClassFolderController)?.Stop();
+            (controller as RemoteClassFolderController)?.Start();
+        }
+        // Even the one it has: one given it meanwhile and not taken yet is then not taken.
+        window.Rebind(controller);
+    }
+
+    // The folders beside the class folders that a take-over left (ClassStore.AsideFolders).
+    private async Task ReadAsideNoteAsync()
+    {
+        var folders = await Task.Run(_classStore.AsideFolders);
+        _classAsideNote = ClassFolderText.AsideNote(folders, Path.GetDirectoryName(ClassStore.DefaultFilesRoot) ?? string.Empty);
+    }
 }

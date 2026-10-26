@@ -107,6 +107,11 @@ const
   PortaConvite = '28902';
   RegraConviteTcp = 'MidviewProfessorConvite';
   RegraConviteUdp = 'MidviewProfessorConviteBusca';
+  { "Pasta da turma" with two teacher PCs in one lab: the teacher's program
+    that keeps the class folders listens here for the other teacher PCs
+    (ClassFolderRemote.Port). }
+  PortaPastaDaTurma = '28903';
+  RegraPastaDaTurma = 'MidviewProfessorPastaDaTurma';
 
 var
   PaginaTipo: TInputOptionWizardPage;
@@ -210,24 +215,32 @@ begin
 end;
 
 { "add rule" never replaces a rule with the same name, so they are deleted
-  first (deleting one that isn't there just fails, harmlessly). }
+  first (deleting one that isn't there just fails, harmlessly). The class
+  folders' rule goes with the invite's. }
 procedure ApagarRegrasDoConvite;
 begin
   RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteTcp + '"');
   RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteUdp + '"');
+  RodarNetsh('advfirewall firewall delete rule name="' + RegraPastaDaTurma + '"');
+end;
+
+{ Coming in to this program only, from the local network only, on that port. }
+function RestricaoDaPorta(const Porta: String): String;
+begin
+  Result := ' dir=in action=allow localport=' + Porta +
+    ' program="' + ExpandConstant('{app}\Midview.Master.exe') + '" remoteip=localsubnet profile=any';
 end;
 
 { The Master runs without administrator rights, so it can't open its own
-  port: the setup does, for this program and the local network only. }
+  ports: the setup does, for this program and the local network only. The
+  invite's ("Dar acesso a um colega") and the class folders' (another teacher
+  PC working this one's "Pasta da turma") are made together. }
 function CriarRegrasDoConvite: Boolean;
-var
-  Restricao: String;
 begin
   ApagarRegrasDoConvite;
-  Restricao := ' dir=in action=allow localport=' + PortaConvite +
-    ' program="' + ExpandConstant('{app}\Midview.Master.exe') + '" remoteip=localsubnet profile=any';
-  Result := RodarNetsh('advfirewall firewall add rule name="' + RegraConviteTcp + '" protocol=TCP' + Restricao) and
-    RodarNetsh('advfirewall firewall add rule name="' + RegraConviteUdp + '" protocol=UDP' + Restricao);
+  Result := RodarNetsh('advfirewall firewall add rule name="' + RegraConviteTcp + '" protocol=TCP' + RestricaoDaPorta(PortaConvite)) and
+    RodarNetsh('advfirewall firewall add rule name="' + RegraConviteUdp + '" protocol=UDP' + RestricaoDaPorta(PortaConvite)) and
+    RodarNetsh('advfirewall firewall add rule name="' + RegraPastaDaTurma + '" protocol=TCP' + RestricaoDaPorta(PortaPastaDaTurma));
 end;
 
 function DescreverFalha(const ArquivoDeErro: String; Codigo: Integer): String;
@@ -327,8 +340,8 @@ begin
     Result := 'Não foi possível parar o Midview desta máquina: ' + DescreverFalha(ArquivoDeErro, Codigo);
 end;
 
-{ Once the files are in place. Professor: open the invite's port. Aluno:
-  set up and start the service. }
+{ Once the files are in place. Professor: open the ports of the invite and
+  of the class folders. Aluno: set up and start the service. }
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ArquivoDeErro: String;
@@ -338,8 +351,9 @@ begin
     Exit;
   if EhProfessor then begin
     if not CriarRegrasDoConvite then
-      SuppressibleMsgBox('O Midview Professor foi instalado, mas a regra do firewall não pôde ser criada: ' +
-        '"Dar acesso a um colega" não vai funcionar neste computador. Rode o instalador de novo.',
+      SuppressibleMsgBox('O Midview Professor foi instalado, mas as regras do firewall não puderam ser criadas: ' +
+        '"Dar acesso a um colega" não vai funcionar neste computador, e a "Pasta da turma" dele não vai poder ' +
+        'ser usada de outro PC de professor. Rode o instalador de novo.',
         mbError, MB_OK, IDOK);
     Exit;
   end;
@@ -376,8 +390,8 @@ begin
       'Para trazer as máquinas, instale o Midview Aluno nelas e clique em "Máquinas da sala" > "Procurar na rede".';
 end;
 
-{ Professor: close the invite's port. Aluno: undo what a lesson left and
-  remove the service, before the files go. }
+{ Professor: close the ports of the invite and of the class folders. Aluno:
+  undo what a lesson left and remove the service, before the files go. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Argumentos, ArquivoDeErro: String;

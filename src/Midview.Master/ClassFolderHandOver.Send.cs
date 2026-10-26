@@ -114,15 +114,21 @@ public sealed partial class ClassFolderHandOver
     // refuses once it stood down here.
     internal async Task<(bool Ok, string Detail)> HandedOverAsync(string name, string senderThumbprint)
     {
+        (bool Ok, string Detail) answer;
         await _giving.WaitAsync().ConfigureAwait(false);
         try
         {
-            return await HandOver(name, senderThumbprint).ConfigureAwait(false);
+            answer = await HandOver(name, senderThumbprint).ConfigureAwait(false);
         }
         finally
         {
             _giving.Release();
         }
+        if (answer.Ok)
+        {
+            RaiseChanged(); // stood down: this PC works the folders through the new home now
+        }
+        return answer;
     }
 
     // HandedOverAsync's work, under _giving.
@@ -156,7 +162,7 @@ public sealed partial class ClassFolderHandOver
             return (false, ClassFolderText.LetsGoAfterTheLesson(_machineName, lesson.Turma));
         }
 
-        _handedOver = true;
+        KeepHandedOver(true);
         try
         {
             ClassHomeFileMaster.WriteLastOtherHome(newHome, _homePath);

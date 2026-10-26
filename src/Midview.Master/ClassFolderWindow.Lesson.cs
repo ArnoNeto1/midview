@@ -156,6 +156,7 @@ public partial class ClassFolderWindow
         return _controller.LastEndProblems.Select(problem => $"✗ {where}: {problem}");
     }
 
+    // Over, a controller MainWindow gave the window meanwhile is taken (Rebind).
     private void SetBusy(bool busy, string? progress = null)
     {
         _busy = busy;
@@ -164,6 +165,10 @@ public partial class ClassFolderWindow
             ShowResults(progress, Array.Empty<string>());
         }
         UpdateButtons();
+        if (!busy)
+        {
+            TakeNextController();
+        }
     }
 
     private void ShowResults(string headline, IEnumerable<string> lines)

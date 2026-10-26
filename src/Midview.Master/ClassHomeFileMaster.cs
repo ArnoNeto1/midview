@@ -7,15 +7,16 @@ namespace Midview.Master;
 // What this teacher PC knows of the class folders' home (plan Rulings 9, 11
 // and 12), kept next to the classroom list (MasterData.Folder): its own
 // generation as the home (ClassHome.Generation), when it became the home in
-// UTC ticks on its own clock, which its claims carry ever after; and the last
+// UTC ticks on its own clock, which its claims carry ever after; the last
 // other PC it saw as the home, so that a PC that was never the home but saw
 // another one never becomes the home by starting a lesson while only Agents
 // with no home are on (only by taking the folders over), and goes on working
-// through that PC. Written whole through a temp file, so a crash never leaves
-// half of it. A file that isn't there, or isn't one, means neither (this PC
-// was never the home and saw none); a file that is there but can't be read
-// right now is tried once more after a moment, then reading it throws
-// (IOException or UnauthorizedAccessException) rather than pass for neither.
+// through that PC; and whether it handed the folders over. Written whole
+// through a temp file, so a crash never leaves half of it. A file that isn't
+// there, or isn't one, means none of these (this PC was never the home, saw
+// none and handed nothing over); a file that is there but can't be read right
+// now is tried once more after a moment, then reading it throws (IOException
+// or UnauthorizedAccessException) rather than pass for none.
 // path: elsewhere than Path (a test's folder).
 public static class ClassHomeFileMaster
 {
@@ -71,6 +72,26 @@ public static class ClassHomeFileMaster
             if (file.LastOtherHome != stored)
             {
                 Save(path, file with { LastOtherHome = stored });
+            }
+        }
+    }
+
+    // Whether this PC handed the class folders over (it stood down for the
+    // PC that took them) and hasn't taken them over since: it takes no room
+    // back (ClassFolderHandOver.TakeBackAsync), also once its Master is opened
+    // again (Task 7). Throws if the file can't be read.
+    public static bool ReadHandedOver(string? path = null) => Load(path ?? Path).HandedOver == true;
+
+    // Keeps whether it did. Throws if it can't be read or written.
+    public static void WriteHandedOver(bool handedOver, string? path = null)
+    {
+        path ??= Path;
+        lock (Gate)
+        {
+            var file = Load(path);
+            if ((file.HandedOver == true) != handedOver)
+            {
+                Save(path, file with { HandedOver = handedOver ? true : null });
             }
         }
     }
@@ -154,7 +175,8 @@ public static class ClassHomeFileMaster
         File.Move(tempPath, path, overwrite: true);
     }
 
-    private sealed record Stored(long? Generation, StoredHome? LastOtherHome);
+    // HandedOver: null in a file from before it was kept (none handed over).
+    private sealed record Stored(long? Generation, StoredHome? LastOtherHome, bool? HandedOver = null);
 
     private sealed record StoredHome(string Thumbprint, string Name, string Address, int Port, long Generation)
     {

@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-public class ClassFolderTextTests
+public partial class ClassFolderTextTests
 {
     private const long KB = 1024;
     private const long MB = 1024 * KB;

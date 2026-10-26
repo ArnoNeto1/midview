@@ -23,6 +23,18 @@ internal static class ClassLessonOnAgents
         return lessons.OfType<ClassLesson>().Where(lesson => lesson.SavedAt <= horizon).MaxBy(lesson => lesson.SavedAt);
     }
 
+    // The newest lesson those machines' Agents follow (Newest), each asked on
+    // a thread of its own, the caller's blocked meanwhile: what the toolbar
+    // of a PC that isn't the home shows (ClassFolderRole). Null for none.
+    public static ClassLesson? NewestOf(
+        IEnumerable<KnownMachine> machines, X509Certificate2 masterCertificate, int agentPort, Action<string> log, long unixNow) =>
+        Newest(
+            Task.WhenAll(machines.Select(machine => Task.Factory.StartNew(
+                    () => Read(machine, masterCertificate, agentPort, log), CancellationToken.None,
+                    TaskCreationOptions.LongRunning, TaskScheduler.Default)))
+                .GetAwaiter().GetResult(),
+            unixNow);
+
     // The lesson the machine's Agent follows; null when it gave no answer or
     // is from before the class folder.
     public static ClassLesson? Read(KnownMachine machine, X509Certificate2 masterCertificate, int agentPort, Action<string> log)

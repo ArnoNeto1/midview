@@ -84,14 +84,19 @@ public sealed partial class ClassFolderHost : IDisposable
     // The port it listens on (the one asked for, or the one the system gave for 0).
     public int Port { get; }
 
+    // Where Open listens when it isn't told: every address. As MasterData.Folder,
+    // only a tool that runs Master against made-up machines points it elsewhere
+    // (loopback: nothing outside this PC reaches it, and Windows asks nothing).
+    public static IPAddress DefaultAddress { get; set; } = IPAddress.Any;
+
     // How long a client has for the handshake and its request together, and to take the answer.
     internal TimeSpan ReadTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     internal TimeSpan CommandTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
-    // Starts listening on every address (address: one only, for the tests)
-    // and serving on the thread pool, never on the caller's context (Master
-    // calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync
+    // Starts listening on every address (DefaultAddress; address: one only,
+    // for the tests) and serving on the thread pool, never on the caller's
+    // context (Master calls this on its UI thread). isTrusted: ColleagueTrust.IsTrustedAsync
     // (the client's thumbprint and the address it came from). handOver: this
     // PC's, to give the class folders to a colleague's PC taking them over
     // (none: that is refused as a request it doesn't know).
@@ -103,7 +108,7 @@ public sealed partial class ClassFolderHost : IDisposable
         ClassFolderHandOver? handOver = null)
     {
         log ??= message => System.Diagnostics.Trace.WriteLine("ClassFolderHost: " + message);
-        var tcp = new TcpListener(address ?? IPAddress.Any, port);
+        var tcp = new TcpListener(address ?? DefaultAddress, port);
         try
         {
             tcp.ExclusiveAddressUse = true;

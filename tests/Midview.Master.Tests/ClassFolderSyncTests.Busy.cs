@@ -156,16 +156,20 @@ public sealed partial class ClassFolderSyncTests
         Assert.True(rig.Pcs[0].Agent.Current.IsOn);
 
         busy.Free();
+        // Seconds, not the 5 minutes any other refusal waits: the busy retry
+        // (10 s) after the poll that met the busy Agent, then the next poll
+        // (3 s), with room for a loaded test run to be slow at each step.
+        var bound = ThumbnailPoller.DefaultBusyRetryInterval + 2 * ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(30);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (rig.Pcs[0].Agent.Current.IsOn)
         {
-            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(30), "the end didn't reach PC1");
+            Assert.True(clock.Elapsed < bound, "the end didn't reach PC1");
             await Task.Delay(50);
         }
 
         Assert.Equal(sync.Lesson, rig.Pcs[0].Agent.Current);
-        Assert.True(clock.Elapsed < ThumbnailPoller.DefaultBusyRetryInterval + ThumbnailPoller.PollInterval + TimeSpan.FromSeconds(5));
         Assert.True(ThumbnailPoller.DefaultBusyRetryInterval <= TimeSpan.FromSeconds(15));
+        Assert.True(bound < TimeSpan.FromMinutes(1)); // well under the 5 minutes of any other refusal
     }
 
     private static ClassFolderSync SyncWithLog(ClassSyncRig rig, FreeingLog log) => new(

@@ -340,6 +340,67 @@ without the two getting in each other's way. Decided with the owner:
 - Every other Midview function on the owner's support PC is unchanged: it
   stays a full teacher PC.
 
+#### Revision (as built)
+
+Plan `docs/superpowers/plans/2026-10-21-class-folder-two-teacher-pcs.md`
+settled what this section left open; the reviews changed some of it:
+
+- **Which PC is the home: generations, not a majority.** The home is a
+  teacher PC's certificate and computer name, plus its generation: when it
+  became the home (UTC ticks on its own clock). The Agents keep the claim
+  with the newest generation; a take-over must bring a newer one, so an old
+  home can never undo a newer take-over. The same PC is recognised under a
+  new name (same certificate and generation) or a new certificate (same
+  name). Every Master asks the online Agents which home they keep, every 30
+  seconds and when the window opens, and goes by the newest one reported.
+- **Becoming the home.** The first start in a lab makes its PC the home. A
+  PC that has seen another PC as the home never becomes it by starting a
+  lesson, only with "Guardar as pastas das turmas neste computador"; nor
+  does one whose own generation is older than a home it has seen.
+- **Stragglers.** A student PC that was off during a take-over still names
+  the old home. The home's next start, and its pollers as each PC comes
+  online, claim it back with the home's generation; an Agent refuses that
+  while it follows a lesson of the home it names.
+- **Busy Agents.** An Agent waits at most 10 seconds for its lesson lock; then
+  it answers "busy" and applies nothing later. The Master asks a busy Agent
+  once more at a start, and hands it a lesson again about 10 seconds later.
+- **Colleagues.** The home serves its window to a teacher PC with its own
+  certificate, or one that an online Agent of the room trusts (given access
+  with "Dar acesso a um colega"). A yes is kept 10 minutes and a no 30
+  seconds; a stranger can't make the home ask the room about many
+  certificates at once.
+- **The remote window.** The home counts as closed only after three polls
+  in a row found nobody there. Closed, only "Encerrar a aula" works, keeping
+  the files, sent straight to the Agents; the home adopts that end when it
+  opens again. Texts about the home's disk and Recycle Bin say "do PC
+  <nome>".
+- **Taking the folders over.** Only with no lesson on, on either PC. The copy
+  arrives into a staging folder and is checked (paths, sizes, free space)
+  before anything changes; "Cancelar" works until the copy goes in place.
+  This PC's own classes go to `Turmas (antes de <data>)`, the old home's to
+  `Turmas (passadas para <PC>)`; an old home with a lesson on lets go when
+  that lesson ends. An Agent whose answer to the claim is lost is waited out
+  and asked again; when one can't be told at all, the old home takes the
+  room back and nothing changes, and only if that fails too does the copy
+  stay until that PC is back and the Agents decide. Files the store doesn't
+  list (hidden, too big, odd names) stay in the old home's copy, and the
+  result says how many.
+- **Switching modes.** A Master changes between working the folders itself
+  and working the home's only when two readings in a row say so (at once
+  when the Agents name it as the home, or it handed the folders over). It never
+  stands down while a lesson of its own is on that the room still follows
+  (it keeps the folders, and its own window, until that lesson ends); a
+  lesson of its own that the room left behind is ended on that PC alone,
+  keeping the files. The listener for colleagues is open only while the PC
+  is the home or no PC is; the window switches by itself after a take-over,
+  on both PCs. The Master doesn't close while a take-over runs, and says
+  once, in the window, where classes set aside by a take-over are.
+- **Firewall.** The teacher setup adds the rule `MidviewProfessorPastaDaTurma`
+  (TCP 28903, this program only, local network only) with the invite's
+  rules, and removes it with them. The Master never opens the firewall
+  itself; without the rule, the remote window says the home's setup must be
+  run again.
+
 ### Classes
 
 - The list of classes is the folders under `Documents\Midview\Turmas`.

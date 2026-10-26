@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:Midview.Master"
         Title="Midview - Sala de aula" Height="760" Width="1530"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
-        Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
+        Closing="OnWindowClosing" Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
     <DockPanel>
         <!-- Grouped like the actions they hold; one row from about 1510 px wide,
              and whole groups move to a second row on a narrower window. -->

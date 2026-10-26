@@ -114,10 +114,11 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 // no copy to give back and nobody to ask: undecided, it leaves this PC's own
 // classes as they are, keeps no generation, and the room's Agents decide.
 //
-// In five files: this one (taking over), ClassFolderHandOver.Claim.cs (the
+// In six files: this one (taking over), ClassFolderHandOver.Claim.cs (the
 // Agents), ClassFolderHandOver.TakeBack.cs (an undecided take-over given back),
-// ClassFolderHandOver.Send.cs (giving, on the home) and
-// ClassFolderHandOver.Receive.cs (the copy arriving, checked).
+// ClassFolderHandOver.Send.cs (giving, on the home),
+// ClassFolderHandOver.Receive.cs (the copy arriving, checked) and
+// ClassFolderHandOver.Busy.cs (what the Master goes by while one runs, and after).
 public sealed partial class ClassFolderHandOver
 {
     // What a take-over leaves free on this PC's disk at least: Windows and the PCs' files need room too.
@@ -247,7 +248,7 @@ public sealed partial class ClassFolderHandOver
             }
             stage.Value = Stage.Claimed;
             KeepGeneration(claimed.Generation);
-            _handedOver = false;
+            KeepHandedOver(false);
             _log($"This PC took the class folders over from {home}, which didn't answer, with generation {claimed.Generation}.");
             return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
         },
@@ -305,6 +306,7 @@ public sealed partial class ClassFolderHandOver
                         _sync.EndTakeOver();
                     }
                     Volatile.Write(ref _taking, 0);
+                    RaiseChanged();
                 }
             },
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -375,7 +377,7 @@ public sealed partial class ClassFolderHandOver
         }
         stage.Value = Stage.Claimed;
         KeepGeneration(claimed.Generation);
-        _handedOver = false;
+        KeepHandedOver(false);
         _log($"This PC took the class folders over from {name} with generation {claimed.Generation}.");
 
         var text = new StringBuilder(ClassFolderText.TookOver(received.Classes, received.Files));
@@ -439,14 +441,14 @@ public sealed partial class ClassFolderHandOver
     }
 
     // Where this PC's own earlier store goes: "antes de 20-10-2026 1330".
-    private string BeforeWhy() => "antes de " + _localNow().ToString("dd-MM-yyyy HHmm", CultureInfo.InvariantCulture);
+    private string BeforeWhy() => BeforeWhyStart + _localNow().ToString("dd-MM-yyyy HHmm", CultureInfo.InvariantCulture);
 
     // Where the old home's copy goes on it: "passadas para PROF-2" (name: as
     // the room's Agents recorded the new home; never empty).
     private static string PassedToWhy(string name)
     {
         var safe = FileNames.Safe(name.Trim());
-        return "passadas para " + (safe.Length > 0 && ClassFolderRules.IsAddressable(safe) ? safe : "outro PC");
+        return PassedToWhyStart + (safe.Length > 0 && ClassFolderRules.IsAddressable(safe) ? safe : "outro PC");
     }
 
     // RemoteHandOverDone to the old home: what it answered (whether it stood

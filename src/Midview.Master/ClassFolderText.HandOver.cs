@@ -235,4 +235,29 @@ public static partial class ClassFolderText
 
     // The home PC's Midview answers again since the window asked about it closed: asked again, its classes can come.
     public static string HomeAnswersAgain(string name) => $"O Midview do PC {name} voltou a responder. Tente de novo.";
+
+    // Closing the Master while a take-over, a hand-over or a take-back runs (ClassFolderHandOver.IsBusy).
+    public const string HandOverStillRunning =
+        "As pastas das turmas estão passando de um computador para outro. Espere a troca terminar para fechar o Midview.";
+
+    // Said once in the window when a take-over left classes aside, beside the
+    // class folders (folders: their names; where: the folder they are in).
+    // Null for none.
+    public static string? AsideNote(IReadOnlyList<string> folders, string where) => folders.Count switch
+    {
+        0 => null,
+        1 => $"Há turmas guardadas à parte na pasta \"{folders[0]}\", em {where}. "
+            + "Esta janela não mostra essas turmas: abra a pasta no Explorador de Arquivos para ver ou copiar os arquivos.",
+        _ => $"Há turmas guardadas à parte nas pastas {Quoted(folders)}, em {where}. "
+            + "Esta janela não mostra essas turmas: abra as pastas no Explorador de Arquivos para ver ou copiar os arquivos.",
+    };
+
+    // "\"A\" e \"B\"", "\"A\", \"B\" e \"C\"", "\"A\", \"B\", \"C\" e mais 2".
+    private static string Quoted(IReadOnlyList<string> folders)
+    {
+        var shown = folders.Take(3).Select(folder => $"\"{folder}\"").ToList();
+        return folders.Count > 3
+            ? $"{string.Join(", ", shown)} e mais {Count(folders.Count - 3)}"
+            : $"{string.Join(", ", shown.Take(shown.Count - 1))} e {shown[^1]}";
+    }
 }

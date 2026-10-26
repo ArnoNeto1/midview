@@ -18,7 +18,8 @@ namespace Midview.Master;
 // it is (Ruling 20) until that Agent answers.
 //
 // The old home is still the home (Ruling 22) while it handed nothing over
-// since it was, an online Agent names it, and neither an online Agent nor the
+// since it was (kept on file: also once its Master is opened again), an
+// online Agent names it, and neither an online Agent nor the
 // last other home it saw names another PC newer than it (the PC asking, only
 // when newer than what it gave up). It believes a generation given up no
 // further ahead than a day of its clock, or of its own generation when the
@@ -49,7 +50,38 @@ public sealed partial class ClassFolderHandOver
 
     // This PC handed the folders over (it stood down) and hasn't taken them
     // over again since: it takes no room back. Under _giving, or volatile.
+    // Kept on file too (ClassHomeFileMaster), so a Master opened again still
+    // knows (Task 7): this field covers a file that couldn't be written.
     private volatile bool _handedOver;
+
+    private void KeepHandedOver(bool handedOver)
+    {
+        _handedOver = handedOver;
+        try
+        {
+            ClassHomeFileMaster.WriteHandedOver(handedOver, _homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"Whether this PC handed the class folders over could not be saved: {ex.Message}");
+        }
+    }
+
+    // As on file; a file that can't be read now counts as handed over: a
+    // take-back refused leaves the PC asking with both copies, one taken by an
+    // old home that gave its folders away would leave the room on an empty one.
+    private bool HandedOverOnFile()
+    {
+        try
+        {
+            return ClassHomeFileMaster.ReadHandedOver(_homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"Whether this PC handed the class folders over could not be read: {ex.Message}");
+            return true;
+        }
+    }
 
     // RemoteTakeBack to the old home (home, its certificate pinned): the
     // generation it took the room back with, or null when it didn't.
@@ -127,14 +159,20 @@ public sealed partial class ClassFolderHandOver
             _log("A colleague's PC asked this PC to take the class folders back while it handed them over.");
             return (false, ClassFolderText.TakeBackTooSlow(_machineName));
         }
+        (bool Ok, string Detail) answer;
         try
         {
-            return await Task.Run(() => TakeBack(abandoned, sender, askedAt)).ConfigureAwait(false);
+            answer = await Task.Run(() => TakeBack(abandoned, sender, askedAt)).ConfigureAwait(false);
         }
         finally
         {
             _giving.Release();
         }
+        if (answer.Ok)
+        {
+            RaiseChanged(); // a newer generation of this PC's: the room is read again
+        }
+        return answer;
     }
 
     // TakeBackAsync's work, under _giving, on a thread of its own.
@@ -154,7 +192,7 @@ public sealed partial class ClassFolderHandOver
         // saw it (ClassHomeFileMaster): the PC asking only past what it gave up.
         bool Newer(ClassHome home, long generation) =>
             !IsThisPc(home) && (home.Generation > abandoned || (!IsSender(home) && home.Generation > generation));
-        if (_handedOver || own is not { } generation || !homes.Any(IsThisPc)
+        if (_handedOver || HandedOverOnFile() || own is not { } generation || !homes.Any(IsThisPc)
             || homes.Any(home => Newer(home, generation)) || (SeenHome() is { } seen && Newer(seen, generation)))
         {
             _log("A colleague's PC asked this PC to take the class folders back, but this PC isn't their home any more.");

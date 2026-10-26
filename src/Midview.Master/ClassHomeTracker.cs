@@ -19,6 +19,11 @@ public enum ClassFolderMode
     Remote,
 }
 
+// What one refresh of ClassHomeTracker found: the home and the mode, as Home
+// and Mode were then, and how many online Agents it asked (none: no machine
+// was on, so it found nothing out, whatever it says).
+public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int Asked);
+
 // Which teacher PC keeps the class folders (plan decision 8, Ruling 9): what
 // the room's online Agents say (MessageType.GetClassHome), asked every
 // interval (30 s by default) and whenever RefreshAsync is called (the window
@@ -92,16 +97,22 @@ public sealed class ClassHomeTracker : IDisposable
     // Raised (on a background thread) when the home or the mode changes.
     public event Action? Changed;
 
+    // Raised (on a background thread) after every refresh, changed or not,
+    // after Changed and before RefreshAsync returns: what it found, so a
+    // change can be taken only once two readings in a row say it (ClassFolderRole).
+    public event Action<ClassHomeReading>? Refreshed;
+
     // The PC that keeps the class folders, as the room says; null for none.
     public ClassHome? Home => Volatile.Read(ref _state).Home;
 
     public ClassFolderMode Mode => Volatile.Read(ref _state).Mode;
 
-    // Asks every online Agent at once and goes by what they answer. Changed is
-    // raised once the refresh is over, so a handler may refresh again.
+    // Asks every online Agent at once and goes by what they answer. Changed and
+    // Refreshed are raised once the refresh is over, so a handler may refresh again.
     public async Task RefreshAsync()
     {
         bool changed;
+        ClassHomeReading reading;
         await _refreshing.WaitAsync().ConfigureAwait(false);
         try
         {
@@ -134,6 +145,7 @@ public sealed class ClassHomeTracker : IDisposable
             {
                 RememberOtherHome(home!);
             }
+            reading = new ClassHomeReading(state.Home, state.Mode, online.Count);
         }
         finally
         {
@@ -144,6 +156,7 @@ public sealed class ClassHomeTracker : IDisposable
         {
             RaiseChanged();
         }
+        RaiseRefreshed(reading);
     }
 
     public void Dispose()
@@ -309,6 +322,18 @@ public sealed class ClassHomeTracker : IDisposable
         catch (Exception ex)
         {
             Log($"A Changed handler failed: {ex}");
+        }
+    }
+
+    private void RaiseRefreshed(ClassHomeReading reading)
+    {
+        try
+        {
+            Refreshed?.Invoke(reading);
+        }
+        catch (Exception ex)
+        {
+            Log($"A Refreshed handler failed: {ex}");
         }
     }
 

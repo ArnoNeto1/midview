@@ -74,6 +74,61 @@ public sealed partial class ClassFolderSync
         }
     }
 
+    // For a PC whose room keeps another PC as the home, as ClassFolderRole
+    // confirmed it: StandDownIfNoLessonAsync, except for a lesson on here that
+    // the room's online Agents left behind (the newest lesson they follow is
+    // this one ended, or another one saved later: the new home's), which is
+    // first ended here only, as one nobody collected (no last rounds, the
+    // files kept, every version known of them remembered), as
+    // AdoptAgentsEndAsync ends one another PC ended: a stale lesson must not
+    // keep this PC from taking the folders over until the day ends. A lesson
+    // the room still follows, or one no Agent says anything about, stays on,
+    // and is the answer (this PC keeps the folders until it ends, Ruling 17).
+    // The Agents are asked before the lesson lock is taken; a lesson started
+    // or ended meanwhile is gone by as it is then.
+    public async Task<ClassLesson?> StandDownForAnotherHomeAsync()
+    {
+        var token = _stop.Token;
+        var ours = Lesson;
+        var newest = ours.IsOn ? await NewestOnTheAgentsAsync(token).ConfigureAwait(false) : null;
+
+        await _lessonGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            var lesson = Lesson;
+            if (lesson.IsOn)
+            {
+                if (lesson != ours || !LeftBehind(lesson, newest))
+                {
+                    return lesson;
+                }
+                _changingLesson = true;
+                await RunningRounds().ConfigureAwait(false);
+                _log($"The lesson of {lesson.Turma} ended here: the room's PCs left it behind for another home's.");
+                EndUncollected(lesson);
+            }
+            await ClearLessonLocked().ConfigureAwait(false);
+            return null;
+        }
+        finally
+        {
+            _changingLesson = false;
+            _lessonGate.Release();
+        }
+    }
+
+    // Whether the newest lesson the room follows says ours is over there.
+    private static bool LeftBehind(ClassLesson ours, ClassLesson? newest) =>
+        newest is not null && newest.SavedAt > ours.SavedAt && (newest.LessonId != ours.LessonId || !newest.IsOn);
+
+    // The newest lesson the online Agents follow (ClassLessonOnAgents.Newest); null for none.
+    private async Task<ClassLesson?> NewestOnTheAgentsAsync(CancellationToken token)
+    {
+        var lessons = await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(
+            () => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token))).ConfigureAwait(false);
+        return ClassLessonOnAgents.Newest(lessons, UnixNow());
+    }
+
     // A take-over of the class folders begins on this PC (ClassFolderHandOver):
     // no lesson starts until EndTakeOver (a start says why, on every PC's
     // line), so what the take-over puts back or throws away never holds files a
@@ -134,9 +189,7 @@ public sealed partial class ClassFolderSync
             return;
         }
 
-        var lessons = await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(
-            () => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token))).ConfigureAwait(false);
-        var newest = ClassLessonOnAgents.Newest(lessons, UnixNow());
+        var newest = await NewestOnTheAgentsAsync(token).ConfigureAwait(false);
         if (newest is null || newest.LessonId != ours.LessonId || !newest.Ended || newest.SavedAt <= ours.SavedAt)
         {
             return;

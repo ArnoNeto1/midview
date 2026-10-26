@@ -28,7 +28,11 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 // the files (the end choices are not shown). The controller's Changed comes on
 // background threads (sometimes while the sync holds its lesson lock), so it is
 // only ever passed on to the UI thread with BeginInvoke; and every read and
-// command runs off the UI thread, so the window never freezes.
+// command runs off the UI thread, so the window never freezes. When this PC
+// becomes the home, or stops being it, MainWindow gives the window the other
+// controller (Rebind), which it takes once nothing it started is running.
+// Classes a take-over left aside, which no view shows, are pointed out above
+// (asideNote).
 //
 // In four files: this one (the two views and what keeps them current),
 // ClassFolderWindow.Classes.cs (the class list), ClassFolderWindow.Lesson.cs
@@ -39,8 +43,11 @@ public partial class ClassFolderWindow : Window
     // How often the views read the disk again (the files, the free space).
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
 
-    private readonly IClassFolderController _controller;
+    private IClassFolderController _controller;
     private readonly ClassFolderHandOver? _handOver;
+
+    // The controller to take once nothing started here is running (Rebind).
+    private IClassFolderController? _nextController;
     private readonly DispatcherTimer _refreshTimer;
     private readonly Action _onChanged;
 
@@ -71,14 +78,17 @@ public partial class ClassFolderWindow : Window
     private long _binBytes;
 
     // handOver: this PC's, for "Guardar as pastas das turmas neste computador"
-    // on a colleague's PC (none: the button isn't shown).
-    public ClassFolderWindow(IClassFolderController controller, ClassFolderHandOver? handOver = null)
+    // on a colleague's PC (none: the button isn't shown). asideNote: where
+    // classes a take-over left aside are (ClassFolderText.AsideNote; none: nothing said).
+    public ClassFolderWindow(IClassFolderController controller, ClassFolderHandOver? handOver = null, string? asideNote = null)
     {
         InitializeComponent();
         _controller = controller;
         _handOver = handOver;
         NameTextBox.MaxLength = ClassLesson.MaxTurmaLength;
         TakeOverButton.Content = ClassFolderText.TakeOverButton;
+        AsideText.Text = asideNote ?? string.Empty;
+        AsideBorder.Visibility = asideNote is null ? Visibility.Collapsed : Visibility.Visible;
 
         _shownLesson = _controller.Lesson;
         _shownClosed = _controller.HomeClosed;
@@ -98,6 +108,40 @@ public partial class ClassFolderWindow : Window
 
         ShowView();
         RefreshFromDisk();
+    }
+
+    // What the window works now (MainWindow starts and stops a remote one's polling by it).
+    internal IClassFolderController Controller => _controller;
+
+    // From now on, the window works controller (on the UI thread). With a
+    // start, an end, a change to the list or a take-over running, once it is
+    // over: what it shows at the end is about the controller it ran on. The
+    // views are read again; the last result stays while the view does.
+    public void Rebind(IClassFolderController controller)
+    {
+        _nextController = controller;
+        if (!_busy)
+        {
+            TakeNextController();
+        }
+    }
+
+    private void TakeNextController()
+    {
+        if (_nextController is not { } next)
+        {
+            return;
+        }
+        _nextController = null;
+        if (ReferenceEquals(next, _controller))
+        {
+            return;
+        }
+        _controller.Changed -= _onChanged;
+        _controller = next;
+        _controller.Changed += _onChanged;
+        _lessonFiles = null;
+        OnLessonChanged();
     }
 
     private ClassLesson Lesson => _controller.Lesson;
@@ -269,11 +313,12 @@ public partial class ClassFolderWindow : Window
             do
             {
                 _readAgain = false;
+                var controller = _controller;
                 var lesson = Lesson;
                 var inLesson = InLessonView;
-                if (await ReadAsync(inLesson) is not { } read)
+                if (await ReadAsync(inLesson) is not { } read || !ReferenceEquals(controller, _controller))
                 {
-                    continue; // not readable just now: the views keep what they show
+                    continue; // not readable just now (the views keep what they show), or from a controller given up
                 }
 
                 ShowLowSpace(read.FreeBytes);

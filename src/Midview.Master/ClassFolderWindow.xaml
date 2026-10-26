@@ -40,6 +40,12 @@
             </StackPanel>
         </Border>
 
+        <!-- Classes a take-over left aside, beside the class folders, which no view shows (ClassFolderText.AsideNote). -->
+        <Border x:Name="AsideBorder" DockPanel.Dock="Top" Visibility="Collapsed" BorderBrush="{StaticResource CardLineBrush}"
+                BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
+            <TextBlock x:Name="AsideText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
+        </Border>
+
         <!-- On a colleague's PC: the class folders to this PC (ClassFolderWindow.TakeOver.cs; its text is
              ClassFolderText.TakeOverButton). Disabled while a lesson is on, with the tooltip saying why. -->
         <Button x:Name="TakeOverButton" DockPanel.Dock="Top" HorizontalAlignment="Right" Visibility="Collapsed" Margin="0,0,0,10"
