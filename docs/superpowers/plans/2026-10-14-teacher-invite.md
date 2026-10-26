@@ -18,7 +18,7 @@
 - Times: invite lives 10 minutes; B listens 2 s for answers; A waits 30 s for `InviteJoin`; B waits 90 s for the list. B tries at most 10 answers. Before the secret is checked, A reads at most one message of at most 4 KB. UDP packets over 2 KB are ignored.
 - `MessageType`: `TrustTeacher = 61`, `InviteJoin = 62`, `InviteDone = 63`, `InviteRefused = 64`.
 - Text the teachers read is Brazilian Portuguese, exactly as written in this plan. Code, comments and commit messages are English. Comments explain why, in the style of the surrounding code. Never remove or shorten an existing comment unless the step says so.
-- Never mention the program Veyon anywhere.
+- Never name any other classroom-control program anywhere.
 - Commit messages: one plain English sentence, no prefix (like `Add a class-wide chat, "Bate-papo da turma"`), then a blank line and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - `src/Midview.Master/OpenWebsiteWindow.xaml.cs` has an unrelated, uncommitted change. Never stage it: `git add` only the files each task names.
 
