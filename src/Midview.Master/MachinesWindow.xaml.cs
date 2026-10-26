@@ -265,6 +265,7 @@ public partial class MachinesWindow : Window
         }
         _updateWindow = new UpdateWindow(UpdatePackage.BundledStudentFolder, _roster, _masterCertificate) { Owner = this };
         _updateWindow.Closed += (_, _) => _updateWindow = null;
+        OwnedWindow.ReturnToOwnerWhenClosed(_updateWindow);
         _updateWindow.Show();
     }
 

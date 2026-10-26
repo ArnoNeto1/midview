@@ -497,6 +497,7 @@ public partial class MainWindow : Window
         var window = create();
         _openWindows.Add(key, window);
         window.Closed += (_, _) => _openWindows.Remove(key, window);
+        OwnedWindow.ReturnToOwnerWhenClosed(window);
         window.Show();
     }
 
@@ -983,6 +984,7 @@ public partial class MainWindow : Window
         var chat = new ChatWindow(tile.Machine, _masterCertificate) { Owner = this };
         chat.Closed += (_, _) => _chatWindows.Remove(chat.Machine.Name);
         _chatWindows.Add(tile.Machine.Name, chat);
+        OwnedWindow.ReturnToOwnerWhenClosed(chat);
         chat.Show();
     }
 
@@ -1018,6 +1020,7 @@ public partial class MainWindow : Window
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
+            OwnedWindow.ReturnToOwnerWhenClosed(window);
             window.Show();
         }
         else
