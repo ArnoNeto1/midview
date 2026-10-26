@@ -45,7 +45,7 @@ public sealed partial class ClassFolderSyncTests
 
             var ended = split.Lesson with { SavedAt = split.Lesson.SavedAt + 1, Ended = true };
             Assert.Equal(ended, split.Sync.Lesson);
-            Assert.True(split.Sync.EndGoesOnlyToItsLesson);
+            Assert.True(split.Sync.IsHeldEnd(split.Sync.Lesson));
             Assert.Equal(ended, split.Pc3.Agent.Current);
             Assert.Equal(ClassLesson.None(0), split.Pc4.Agent.Current);
             Assert.All(rig.Pcs.Take(2), pc => Assert.Equal(split.Theirs, pc.Agent.Current));
@@ -127,7 +127,7 @@ public sealed partial class ClassFolderSyncTests
 
             var ended = lesson with { SavedAt = lesson.SavedAt + 1, Ended = true };
             Assert.Equal(ended, sync.Lesson);
-            Assert.True(sync.EndGoesOnlyToItsLesson);
+            Assert.True(sync.IsHeldEnd(sync.Lesson));
             Assert.Equal(ended, pc1.Agent.Current);
             Assert.Equal(theirs, pc3.Agent.Current);
 
@@ -165,7 +165,7 @@ public sealed partial class ClassFolderSyncTests
         await sync.EndAsync(EndChoice.Keep);
 
         Assert.Equal(lesson.SavedAt + 60, sync.Lesson.SavedAt);
-        Assert.False(sync.EndGoesOnlyToItsLesson);
+        Assert.False(sync.IsHeldEnd(sync.Lesson));
         Assert.All(rig.Pcs, pc => Assert.Equal(sync.Lesson, pc.Agent.Current));
     }
 

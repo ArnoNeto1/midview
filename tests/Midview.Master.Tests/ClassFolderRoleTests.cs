@@ -122,7 +122,7 @@ public sealed partial class ClassFolderRoleTests
     public async Task ALessonOfThisPcTheRoomFollows_KeepsItLocal_UntilItEnds()
     {
         using var rig = new ClassSyncRig(homes: 3);
-        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(5));
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master);
         await prof1.Sync.StartAsync(Turma);
         await prof1.Sync.EndAsync(EndChoice.Keep);
         // PC1 took another PC's take-over, and was off for this PC's start (its
@@ -162,7 +162,8 @@ public sealed partial class ClassFolderRoleTests
         Assert.Null(prof1.Role.HomeGeneration);
         Assert.False(Listens(prof1.HostPort));
 
-        await Until(() => prof1.Role.LessonForPollers is null); // the grace over, by itself
+        prof1.MoveClock(ClassFolderRole.DefaultEndedGrace); // the grace over
+        Assert.Null(prof1.Role.LessonForPollers);
         Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
     }
 
@@ -174,7 +175,7 @@ public sealed partial class ClassFolderRoleTests
     public async Task ABackedOutStart_GoesRemote_AndItsEndIsStillHandedOutForTheGrace()
     {
         using var rig = new ClassSyncRig(homes: 3);
-        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(5));
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master);
         Claim(rig, rig.Pcs[0], rig.OtherMaster, Prof2, rig.NowTicks + TimeSpan.TicksPerHour);
         rig.Offline[rig.Pcs[0].Name] = true;
         await prof1.Role.RefreshAndActAsync(); // Local: PC2 and PC3 keep no home
@@ -190,7 +191,8 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
         Assert.Equal(ended, prof1.Role.LessonForPollers);
         Assert.True(prof1.Role.IsHeldEnd(ended));
-        await Until(() => prof1.Role.LessonForPollers is null);
+        prof1.MoveClock(ClassFolderRole.DefaultEndedGrace); // the grace over
+        Assert.Null(prof1.Role.LessonForPollers);
     }
 
     // A reading naming this PC past the latest generation (an Agent's file

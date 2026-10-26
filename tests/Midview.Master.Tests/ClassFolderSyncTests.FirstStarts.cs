@@ -143,7 +143,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.False(backedOut.IsOn);
         Assert.Equal(backedOut, pc2.Agent.Current);
         Assert.Equal(backedOut, sync.Lesson);
-        Assert.True(sync.EndGoesOnlyToItsLesson);
+        Assert.True(sync.IsHeldEnd(sync.Lesson));
     }
 
     // PROF-1, which couldn't see PC1 (another list of machines), started its
@@ -229,6 +229,45 @@ public sealed partial class ClassFolderSyncTests
 
             Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
             Assert.All(rig.Pcs, pc => Assert.Equal((other.Lesson, OtherPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
+    // ...but once PROF-1 ended that lesson, a PC that was off for its end
+    // (PC3, still in it) blocks nothing: PC2 says the lesson ended, so PROF-2
+    // forgets PROF-1's lesson and starts; PC3 is left out until its lesson is
+    // over there, as any PC still in an older home's lesson.
+    [Fact]
+    public async Task ARetryAfterTheOtherPcsLessonEnded_Starts_ThoughAPcOffForTheEndIsStillInIt()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var (pc1, pc2, pc3) = (rig.Pcs[0], rig.Pcs[1], rig.Pcs[2]);
+        ClaimFor(rig, pc1, OtherPc, takeOver: false, rig.NowTicks);
+        var seenByProf1 = rig.Machines.Skip(1).ToList();
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => seenByProf1.ToList(), _ => true, () => rig.Now, ThisPc, agentPort: rig.AgentPort,
+            sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            var other = ProfTwo(rig);
+            Assert.All(await other.StartAsync("3º B"), line => Assert.Equal(ClassFolderText.OtherPcsLessonFirst(ThisPc), line.Detail));
+            rig.Now = rig.Now.AddMinutes(30);
+            seenByProf1.Remove(pc3.Machine); // off for PROF-1's end
+            await sync.EndAsync(EndChoice.Keep);
+            Assert.False(pc2.Agent.Current.IsOn);
+            Assert.Equal(lesson, pc3.Agent.Current);
+            rig.Now = rig.Now.AddMinutes(30);
+
+            var started = await other.StartAsync("3º B");
+
+            Assert.True(other.Lesson.IsOn, string.Join("; ", started.Select(line => $"{line.Machine.Name} {line.Ok} {line.Detail}")));
+            Assert.All(new[] { pc1, pc2 }, pc => Assert.Equal((other.Lesson, OtherPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
+            Assert.Equal((lesson, ThisPc), (pc3.Agent.Current, pc3.Agent.CurrentHome?.Name));
         }
         finally
         {

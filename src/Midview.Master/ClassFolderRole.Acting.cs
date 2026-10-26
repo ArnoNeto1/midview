@@ -217,7 +217,7 @@ public sealed partial class ClassFolderRole
             _lessonsOpen = false;
             _holding = false;
             _graceEnd = heldEnd;
-            _graceUntil = Environment.TickCount64 + (long)EndedGrace.TotalMilliseconds;
+            _graceUntil = Milliseconds() + (long)EndedGrace.TotalMilliseconds;
         }
         host?.Dispose();
         _hostFailures = 0;

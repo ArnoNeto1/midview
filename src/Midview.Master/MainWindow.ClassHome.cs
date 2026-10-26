@@ -70,11 +70,13 @@ public partial class MainWindow
         : null;
 
     // The lesson the room's online Agents follow: the home's, for the button's label on another teacher PC.
-    private ClassLesson? AgentsLesson() => ClassLessonOnAgents.NewestOf(
-        Volatile.Read(ref _roster).Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)),
-        _masterCertificate, ConnectionClient.AgentPort,
-        message => System.Diagnostics.Trace.WriteLine("MainWindow: " + message),
-        DateTimeOffset.Now.ToUnixTimeSeconds());
+    private ClassLesson? AgentsLesson()
+    {
+        void Log(string message) => System.Diagnostics.Trace.WriteLine("MainWindow: " + message);
+        return ClassLessonOnAgents.NewestOf(
+            ClassLessonOnAgents.Online(() => Volatile.Read(ref _roster), IsOnline, Log),
+            _masterCertificate, ConnectionClient.AgentPort, Log, DateTimeOffset.Now.ToUnixTimeSeconds());
+    }
 
     // A take-over goes on for minutes after its copy is in place, on both
     // teacher PCs: closing now would leave it half done, so the Master stays

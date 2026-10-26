@@ -14,14 +14,14 @@ public sealed partial class ClassFolderRoleTests
     // (the Agents keep the address a claim came from). Both of the rig's
     // teachers are colleagues. trackerInterval and confirmWait: long ones by
     // default, so only the test's own refreshes are readings; short ones make
-    // the tracker read the room by itself, as in a lab. endedGrace: how long an
-    // end is still handed out after a lesson the room followed (the role's
-    // EndedGrace). FailedOpens: how many times the host can't be had first.
+    // the tracker read the room by itself, as in a lab. The role's EndedGrace
+    // runs by a clock the test moves (MoveClock). FailedOpens: how many times
+    // the host can't be had first.
     private sealed class TeacherPc : IDisposable
     {
         public TeacherPc(
             ClassSyncRig rig, string name, X509Certificate2 certificate, TimeSpan? confirmWait = null,
-            TimeSpan? trackerInterval = null, TimeSpan? endedGrace = null)
+            TimeSpan? trackerInterval = null)
         {
             HostPort = FreePort();
             var own = name == Prof1 ? rig.Root : Path.Combine(rig.Root, name.ToLowerInvariant());
@@ -72,14 +72,18 @@ public sealed partial class ClassFolderRoleTests
                     new DateTimeOffset(rig.Now).ToUnixTimeSeconds()),
                 confirmWait ?? TimeSpan.FromHours(1))
             {
-                EndedGrace = endedGrace ?? ClassFolderRole.DefaultEndedGrace,
                 HostRetryWait = TimeSpan.FromMilliseconds(200),
+                Milliseconds = () => Environment.TickCount64 + Interlocked.Read(ref _clockAhead),
             };
         }
 
         private int _failedOpens;
         private int _opens;
         private int _opened;
+        private long _clockAhead;
+
+        // Moves the clock the role's EndedGrace runs by.
+        public void MoveClock(TimeSpan by) => Interlocked.Add(ref _clockAhead, (long)by.TotalMilliseconds);
 
         public int FailedOpens
         {

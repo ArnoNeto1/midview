@@ -106,7 +106,7 @@ public sealed partial class ClassFolderRole : IDisposable
 
     // Local only for a lesson of this PC's the room still follows (so it can be ended here).
     // Once Remote, the end of such a lesson (or of a start backed out) that is
-    // still handed out, and until when (Environment.TickCount64). Under _lock.
+    // still handed out, and until when (Milliseconds). Under _lock.
     private bool _holding;
     private ClassLesson? _graceEnd;
     private long _graceUntil;
@@ -243,10 +243,13 @@ public sealed partial class ClassFolderRole : IDisposable
         }
     }
 
-    // DefaultEndedGrace and DefaultHostRetryWait, or a test's.
-    internal TimeSpan EndedGrace { get; init; } = DefaultEndedGrace;
+    private static TimeSpan EndedGrace => DefaultEndedGrace;
 
+    // DefaultHostRetryWait, or a test's.
     internal TimeSpan HostRetryWait { get; init; } = DefaultHostRetryWait;
+
+    // The clock EndedGrace runs by (milliseconds): a test's, so it doesn't wait it out.
+    internal Func<long> Milliseconds { get; init; } = () => Environment.TickCount64;
 
     // The lesson under the toolbar button: this PC's own, or, Remote, the home's.
     public ClassLesson ShownLesson
@@ -378,7 +381,7 @@ public sealed partial class ClassFolderRole : IDisposable
 
     // Under _lock: Remote, the end still handed out for EndedGrace; null once it is over.
     private ClassLesson? GraceEndLocked() =>
-        _mode == ClassFolderMode.Remote && Environment.TickCount64 < _graceUntil ? _graceEnd : null;
+        _mode == ClassFolderMode.Remote && Milliseconds() < _graceUntil ? _graceEnd : null;
 
     // What Changed is about.
     private (ClassFolderMode?, IClassFolderController, ClassLesson) Seen() => (Mode, Controller, ShownLesson);

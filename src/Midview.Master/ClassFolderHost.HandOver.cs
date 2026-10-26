@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using Midview.Protocol;
@@ -30,8 +31,17 @@ public sealed partial class ClassFolderHost
         client.SendTimeout = wait;
         client.ReceiveTimeout = wait;
         CommandClient.EnableKeepAlive(client.Client);
-        _handOver.Send(channel, _stop.Token, NameIn(request.Payload) ?? string.Empty);
+        _handOver.Send(channel, _stop.Token, TakerName(request.Payload));
     }
+
+    // The name RemoteHandOver gives, to show the teacher: a computer name
+    // (NameIn) on one line, with no control or formatting character (a line
+    // break, a tab, a mark that turns text around); empty for anything else.
+    internal static string TakerName(byte[] payload) =>
+        NameIn(payload)?.Trim() is { Length: > 0 } name
+        && !name.Any(c => char.IsControl(c) || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.Format)
+            ? name
+            : string.Empty;
 
     // A computer name in UTF-8 (1 to ClassHome.MaxNameLength characters); null for anything else.
     private static string? NameIn(byte[] payload)

@@ -19,8 +19,6 @@ public sealed partial class ClassFolderSync
     // to an Agent still in that lesson.
     private ClassLesson? _heldEnd;
 
-    public bool EndGoesOnlyToItsLesson => IsHeldEnd(Lesson);
-
     // Whether lesson is such an end (the last one this PC made, though the
     // lesson here may have been cleared since: a stand-down).
     public bool IsHeldEnd(ClassLesson lesson) => Volatile.Read(ref _heldEnd) is { } ended && ended == lesson;

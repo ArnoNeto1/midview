@@ -268,6 +268,25 @@ public sealed partial class ClassFolderHostTests
         Assert.Equal((false, ClassFolderText.StartFailed(Turma, "acesso negado")), (started.Ok, started.Detail));
     }
 
+    // The name a colleague's PC gives with RemoteHandOver, which the close
+    // question shows: a computer name on one line, or none.
+    [Theory]
+    [InlineData(new byte[0], "")]
+    [InlineData(new byte[] { 0x50, 0xC3, 0x28 }, "")] // not UTF-8
+    [InlineData(null, "")] // 65 characters
+    [InlineData(new byte[] { 0x50, 0x52, 0x4F, 0x46, 0x2D, 0x32 }, "PROF-2")]
+    [InlineData(new byte[] { 0x20, 0x50, 0x43, 0x20 }, "PC")]
+    public void TheTakersName_IsAComputerNameOrNone(byte[]? payload, string expected) =>
+        Assert.Equal(expected, ClassFolderHost.TakerName(payload ?? Encoding.UTF8.GetBytes(new string('P', 65))));
+
+    [Theory]
+    [InlineData("PROF-2\r\nO PC LAB-01 confirmou")]
+    [InlineData("PROF\t2")]
+    [InlineData("PROF-‮2")]
+    [InlineData("PROF-​2")]
+    public void ATakersNameWithControlOrFormattingCharacters_IsNone(string name) =>
+        Assert.Equal(string.Empty, ClassFolderHost.TakerName(Encoding.UTF8.GetBytes(name)));
+
     // A class folder made by hand with a name over 60 characters is
     // left out of the state, and a PC's name over 64 is cut, instead of the
     // colleague's PC refusing the whole state (or reply).

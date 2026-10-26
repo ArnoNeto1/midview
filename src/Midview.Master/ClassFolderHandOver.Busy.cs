@@ -90,13 +90,22 @@ public sealed partial class ClassFolderHandOver
 
     // The room names this PC the home at that generation (ClassFolderRole, from
     // its readings): a hand-over at an older one is behind it.
+    // The look and the clearing are one step, so a hand-over made meanwhile is never cleared.
     public void SeenAsHome(long generation)
     {
-        if (HandedOverStanding().To is { } to && generation > to.Generation)
+        ClassHome? voided = null;
+        lock (_handedOverGate)
+        {
+            if (HandedOverStanding().To is { } to && generation > to.Generation)
+            {
+                KeepHandedOver(null);
+                voided = to;
+            }
+        }
+        if (voided is not null)
         {
             _log($"The room names this PC the class folders' home again (generation {generation}): "
-                + $"its hand-over to {to.Name} no longer counts.");
-            KeepHandedOver(null);
+                + $"its hand-over to {voided.Name} no longer counts.");
         }
     }
 
