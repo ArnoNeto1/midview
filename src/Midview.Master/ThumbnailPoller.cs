@@ -43,6 +43,7 @@ public sealed class ThumbnailPoller : IDisposable
     private readonly Func<(int Width, int Height)>? _thumbnailSize;
     private readonly Func<ClassLesson?>? _classLesson;
     private readonly Func<ClassHomeClaim?>? _classHomeClaim;
+    private readonly Func<ClassLesson, ClassLesson?>? _classLessonOver;
     private readonly TimeSpan _agentRetryInterval;
     private long? _sentAppBlockSavedAt;
     private DateTime _nextAppBlockAttempt = DateTime.MinValue;
@@ -64,13 +65,16 @@ public sealed class ThumbnailPoller : IDisposable
     // classLesson: the class folder's lesson (ClassFolderRole.LessonForPollers),
     // handed to the Agent like the program block. classHomeClaim: while this
     // PC keeps the class folders, its claim on an Agent that keeps an older
-    // home (ClassFolderRole.HomeGeneration); null otherwise.
+    // home (ClassFolderRole.HomeGeneration); null otherwise. classLessonOver:
+    // for a lesson the Agent follows, its end when this PC knows it is over
+    // (ClassFolderRole.EndOfLessonOver); null otherwise.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
         Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
         TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null,
-        Func<ClassLesson?>? classLesson = null, Func<ClassHomeClaim?>? classHomeClaim = null)
+        Func<ClassLesson?>? classLesson = null, Func<ClassHomeClaim?>? classHomeClaim = null,
+        Func<ClassLesson, ClassLesson?>? classLessonOver = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
@@ -81,6 +85,7 @@ public sealed class ThumbnailPoller : IDisposable
         _thumbnailSize = thumbnailSize;
         _classLesson = classLesson;
         _classHomeClaim = classHomeClaim;
+        _classLessonOver = classLessonOver;
         _agentRetryInterval = agentRetryInterval ?? DefaultAgentRetryInterval;
         _thread = new Thread(Run) { IsBackground = true, Name = $"Thumbnails: {machine.Name}" };
     }
@@ -272,6 +277,10 @@ public sealed class ThumbnailPoller : IDisposable
     // (SavedAt 0: the Master hasn't had one yet) is nothing to hand over, nor is
     // no lesson at all (a Master that stood down, however saved), which an
     // Agent would take for a newer end of the lesson another teacher PC runs.
+    // An Agent that keeps its own newer lesson instead is asked which: one
+    // this PC knows is over (the PC was off for its end, and missed this
+    // lesson's start) is ended there, and this lesson handed again, as an
+    // Agent takes only the end of the lesson it follows.
     private void SendClassLessonIfChanged()
     {
         if (_classLesson?.Invoke() is not { SavedAt: > 0 } lesson || lesson.LessonId == Guid.Empty
@@ -285,9 +294,11 @@ public sealed class ThumbnailPoller : IDisposable
 
         try
         {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
-                MessageType.SetClassLesson, lesson.Encode());
+            var (succeeded, detail) = SendClassLesson(agentThumbprint, lesson);
+            if (succeeded && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal) && EndLessonOver(agentThumbprint))
+            {
+                (succeeded, detail) = SendClassLesson(agentThumbprint, lesson);
+            }
             if (succeeded)
             {
                 _sentClassLessonSavedAt = lesson.SavedAt;
@@ -311,6 +322,27 @@ public sealed class ThumbnailPoller : IDisposable
         _nextClassLessonAttempt = DateTime.UtcNow + wait;
     }
 
+    private (bool Succeeded, string Detail) SendClassLesson(string agentThumbprint, ClassLesson lesson) =>
+        CommandClient.SendCommandForResult(
+            _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate, MessageType.SetClassLesson, lesson.Encode());
+
+    // The lesson the Agent follows, ended there when this PC knows it is over
+    // (classLessonOver): true when the Agent took that end.
+    private bool EndLessonOver(string agentThumbprint)
+    {
+        if (_classLessonOver is null || _stop.IsCancellationRequested)
+        {
+            return false;
+        }
+        var (followed, _) = ClassFolderClient.GetLesson(_machine, _masterCertificate, _agentPort);
+        if (followed is null || _classLessonOver(followed) is not { } end)
+        {
+            return false;
+        }
+        var (succeeded, detail) = SendClassLesson(agentThumbprint, end);
+        return succeeded && !detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal);
+    }
+
     // The class folders' home (Ruling 9): while this PC keeps them, an Agent
     // that keeps an older home, another PC's or this PC's own at an older
     // generation (a straggler: off when this PC took the folders over), is
@@ -318,11 +350,15 @@ public sealed class ThumbnailPoller : IDisposable
     // time it comes back. The Agent itself refuses it while it follows a lesson
     // of the home it keeps (tried again after the retry interval, or in a
     // moment when it was busy), and takes this PC's own as a refresh. One that
-    // keeps no home, or one at least as new, is left as it is.
+    // keeps no home, or one at least as new, is left as it is. A lesson the
+    // straggler still follows that this PC knows is over (it came with the
+    // old home's folders: the PC was off for its end too) is ended there
+    // first, or nobody would ever end it, and the PC would stay out of this
+    // PC's lessons until the day ends.
     private void ClaimClassHomeIfBehind()
     {
         if (_classHomeClaim?.Invoke() is not { } claim || claim.Generation == _checkedClassHomeGeneration
-            || _machine.AgentThumbprint is not { Length: > 0 }
+            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
             || DateTime.UtcNow < _nextClassHomeAttempt || _stop.IsCancellationRequested)
         {
             return;
@@ -333,6 +369,7 @@ public sealed class ThumbnailPoller : IDisposable
             var (home, oldAgent) = ClassFolderClient.GetHome(_machine, _masterCertificate, _agentPort);
             if (!oldAgent && home is not null && home.Generation < claim.Generation)
             {
+                EndLessonOver(agentThumbprint);
                 var (ok, detail, _) = ClassFolderClient.ClaimHome(_machine, _masterCertificate, claim, _agentPort);
                 if (!ok)
                 {

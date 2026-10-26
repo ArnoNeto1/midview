@@ -55,6 +55,9 @@ public partial class MainWindow
     // What the pollers hand each machine's Agent (on their threads).
     private ClassLesson? LessonForPollers() => _classRole.LessonForPollers;
 
+    // The end the pollers hand an Agent still in a lesson this PC knows is over (on their threads).
+    private ClassLesson? EndOfLessonOver(ClassLesson followed) => _classRole.EndOfLessonOver(followed);
+
     // While this PC keeps the class folders: its claim on an Agent that keeps
     // an older home (on the pollers' threads), as its start claims (ClassFolderSync).
     private ClassHomeClaim? StragglerClaim() => _classRole.HomeGeneration is { } generation

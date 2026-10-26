@@ -18,9 +18,29 @@ public sealed partial class ClassStore
         _lessons.Remember(lessonId, turma);
     }
 
+    // A lesson another teacher PC ran, as the room's Agents follow it (that
+    // PC's folders taken over while it doesn't answer): what PCs set aside for
+    // it comes into that class here. Nothing for a lesson already known.
+    // Throws ArgumentException for a name that is no class name.
+    public void RememberLessonHeardOf(Guid lessonId, string turma)
+    {
+        FolderOf(turma);
+        _lessons.RememberHeardOf(lessonId, turma);
+    }
+
     // Null for a lesson this Master never started, or whose class was deleted
     // (a class renamed since takes its lessons with it).
     public string? TurmaOfLesson(Guid lessonId) => _lessons.TurmaOf(lessonId);
+
+    // Whether the lesson is known here: started here or by a home this PC
+    // took the folders over from, heard of (RememberLessonHeardOf), or of a
+    // class deleted since. False for another teacher PC's lesson this one
+    // never knew: what a PC set aside for it is left to that PC.
+    public bool KnowsLesson(Guid lessonId) => _lessons.Knows(lessonId);
+
+    // Whether this PC, or a home it took the folders over from, ran the
+    // lesson: known, and not only heard of.
+    public bool RanLesson(Guid lessonId) => _lessons.Ran(lessonId);
 
     // The lesson's end was collected: what a PC set aside for it afterwards is
     // its own (it goes to that student's Recycle Bin), never the class's.

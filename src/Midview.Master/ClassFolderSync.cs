@@ -33,7 +33,8 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // what each file needs, and the files are pulled, pushed, renamed or deleted
 // (ClassFolderClient), at most 4 PCs copying at once and never two rounds of one
 // PC at once. What a PC set aside for a lesson that is over is brought into that
-// lesson's class, unless "Encerrar a aula" collected that lesson already.
+// lesson's class, unless "Encerrar a aula" collected that lesson already; what
+// it set aside for a lesson this PC never knew (another teacher PC's) stays there.
 //
 // The lesson is kept in a file (ClassLessonFileMaster), so a Master closed and
 // opened again carries on with it; one that started on an earlier day is ended,
@@ -416,9 +417,19 @@ public sealed partial class ClassFolderSync : IDisposable
     // with its student's folders took nothing (ClassHomeClaim.BusyText): this
     // PC's poller hands it the lesson later, so its line doesn't ask the
     // teacher to try again (Ruling 22).
+    // An end kept out because the Agent is still in a lesson this PC knows is
+    // over (the PC was off for that end and for this lesson's start) goes once
+    // that one is ended there (EndOfLessonOver).
     private (KnownMachine Machine, bool Ok, string Detail) SendLesson(KnownMachine machine, ClassLesson lesson)
     {
         var (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
+        if (!succeeded && !lesson.IsOn && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal)
+            && ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log) is { } followed
+            && EndOfLessonOver(followed) is { } over
+            && ClassLessonOnAgents.Send(machine, _masterCertificate, over, _agentPort).Ok)
+        {
+            (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
+        }
         if (succeeded)
         {
             _delivered[Key(machine)] = lesson.SavedAt;

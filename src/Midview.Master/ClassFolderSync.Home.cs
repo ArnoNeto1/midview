@@ -78,10 +78,13 @@ public sealed partial class ClassFolderSync
     // confirmed it: StandDownIfNoLessonAsync, except for a lesson on here that
     // the room's online Agents left behind (the newest lesson they follow is
     // this one ended, or another one saved later: the new home's), which is
-    // first ended here only, as one nobody collected (no last rounds, the
-    // files kept, every version known of them remembered), as
-    // AdoptAgentsEndAsync ends one another PC ended: a stale lesson must not
-    // keep this PC from taking the folders over until the day ends. A lesson
+    // first ended, as one nobody collected (no last rounds, the files kept,
+    // every version known of them remembered), as AdoptAgentsEndAsync ends one
+    // another PC ended: a stale lesson must not keep this PC from taking the
+    // folders over until the day ends. Its end goes to every Agent first: a
+    // PC still in it (a split room) must not stay in it until the day ends,
+    // with nobody to end it, and an Agent takes only the end of the lesson it
+    // follows, so the PCs in the new home's lesson stay in theirs. A lesson
     // the room still follows, or one no Agent says anything about, stays on,
     // and is the answer (this PC keeps the folders until it ends, Ruling 17).
     // The Agents are asked before the lesson lock is taken; a lesson started
@@ -105,6 +108,10 @@ public sealed partial class ClassFolderSync
                 _changingLesson = true;
                 await RunningRounds().ConfigureAwait(false);
                 _log($"The lesson of {lesson.Turma} ended here: the room's PCs left it behind for another home's.");
+                var ended = lesson with { SavedAt = NextSavedAt(), Ended = true };
+                await SendToEveryAgentAsync(ended).ConfigureAwait(false);
+                // The next lesson here is newer than this end, even in the same second.
+                RaiseSavedAtFloor(ended.SavedAt);
                 EndUncollected(lesson);
             }
             await ClearLessonLocked().ConfigureAwait(false);
@@ -130,6 +137,25 @@ public sealed partial class ClassFolderSync
         var lessons = await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(
             () => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token))).ConfigureAwait(false);
         return ClassLessonOnAgents.Newest(lessons, UnixNow());
+    }
+
+    // The end to hand an Agent that still follows a lesson this PC knows is
+    // over: one this PC ran, or a home before it whose lessons map came with
+    // the folders, that isn't the lesson here (a PC off since then missed its
+    // end, and the next lesson's start). An Agent takes only the end of the
+    // lesson it follows, so the end of this PC's own last lesson, or this PC's
+    // take-over, would never reach it. The end is one second newer than what
+    // the Agent has, no newer than the end it missed, so what this PC hands it
+    // next is newer still. Null for any other lesson: this PC's own, one only
+    // heard of from the Agents (another PC's, which may still be on there), or
+    // one it never knew.
+    public ClassLesson? EndOfLessonOver(ClassLesson followed)
+    {
+        if (!followed.IsOn || followed.LessonId == Lesson.LessonId || !_store.RanLesson(followed.LessonId))
+        {
+            return null;
+        }
+        return followed with { SavedAt = followed.SavedAt == long.MaxValue ? long.MaxValue : followed.SavedAt + 1, Ended = true };
     }
 
     // A take-over of the class folders begins on this PC (ClassFolderHandOver):

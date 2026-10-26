@@ -1,4 +1,3 @@
-using System.Security;
 using System.Security.Principal;
 using Microsoft.Win32;
 using Midview.Protocol;
@@ -24,7 +23,14 @@ namespace Midview.Agent;
 // As SYSTEM on the student's folders: nothing inside a folder is ever
 // touched (the Session, as the student, moves the files), and a Desktop or
 // folder that is a link is left alone, not followed.
-public sealed class ClassLessonHandler
+//
+// An end ends only the lesson it is of: with two teacher PCs in one lab, the
+// end of the other PC's lesson (one it held, a start at the same time) must
+// not take this PC out of the home's lesson, which nobody would hand it again.
+//
+// In two files: this one (the lesson) and ClassLessonHandler.Folders.cs (the
+// student's Desktop and download folder made to match it).
+public sealed partial class ClassLessonHandler
 {
     // The start of every class folder's name (U+2013 EN DASH), as
     // ClassLesson.FolderName makes it.
@@ -46,19 +52,6 @@ public sealed class ClassLessonHandler
     private readonly TimeSpan _claimWait;
     private readonly object _gate = new();
     private ClassLesson _lesson;
-
-    // The class folder Protect last succeeded on (student, Desktop, name), so
-    // later polls only check it; any other means Protect runs again. A folder
-    // given back keeps its owner, so its owner alone can't say it is protected.
-    private string? _protectedFor;
-
-    // The class folders already given back (student and path), so a poll
-    // doesn't give them back again.
-    private readonly HashSet<string> _released = new(StringComparer.OrdinalIgnoreCase);
-
-    // A policy write that failed may have left Chrome's value right and
-    // Edge's not: the next look writes it again even if Chrome's matches.
-    private bool _policyUnsure;
 
     // The first look after the Agent starts is the startup one, whichever
     // comes first (the service's first poll or ReconcileAtStartup).
@@ -120,7 +113,9 @@ public sealed class ClassLessonHandler
 
     // senderThumbprint: the TLS channel's; senderAddress: the connection's.
     // A start or a class change from a PC that isn't the home is refused
-    // with nothing touched; an end is taken from any teacher. With no home,
+    // with nothing touched; an end is taken from any teacher, when it is of
+    // the lesson on here or no lesson is on (one of another lesson changes
+    // nothing, answered as an older lesson is). With no home,
     // the PC that starts a lesson becomes it. Under the lesson's lock, had
     // within the claim wait or refused as busy, as a claim (Ruling 22): the
     // Master's poller sends the lesson again, and this one is never applied later.
@@ -144,7 +139,7 @@ public sealed class ClassLessonHandler
         {
             return (false, refusal);
         }
-        if (lesson.SavedAt < _lesson.SavedAt)
+        if (lesson.SavedAt < _lesson.SavedAt || (!lesson.IsOn && _lesson.IsOn && lesson.LessonId != _lesson.LessonId))
         {
             return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
         }
@@ -283,170 +278,6 @@ public sealed class ClassLessonHandler
         Volatile.Write(ref _lesson, ended);
         done.Add($"ended the lesson of {lesson.Turma}, which started on an earlier day");
     }
-
-    // The logged-on student's Desktop and download folder made to match the
-    // lesson. True when the folder Chrome saves into changed. desktop: null
-    // when there is none the Agent may work on (UserSessionProcessLauncher.
-    // LoggedOnStudent): then only the download folder Midview set is removed,
-    // with no lesson on, as that needs no Desktop.
-    private bool FollowLesson(
-        ClassLesson lesson, string? desktop, SecurityIdentifier student, List<string> done, List<string> problems)
-    {
-        // Opened as itself: a Desktop that is missing or a link (redirected
-        // elsewhere) gets nothing, not even the download folder. With no
-        // lesson on there was nothing to put there either.
-        var desktopUsable = desktop is not null && ProtectedStudentFolders.IsRealDirectory(desktop);
-        if (!desktopUsable)
-        {
-            if (lesson.IsOn)
-            {
-                problems.Add(desktop is null
-                    ? "Área de Trabalho do aluno não encontrada, ou fora da pasta do aluno e não é dele"
-                    : $"Área de Trabalho não encontrada ou não é uma pasta comum ({desktop})");
-            }
-        }
-        else
-        {
-            if (lesson.IsOn)
-            {
-                ProtectClassFolder(lesson, desktop!, student, done, problems);
-            }
-            else
-            {
-                _protectedFor = null;
-            }
-            ReleaseOtherClassFolders(lesson, desktop!, student, done, problems);
-        }
-
-        if (!lesson.IsOn)
-        {
-            return PointDownloads(student, null, done, problems);
-        }
-        return desktopUsable && PointDownloads(student, Path.Combine(desktop!, lesson.FolderName), done, problems);
-    }
-
-    private void ProtectClassFolder(
-        ClassLesson lesson, string desktop, SecurityIdentifier student, List<string> done, List<string> problems)
-    {
-        var names = new[] { lesson.FolderName };
-        var folder = Path.Combine(desktop, lesson.FolderName);
-        var key = $"{student.Value}|{folder}";
-        _released.Remove(key);
-        if (string.Equals(_protectedFor, key, StringComparison.OrdinalIgnoreCase)
-            && !ProtectedStudentFolders.NeedsProtecting(desktop, _folderOwner, names))
-        {
-            return;
-        }
-
-        var folderProblems = ProtectedStudentFolders.Protect(desktop, student, _folderOwner, names);
-        if (folderProblems.Count == 0)
-        {
-            _protectedFor = key;
-            done.Add($"protected {folder}");
-        }
-        else
-        {
-            _protectedFor = null;
-            problems.AddRange(folderProblems);
-        }
-    }
-
-    // Every class folder on the Desktop but the lesson's own is given back
-    // (once each). A link of that name is left alone.
-    private void ReleaseOtherClassFolders(
-        ClassLesson lesson, string desktop, SecurityIdentifier student, List<string> done, List<string> problems)
-    {
-        List<string> names;
-        try
-        {
-            names = new DirectoryInfo(desktop).EnumerateDirectories()
-                .Where(folder => folder.Name.StartsWith(FolderPrefix, StringComparison.OrdinalIgnoreCase)
-                    && !(lesson.IsOn && string.Equals(folder.Name, lesson.FolderName, StringComparison.OrdinalIgnoreCase))
-                    && (folder.Attributes & FileAttributes.ReparsePoint) == 0
-                    && !_released.Contains($"{student.Value}|{Path.Combine(desktop, folder.Name)}"))
-                .Select(folder => folder.Name)
-                .ToList();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
-        {
-            problems.Add($"Área de Trabalho ({desktop}): {ErrorText.Describe(ex)}");
-            return;
-        }
-
-        foreach (var name in names)
-        {
-            var folderProblems = ProtectedStudentFolders.Release(desktop, student, new[] { name });
-            if (folderProblems.Count == 0)
-            {
-                _released.Add($"{student.Value}|{Path.Combine(desktop, name)}");
-                done.Add($"gave {name} back to the student");
-            }
-            else
-            {
-                problems.AddRange(folderProblems);
-            }
-        }
-    }
-
-    // Chrome's and Edge's download folder set to folder (null: removed, where
-    // it is a class folder). True when Chrome's changed.
-    private bool PointDownloads(SecurityIdentifier student, string? folder, List<string> done, List<string> problems)
-    {
-        try
-        {
-            using var software = _openUserSoftware(student);
-            if (software is null)
-            {
-                problems.Add("o registro do aluno não está carregado; a pasta de downloads do navegador fica para depois");
-                return false;
-            }
-
-            var before = DownloadFolderPolicy.Current(software);
-            if (before == folder && !_policyUnsure)
-            {
-                return false;
-            }
-
-            Exception? failure = null;
-            try
-            {
-                if (folder is null)
-                {
-                    DownloadFolderPolicy.Remove(software);
-                }
-                else
-                {
-                    DownloadFolderPolicy.Apply(software, folder);
-                }
-            }
-            catch (Exception ex) when (IsRegistryError(ex))
-            {
-                failure = ex;
-            }
-            _policyUnsure = failure is not null;
-
-            var after = DownloadFolderPolicy.Current(software);
-            if (failure is not null)
-            {
-                problems.Add($"pasta de downloads do navegador: {ErrorText.Describe(failure)}");
-            }
-            if (after == before)
-            {
-                return false;
-            }
-            done.Add(after is null ? "removed the browsers' download folder" : $"pointed the browsers' downloads at {after}");
-            return true;
-        }
-        catch (Exception ex) when (IsRegistryError(ex))
-        {
-            _policyUnsure = true;
-            problems.Add($"pasta de downloads do navegador: {ErrorText.Describe(ex)}");
-            return false;
-        }
-    }
-
-    private static bool IsRegistryError(Exception ex) =>
-        ex is IOException or UnauthorizedAccessException or SecurityException;
 
     private void Report(string? outcome)
     {

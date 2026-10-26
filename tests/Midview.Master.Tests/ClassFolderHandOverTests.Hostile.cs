@@ -149,7 +149,8 @@ public sealed partial class ClassFolderHandOverTests
 
     // The home's Master doesn't answer (that PC is gone): after the window's
     // confirmation, this PC claims the Agents with a newer generation and
-    // starts with its own classes, which stay where they are.
+    // starts with its own classes, which stay where they are, and the class
+    // of the lesson the room follows, for what the PCs set aside for it.
     [Fact]
     public async Task WithTheHomeUnreachable_TheTakeOverClaimsTheAgents_AndKeepsThisPcsOwnClasses()
     {
@@ -181,7 +182,11 @@ public sealed partial class ClassFolderHandOverTests
             Assert.Equal((NewHome, generation + 1), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation));
         }
         Assert.Equal(generation + 1, ClassHomeFileMaster.Read(lab.NewHomePath));
-        Assert.Equal(new[] { "Antiga" }, lab.NewStore.List().Select(summary => summary.Turma));
+        // Its own class stays; the class of the lesson the room followed is made, empty, for what the PCs set aside.
+        Assert.Equal(new[] { Turma, "Antiga" }, lab.NewStore.List().Select(summary => summary.Turma));
+        Assert.Empty(lab.NewStore.Files(Turma));
+        Assert.Equal(Turma, lab.NewStore.TurmaOfLesson(rig.Pcs[0].Agent.Current.LessonId));
+        Assert.False(lab.NewStore.RanLesson(rig.Pcs[0].Agent.Current.LessonId));
         Assert.False(Directory.EnumerateDirectories(lab.NewRoot, "Turmas (*").Any());
         Assert.Equal(new[] { Turma, "3º B" }, rig.Store.List().Select(summary => summary.Turma));
     }

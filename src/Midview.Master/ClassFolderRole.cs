@@ -28,7 +28,8 @@ namespace Midview.Master;
 //   its own is on that the room's Agents still follow, which keeps it Local,
 //   holding, so that lesson can still be ended here (Ruling 17): its pollers
 //   go on handing it out, and its end too for EndedGrace once it is over; a
-//   lesson of its own the room left behind is ended here first.
+//   lesson of its own the room left behind is ended first, on the PCs still
+//   in it and here.
 //
 // While a take-over isn't over (handOver.IsBusy: one runs here, a hand-over or
 // a take-back runs for a colleague's PC, or a copy sent hasn't settled), no
@@ -194,6 +195,21 @@ public sealed partial class ClassFolderRole : IDisposable
                 return HandsOutLocked() ? _sync.Lesson : null;
             }
         }
+    }
+
+    // For a lesson an Agent follows, the end the pollers hand it when this PC
+    // knows that lesson is over (ClassFolderSync.EndOfLessonOver), while they
+    // hand lessons out; null otherwise.
+    public ClassLesson? EndOfLessonOver(ClassLesson followed)
+    {
+        lock (_lock)
+        {
+            if (!HandsOutLocked())
+            {
+                return null;
+            }
+        }
+        return _sync.EndOfLessonOver(followed);
     }
 
     // This PC's generation as the home, which the pollers claim stragglers

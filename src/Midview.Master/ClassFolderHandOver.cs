@@ -78,7 +78,9 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 //
 // Taking them over from a home that doesn't answer (TakeOverUnreachableAsync,
 // after the window's confirmation): the Agents are claimed the same way, and
-// this PC goes on with its own store, or none.
+// this PC goes on with its own store, or none, with the lessons the room
+// follows remembered and their classes made (LearnTheRoomsLessons), so what
+// the PCs set aside for them comes in at this PC's next lesson.
 //
 // Giving them, on the home (for ClassFolderHost): Send streams the store
 // (ClassFolderHandOver.Send.cs) and HandedOverAsync stands down once the room's
@@ -254,6 +256,7 @@ public sealed partial class ClassFolderHandOver
             KeepGeneration(claimed.Generation);
             KeepHandedOver(null);
             _log($"This PC took the class folders over from {home}, which didn't answer, with generation {claimed.Generation}.");
+            LearnTheRoomsLessons();
             return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
         },
         (stage, reason) => stage.Value == Stage.Copying

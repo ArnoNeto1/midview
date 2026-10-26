@@ -10,15 +10,19 @@ namespace Midview.Master;
 // those last rounds, the versions of files the class already had or gave out
 // then, so what a PC set aside that is one of them is not brought back. A PC
 // can come back days later with files set aside for a lesson; this is how the
-// Master knows which class they belong to and which are new. One JSON file,
-// MasterData.Folder\class-lessons.json by default: not in the index folder,
-// where a class named "lessons" would have its index.
+// Master knows which class they belong to and which are new. A lesson whose
+// class was deleted stays in the map with no class: known, so what a PC set
+// aside for it is cleared, unlike a lesson the map never had (another teacher
+// PC's, whose files are that PC's to bring in). A lesson only heard of from the
+// room's Agents (HeardOf) is known too, with its class, though another PC ran it.
+// One JSON file, MasterData.Folder\class-lessons.json by default: not in the
+// index folder, where a class named "lessons" would have its index.
 //
 // Never throws: a file that can't be read is set aside (corrupt) or taken as
 // empty (unreadable), and one that can't be written is kept in memory and
 // written again with the next change; both are logged. The worst that comes
-// of it is a PC's leftovers cleared instead of collected (they go to that
-// student's Recycle Bin), or collected as a "(2)" of what the class has.
+// of it is a PC's leftovers left where they are, set aside on that PC, instead
+// of collected or cleared, or collected as a "(2)" of what the class has.
 internal sealed class ClassLessonsFile
 {
     private readonly string _path;
@@ -54,6 +58,24 @@ internal sealed class ClassLessonsFile
         }
     }
 
+    // Whether the map has the lesson at all (with its class, or one deleted since).
+    public bool Knows(Guid lessonId)
+    {
+        lock (_gate)
+        {
+            return Lessons().ContainsKey(lessonId);
+        }
+    }
+
+    // Whether the map has the lesson as one this PC, or a home before it, ran: not only heard of.
+    public bool Ran(Guid lessonId)
+    {
+        lock (_gate)
+        {
+            return Lessons().TryGetValue(lessonId, out var lesson) && !lesson.HeardOf;
+        }
+    }
+
     public bool IsCollected(Guid lessonId)
     {
         lock (_gate)
@@ -81,6 +103,22 @@ internal sealed class ClassLessonsFile
                 lesson.Turma = turma;
                 Save();
             }
+        }
+    }
+
+    // A lesson the map doesn't have, only heard of; one it has stays as it is.
+    public void RememberHeardOf(Guid lessonId, string turma)
+    {
+        lock (_gate)
+        {
+            if (Lessons().ContainsKey(lessonId))
+            {
+                return;
+            }
+            var lesson = LessonOf(lessonId);
+            lesson.Turma = turma;
+            lesson.HeardOf = true;
+            Save();
         }
     }
 
@@ -133,16 +171,18 @@ internal sealed class ClassLessonsFile
         }
     }
 
-    // The class is gone, or a new one takes its name: its lessons are nobody's now.
+    // The class is gone, or a new one takes its name: its lessons are of no
+    // class now, but stay known (what a PC set aside for them is cleared), with
+    // nothing left to compare their files with.
     public void ForgetClass(string turma)
     {
         lock (_gate)
         {
-            var lessons = Lessons();
-            var gone = lessons.Where(pair => SameClass(pair.Value.Turma, turma)).Select(pair => pair.Key).ToList();
-            foreach (var lessonId in gone)
+            var gone = Lessons().Values.Where(lesson => SameClass(lesson.Turma, turma)).ToList();
+            foreach (var lesson in gone)
             {
-                lessons.Remove(lessonId);
+                lesson.Turma = null;
+                lesson.Known.Clear();
             }
             if (gone.Count > 0)
             {
@@ -190,7 +230,7 @@ internal sealed class ClassLessonsFile
                     continue;
                 }
 
-                var lesson = new Lesson { Turma = entry.Turma, Collected = entry.Collected };
+                var lesson = new Lesson { Turma = entry.Turma, Collected = entry.Collected, HeardOf = entry.HeardOf };
                 foreach (var known in entry.Known ?? new())
                 {
                     if (known?.Path is { } path)
@@ -237,7 +277,8 @@ internal sealed class ClassLessonsFile
                 pair.Key, pair.Value.Turma, pair.Value.Collected,
                 pair.Value.Known.Count == 0
                     ? null
-                    : pair.Value.Known.Select(known => (StoredVersion?)new StoredVersion(known.Path, known.Size, known.LastWriteTicks)).ToList()))
+                    : pair.Value.Known.Select(known => (StoredVersion?)new StoredVersion(known.Path, known.Size, known.LastWriteTicks)).ToList(),
+                pair.Value.HeardOf))
                 .ToList();
             var tempPath = _path + ".tmp";
             File.WriteAllBytes(tempPath, JsonSerializer.SerializeToUtf8Bytes(stored));
@@ -255,11 +296,15 @@ internal sealed class ClassLessonsFile
 
         public bool Collected { get; set; }
 
+        // Only heard of from the room's Agents: another PC ran it (ClassStore.RememberLessonHeardOf).
+        public bool HeardOf { get; set; }
+
         // Paths upper-cased (invariant), so they compare ignoring case.
         public HashSet<(string Path, long Size, long LastWriteTicks)> Known { get; } = new();
     }
 
-    private sealed record StoredLesson(Guid LessonId, string? Turma, bool Collected, List<StoredVersion?>? Known);
+    // HeardOf: false in a map written before it.
+    private sealed record StoredLesson(Guid LessonId, string? Turma, bool Collected, List<StoredVersion?>? Known, bool HeardOf = false);
 
     private sealed record StoredVersion(string? Path, long Size, long LastWriteTicks);
 }

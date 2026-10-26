@@ -161,11 +161,14 @@ public sealed partial class ClassFolderSync
         return true;
     }
 
-    // The files of a listing that the PC set aside for lessons that are over, by lesson.
-    private static List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(ClassFolderClient.ListResult listing, ClassLesson lesson) =>
+    // The files of a listing that the PC set aside for lessons that are over,
+    // by lesson: only lessons this PC knows (CollectSetAside), so a PC with
+    // nothing else but another teacher PC's files is in sync without a copy turn.
+    private List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(ClassFolderClient.ListResult listing, ClassLesson lesson) =>
         listing.Entries
             .Where(entry => entry.LessonId != listing.CurrentLessonId && entry.LessonId != lesson.LessonId && entry.LessonId != Guid.Empty)
             .GroupBy(entry => entry.LessonId)
+            .Where(files => _store.KnowsLesson(files.Key))
             .ToList();
 
     // What one listing of the PC needs: files already in sync, to record, and the
@@ -256,10 +259,22 @@ public sealed partial class ClassFolderSync
     }
 
     // A PC whose Session is on another lesson: its Agent gets this one, unless it
-    // took it already (the Session follows within a few seconds).
+    // took it already and follows it still (the Session follows within a few
+    // seconds). An Agent that took it once is asked again rather than trusted:
+    // it may follow another lesson since (another teacher PC handed it one, or
+    // its state was lost), which nothing else would hand this one back for. One
+    // that doesn't answer is taken at its word.
     private async Task UpdateLessonAsync(KnownMachine machine, ClassLesson lesson, CancellationToken token)
     {
-        if (!_delivered.TryGetValue(Key(machine), out var savedAt) || savedAt != lesson.SavedAt)
+        var delivered = _delivered.TryGetValue(Key(machine), out var savedAt) && savedAt == lesson.SavedAt;
+        if (delivered
+            && await Task.Run(() => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token).ConfigureAwait(false)
+                is { } follows
+            && follows != lesson)
+        {
+            delivered = false;
+        }
+        if (!delivered)
         {
             var (_, sent, detail) = await Task.Run(() => SendLesson(machine, lesson), token).ConfigureAwait(false);
             if (!sent)

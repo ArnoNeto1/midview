@@ -62,7 +62,7 @@ public sealed partial class ClassFolderSyncTests
     // Agents, took the folders over and started a lesson of its own. Opened again, this
     // PC still has its lesson on (the Agents' newest is another one: nothing to adopt).
     // Confirmed remote, it ends it here, as one nobody collected, and stands down;
-    // nothing goes to the Agents.
+    // its end goes to the Agents too, and those in another lesson don't take it.
     [Fact]
     public async Task ALessonTheRoomLeftBehind_IsEndedHereUncollected_ThenItStandsDown()
     {
@@ -93,7 +93,7 @@ public sealed partial class ClassFolderSyncTests
             Assert.Contains(ClassLesson.None(0), changes);
             Assert.False(rig.Store.IsCollected(lesson.LessonId));
             Assert.True(log.Has($"The lesson of {Turma} ended here"));
-            Assert.All(rig.Pcs, pc => Assert.Equal(newest, pc.Agent.Current)); // nothing sent
+            Assert.All(rig.Pcs, pc => Assert.Equal(newest, pc.Agent.Current)); // the end of another lesson: not taken
         }
         finally
         {
@@ -101,11 +101,47 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
-    // PROF-2 takes the folders over on every Agent and starts 3º B there, saved at savedAt.
-    private static ClassLesson StartAnotherHomesLesson(ClassSyncRig rig, long savedAt)
+    // A split room: PC1 and PC2 ended this PC's lesson and follow PROF-2's
+    // now; PC3 is still in this PC's lesson, which the room left behind.
+    // Confirmed remote, this PC ends it on the Agents too, then here: PC3 is
+    // out of it at once (its student's downloads no longer go into the
+    // lesson's folder until the day ends), and PC1 and PC2 stay in PROF-2's.
+    [Fact]
+    public async Task ALessonTheRoomLeftBehind_IsEndedOnThePcsStillInIt()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var sync = rig.NewSync();
+        await sync.StartAsync(Turma);
+        var lesson = sync.Lesson;
+        var moved = rig.Pcs.Take(2).ToList();
+        var pc3 = rig.Pcs[2];
+        foreach (var pc in moved)
+        {
+            Assert.True(ClassFolderClient.SetLesson(
+                pc.Machine, rig.OtherMaster, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true }, rig.AgentPort).Succeeded);
+        }
+        var newest = StartAnotherHomesLesson(rig, lesson.SavedAt + 10, moved);
+        pc3.Follow();
+        pc3.Write("ainda.txt", Bytes(10, 1), Utc(1));
+
+        Assert.Null(await sync.StandDownForAnotherHomeAsync());
+
+        Assert.Equal(ClassLesson.None(0), sync.Lesson);
+        Assert.Equal(lesson.LessonId, pc3.Agent.Current.LessonId);
+        Assert.False(pc3.Agent.Current.IsOn);
+        Assert.All(moved, pc => Assert.Equal(newest, pc.Agent.Current));
+        Assert.False(rig.Store.IsCollected(lesson.LessonId));
+        // What PC3's student saved is set aside, kept on that PC.
+        pc3.Follow();
+        Assert.Contains(pc3.Folder.List().Entries, entry => entry.LessonId == lesson.LessonId && entry.Path == "ainda.txt");
+        Assert.Empty(pc3.Bin.FileNames());
+    }
+
+    // PROF-2 takes the folders over on those PCs (every one by default) and starts 3º B there, saved at savedAt.
+    private static ClassLesson StartAnotherHomesLesson(ClassSyncRig rig, long savedAt, IEnumerable<StudentPc>? pcs = null)
     {
         var lesson = new ClassLesson(savedAt, Guid.NewGuid(), "3º B", savedAt, Ended: false);
-        foreach (var pc in rig.Pcs)
+        foreach (var pc in pcs ?? rig.Pcs)
         {
             var claim = new ClassHomeClaim(OtherPc, ClassFolderRemote.Port, TakeOver: true, rig.NowTicks + TimeSpan.TicksPerHour);
             var (claimed, why, _) = ClassFolderClient.ClaimHome(pc.Machine, rig.OtherMaster, claim, rig.AgentPort);

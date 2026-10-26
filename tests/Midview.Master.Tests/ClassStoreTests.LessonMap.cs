@@ -100,6 +100,58 @@ public partial class ClassStoreTests
         Assert.Null(_store.TurmaOfLesson(lesson));
     }
 
+    // A lesson of a class deleted here is still known (what a PC set aside for
+    // it is cleared), unlike one never known (another teacher PC's, left alone).
+    [Fact]
+    public void LessonMap_ALessonOfADeletedClass_StaysKnown_WithNoClass()
+    {
+        MakeClass();
+        MakeClass("3º B");
+        var deleted = Guid.NewGuid();
+        var renamedOver = Guid.NewGuid();
+        _store.RememberLesson(deleted, "3º B");
+        _store.RememberLesson(renamedOver, Turma);
+        _store.RememberVersion(deleted, "a.txt", VersionOf("a"));
+        Assert.True(_store.Delete("3º B").Ok);
+        Directory.Delete(FolderOf(Turma));
+        MakeClass(); // a new class under the old name
+
+        var reopened = NewStore(_bin);
+        foreach (var lesson in new[] { deleted, renamedOver })
+        {
+            Assert.True(reopened.KnowsLesson(lesson));
+            Assert.True(reopened.RanLesson(lesson));
+            Assert.Null(reopened.TurmaOfLesson(lesson));
+        }
+        Assert.False(reopened.IsKnownVersion(deleted, "a.txt", VersionOf("a")));
+        Assert.False(reopened.KnowsLesson(Guid.NewGuid()));
+        Assert.False(reopened.RanLesson(Guid.NewGuid()));
+    }
+
+    // A lesson only heard of from the room's Agents: known, with its class,
+    // but not one this PC ran; a lesson already known stays as it was.
+    [Fact]
+    public void LessonMap_ALessonHeardOf_IsKnown_ButNotRun_AndNeverReplacesOneKnown()
+    {
+        MakeClass();
+        var heard = Guid.NewGuid();
+        var ours = Guid.NewGuid();
+        _store.RememberLesson(ours, Turma);
+        _store.MarkCollected(ours);
+
+        _store.RememberLessonHeardOf(heard, Turma);
+        _store.RememberLessonHeardOf(ours, Turma);
+
+        var reopened = NewStore(_bin);
+        Assert.True(reopened.KnowsLesson(heard));
+        Assert.False(reopened.RanLesson(heard));
+        Assert.Equal(Turma, reopened.TurmaOfLesson(heard));
+        Assert.False(reopened.IsCollected(heard));
+        Assert.True(reopened.RanLesson(ours));
+        Assert.True(reopened.IsCollected(ours));
+        Assert.Throws<ArgumentException>(() => _store.RememberLessonHeardOf(Guid.NewGuid(), "..\\fora"));
+    }
+
     [Fact]
     public void LessonMap_ACorruptFile_IsSetAside_AndTheMapStartsEmpty()
     {

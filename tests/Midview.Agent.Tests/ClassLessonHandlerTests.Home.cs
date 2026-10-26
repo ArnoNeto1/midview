@@ -93,6 +93,51 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal(HomePc, home.Current!.Thumbprint);
     }
 
+    // An end ends only the lesson it is of: another teacher PC's lesson (a
+    // lesson it held, ended; two starts at once), however new, leaves the one
+    // on here as it is, folder, policy and Chrome included, and is answered as
+    // an older lesson is (the sender's lesson is not the one followed here).
+    [Theory]
+    [InlineData(HomePc)]
+    [InlineData(OtherPc)]
+    public void Handle_AnEndOfAnotherLesson_IsNotTaken_AndTheLessonStaysOn(string sender)
+    {
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+        var lesson = Lesson("3º A", 100);
+        Assert.True(handler.Handle(lesson.Encode(), HomePc, "10.0.0.5").Succeeded);
+        var stateFile = File.ReadAllBytes(_statePath);
+        _inspector.Start("chrome.exe");
+        var theirs = Lesson("3º B", 500) with { Ended = true };
+
+        var (ok, detail) = handler.Handle(theirs.Encode(), sender, "10.0.0.7");
+
+        Assert.True(ok);
+        Assert.Equal($"{ClassLesson.KeptNewerText}: aula do 3º A", detail);
+        Assert.Equal(lesson, handler.Current);
+        Assert.Equal(stateFile, File.ReadAllBytes(_statePath));
+        Assert.True(IsProtected(FolderOf("3º A")));
+        Assert.Equal(FolderOf("3º A"), Policy(DownloadFolderPolicy.ChromeKey));
+        Assert.Empty(_inspector.Ended);
+    }
+
+    // With no lesson on, an end of any lesson is taken, newest first, as before.
+    [Fact]
+    public void Handle_WithNoLessonOn_AnEndOfAnyLesson_IsTaken()
+    {
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+        var lesson = Lesson("3º A", 100);
+        Assert.True(handler.Handle(lesson.Encode(), HomePc, "10.0.0.5").Succeeded);
+        Assert.True(handler.Handle((lesson with { SavedAt = 101, Ended = true }).Encode(), HomePc, "10.0.0.5").Succeeded);
+        var theirs = Lesson("3º B", 500) with { Ended = true };
+
+        var (ok, detail) = handler.Handle(theirs.Encode(), OtherPc, "10.0.0.7");
+
+        Assert.True(ok);
+        Assert.Equal("aula encerrada", detail);
+        Assert.Equal(theirs, handler.Current);
+        Assert.Equal(theirs, ClassLessonFile.Read(_statePath));
+    }
+
     // Decision 4: a Master that sent no claim (part 1) becomes the home by
     // starting the first lesson.
     [Fact]

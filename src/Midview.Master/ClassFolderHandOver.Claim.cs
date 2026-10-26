@@ -125,6 +125,44 @@ public sealed partial class ClassFolderHandOver
         return new ClaimResult(Outcome.NotTaken, why, generation, Array.Empty<string>());
     }
 
+    // After a take-over from a home that doesn't answer: each lesson the
+    // room's online Agents follow, on or ended (that home's, which this PC's
+    // store never had), is remembered as one heard of, with its class, made
+    // here when this PC has none of that name, so what the PCs set aside for it
+    // comes into that class at this PC's next lesson instead of staying on the
+    // PCs. A lesson already known stays as it is. Never throws: a class that
+    // can't be made is logged, and that lesson's files stay on the PCs.
+    private void LearnTheRoomsLessons()
+    {
+        var lessons = AskEach(AgentsOnline(), machine => ClassLessonOnAgents.Read(machine, _certificate, _agentPort, _log));
+        foreach (var lesson in lessons.OfType<ClassLesson>().Where(lesson => lesson.LessonId != Guid.Empty).DistinctBy(lesson => lesson.LessonId))
+        {
+            if (!ClassStore.IsValidName(lesson.Turma) || _store.KnowsLesson(lesson.LessonId))
+            {
+                continue;
+            }
+            try
+            {
+                var turma = lesson.Turma;
+                if (!_store.Exists(turma))
+                {
+                    var (made, why, name) = _store.Create(turma);
+                    if (!made)
+                    {
+                        _log($"The class {turma} of a lesson the room follows could not be made here: {why}");
+                        continue;
+                    }
+                    turma = name;
+                }
+                _store.RememberLessonHeardOf(lesson.LessonId, turma);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
+                _log($"The lesson of {lesson.Turma} the room follows could not be remembered: {ex.Message}");
+            }
+        }
+    }
+
     // The home an Agent keeps is this PC, at the generation it just claimed with.
     private bool IsThisPcAt(ClassHome home, long generation) =>
         home.Generation == generation

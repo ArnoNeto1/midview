@@ -360,7 +360,21 @@ settled what this section left open; the reviews changed some of it:
 - **Stragglers.** A student PC that was off during a take-over still names
   the old home. The home's next start, and the home's Master again as each
   PC comes online, claim it back with the home's generation; an Agent refuses
-  that while it follows a lesson of the home it names.
+  that while it follows a lesson of the home it names. When that lesson came
+  with the copy of the old home's classes (so it is over), the home's Master
+  ends it on that PC first, then claims it.
+- **Ends.** An Agent takes an end only of the lesson it follows, or with no
+  lesson on: another teacher PC's end never takes a PC out of the home's
+  lesson. A PC still in a lesson the home's Master ran and moved on from
+  (it was off for that lesson's end and the next start) is handed that
+  lesson's end first, so one teacher PC works as before.
+- **Files set aside for another PC's lesson.** What a student PC set aside for
+  a lesson this Master never knew stays on that PC (it is usually the other
+  teacher PC's, which brings it in); only a known lesson's files are brought
+  in, or cleared when that lesson was collected or its class deleted. Taking
+  the folders over from a home that doesn't answer remembers the lessons the
+  room follows and makes their classes, so their files come in at the next
+  lesson.
 - **Busy Agents.** An Agent waits at most 10 seconds for its lesson lock; then
   it answers "busy" and applies nothing later. The Master asks a busy Agent
   once more at a start, and hands it a lesson again about 10 seconds later.
@@ -391,7 +405,8 @@ settled what this section left open; the reviews changed some of it:
   stands down while a lesson of its own is on that the room still follows
   (it keeps the folders, and its own window, until that lesson ends, and
   hands that lesson's end to the PCs a few minutes more); a lesson of its own
-  that the room left behind is ended on that PC alone, keeping the files.
+  that the room left behind is ended, keeping the files, on that PC and on
+  the student PCs still in it.
   Nothing changes while a take-over isn't over, on either PC: the old home
   keeps its listener open until the PC taking the folders over says how it
   went (or a few minutes pass). The listener for colleagues is open only
