@@ -127,11 +127,13 @@ public sealed partial class ClassFolderSync
     // Whether a PC that keeps kept and follows followed is still in a lesson of
     // the home this PC took the folders over from while it didn't answer
     // (takenFrom), saved before then: off for that take-over, and nobody left
-    // to end that lesson. If that home was alive after all, a start goes on
-    // beside its lesson, as before two teacher PCs.
+    // to end that lesson. The same PC as ClassHome.IsSamePc tells it (paired
+    // again, say), never at a newer generation than the one taken over (a
+    // claim it made since). If that home was alive after all, a start goes on
+    // beside its lesson, as before this rule.
     private static bool TakenOverStraggler((ClassHome Home, long At)? takenFrom, ClassLesson followed, ClassHome? kept) =>
         takenFrom is { } from && kept is not null && followed.IsOn && followed.SavedAt < from.At
-        && kept.IsSameIdentity(from.Home.Thumbprint, from.Home.Name) && kept.Generation <= from.Home.Generation;
+        && from.Home.IsSamePc(kept.Thumbprint, kept.Name, kept.Generation) && kept.Generation <= from.Home.Generation;
 
     // ClassHomeFileMaster.ReadTakenOverFrom; null when it can't be read.
     private (ClassHome Home, long At)? TakenOverFrom()

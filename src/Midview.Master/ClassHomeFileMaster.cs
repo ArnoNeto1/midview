@@ -112,9 +112,11 @@ public static class ClassHomeFileMaster
     // then, and when (Unix seconds, this PC's clock): a PC still in a lesson
     // of that home from before then (off for the take-over) is a straggler's
     // to a start, which leaves it out. Null for none (a take-over with a copy
-    // clears it). Throws if the file can't be read.
+    // clears it; a record with no home is none). Throws if the file can't be read.
     public static (ClassHome Home, long At)? ReadTakenOverFrom(string? path = null) =>
-        Load(path ?? Path).TakenOverFrom is { } stored && stored.Home.ToHome() is { } home && IsHome(home) ? (home, stored.At) : null;
+        Load(path ?? Path).TakenOverFrom is { Home: { } stored } takenOver && stored.ToHome() is { } home && IsHome(home)
+            ? (home, takenOver.At)
+            : null;
 
     // Keeps it (null: none). Throws if it can't be read or written.
     public static void WriteTakenOverFrom(ClassHome? home, long at, string? path = null)

@@ -66,4 +66,22 @@ public sealed partial class ClassFolderHandOverTests
         Assert.DoesNotContain(pc1.Folder.List().Entries, entry => entry.LessonId == lesson.LessonId);
         Assert.Empty(store.Files("3º B"));
     }
+
+    // A take-over with a copy brings the old home's lessons along: no home
+    // taken over unanswered stays on file to leave a PC out of a start.
+    [Fact]
+    public async Task ATakeOverWithACopy_ForgetsAHomeTakenOverUnanswered()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        lab.FillTheOldHome();
+        ClassHomeFileMaster.WriteTakenOverFrom(
+            new ClassHome(new string('C', 40), "PROF-3", "10.0.0.9", ClassFolderRemote.Port, 1_000), 1_790_000_000, lab.NewHomePath);
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home);
+
+        Assert.True(result.Ok, result.Detail);
+        Assert.Null(ClassHomeFileMaster.ReadTakenOverFrom(lab.NewHomePath));
+    }
 }

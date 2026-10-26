@@ -413,14 +413,16 @@ settled what this section left open; the reviews changed some of it:
 - **Known limits.** Two Windows accounts sharing a copied `master-identity.pfx`
   can't be told apart. A hostile trusted teacher can push the generations to
   the ceiling (`class-home.json` on the Agents recovers). "Newest" compares
-  save times across teacher PCs, so their clocks must agree within the time
-  between lessons (within 2 s for the same-second rule), or a start can go
-  beside a live lesson, or be refused for a stale one. A start whose claims
-  all met busy Agents, and whose lesson every PC refuses, leaves a lesson on
-  with no PC in it until ended. If the other teacher PC goes off with its
-  lesson on, this PC's starts are refused until the PCs end it with the day.
-  Closing a Master anyway while its copy awaits the taker can leave that
-  take-over undecided: the copy stays (nothing deleted; the window says where).
+  save times across teacher PCs, and the moment of a take-over from a home that
+  didn't answer (this PC's clock) with that home's save times, so their clocks
+  must agree within the time between lessons (within 2 s for the same-second
+  rule), or a start can go beside a live lesson, or be refused for a stale one.
+  A start whose claims all met busy Agents, and whose lesson every PC refuses,
+  leaves a lesson on with no PC in it until ended. If the other teacher PC goes
+  off with its lesson on, this PC's starts are refused until the PCs end it
+  with the day. Closing a Master anyway while its copy awaits the taker can
+  leave that take-over undecided: the copy stays (nothing deleted; the window
+  says where).
 
 ### Classes
 
@@ -466,8 +468,7 @@ settled what this section left open; the reviews changed some of it:
 ## Testing
 
 - `Midview.Protocol.Tests`: encode/decode round-trips and rejection of
-  malformed payloads for every new message (listing, pull, push, lesson
-  state).
+  malformed payloads for every new message (listing, pull, push, lesson state).
 - `Midview.Master.Tests`: the per-file decision (new, changed, missing on
   PC, deleted by the teacher, still being written) as a pure function over
   two listings and an index; the store and index (arrival dates, "só os de
@@ -478,8 +479,7 @@ settled what this section left open; the reviews changed some of it:
   handing the folders over).
 - `Midview.Session.Tests`: listing skips hidden, linked and in-progress
   files; a push writes through a temp file and keeps the time; a push with
-  `..` or an absolute path is refused; a file held open is retried, not
-  fatal.
+  `..` or an absolute path is refused; a file held open is retried, not fatal.
 - `Midview.Agent.Tests`: lesson state save/corruption/newest-wins/
   reconcile; the folder's protection added and released (temp Desktop, as
   the existing folder tests); the download policy written and removed

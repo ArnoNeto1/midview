@@ -215,35 +215,61 @@ public sealed partial class ClassFolderSyncTests
     {
         using var rig = new ClassSyncRig(homes: 3);
         var (pc1, pc2, pc3) = (rig.Pcs[0], rig.Pcs[1], rig.Pcs[2]);
-        var seen = rig.Machines.ToList();
-        ClassLesson lesson;
-        using (var one = ProfOneSeeing(rig, seen))
-        {
-            await one.StartAsync(Turma);
-            await one.EndAsync(EndChoice.Keep); // every PC keeps PROF-1
-            rig.Now = rig.Now.AddMinutes(30);
-            seen.RemoveAll(machine => machine != pc3.Machine);
-            await one.StartAsync("3º B");
-            lesson = one.Lesson;
-            Assert.Equal(lesson, pc3.Agent.Current);
-        }
-        rig.Now = rig.Now.AddHours(1);
-        rig.Offline[pc3.Name] = true;
-        var store = rig.OwnStore("outro-professor");
-        var two = rig.NewSync(
-            machineName: OtherPc, master: rig.OtherMaster, lessonPath: OtherLessonPath(rig), homePath: OtherHomePath(rig), store: store);
-        var taker = new ClassFolderHandOver(
-            store, two, rig.OtherMaster, OtherPc, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
-            rig.AgentPort, homePath: OtherHomePath(rig), log: _ => { });
-        Assert.True((await taker.TakeOverUnreachableAsync(ThisPc)).Ok);
-        rig.Offline.Clear();
-        rig.Now = rig.Now.AddMinutes(10);
+        var (two, lesson) = await TakeOverWithPc3OffAsync(rig, lessonOnPc3: true);
 
         var started = await two.StartAsync("3º B");
 
         Assert.True(two.Lesson.IsOn, Said(started));
         Assert.All(new[] { pc1, pc2 }, pc => Assert.Equal((two.Lesson, OtherPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
         Assert.Equal((lesson, ThisPc), (pc3.Agent.Current, pc3.Agent.CurrentHome?.Name));
+    }
+
+    // ...the same when the old home is recorded under a new certificate (paired
+    // again) and PC3 still keeps its old one: the same PC by its name.
+    [Fact]
+    public async Task AfterATakeOverFromAHomePairedAgain_APcStillInItsLesson_IsLeftOut()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var (two, _) = await TakeOverWithPc3OffAsync(rig, lessonOnPc3: true);
+        var (recorded, at) = ClassHomeFileMaster.ReadTakenOverFrom(OtherHomePath(rig))!.Value;
+        ClassHomeFileMaster.WriteTakenOverFrom(recorded with { Thumbprint = new string('C', 40) }, at, OtherHomePath(rig));
+
+        var started = await two.StartAsync("3º B");
+
+        Assert.True(two.Lesson.IsOn, Said(started));
+    }
+
+    // But a lesson the old home started after the take-over (it came back,
+    // seeing only PC3), or a PC that keeps the old home above the generation
+    // taken over (it claimed PC3 again since): not a straggler's, and while
+    // that lesson is the room's newest, nothing starts.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AfterATakeOverFromAHomeThatDidntAnswer_ItsLessonOfLaterOrANewerClaim_StillBlocks(bool laterLesson)
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc3 = rig.Pcs[2];
+        var (two, _) = await TakeOverWithPc3OffAsync(rig, lessonOnPc3: !laterLesson);
+        var recorded = ClassHomeFileMaster.ReadTakenOverFrom(OtherHomePath(rig))!.Value.Home;
+        if (laterLesson)
+        {
+            using var back = ProfOneSeeing(rig, new List<KnownMachine> { pc3.Machine });
+            await back.StartAsync(Turma);
+            Assert.True(pc3.Agent.Current.IsOn);
+        }
+        else
+        {
+            Assert.True(ClassFolderClient.ClaimHome(
+                pc3.Machine, rig.Master, new ClassHomeClaim(ThisPc, ClassFolderRemote.Port, false, recorded.Generation + 1),
+                rig.AgentPort).Ok);
+        }
+        rig.Now = rig.Now.AddMinutes(1);
+
+        var lines = await two.StartAsync("3º B");
+
+        Assert.False(two.Lesson.IsOn, Said(lines));
+        Assert.All(lines, line => Assert.Equal((false, ClassFolderText.OtherPcsLessonOn(ThisPc)), (line.Ok, line.Detail)));
     }
 
     // Any start that meets another home's lesson.
@@ -272,6 +298,40 @@ public sealed partial class ClassFolderSyncTests
                 lessonPath: OtherLessonPath(rig), log: twoLog, homePath: OtherHomePath(rig));
         Assert.All(await two.StartAsync("3º B"), line => Assert.Equal(ClassFolderText.OtherPcsLessonFirst(ThisPc), line.Detail));
         return (two, one.Lesson);
+    }
+
+    // PROF-1 the home of every PC (a lesson ended there); with lessonOnPc3, its
+    // next lesson then on PC3 alone. PROF-1 breaks; an hour later PROF-2 takes
+    // the folders over from it, unanswered, with PC3 off, which is back ten
+    // minutes later. PROF-2, and PC3's lesson.
+    private static async Task<(ClassFolderSync Two, ClassLesson OnPc3)> TakeOverWithPc3OffAsync(ClassSyncRig rig, bool lessonOnPc3)
+    {
+        var pc3 = rig.Pcs[2];
+        var seen = rig.Machines.ToList();
+        using (var one = ProfOneSeeing(rig, seen))
+        {
+            await one.StartAsync(Turma);
+            await one.EndAsync(EndChoice.Keep);
+            if (lessonOnPc3)
+            {
+                rig.Now = rig.Now.AddMinutes(30);
+                seen.RemoveAll(machine => machine != pc3.Machine);
+                await one.StartAsync("3º B");
+                Assert.True(pc3.Agent.Current.IsOn);
+            }
+        }
+        rig.Now = rig.Now.AddHours(1);
+        rig.Offline[pc3.Name] = true;
+        var store = rig.OwnStore("outro-professor");
+        var two = rig.NewSync(
+            machineName: OtherPc, master: rig.OtherMaster, lessonPath: OtherLessonPath(rig), homePath: OtherHomePath(rig), store: store);
+        var taker = new ClassFolderHandOver(
+            store, two, rig.OtherMaster, OtherPc, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            rig.AgentPort, homePath: OtherHomePath(rig), log: _ => { });
+        Assert.True((await taker.TakeOverUnreachableAsync(ThisPc)).Ok);
+        rig.Offline.Clear();
+        rig.Now = rig.Now.AddMinutes(10);
+        return (two, pc3.Agent.Current);
     }
 
     private static string Said(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> lines) =>

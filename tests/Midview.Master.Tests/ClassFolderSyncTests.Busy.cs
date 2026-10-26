@@ -38,6 +38,30 @@ public sealed partial class ClassFolderSyncTests
         Assert.True(log.Has("PC1 was busy"));
     }
 
+    // ...and the same when this PC switches class with its own lesson on: a
+    // busy PC that keeps this PC says nothing of another home's lesson (only
+    // one that keeps another home could), so it never holds the start up.
+    [Fact]
+    public async Task ASwitchOfClassWithABusyAgent_InThisPcsOwnLesson_GoesOn()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var log = new FreeingLog();
+        using var sync = SyncWithLog(rig, log);
+        await sync.StartAsync(Turma);
+        Assert.All(rig.Pcs, pc => Assert.Equal(sync.Lesson, pc.Agent.Current));
+        rig.Now = rig.Now.AddMinutes(10);
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> started;
+        using (var busy = new BusyAgents(rig.Pcs.Take(1)))
+        {
+            log.FreeWhen(busy, $"PC1 didn't take this PC as the class folders' home: {ClassHomeClaim.BusyText}");
+            started = await sync.StartAsync("3º B");
+        }
+
+        Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
+        Assert.True(sync.Lesson.IsOn);
+        Assert.Equal("3º B", sync.Lesson.Turma);
+    }
+
     // PC1 was off when this PC took the folders over, so it still keeps PROF-2
     // (older): the start takes it back. Busy at the first try, it is asked once
     // more: free by then, it takes this PC and gets the lesson; still busy, its
