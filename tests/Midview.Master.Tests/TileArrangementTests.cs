@@ -64,4 +64,43 @@ public class TileArrangementTests
         Assert.Equal((5.0, 3.0), TileArrangement.Extent([new(0, 0), new(4, 2)]));
         Assert.Equal((3.5, 1.0), TileArrangement.Extent([new(2.5, 0)]));
     }
+
+    // A machine renamed in the room keeps its place, and its old name none.
+    [Fact]
+    public void Renamed_KeepsThePlaceUnderTheNewName()
+    {
+        var cells = new Dictionary<string, TileCell>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Aluno-23"] = new(3, 1),
+            ["Aluno-24"] = new(4, 1),
+        };
+
+        TileArrangement.Renamed(cells, "Aluno-23", "Sala2-PC05");
+
+        Assert.Equal(new TileCell(3, 1), cells["Sala2-PC05"]);
+        Assert.False(cells.ContainsKey("Aluno-23"));
+        Assert.Equal(new TileCell(4, 1), cells["Aluno-24"]);
+    }
+
+    [Fact]
+    public void Renamed_WithNoPlaceYet_ChangesNothing()
+    {
+        var cells = new Dictionary<string, TileCell>(StringComparer.OrdinalIgnoreCase) { ["Aluno-24"] = new(4, 1) };
+
+        TileArrangement.Renamed(cells, "Aluno-23", "Sala2-PC05");
+
+        Assert.Equal(["Aluno-24"], cells.Keys);
+    }
+
+    // Only the case changed: the same name, the same place.
+    [Fact]
+    public void Renamed_OnlyInCase_KeepsThePlace()
+    {
+        var cells = new Dictionary<string, TileCell>(StringComparer.OrdinalIgnoreCase) { ["aluno-23"] = new(3, 1) };
+
+        TileArrangement.Renamed(cells, "aluno-23", "ALUNO-23");
+
+        Assert.Equal(new TileCell(3, 1), cells["ALUNO-23"]);
+        Assert.Single(cells);
+    }
 }

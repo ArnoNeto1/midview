@@ -1101,6 +1101,12 @@ public partial class MainWindow : Window
             }
         }
 
+        // Renamed ("Editar a máquina"): its tile stays where the teacher put it.
+        if (original is not null && !string.Equals(original.Name, updated.Name, StringComparison.Ordinal))
+        {
+            TileArrangement.Renamed(_cells, original.Name, updated.Name);
+            SaveCells();
+        }
         InsertTile(position, updated);
         UpdateEmptyHint();
         SaveRoster();

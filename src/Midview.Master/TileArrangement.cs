@@ -55,6 +55,17 @@ public static class TileArrangement
     private static bool IsWhole(TileCell cell) =>
         cell.X >= 0 && cell.Y >= 0 && cell.X == Math.Round(cell.X) && cell.Y == Math.Round(cell.Y);
 
+    // A machine renamed in the room keeps the place the teacher gave it
+    // (places are kept by name), and its old name keeps none, so a machine
+    // named like that later starts from a free cell.
+    public static void Renamed(IDictionary<string, TileCell> cells, string from, string to)
+    {
+        if (cells.Remove(from, out var cell))
+        {
+            cells[to] = cell;
+        }
+    }
+
     // How many cells across and down the room takes, from its top-left
     // corner; at least one of each.
     public static (double Columns, double Rows) Extent(IEnumerable<TileCell> cells)
