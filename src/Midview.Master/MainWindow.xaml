@@ -10,6 +10,22 @@
              and whole groups move to a second row on a narrower window. -->
         <Border DockPanel.Dock="Top" Background="{StaticResource SlateBrush}" Padding="8,2">
             <WrapPanel>
+                <!-- Energia first, as the owner asked. -->
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" Click="OnPowerClassClicked" OpensOptions="True"
+                                             ToolTip="Desliga a turma, com aviso aos alunos." />
+                        <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" Click="OnRestartClassClicked" OpensOptions="True"
+                                             ToolTip="Reinicia a turma, com aviso aos alunos." />
+                        <local:ToolbarButton Content="Ligar" Icon="&#xE945;" Click="OnWakeClassClicked"
+                                             ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
+                        <local:ToolbarButton Content="Agendar" Icon="&#xE787;" Click="OnScheduleClicked" OpensOptions="True"
+                                             ToolTip="Escolhe dias e horários para ligar e desligar o laboratório." />
+                    </StackPanel>
+                    <TextBlock Text="Energia" Style="{StaticResource ToolbarGroupCaption}" />
+                </StackPanel>
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <local:ToolbarButton x:Name="ViewButton" Content="Ver a tela" Icon="&#xE890;" Click="OnViewSelectedClicked"
@@ -64,21 +80,6 @@
                                              ToolTip="Bloqueia a internet inteira ou alguns sites na turma." />
                     </StackPanel>
                     <TextBlock Text="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
-                </StackPanel>
-                <Rectangle Style="{StaticResource ToolbarSeparator}" />
-
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" Click="OnPowerClassClicked" OpensOptions="True"
-                                             ToolTip="Desliga a turma, com aviso aos alunos." />
-                        <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" Click="OnRestartClassClicked" OpensOptions="True"
-                                             ToolTip="Reinicia a turma, com aviso aos alunos." />
-                        <local:ToolbarButton Content="Ligar" Icon="&#xE945;" Click="OnWakeClassClicked"
-                                             ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
-                        <local:ToolbarButton Content="Agendar" Icon="&#xE787;" Click="OnScheduleClicked" OpensOptions="True"
-                                             ToolTip="Escolhe dias e horários para ligar e desligar o laboratório." />
-                    </StackPanel>
-                    <TextBlock Text="Energia" Style="{StaticResource ToolbarGroupCaption}" />
                 </StackPanel>
                 <Rectangle Style="{StaticResource ToolbarSeparator}" />
 
