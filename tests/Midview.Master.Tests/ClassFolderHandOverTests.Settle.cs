@@ -85,6 +85,13 @@ public sealed partial class ClassFolderHandOverTests
             Assert.True(DateTime.UtcNow < deadline, "still busy");
             await Task.Delay(50);
         }
+        // Changed comes from the expiry's own thread, a moment after IsBusy turns false.
+        while (Volatile.Read(ref changes) == 0)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "no Changed");
+            await Task.Delay(50);
+        }
+        await Task.Delay(300);
         Assert.Equal(1, Volatile.Read(ref changes));
     }
 
