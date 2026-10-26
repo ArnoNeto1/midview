@@ -91,9 +91,12 @@ public sealed partial class ClassFolderHandOver
         {
             _log($"{refused.Machine.Name} didn't take this PC as the class folders' home: {refused.Detail}");
         }
+        // The home this claim takes the room from: the strongest the Agents report, or this PC saw, that isn't this PC.
+        var replaced = ClassHomeTracker.Strongest((seen is null ? homes : homes.Append(seen))
+            .Where(home => !home.IsSamePc(_certificate.Thumbprint, _machineName, null)));
         if (answers.Any(answer => answer.Answer == Answer.Took))
         {
-            return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>());
+            return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>(), replaced);
         }
 
         var lost = answers.Where(answer => answer.Answer == Answer.Lost).ToList();
@@ -109,7 +112,7 @@ public sealed partial class ClassFolderHandOver
             if (reread.Any(read => read.Home is { } home && IsThisPcAt(home, generation)))
             {
                 _log("An Agent whose answer was lost took this PC as the class folders' home.");
-                return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>());
+                return new ClaimResult(Outcome.Taken, string.Empty, generation, Array.Empty<string>(), replaced);
             }
             var silent = lost.Where(answer => !reread.Any(read => read.Machine == answer.Machine && read.Answered))
                 .Select(answer => answer.Machine.Name).ToList();
@@ -234,6 +237,19 @@ public sealed partial class ClassFolderHandOver
         }
     }
 
+    // The home taken over from while it didn't answer, as of now (ClassHomeFileMaster.ReadTakenOverFrom); null: none.
+    private void KeepTakenOverFrom(ClassHome? home)
+    {
+        try
+        {
+            ClassHomeFileMaster.WriteTakenOverFrom(home, new DateTimeOffset(_localNow()).ToUnixTimeSeconds(), _homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            _log($"The class folders' home taken over from could not be saved: {ex.Message}");
+        }
+    }
+
     private void KeepGeneration(long generation)
     {
         try
@@ -262,5 +278,7 @@ public sealed partial class ClassFolderHandOver
 
     private sealed record HomeRead(KnownMachine Machine, bool Answered, ClassHome? Home);
 
-    private sealed record ClaimResult(Outcome Outcome, string Detail, long Generation, IReadOnlyList<string> Unknown);
+    // Replaced: the home the room is taken from (Claim); null for none known.
+    private sealed record ClaimResult(
+        Outcome Outcome, string Detail, long Generation, IReadOnlyList<string> Unknown, ClassHome? Replaced = null);
 }

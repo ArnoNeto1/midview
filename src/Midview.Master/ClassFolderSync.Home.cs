@@ -265,7 +265,7 @@ public sealed partial class ClassFolderSync
         {
             KeepGeneration(claimed);
         }
-        if (await AnotherHomesLessonOnAsync(reports, answers).ConfigureAwait(false) is { } otherHome)
+        if (await AnotherHomesLessonOnAsync(reports, others, answers).ConfigureAwait(false) is { } otherHome)
         {
             return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonOn(otherHome)));
         }

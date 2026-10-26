@@ -257,6 +257,7 @@ public sealed partial class ClassFolderHandOver
             stage.Value = Stage.Claimed;
             KeepGeneration(claimed.Generation);
             KeepHandedOver(null);
+            KeepTakenOverFrom(claimed.Replaced);
             _log($"This PC took the class folders over from {home}, which didn't answer, with generation {claimed.Generation}.");
             LearnTheRoomsLessons();
             return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
@@ -387,6 +388,7 @@ public sealed partial class ClassFolderHandOver
         stage.Value = Stage.Claimed;
         KeepGeneration(claimed.Generation);
         KeepHandedOver(null);
+        KeepTakenOverFrom(null); // the old home's lessons came with the copy
         _log($"This PC took the class folders over from {name} with generation {claimed.Generation}.");
 
         var text = new StringBuilder(ClassFolderText.TookOver(received.Classes, received.Files));

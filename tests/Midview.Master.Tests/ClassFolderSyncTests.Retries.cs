@@ -181,7 +181,72 @@ public sealed partial class ClassFolderSyncTests
         Assert.False(pc2.Agent.Current.IsOn);
     }
 
-    // A retry that finds that lesson still on.
+    // PROF-1's PCs busy with their students' folders when PROF-2 retries: their
+    // take-overs come back busy, not "Encerre a aula…", but their lessons can
+    // be read, and PROF-1's is the room's newest: nothing starts.
+    [Fact]
+    public async Task ARetryWhoseTakeOversFindTheOtherPcsPcsBusy_IsRefused()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var seen = rig.Machines.Skip(1).ToList();
+        using var one = ProfOneSeeing(rig, seen);
+        var (two, lesson) = await MeetTheOtherPcsLessonAsync(rig, one);
+        rig.Now = rig.Now.AddMinutes(1);
+
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> retry;
+        using (new BusyAgents(rig.Pcs.Skip(1)))
+        {
+            retry = await two.StartAsync("3º B");
+        }
+
+        Assert.False(two.Lesson.IsOn, Said(retry));
+        Assert.All(retry, line => Assert.Equal((false, ClassFolderText.OtherPcsLessonOn(ThisPc)), (line.Ok, line.Detail)));
+        Assert.False(rig.Pcs[0].Agent.Current.IsOn);
+        Assert.All(rig.Pcs.Skip(1), pc => Assert.Equal(lesson, pc.Agent.Current));
+    }
+
+    // PROF-1 was the home; its last lesson ran on PC3 alone, then its PC
+    // broke. PROF-2 took the folders over from the home that didn't answer,
+    // with PC3 off. PC3 comes back still in that lesson, which PROF-2 never
+    // knew: as a PC of the home taken over, in a lesson from before the
+    // take-over, it is left out, and PROF-2's starts go on.
+    [Fact]
+    public async Task AfterATakeOverFromAHomeThatDidntAnswer_APcStillInItsLesson_IsLeftOut()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var (pc1, pc2, pc3) = (rig.Pcs[0], rig.Pcs[1], rig.Pcs[2]);
+        var seen = rig.Machines.ToList();
+        ClassLesson lesson;
+        using (var one = ProfOneSeeing(rig, seen))
+        {
+            await one.StartAsync(Turma);
+            await one.EndAsync(EndChoice.Keep); // every PC keeps PROF-1
+            rig.Now = rig.Now.AddMinutes(30);
+            seen.RemoveAll(machine => machine != pc3.Machine);
+            await one.StartAsync("3º B");
+            lesson = one.Lesson;
+            Assert.Equal(lesson, pc3.Agent.Current);
+        }
+        rig.Now = rig.Now.AddHours(1);
+        rig.Offline[pc3.Name] = true;
+        var store = rig.OwnStore("outro-professor");
+        var two = rig.NewSync(
+            machineName: OtherPc, master: rig.OtherMaster, lessonPath: OtherLessonPath(rig), homePath: OtherHomePath(rig), store: store);
+        var taker = new ClassFolderHandOver(
+            store, two, rig.OtherMaster, OtherPc, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            rig.AgentPort, homePath: OtherHomePath(rig), log: _ => { });
+        Assert.True((await taker.TakeOverUnreachableAsync(ThisPc)).Ok);
+        rig.Offline.Clear();
+        rig.Now = rig.Now.AddMinutes(10);
+
+        var started = await two.StartAsync("3º B");
+
+        Assert.True(two.Lesson.IsOn, Said(started));
+        Assert.All(new[] { pc1, pc2 }, pc => Assert.Equal((two.Lesson, OtherPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
+        Assert.Equal((lesson, ThisPc), (pc3.Agent.Current, pc3.Agent.CurrentHome?.Name));
+    }
+
+    // Any start that meets another home's lesson.
     [Fact]
     public void TheOtherPcsLessonOnText_IsTheOneAgreed() => Assert.Equal(
         "a aula do PC PROF-1 continua em andamento; tente de novo quando ela acabar", ClassFolderText.OtherPcsLessonOn("PROF-1"));

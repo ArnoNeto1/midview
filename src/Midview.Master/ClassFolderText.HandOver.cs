@@ -241,7 +241,8 @@ public static partial class ClassFolderText
     // retry finds the room as it is (this PC keeps the newer claim).
     public static string OtherPcsLessonFirst(string pc) => $"o PC {pc} começou uma aula ao mesmo tempo; tente de novo";
 
-    // ...a retry that finds pc's lesson still on those PCs.
+    // ...any start that finds a lesson of pc (another home) on a PC it couldn't
+    // take back, while that lesson is the room's newest.
     public static string OtherPcsLessonOn(string pc) => $"a aula do PC {pc} continua em andamento; tente de novo quando ela acabar";
 
     // No PC of the room took this PC as the home (none answered).

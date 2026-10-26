@@ -1,3 +1,4 @@
+using System.IO;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -72,19 +73,26 @@ public sealed partial class ClassFolderSync
     }
 
     // A start some of whose take-overs were refused for a lesson on there
-    // ("Encerre a aula…": another home's, which never heard of this start):
-    // while the room's newest lesson, by SavedAt, is on and a PC that refused
-    // so follows it (the other teacher PC's lesson, or its next one), nothing
-    // starts here, as a second lesson would split the room; nor while such a
-    // PC's lesson can't be read (no start beside what can't be seen). The name
-    // of the home that PC keeps then, for every PC's line. Null otherwise: a
-    // lesson older than the room's newest, still on a PC that was off for its
-    // end, leaves only that PC out, as any PC still in an older home's lesson;
-    // so does one this PC knows is over (EndOfLessonOver: it came with the
-    // folders), which its pollers end there.
-    private async Task<string?> AnotherHomesLessonOnAsync(IReadOnlyList<HomeReport> reports, IReadOnlyList<ClaimAnswer> answers)
+    // ("Encerre a aula…": another home's, which never heard of this start), or
+    // came back busy (a busy PC may be in such a lesson too): while the room's
+    // newest lesson, by SavedAt, is on and such a PC follows it (the other
+    // teacher PC's lesson, or its next one), nothing starts here, as a second
+    // lesson would split the room; nor while such a PC's lesson can't be read
+    // (no start beside what can't be seen). The name of the home that PC keeps
+    // then, for every PC's line. Null otherwise: a lesson older than the room's
+    // newest, still on a PC that was off for its end, leaves only that PC out,
+    // as any PC still in an older home's lesson; so does one this PC knows is
+    // over (EndOfLessonOver: it came with the folders, and its pollers end it
+    // there), or one of a home this PC took the folders over from while it
+    // didn't answer, saved before then (TakenOverStraggler). others: the PCs
+    // claimed with a take-over (they keep another home).
+    private async Task<string?> AnotherHomesLessonOnAsync(
+        IReadOnlyList<HomeReport> reports, IReadOnlyList<HomeReport> others, IReadOnlyList<ClaimAnswer> answers)
     {
-        var refusing = answers.Where(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst)
+        var takenOver = others.Select(report => Key(report.Machine)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var refusing = answers
+            .Where(answer => (!answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst)
+                || (answer.Busy && takenOver.Contains(Key(answer.Machine))))
             .Select(answer => Key(answer.Machine)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (refusing.Count == 0)
         {
@@ -92,11 +100,15 @@ public sealed partial class ClassFolderSync
         }
         ClassHome? KeptBy(string key) =>
             reports.FirstOrDefault(report => string.Equals(Key(report.Machine), key, StringComparison.OrdinalIgnoreCase))?.Home;
+        var takenFrom = TakenOverFrom();
+        ClassLesson AsThisPcSeesIt(ClassLesson followed, ClassHome? kept) =>
+            EndOfLessonOver(followed, kept)
+            ?? (TakenOverStraggler(takenFrom, followed, kept) ? followed with { Ended = true } : followed);
         var lessons = (await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false))
             .GroupBy(read => Key(read.Machine), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(
                 group => group.Key,
-                group => group.First().Lesson is { } followed ? EndOfLessonOver(followed, KeptBy(group.Key)) ?? followed : null,
+                group => group.First().Lesson is { } followed ? AsThisPcSeesIt(followed, KeptBy(group.Key)) : null,
                 StringComparer.OrdinalIgnoreCase);
         var newest = ClassLessonOnAgents.Newest(lessons.Values, UnixNow());
         var holding = refusing.FirstOrDefault(key => lessons.GetValueOrDefault(key) is not { } followed
@@ -111,6 +123,29 @@ public sealed partial class ClassFolderSync
     }
 
     private static string NameOf(ClassHome home) => home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;
+
+    // Whether a PC that keeps kept and follows followed is still in a lesson of
+    // the home this PC took the folders over from while it didn't answer
+    // (takenFrom), saved before then: off for that take-over, and nobody left
+    // to end that lesson. If that home was alive after all, a start goes on
+    // beside its lesson, as before two teacher PCs.
+    private static bool TakenOverStraggler((ClassHome Home, long At)? takenFrom, ClassLesson followed, ClassHome? kept) =>
+        takenFrom is { } from && kept is not null && followed.IsOn && followed.SavedAt < from.At
+        && kept.IsSameIdentity(from.Home.Thumbprint, from.Home.Name) && kept.Generation <= from.Home.Generation;
+
+    // ClassHomeFileMaster.ReadTakenOverFrom; null when it can't be read.
+    private (ClassHome Home, long At)? TakenOverFrom()
+    {
+        try
+        {
+            return ClassHomeFileMaster.ReadTakenOverFrom(_homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
+            return null;
+        }
+    }
 
     // After a start's lesson went to the Agents: one that refused it for a
     // home that outranks this PC (it claimed the room meanwhile, on PCs this
