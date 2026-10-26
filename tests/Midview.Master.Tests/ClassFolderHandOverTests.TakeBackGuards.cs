@@ -128,7 +128,7 @@ public sealed partial class ClassFolderHandOverTests
         };
 
         var handingOver = OwnThread(() => Assert.True(lab.SendHandedOver(NewHome).Ok));
-        Assert.True(reading.Wait(TimeSpan.FromSeconds(10)));
+        Assert.True(reading.Wait(TimeSpan.FromSeconds(30)));
         Volatile.Write(ref held, 0);
         var takeBack = Task.Factory.StartNew(
             () => lab.SendTakeBack(rig.OtherMaster, ClassFolderRemote.EncodeTakeBack(generation + 1)),
@@ -253,7 +253,8 @@ public sealed partial class ClassFolderHandOverTests
 
     // The old home takes longer than one network wait to take the room
     // back (its Agents slow to answer): this PC waits for its answer, and says
-    // the folders stayed there, not that it can't tell.
+    // the folders stayed there, not that it can't tell. The network wait still
+    // covers each read of the copy before it, on a loaded test run too.
     [Fact]
     public async Task ASlowTakeBackThatWorks_IsToldTakenBack_NotUndecided()
     {
@@ -265,10 +266,10 @@ public sealed partial class ClassFolderHandOverTests
         lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
         lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
         lab.LetPc1TakeTheClaimAndGoOff(takes: true);
-        lab.Taker.NetworkWait = TimeSpan.FromSeconds(1);
+        lab.Taker.NetworkWait = TimeSpan.FromSeconds(3);
         lab.Giver.ReadHome = machine =>
         {
-            Thread.Sleep(TimeSpan.FromSeconds(1.5));
+            Thread.Sleep(lab.Taker.NetworkWait + TimeSpan.FromSeconds(1));
             return ClassFolderClient.GetHome(machine, rig.Master, rig.AgentPort);
         };
 

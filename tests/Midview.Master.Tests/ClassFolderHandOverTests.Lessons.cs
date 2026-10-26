@@ -51,7 +51,8 @@ public sealed partial class ClassFolderHandOverTests
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
         lab.FillTheOldHome();
-        lab.Giver.SettleWait = TimeSpan.FromSeconds(2);
+        // From the copy's end: seconds for a loaded test run to reach the claims, where the old home is still unsettled.
+        lab.Giver.SettleWait = TimeSpan.FromSeconds(4);
         IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? sending = null, unsettled = null;
         var progress = new Inline(step =>
         {

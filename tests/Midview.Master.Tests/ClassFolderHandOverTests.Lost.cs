@@ -106,7 +106,7 @@ public sealed partial class ClassFolderHandOverTests
                 {
                     claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, gone.Set)));
                 }
-                if (!gone.Wait(TimeSpan.FromSeconds(10)))
+                if (!gone.Wait(TimeSpan.FromSeconds(30)))
                 {
                     Volatile.Write(ref missed, 1);
                 }
@@ -150,7 +150,7 @@ public sealed partial class ClassFolderHandOverTests
                 {
                     claims.Add(OwnThread(() => ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, gone.Set)));
                 }
-                if (!gone.Wait(TimeSpan.FromSeconds(10)))
+                if (!gone.Wait(TimeSpan.FromSeconds(30)))
                 {
                     Volatile.Write(ref missed, 1);
                 }

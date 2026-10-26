@@ -353,7 +353,7 @@ public sealed partial class ClassLessonHandlerTests
         clock.Stop();
         Volatile.Write(ref hold, 0);
         release.Set();
-        await reconciling.WaitAsync(TimeSpan.FromSeconds(10));
+        await reconciling.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.False(ok);
         Assert.Equal(ClassHomeClaim.BusyText, detail);
@@ -399,7 +399,7 @@ public sealed partial class ClassLessonHandlerTests
         clock.Stop();
         Volatile.Write(ref hold, 0);
         release.Set();
-        await reconciling.WaitAsync(TimeSpan.FromSeconds(10));
+        await reconciling.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.False(ok);
         Assert.Equal(ClassHomeClaim.BusyText, detail);

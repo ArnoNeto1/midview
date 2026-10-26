@@ -17,6 +17,10 @@ public sealed partial class ClassFolderSyncTests
         var sync = rig.NewSync();
         await sync.StartAsync(Turma);
         var lesson = sync.Lesson;
+        // Before the end reaches the Agents: the sync's own adopt loop, held
+        // back on a busy test run, may adopt it before the call below does.
+        var changes = new List<ClassLesson>();
+        sync.LessonChanged += changes.Add;
         var pc1 = rig.Pcs[0];
         foreach (var pc in rig.Pcs)
         {
@@ -24,8 +28,6 @@ public sealed partial class ClassFolderSyncTests
         }
         pc1.Write("depois.txt", Bytes(10, 1), Utc(1)); // never copied
         var ended = EndOnTheAgents(rig, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true });
-        var changes = new List<ClassLesson>();
-        sync.LessonChanged += changes.Add;
 
         await sync.AdoptAgentsEndAsync();
 
@@ -103,9 +105,9 @@ public sealed partial class ClassFolderSyncTests
         var sync = rig.NewSync();
         await sync.StartAsync(Turma);
         var lesson = sync.Lesson;
-        EndOnTheAgents(rig, new ClassLesson(lesson.SavedAt + 5, Guid.NewGuid(), Turma, lesson.StartedAt, Ended: true));
-        var changes = new List<ClassLesson>();
+        var changes = new List<ClassLesson>(); // the adopt loop's too
         sync.LessonChanged += changes.Add;
+        EndOnTheAgents(rig, new ClassLesson(lesson.SavedAt + 5, Guid.NewGuid(), Turma, lesson.StartedAt, Ended: true));
 
         await sync.AdoptAgentsEndAsync();
 

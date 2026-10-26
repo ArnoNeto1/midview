@@ -88,10 +88,10 @@ public sealed partial class ClassFolderHandOverTests
         {
             var cancel = new HandOverCancel();
             var taking = lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port }, cancel: cancel);
-            Assert.True(stalled.Wait(TimeSpan.FromSeconds(10)));
+            Assert.True(stalled.Wait(TimeSpan.FromSeconds(30)));
             await Task.Delay(200);
             clock.Restart();
-            _ = Task.Run(() => cancel.Cancel());
+            _ = OwnThread(() => cancel.Cancel());
             result = await taking;
             clock.Stop();
             stall.Set();

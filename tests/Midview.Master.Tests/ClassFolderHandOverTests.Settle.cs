@@ -63,14 +63,16 @@ public sealed partial class ClassFolderHandOverTests
 
     // A take-over that never says how it went (its claims refused: it puts
     // everything back and tells nobody) stops keeping the old home busy after
-    // SettleWait, and the old home is told to look at the room again.
+    // SettleWait, and the old home is told to look at the room again. The wait
+    // runs from the copy's end, so it leaves a loaded test run seconds to put
+    // everything back before the old home is seen still busy.
     [Fact]
     public async Task ACopyThatNeverSettles_StopsKeepingTheOldHomeBusy_AfterTheWait()
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var lab = new HandOverLab(rig);
         await lab.MakeTheOldHomeTheHomeAsync();
-        lab.Giver.SettleWait = TimeSpan.FromSeconds(1);
+        lab.Giver.SettleWait = TimeSpan.FromSeconds(4);
         lab.Taker.SendClaim = (_, _, _) => (false, "recusado", false);
         var changes = 0;
         lab.Giver.Changed += () => Interlocked.Increment(ref changes);

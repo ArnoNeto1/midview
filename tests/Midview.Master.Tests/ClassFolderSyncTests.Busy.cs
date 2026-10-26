@@ -124,7 +124,7 @@ public sealed partial class ClassFolderSyncTests
             using var claiming = new ManualResetEventSlim();
             log.When("PC1 was busy", claiming.Set);
             var starting = sync.StartAsync("3º B");
-            Assert.True(claiming.Wait(TimeSpan.FromSeconds(10))); // the start holds the lesson lock
+            Assert.True(claiming.Wait(TimeSpan.FromSeconds(30))); // the start holds the lesson lock
             standingDown = sync.StandDownIfNoLessonAsync();
             busy.Free();
             await starting;

@@ -312,7 +312,7 @@ public sealed partial class ClassHomeTrackerTests
     // A file that is there but can't be read is tried once more, then said so;
     // it never passes for no file (which would let this PC claim the home with now).
     [Fact]
-    public async Task AFileThatCantBeRead_IsTriedAgain_ThenThrows()
+    public void AFileThatCantBeRead_IsTriedAgain_ThenThrows()
     {
         var folder = Path.Combine(Path.GetTempPath(), $"midview-generation-{Guid.NewGuid():N}");
         var path = Path.Combine(folder, "class-home.json");
@@ -328,15 +328,19 @@ public sealed partial class ClassHomeTrackerTests
             }
             Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
 
-            // Held for a moment only: the second try reads it.
+            // Held for a moment only: the second try reads it. Let go by a
+            // thread of its own, ahead of the others: one from a busy test
+            // run's pool could come after the second try, 200 ms on.
             var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
-            var letGo = Task.Run(async () =>
+            var letGo = new Thread(() =>
             {
-                await Task.Delay(50);
+                Thread.Sleep(50);
                 held.Dispose();
-            });
+            })
+            { Priority = ThreadPriority.Highest };
+            letGo.Start();
             Assert.Equal(Newer, ClassHomeFileMaster.Read(path));
-            await letGo;
+            Assert.True(letGo.Join(TimeSpan.FromSeconds(30)));
         }
         finally
         {

@@ -223,8 +223,8 @@ public sealed partial class RemoteClassFolderControllerTests
     }
 
     // A home whose state is what the test says (a lesson on, one PC copying),
-    // whose reads and creations each take Hold, and which counts how many of
-    // each reach it at once.
+    // whose reads and creations each take Hold (or wait for Gate), and which
+    // counts how many of each reach it at once.
     private sealed class ScriptedHome : IClassFolderController
     {
         public static readonly IReadOnlyList<PcLineDto> Pcs1 = new[] { new PcLineDto("PC1", nameof(PcSyncState.Copying), string.Empty) };
@@ -241,6 +241,9 @@ public sealed partial class RemoteClassFolderControllerTests
         public Func<string, IReadOnlyList<ResultLineDto>>? Start { get; init; }
 
         public TimeSpan Hold { get; init; }
+
+        // Instead of Hold: what each read and creation waits for, until the test lets it go.
+        public Task? Gate { get; init; }
 
         public int MostReadsAtOnce => Volatile.Read(ref _mostReads);
 
@@ -276,7 +279,7 @@ public sealed partial class RemoteClassFolderControllerTests
             Raise(ref _mostReads, Interlocked.Increment(ref _reading));
             try
             {
-                await Task.Delay(Hold);
+                await (Gate ?? Task.Delay(Hold));
                 return Read();
             }
             finally
@@ -290,7 +293,7 @@ public sealed partial class RemoteClassFolderControllerTests
             Raise(ref _mostCommands, Interlocked.Increment(ref _commanding));
             try
             {
-                await Task.Delay(Hold);
+                await (Gate ?? Task.Delay(Hold));
                 return (true, string.Empty, name);
             }
             finally

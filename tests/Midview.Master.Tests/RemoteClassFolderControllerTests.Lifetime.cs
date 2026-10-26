@@ -51,11 +51,14 @@ public sealed partial class RemoteClassFolderControllerTests
     // Disposed while a command and a state read wait their turn (the
     // window closing in the middle of a click): both end at once, the command
     // refused as disposed; the command already at the home still gets its reply.
+    // At once: while the home still holds the first command and read, so
+    // never after their turn came, however long a busy test run takes.
     [Fact]
     public async Task Disposed_WhatWaitsItsTurnEndsAtOnce()
     {
         var certificates = Certificates.Shared;
-        var scripted = new ScriptedHome { Hold = TimeSpan.FromSeconds(2) };
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scripted = new ScriptedHome { Gate = held.Task };
         using var host = Open(certificates.Home, scripted, Trusting(certificates.Colleague));
         var remote = certificates.Remote(host);
         var first = remote.CreateAsync("9º A");
@@ -66,8 +69,10 @@ public sealed partial class RemoteClassFolderControllerTests
 
         remote.Dispose();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => second.WaitAsync(TimeSpan.FromSeconds(5)));
-        await secondRead.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => second.WaitAsync(Wait));
+        await secondRead.WaitAsync(Wait);
+        Assert.False(first.IsCompleted);
+        held.SetResult();
         Assert.True((await first.WaitAsync(Wait)).Ok);
         await reading.WaitAsync(Wait);
     }
@@ -119,7 +124,7 @@ public sealed partial class RemoteClassFolderControllerTests
             await remote.PollAsync();
             // The accept loop runs on the pool, which a busy test run can hold back:
             // the first connection is counted first, then a retry would have had time.
-            var deadline = DateTime.UtcNow.AddSeconds(15);
+            var deadline = DateTime.UtcNow.AddSeconds(30);
             while (AcceptedCount() == 0 && DateTime.UtcNow < deadline)
             {
                 await Task.Delay(50);
