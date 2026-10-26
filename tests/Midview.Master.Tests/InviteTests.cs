@@ -8,10 +8,11 @@ using Xunit;
 // Both teachers' sides over loopback, with the machines faked (giveClass).
 public class InviteTests : IDisposable
 {
-    // As long as a teacher listens. Here both teachers share one thread
-    // pool: the join holds a thread while it listens, other test classes
-    // hold more, and the invite's answer can wait over half a second for a
-    // thread. Listening less made the join miss an invite that was open.
+    // As long as a teacher listens. The invite answers from the thread pool,
+    // which the test classes running alongside can keep busy past one
+    // listening time: a join (or a Find) that should hear the invite listens
+    // again while it hears nobody (Join, Heard), and joins run on threads of
+    // their own, so that they never hold a pool thread the answer needs.
     private static readonly TimeSpan Listen = TeacherInvite.ListenTime;
 
     // Where nobody should answer: a short wait can only make that pass.
@@ -60,12 +61,55 @@ public class InviteTests : IDisposable
     private static IReadOnlyList<IPEndPoint> Targets(params InviteHost[] hosts) =>
         hosts.Select(host => new IPEndPoint(IPAddress.Loopback, host.UdpPort)).ToList();
 
+    // A join that should find one of hosts: one that found nobody (NotFound:
+    // it sent no secret) listens again, until Wait is over.
     private Task<(string From, InviteResult Result)> Join(string code, X509Certificate2 certificate, params InviteHost[] hosts) =>
-        Join(code, certificate, Listen, hosts);
+        Join(code, certificate, hosts, progress: null);
 
-    private Task<(string From, InviteResult Result)> Join(
+    // progress: what the join that got an answer reported, in order.
+    private async Task<(string From, InviteResult Result)> Join(
+        string code, X509Certificate2 certificate, InviteHost[] hosts, List<string>? progress)
+    {
+        var deadline = DateTime.UtcNow + Wait;
+        while (true)
+        {
+            try
+            {
+                return await OwnThread(() =>
+                {
+                    progress?.Clear();
+                    return InviteJoin.Join(code, certificate, "PROF-02", Targets(hosts), Listen, progress is null ? null : progress.Add);
+                }).WaitAsync(Wait);
+            }
+            catch (InviteJoinException ex) when (ex.Message == InviteJoin.NotFound && DateTime.UtcNow < deadline)
+            {
+            }
+        }
+    }
+
+    // One join, listening this long: for where nobody should answer.
+    private Task<(string From, InviteResult Result)> JoinOnce(
         string code, X509Certificate2 certificate, TimeSpan listen, params InviteHost[] hosts) =>
-        Task.Run(() => InviteJoin.Join(code, certificate, "PROF-02", Targets(hosts), listen)).WaitAsync(Wait);
+        OwnThread(() => InviteJoin.Join(code, certificate, "PROF-02", Targets(hosts), listen)).WaitAsync(Wait);
+
+    // What a Find heard once it heard anyone, listening again until Wait is over.
+    private static async Task<IReadOnlyList<(IPEndPoint Endpoint, string Name)>> Heard(params InviteHost[] hosts)
+    {
+        var deadline = DateTime.UtcNow + Wait;
+        while (true)
+        {
+            var found = await OwnThread(() => InviteJoin.Find(Targets(hosts), Listen)).WaitAsync(Wait);
+            if (found.Count > 0)
+            {
+                return found;
+            }
+            Assert.True(DateTime.UtcNow < deadline, "No invite answered.");
+        }
+    }
+
+    // A join or a Find blocks for its whole listening time.
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     [Fact]
     public async Task TheRightCode_GivesTheColleagueTheClass()
@@ -73,8 +117,7 @@ public class InviteTests : IDisposable
         var host = Open();
         var progress = new List<string>();
 
-        var (from, result) = await Task.Run(() => InviteJoin.Join(host.Code, _teacherB, "PROF-02", Targets(host), Listen, progress.Add))
-            .WaitAsync(Wait);
+        var (from, result) = await Join(host.Code, _teacherB, new[] { host }, progress);
 
         Assert.Equal("PROF-01", from);
         Assert.Equal(TheClass.Given, result.Given);
@@ -109,7 +152,7 @@ public class InviteTests : IDisposable
             SynchronizationContext.SetSynchronizationContext(previous);
         }
 
-        Assert.Single(InviteJoin.Find(Targets(host), Listen));
+        Assert.Single(await Heard(host));
         var (from, result) = await Join(host.Code, _teacherB, host);
         Assert.Equal("PROF-01", from);
         Assert.Equal(TheClass.Given, result.Given);
@@ -138,7 +181,7 @@ public class InviteTests : IDisposable
         Assert.Equal(InviteHost.WrongCodeText, refused.Message);
         Assert.Equal(InviteEnd.WrongCode, (await host.Outcome.WaitAsync(Wait)).End);
         Assert.Empty(_grants);
-        var afterwards = await Assert.ThrowsAsync<InviteJoinException>(() => Join(host.Code, _teacherB, Silence, host));
+        var afterwards = await Assert.ThrowsAsync<InviteJoinException>(() => JoinOnce(host.Code, _teacherB, Silence, host));
         Assert.Equal(InviteJoin.NotFound, afterwards.Message);
     }
 
@@ -150,7 +193,7 @@ public class InviteTests : IDisposable
         var secret = TeacherInvite.Secret(host.Code);
         var elsewhere = secret + TeacherInvite.Check(someoneElse.Thumbprint, secret);
 
-        var refused = await Assert.ThrowsAsync<InviteJoinException>(() => Join(elsewhere, _teacherB, host));
+        var refused = await Assert.ThrowsAsync<InviteJoinException>(() => JoinOnce(elsewhere, _teacherB, Listen, host));
 
         // Had the secret (the right one) been sent, the class would be given.
         Assert.Equal(InviteJoin.NotFound, refused.Message);
@@ -164,7 +207,7 @@ public class InviteTests : IDisposable
         var host = Open(lifetime: TimeSpan.FromMilliseconds(300));
 
         Assert.Equal(InviteEnd.Expired, (await host.Outcome.WaitAsync(Wait)).End);
-        var refused = await Assert.ThrowsAsync<InviteJoinException>(() => Join(host.Code, _teacherB, Silence, host));
+        var refused = await Assert.ThrowsAsync<InviteJoinException>(() => JoinOnce(host.Code, _teacherB, Silence, host));
         Assert.Equal(InviteJoin.NotFound, refused.Message);
     }
 
@@ -172,7 +215,7 @@ public class InviteTests : IDisposable
     public async Task ClosingTheWindow_CancelsTheInvite_AndStopsAnswering()
     {
         var host = Open();
-        Assert.Single(InviteJoin.Find(Targets(host), Listen));
+        Assert.Single(await Heard(host));
 
         host.Dispose();
 
