@@ -348,12 +348,12 @@ settled what this section left open; the reviews changed some of it:
 - **Which PC is the home: generations, not a majority.** The home is a
   teacher PC's certificate and computer name, plus its generation: when it
   became the home (UTC ticks on its own clock). The Agents keep the claim
-  with the newest generation (none over a day past their clock and the one
-  they keep); a take-over must bring a newer one, so an old home never undoes
-  a newer take-over. The same PC is recognised under a new name (same
-  certificate and generation) or a new certificate (same name). Masters ask
-  the online Agents which home they keep, every 30 seconds and when the
-  window opens, and go by the newest one reported.
+  with the newest generation (none past the last tick a clock can show; no
+  student PC's clock counts); a take-over must bring a newer one, so an old
+  home never undoes a newer take-over. The same PC is recognised under a new
+  name (same certificate and generation) or a new certificate (same name).
+  Masters ask the online Agents which home they keep, every 30 seconds and
+  when the window opens, and go by the newest, the last name between equals.
 - **Becoming the home.** The first start in a lab makes its PC the home. A
   PC that has seen another PC as the home never becomes it by starting a
   lesson, only with "Guardar as pastas das turmas neste computador"; nor

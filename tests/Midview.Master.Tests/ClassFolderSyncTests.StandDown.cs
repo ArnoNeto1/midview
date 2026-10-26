@@ -171,6 +171,41 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
+    // Another lesson saved in that second but ended (PROF-2's, over by then)
+    // doesn't leave this PC's behind: PC3 still follows it, so it stays on.
+    [Fact]
+    public async Task AnotherLessonsEndOfTheSameSecond_DoesNotLeaveThisPcsLessonBehind()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc3 = rig.Pcs[2];
+        var visible = new List<KnownMachine> { pc3.Machine };
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => visible, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
+            lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            var theirs = StartAnotherHomesLesson(rig, lesson.SavedAt - 5, rig.Pcs.Take(2));
+            foreach (var pc in rig.Pcs.Take(2))
+            {
+                Assert.True(ClassFolderClient.SetLesson(
+                    pc.Machine, rig.OtherMaster, theirs with { SavedAt = lesson.SavedAt, Ended = true }, rig.AgentPort).Succeeded);
+            }
+            visible = rig.Machines.ToList();
+
+            Assert.Equal(lesson, await sync.StandDownForAnotherHomeAsync());
+
+            Assert.Equal(lesson, sync.Lesson);
+            Assert.Equal(lesson, pc3.Agent.Current);
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
     // PROF-2 takes the folders over on those PCs (every one by default) and starts 3º B there, saved at savedAt.
     // lesson: that one, already started on other PCs.
     private static ClassLesson StartAnotherHomesLesson(

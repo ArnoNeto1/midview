@@ -228,7 +228,10 @@ public sealed partial class ClassFolderRole : IDisposable
         {
             lock (_lock)
             {
-                return HandsOutLocked() && _latest is { Mode: ClassFolderMode.Local, Home: { } home } ? home.Generation : null;
+                // Never past the latest generation, which the Agents refuse (one kept from before that limit).
+                return HandsOutLocked() && _latest is { Mode: ClassFolderMode.Local, Home: { } home }
+                    ? Math.Min(home.Generation, ClassHome.MaxGeneration)
+                    : null;
             }
         }
     }

@@ -263,44 +263,6 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
     }
 
-    // Two PCs of the same generation: the one most Agents report, and on a tie the one the
-    // tracker already has, whichever that is.
-    [Fact]
-    public async Task ATie_KeepsTheCurrentHome()
-    {
-        using var rig = new ClassSyncRig(homes: 3);
-        Claim(rig, rig.Pcs[0], rig.OtherMaster, OtherPc, Older);
-        Claim(rig, rig.Pcs[1], rig.OtherMaster, OtherPc, Older);
-        Claim(rig, rig.Pcs[2], rig.Master, "PROF-3", Older);
-
-        using (var tracker = NewTracker(rig))
-        {
-            await tracker.RefreshAsync();
-            Assert.Equal(OtherPc, tracker.Home?.Name);
-
-            rig.Offline[rig.Pcs[0].Name] = true; // one each now
-            for (var refresh = 0; refresh < 5; refresh++)
-            {
-                await tracker.RefreshAsync();
-                Assert.Equal(OtherPc, tracker.Home?.Name);
-            }
-        }
-
-        rig.Offline[rig.Pcs[1].Name] = true;
-        using (var tracker = NewTracker(rig))
-        {
-            await tracker.RefreshAsync();
-            Assert.Equal("PROF-3", tracker.Home?.Name);
-
-            rig.Offline.TryRemove(rig.Pcs[1].Name, out _); // one each now
-            for (var refresh = 0; refresh < 5; refresh++)
-            {
-                await tracker.RefreshAsync();
-                Assert.Equal("PROF-3", tracker.Home?.Name);
-            }
-        }
-    }
-
     [Fact]
     public async Task NoAgentOnline_IsLocal_ForAPcThatSawNoHome()
     {

@@ -33,7 +33,11 @@ public partial class MainWindow
     // another PC's folders, that its own stay in its "Turmas"
     // (ClassFolderText.AsideNote): read at the start, after every take-over
     // and at every change of the role, said in the window; null for none.
+    // _classAsideReads: the reads begun, so only the latest one's note is shown
+    // (reads overlap: an older one finishing last would show what changed).
+    // UI thread only.
     private string? _classAsideNote;
+    private long _classAsideReads;
 
     // Before the tiles: their pollers hand the lesson to each machine's Agent.
     private ClassFolderSync StartClassFolder()
@@ -125,9 +129,15 @@ public partial class MainWindow
     // and this PC's own classes while it works another PC's, in the window too when open.
     private async Task ReadAsideNoteAsync()
     {
+        var read = ++_classAsideReads;
         var remote = _classRole.Mode == ClassFolderMode.Remote;
         var where = Path.GetDirectoryName(ClassStore.DefaultFilesRoot) ?? string.Empty;
-        _classAsideNote = await Task.Run(() => ClassFolderText.AsideNote(_classStore, remote, where));
-        _classWindow?.ShowAsideNote(_classAsideNote);
+        var note = await Task.Run(() => ClassFolderText.AsideNote(_classStore, remote, where));
+        if (read != _classAsideReads)
+        {
+            return; // a later read is on its way
+        }
+        _classAsideNote = note;
+        _classWindow?.ShowAsideNote(note);
     }
 }

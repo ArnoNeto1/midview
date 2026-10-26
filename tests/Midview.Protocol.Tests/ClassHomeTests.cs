@@ -116,6 +116,18 @@ public class ClassHomeTests
         }
     }
 
+    // The latest generation is the last tick a clock can show; the one after
+    // a generation never goes past it.
+    [Fact]
+    public void TheLatestGeneration_IsTheLastTickOfAClock_AndNextStopsThere()
+    {
+        Assert.Equal(ClassHome.MaxGeneration, DateTime.MaxValue.Ticks);
+        Assert.Equal(6L, ClassHome.Next(5));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHome.Next(ClassHome.MaxGeneration - 1));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHome.Next(ClassHome.MaxGeneration));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHome.Next(long.MaxValue));
+    }
+
     [Fact]
     public void Encode_TheGeneration_IsTheLastEightBytes_BigEndian()
     {

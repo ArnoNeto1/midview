@@ -38,6 +38,16 @@ public sealed record ClassHome(string Thumbprint, string Name, string Address, i
     // sent no claim): "As pastas das turmas ficam no PC de outro professor".
     public const string UnnamedText = "de outro professor";
 
+    // The latest generation there can be: the last tick a clock can show
+    // (DateTime.MaxValue.Ticks). An Agent refuses a claim past it, and a
+    // Master never claims past it (Next), so a home kept at a bogus
+    // generation (long.MaxValue, say) can't put every later take-over out of
+    // reach. Nothing goes by a student PC's clock, which may be years behind.
+    public const long MaxGeneration = 3_155_378_975_999_999_999;
+
+    // The generation just after this one, never past MaxGeneration.
+    public static long Next(long generation) => generation >= MaxGeneration ? MaxGeneration : generation + 1;
+
     // No home: what an Agent has before any lesson claimed it.
     public static ClassHome? None => null;
 

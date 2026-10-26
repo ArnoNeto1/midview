@@ -74,9 +74,10 @@ public sealed partial class ClassFolderSync
     }
 
     // Whether the newest lesson the room follows (of those lessons) says ours
-    // is over there: a newer one that isn't ours on, or another lesson saved
-    // in the same second as ours (the other home's, started at the same
-    // moment), which the room keeps as the home's. The SavedAt come from two
+    // is over there: a newer one that isn't ours on, or another lesson on
+    // that was saved in the same second as ours (the other home's, started at
+    // the same moment), which the room keeps as the home's; one of that second
+    // already ended says nothing of ours. The SavedAt come from two
     // teacher PCs' clocks (another home's lesson), so clocks far apart could
     // get this wrong; as with generations, a lab's teacher PCs are taken to
     // agree within the time between lessons.
@@ -85,7 +86,7 @@ public sealed partial class ClassFolderSync
         && (newest.SavedAt > ours.SavedAt
             ? newest.LessonId != ours.LessonId || !newest.IsOn
             : newest.SavedAt == ours.SavedAt
-              && lessons.Any(lesson => lesson is { } other && other.SavedAt == ours.SavedAt && other.LessonId != ours.LessonId));
+              && lessons.Any(lesson => lesson is { IsOn: true } other && other.SavedAt == ours.SavedAt && other.LessonId != ours.LessonId));
 
     // The newest lesson the online Agents follow (ClassLessonOnAgents.Newest); null for none.
     private async Task<ClassLesson?> NewestOnTheAgentsAsync(CancellationToken token) =>
@@ -108,10 +109,17 @@ public sealed partial class ClassFolderSync
     // names. A file that can't be read counts as one seen. So does an online
     // Agent following a lesson newer than ours (another lesson: another PC
     // started it since), whatever home it keeps or whether that can be read.
-    private async Task<bool> AnotherHomeSeenOrNamedAsync(ClassLesson ours, CancellationToken token) =>
-        await AnotherHomeSeenOrNamedAsync().ConfigureAwait(false)
-        || (await LessonsOnTheAgentsAsync(token).ConfigureAwait(false))
-            .Any(read => read.Lesson is { } followed && followed.SavedAt > ours.SavedAt && followed.LessonId != ours.LessonId);
+    // The homes and the lessons are asked at once: a PC that doesn't answer
+    // costs one wait, not two.
+    private async Task<bool> AnotherHomeSeenOrNamedAsync(ClassLesson ours, CancellationToken token)
+    {
+        var lessons = LessonsOnTheAgentsAsync(token);
+        var named = AnotherHomeSeenOrNamedAsync();
+        await Task.WhenAll(lessons, named).ConfigureAwait(false);
+        return await named.ConfigureAwait(false)
+            || (await lessons.ConfigureAwait(false))
+                .Any(read => read.Lesson is { } followed && followed.SavedAt > ours.SavedAt && followed.LessonId != ours.LessonId);
+    }
 
     private async Task<bool> AnotherHomeSeenOrNamedAsync()
     {

@@ -236,9 +236,10 @@ public static partial class ClassFolderText
     public const string HandOverRunningHere = "as pastas das turmas estão passando para outro computador; espere a troca terminar";
 
     // ...when this PC and pc claimed the room at once, and pc's lesson was on
-    // the PCs before this PC could take them: the folders come to this PC
-    // once that lesson ends.
-    public static string OtherPcsLessonFirst(string pc) => $"o PC {pc} começou uma aula antes; tente de novo quando ela acabar";
+    // PCs this PC couldn't take back then. That lesson may be taken back by
+    // the time the teacher reads this, so the line doesn't say it is on; a
+    // retry finds the room as it is (this PC keeps the newer claim).
+    public static string OtherPcsLessonFirst(string pc) => $"o PC {pc} começou uma aula ao mesmo tempo; tente de novo";
 
     // No PC of the room took this PC as the home (none answered).
     public const string NoPcTookIt = "Nenhum PC da sala respondeu.";
@@ -250,12 +251,9 @@ public static partial class ClassFolderText
     public const string HandOverStillRunning =
         "As pastas das turmas estão passando de um computador para outro. Espere a troca terminar para fechar o Midview.";
 
-    // Said once in the window when a take-over left classes aside, beside the
-    // class folders (folders: their names; where: the folder they are in), or
-    // when this PC works another PC's folders while its own "Turmas" holds
-    // classes (ownClassesHidden: it stopped being the home with no hand-over,
-    // and they stay there, as the room may name this PC again). Null for none.
-    // ...for this PC's store, while it works another PC's folders (remote) or its own.
+    // AsideNote for this PC's store (where: the folder its "Turmas" is in):
+    // the folders a take-over left beside it, and, while this PC works another
+    // PC's folders (remote), its own classes when it has any.
     public static string? AsideNote(ClassStore store, bool remote, string where) =>
         AsideNote(store.AsideFolders(), where, remote && HasClasses(store));
 
@@ -272,6 +270,13 @@ public static partial class ClassFolderText
         }
     }
 
+    // What the window says above the classes, whenever it is opened and as it
+    // changes: where classes a take-over left aside are, beside the class
+    // folders (folders: their names; where: the folder they are in), and,
+    // when this PC works another PC's folders while its own "Turmas" holds
+    // classes (ownClassesHidden: it stopped being the home with no hand-over,
+    // and they stay there, as the room may name this PC again), that those
+    // are there. Null for none.
     public static string? AsideNote(IReadOnlyList<string> folders, string where, bool ownClassesHidden = false)
     {
         var said = new List<string>();

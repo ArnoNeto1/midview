@@ -83,7 +83,7 @@ public sealed partial class ClassFolderHandOver
         var generation = Math.Max(
             ClassHomeFileMaster.TakeOverGeneration(
                 new DateTimeOffset(_localNow()).UtcTicks, seen is null ? homes : homes.Append(seen)),
-            above == long.MaxValue ? above : above + 1);
+            ClassHome.Next(above));
         var claim = new ClassHomeClaim(_machineName, _homePort, TakeOver: true, generation);
         var answers = AskEach(online, machine => ClaimOn(machine, claim, retryBusy));
         foreach (var refused in answers.Where(answer => answer.Answer == Answer.Refused))

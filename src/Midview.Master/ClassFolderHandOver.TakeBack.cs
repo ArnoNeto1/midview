@@ -74,10 +74,11 @@ public sealed partial class ClassFolderHandOver
             }
             // Newer than what this PC gave up, whatever it says, and no further
             // ahead than a day (of this PC's clock, or of what it gave up when
-            // that is later): a bogus answer kept as the home seen would put
-            // every later take-over out of reach (Ruling 23).
-            var floor = abandoned == long.MaxValue ? abandoned : abandoned + 1;
-            var ceiling = Plus(Math.Max(new DateTimeOffset(_localNow()).UtcTicks, abandoned), TakeBackHorizon);
+            // that is later) nor past the latest generation: a bogus answer
+            // kept as the home seen would put every later take-over out of reach.
+            var floor = ClassHome.Next(abandoned);
+            var ceiling = Math.Min(
+                ClassHome.MaxGeneration, Plus(Math.Max(new DateTimeOffset(_localNow()).UtcTicks, abandoned), TakeBackHorizon));
             return long.TryParse(why, NumberStyles.None, CultureInfo.InvariantCulture, out var generation)
                 && generation > floor && generation <= ceiling
                 ? generation

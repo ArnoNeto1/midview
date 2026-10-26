@@ -36,26 +36,18 @@ public sealed class ClassHomeState
     // claim): "As pastas das turmas ficam no PC de outro professor".
     public const string UnnamedHomeText = ClassHome.UnnamedText;
 
-    // A claim whose generation is further ahead than MaxAhead.
-    public const string TooFarAheadText = "pedido com data adiantada demais; confira o relógio do PC do professor";
-
-    // How far past the newer of this PC's clock and the recorded generation a
-    // claim's generation may be: one far ahead (long.MaxValue, say) would put
-    // every later take-over out of reach for good.
-    public static readonly TimeSpan MaxAhead = TimeSpan.FromDays(1);
+    // A claim whose generation is past ClassHome.MaxGeneration.
+    public const string GenerationTooLargeText = "pedido inválido: data da troca além do limite";
 
     private readonly string _statePath;
     private readonly Action<string> _log;
-    private readonly Func<DateTime> _localNow;
     private readonly object _gate = new();
     private ClassHome? _home;
 
-    // localNow: this PC's clock (DateTime.Now by default).
-    public ClassHomeState(string statePath, Action<string>? log = null, Func<DateTime>? localNow = null)
+    public ClassHomeState(string statePath, Action<string>? log = null)
     {
         _statePath = statePath;
         _log = log ?? AgentLog.Warn;
-        _localNow = localNow ?? (() => DateTime.Now);
         _home = Load(statePath);
     }
 
@@ -73,8 +65,9 @@ public sealed class ClassHomeState
     // refreshes what is recorded and keeps the newer generation. Another PC is
     // refused, naming the home, unless it takes the folders over with a newer
     // generation than the home's (an old home can't undo a takeover) and no
-    // lesson is on. A generation more than MaxAhead past the newer of this
-    // PC's clock and the recorded one is refused from any PC (TooFarAheadText).
+    // lesson is on. A generation past ClassHome.MaxGeneration is refused from
+    // any PC (GenerationTooLargeText); this PC's clock counts for nothing (a
+    // student PC's may be years behind, its battery dead).
     public (bool Ok, string Detail) Claim(string senderThumbprint, string senderAddress, ClassHomeClaim claim, bool lessonOn)
     {
         if (!IsSender(senderThumbprint, senderAddress) || claim.Name.Length == 0 || !IsUsable(claim.Name, claim.Port)
@@ -82,14 +75,14 @@ public sealed class ClassHomeState
         {
             return (false, "pedido inválido");
         }
+        if (claim.Generation > ClassHome.MaxGeneration)
+        {
+            return (false, GenerationTooLargeText);
+        }
 
         lock (_gate)
         {
             var home = _home;
-            if (claim.Generation > Latest(home?.Generation ?? 0))
-            {
-                return (false, TooFarAheadText);
-            }
             ClassHome claimed;
             string detail;
             if (home is null)
@@ -203,15 +196,6 @@ public sealed class ClassHomeState
 
         Volatile.Write(ref _home, home);
         _log($"Class folders' home: {(home.Name.Length > 0 ? home.Name : "(no name)")} at {home.Address} ({home.Thumbprint}).");
-    }
-
-    // The latest generation a claim may bring (UTC ticks): MaxAhead past the
-    // newer of this PC's clock and the one recorded, so a room whose
-    // generations ran ahead of this clock still takes newer take-overs.
-    private long Latest(long recorded)
-    {
-        var from = Math.Max(new DateTimeOffset(_localNow()).UtcTicks, recorded);
-        return from > long.MaxValue - MaxAhead.Ticks ? long.MaxValue : from + MaxAhead.Ticks;
     }
 
     private static string Normalize(string thumbprint) => thumbprint.ToUpperInvariant();

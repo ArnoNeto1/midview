@@ -190,6 +190,14 @@ public sealed partial class ClassFolderSync : IDisposable
     // fresh listing, just before it copies anything.
     internal Action<KnownMachine>? CopyingStarts { get; set; }
 
+    // For the tests: how a lesson goes to a machine's Agent instead of
+    // ClassLessonOnAgents.Send (an Agent that takes it and whose answer is lost).
+    internal Func<KnownMachine, ClassLesson, (bool Ok, string Detail)>? SendToAgent { get; set; }
+
+    // For the tests: called once a start has read which home the Agents keep,
+    // just before its claims go out (another PC's claims landing meanwhile).
+    internal Action? ClaimsGoingOut { get; set; }
+
     // A new lesson of that class: saved, then sent to every PC's Agent at once,
     // with what each answered. The window only starts one with no lesson on
     // ("Trocar de turma…" ends the lesson first, with EndAsync). A lesson still
@@ -447,13 +455,13 @@ public sealed partial class ClassFolderSync : IDisposable
     // that one is ended there (EndOfLessonOver).
     private (KnownMachine Machine, bool Ok, string Detail) SendLesson(KnownMachine machine, ClassLesson lesson)
     {
-        var (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
+        var (succeeded, detail) = Send(machine, lesson);
         if (!succeeded && !lesson.IsOn && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal)
             && ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log) is { } followed
             && EndOfLessonOver(followed, HomeOf(machine)?.Home) is { } over
-            && ClassLessonOnAgents.Send(machine, _masterCertificate, over, _agentPort).Ok)
+            && Send(machine, over).Ok)
         {
-            (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
+            (succeeded, detail) = Send(machine, lesson);
         }
         if (succeeded)
         {
@@ -461,4 +469,7 @@ public sealed partial class ClassFolderSync : IDisposable
         }
         return (machine, succeeded, !succeeded && detail == ClassHomeClaim.BusyText ? ClassFolderText.LessonBusy : detail);
     }
+
+    private (bool Ok, string Detail) Send(KnownMachine machine, ClassLesson lesson) =>
+        SendToAgent?.Invoke(machine, lesson) ?? ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
 }

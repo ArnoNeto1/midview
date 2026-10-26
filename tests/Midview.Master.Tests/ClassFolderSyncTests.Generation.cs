@@ -33,6 +33,35 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(generation + 1, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
+    // A generation on file past the latest one (kept from before that limit)
+    // is claimed at the latest, which the Agents take, and kept so.
+    [Fact]
+    public async Task AGenerationOnFilePastTheLatest_IsClaimedAtTheLatest()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        ClassHomeFileMaster.Write(long.MaxValue, rig.HomePath);
+        var sync = rig.NewSync();
+
+        var started = await sync.StartAsync(Turma);
+
+        Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
+        Assert.All(rig.Pcs, pc => Assert.Equal((ThisPc, ClassHome.MaxGeneration), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHomeFileMaster.Read(rig.HomePath));
+    }
+
+    // A take-over's generation is newer than every home reported, and never
+    // past the latest one, whatever a home reports (one kept from before that limit).
+    [Fact]
+    public void ATakeOversGeneration_NeverPassesTheLatest()
+    {
+        ClassHome At(long generation) => new(new string('A', 40), OtherPc, "10.0.0.6", ClassFolderRemote.Port, generation);
+
+        Assert.Equal(ClassHome.MaxGeneration, ClassHomeFileMaster.TakeOverGeneration(500, new[] { At(long.MaxValue) }));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHomeFileMaster.TakeOverGeneration(500, new[] { At(ClassHome.MaxGeneration) }));
+        Assert.Equal(ClassHome.MaxGeneration, ClassHomeFileMaster.TakeOverGeneration(500, new[] { At(ClassHome.MaxGeneration - 1) }));
+        Assert.Equal(1_001, ClassHomeFileMaster.TakeOverGeneration(500, new[] { At(1_000) }));
+    }
+
     // An Agent that names another PC never counts toward this PC's generation.
     [Fact]
     public async Task AnotherPcsNewerGeneration_IsNeverTakenForThisPcs()

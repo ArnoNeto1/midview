@@ -107,11 +107,12 @@ public static class ClassHomeFileMaster
     }
 
     // The generation a takeover claims with: newer than every home the Agents
-    // report, and than now (UTC ticks) when this PC's clock is ahead of theirs.
+    // report, and than now (UTC ticks) when this PC's clock is ahead of theirs;
+    // never past ClassHome.MaxGeneration, which an Agent refuses.
     public static long TakeOverGeneration(long nowUtcTicks, IEnumerable<ClassHome> reported)
     {
         var newest = reported.Select(home => home.Generation).DefaultIfEmpty(0).Max();
-        return Math.Max(nowUtcTicks, newest == long.MaxValue ? long.MaxValue : newest + 1);
+        return Math.Min(ClassHome.MaxGeneration, Math.Max(nowUtcTicks, ClassHome.Next(newest)));
     }
 
     private static Stored Load(string path)

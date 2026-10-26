@@ -92,18 +92,31 @@ internal sealed class ClassSyncRig : IDisposable
 
     // An hour between rounds by default, so only the test runs them. By default
     // the teacher PC is Master, MachineName, with the lesson at LessonPath and
-    // its generation at HomePath; another teacher PC of the lab has its own
-    // name and files.
+    // its generation at HomePath, over Store, on the rig's clock; another
+    // teacher PC of the lab has its own name and files, and may have its own
+    // store (OwnStore) and clock.
     public ClassFolderSync NewSync(
         TimeSpan? interval = null, string machineName = MachineName, X509Certificate2? master = null, string? lessonPath = null,
-        string? homePath = null)
+        string? homePath = null, ClassStore? store = null, Func<DateTime>? clock = null)
     {
         var sync = new ClassFolderSync(
-            Store, master ?? Master, () => Machines, machine => !Offline.ContainsKey(machine.Name), () => Now, machineName,
-            agentPort: AgentPort, sessionPort: SessionPort, interval: interval ?? TimeSpan.FromHours(1),
+            store ?? Store, master ?? Master, () => Machines, machine => !Offline.ContainsKey(machine.Name), clock ?? (() => Now),
+            machineName, agentPort: AgentPort, sessionPort: SessionPort, interval: interval ?? TimeSpan.FromHours(1),
             lessonPath: lessonPath ?? LessonPath, homePath: homePath ?? HomePath);
         _syncs.Add(sync);
         return sync;
+    }
+
+    // Another teacher PC's own store, under folder in the rig's root, with the rig's two classes.
+    public ClassStore OwnStore(string folder)
+    {
+        var root = Path.Combine(Root, folder);
+        var store = new ClassStore(
+            Path.Combine(root, "Turmas"), Path.Combine(root, "dados", "turmas"), new FolderBin(Path.Combine(root, "lixeira")),
+            () => Now, lessonsPath: Path.Combine(root, "dados", "class-lessons.json"), freeBytes: () => FreeSpace);
+        Assert.True(store.Create(Turma).Ok);
+        Assert.True(store.Create("3º B").Ok);
+        return store;
     }
 
     // The last status of each PC, by name.
@@ -217,7 +230,7 @@ internal sealed class StudentPc : IDisposable
         Directory.CreateDirectory(Desktop);
         Bin = new FolderBin(Path.Combine(Root, "lixeira"));
 
-        var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }, () => rig.Now) : null;
+        var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }) : null;
         Agent = new ClassLessonHandler(
             Path.Combine(Root, "class-lesson.json"),
             () =>

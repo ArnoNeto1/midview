@@ -258,7 +258,9 @@ public sealed partial class ClassFolderSync
             return HomeClaim.Refused(EveryPc(seen.RefusalText));
         }
 
-        var claimed = ours ?? new DateTimeOffset(_localNow()).UtcTicks;
+        // Never past the latest generation, which the Agents refuse (one kept from before that limit).
+        var claimed = Math.Min(ours ?? new DateTimeOffset(_localNow()).UtcTicks, ClassHome.MaxGeneration);
+        ClaimsGoingOut?.Invoke();
         var answers = (await Task.WhenAll(reports.Select(report =>
                 Task.Run(() => Claim(report.Machine, takeOver: others.Contains(report), claimed))))
             .ConfigureAwait(false)).OfType<ClaimAnswer>().ToList();

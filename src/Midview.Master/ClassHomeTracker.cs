@@ -37,8 +37,9 @@ public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int
 // nothing, and so does one that keeps no home. The home is the one reported
 // with the newest generation (ClassHome.Generation), however few Agents have
 // heard of it yet, as a start goes by it (ClassFolderSync); between PCs of the
-// same generation, the one most Agents report, and on a tie the one already
-// known. No home reported is no home.
+// same generation, the name that sorts last, as a start decides it (Outranks);
+// between records of one PC, the one most Agents report, and on a tie the one
+// already known. No home reported is no home.
 //
 // This PC is the home when it is the home's PC as the Agents themselves decide
 // (ClassHome.IsSamePc): its certificate and computer name, its certificate and
@@ -183,11 +184,21 @@ public sealed class ClassHomeTracker : IDisposable
         }
     }
 
+    // Whether home keeps the room over the PC with that generation and
+    // computer name: a newer generation, or the same one and a name that
+    // sorts after it (ignoring case). Every teacher PC decides it alike: a
+    // start between two PCs claiming at once (ClassFolderSync.Contest.cs), and
+    // the tracker between two PCs of one generation (Choose).
+    internal static bool Outranks(ClassHome home, long generation, string name) =>
+        home.Generation > generation
+        || (home.Generation == generation && string.Compare(home.Name, name, StringComparison.OrdinalIgnoreCase) > 0);
+
     // The home of the newest generation the answers name (none: no home);
-    // between PCs of that generation, the one most answers name, then current
-    // (the home known so far), then the one of the newest answer. It is told as
-    // its newest answer has it (the address a claim refreshed last, most
-    // likely). answers: in the order they arrived.
+    // between PCs of that generation, the name that sorts last (Outranks);
+    // between records of one PC (another certificate, say), the one most
+    // answers name, then current (the home known so far), then the one of the
+    // newest answer. It is told as its newest answer has it (the address a
+    // claim refreshed last, most likely). answers: in the order they arrived.
     internal static ClassHome? Choose(IReadOnlyList<ClassHome?> answers, ClassHome? current)
     {
         var homes = answers.OfType<ClassHome>().Select((home, order) => (Home: home, Order: order)).ToList();
@@ -197,7 +208,10 @@ public sealed class ClassHomeTracker : IDisposable
         }
 
         var newest = homes.Max(answer => answer.Home.Generation);
-        var groups = homes.Where(answer => answer.Home.Generation == newest).GroupBy(answer => KeyOf(answer.Home)).ToList();
+        var atNewest = homes.Where(answer => answer.Home.Generation == newest).ToList();
+        var lastName = atNewest.Select(answer => answer.Home.Name).Max(StringComparer.OrdinalIgnoreCase);
+        var groups = atNewest.Where(answer => string.Equals(answer.Home.Name, lastName, StringComparison.OrdinalIgnoreCase))
+            .GroupBy(answer => KeyOf(answer.Home)).ToList();
         var most = groups.Max(group => group.Count());
         var tied = groups.Where(group => group.Count() == most).ToList();
         var winner = tied.Count == 1

@@ -197,6 +197,25 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal(heldEnd, partOne.Current);
     }
 
+    // A student PC whose clock is years behind (a dead CMOS battery: 2015)
+    // takes a teacher PC's first claim, and a colleague's take-over made days
+    // later, all the same: nothing of the home goes by this PC's clock.
+    [Fact]
+    public void ClaimHome_WithThisPcsClockIn2015_TakesAFirstClaimAndATakeOver()
+    {
+        _now = new DateTime(2015, 1, 1, 8, 0, 0);
+        var handler = Create(home: new ClassHomeState(_homePath, _log.Add));
+        var friday = new DateTimeOffset(new DateTime(2026, 10, 16, 13, 0, 0)).UtcTicks;
+        var monday = new DateTimeOffset(new DateTime(2026, 10, 19, 13, 0, 0)).UtcTicks;
+
+        var first = handler.ClaimHome(HomePc, "10.0.0.5", ClaimOf("PROF-1", generation: friday));
+        var takeOver = handler.ClaimHome(OtherPc, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: monday));
+
+        Assert.True(first.Ok, first.Detail);
+        Assert.True(takeOver.Ok, takeOver.Detail);
+        Assert.Equal(("PROF-2", monday), (handler.CurrentHome!.Name, handler.CurrentHome.Generation));
+    }
+
     // With no lesson on, an end of any lesson is taken, newest first, as before.
     [Fact]
     public void Handle_WithNoLessonOn_AnEndOfAnyLesson_IsTaken()

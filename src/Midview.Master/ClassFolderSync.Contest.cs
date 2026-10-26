@@ -44,15 +44,15 @@ public sealed partial class ClassFolderSync
             }
             return new HomeClaim(null, busy, claimed);
         }
-        if (!holds || Outranks(rival, claimed, _machineName))
+        // A rival at the latest generation can't be taken back (nothing is newer): it keeps the room.
+        if (!holds || Outranks(rival, claimed, _machineName) || rival.Generation >= ClassHome.MaxGeneration)
         {
             _log($"{rival.Name} claimed the class folders at the same time and keeps them: nothing starts here.");
             RememberOtherHome(rival);
             return HomeClaim.Refused(EveryPc(rival.RefusalText));
         }
 
-        var generation = rival.Generation < claimed ? claimed
-            : rival.Generation == long.MaxValue ? long.MaxValue : rival.Generation + 1;
+        var generation = rival.Generation < claimed ? claimed : ClassHome.Next(rival.Generation);
         _log($"{rival.Name} claimed the class folders at the same time; this PC keeps them (generation {generation}).");
         var answers = (await Task.WhenAll(reread
                 .Where(read => read.Home is { } home && (!IsThisPc(home, claimed) || generation != claimed))
@@ -74,13 +74,14 @@ public sealed partial class ClassFolderSync
     // After a start's lesson went to the Agents: one that refused it for a
     // home that outranks this PC (it claimed the room meanwhile, on PCs this
     // PC didn't claim: off for this PC, say) means the room is that PC's.
-    // The lesson is ended on the Agents that took it (one second after it, as
-    // a held lesson's end: never newer than that PC's lesson of the same
-    // moment), and cleared here as a stand-down clears it (no lesson on that
-    // no PC follows, nothing the pollers hand out); every PC's line names that
-    // PC, which this PC has now seen. Null otherwise, as for a refusal naming
-    // an older home (a PC still in that home's lesson). With the lesson lock
-    // held, the lesson just adopted.
+    // The lesson is ended as a held lesson's end (SendHeldEndAsync: one second
+    // after it, never newer than that PC's lesson of the same moment): on the
+    // Agents still in it, and on those that can't be read (one whose answer
+    // was lost may have taken it). It is the lesson here then, ended (no
+    // lesson on that no PC follows), and the pollers hand it only to a PC
+    // still in it; every PC's line names that PC, which this PC has now seen.
+    // Null otherwise, as for a refusal naming an older home (a PC still in
+    // that home's lesson). With the lesson lock held, the lesson just adopted.
     private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>?> BackOutForANewerHomeAsync(
         ClassLesson lesson, IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> lines, long generation)
     {
@@ -100,21 +101,18 @@ public sealed partial class ClassFolderSync
 
         _log($"{newer.Name} keeps the class folders since this PC's claims: the lesson of {lesson.Turma} is taken back.");
         var ended = HeldEndOf(lesson);
-        await Task.WhenAll(lines.Where(line => line.Ok).Select(line => Task.Run(
-            () => ClassLessonOnAgents.Send(line.Machine, _masterCertificate, ended, _agentPort)))).ConfigureAwait(false);
+        await SendHeldEndAsync(ended, await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false)).ConfigureAwait(false);
         RememberOtherHome(newer);
         RaiseSavedAtFloor(ended.SavedAt);
         EndUncollected(lesson);
-        Adopt(ClassLesson.None(0));
+        Volatile.Write(ref _heldEnd, ended);
+        Adopt(ended);
         return EveryPc(newer.RefusalText);
     }
 
     // Whether home keeps the room over the PC with that generation and
-    // computer name: a newer generation, or the same one and a name that
-    // sorts after it (ignoring case), as both PCs decide it.
-    private static bool Outranks(ClassHome home, long generation, string name) =>
-        home.Generation > generation
-        || (home.Generation == generation && string.Compare(home.Name, name, StringComparison.OrdinalIgnoreCase) > 0);
+    // computer name, as every teacher PC decides it (ClassHomeTracker.Outranks).
+    private static bool Outranks(ClassHome home, long generation, string name) => ClassHomeTracker.Outranks(home, generation, name);
 
     // The home that outranks every other one of homes; null for none.
     private static ClassHome? Strongest(IEnumerable<ClassHome> homes) =>
