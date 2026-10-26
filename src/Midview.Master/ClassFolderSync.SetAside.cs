@@ -24,9 +24,14 @@ public sealed partial class ClassFolderSync
     // a version remembered for the lesson (what the class and its PCs had when it
     // ended, ClassStore.RememberVersionsOf, and what any PC's set-aside files
     // brought in since), so the same file on 30 PCs comes in once, and one the
-    // teacher deleted doesn't come back. A lesson this PC doesn't know at all is
-    // left as it is, on the PC: with two teacher PCs in the lab it is often the
-    // other one's, whose Master brings its files in (SetAsideOf leaves it out).
+    // teacher deleted doesn't come back. A lesson this PC doesn't know at all
+    // (or whose class went aside with this PC's own at a take-over,
+    // ClassStore.CollectsSetAsideOf) is left as it is, on the PC: with two
+    // teacher PCs in the lab it is often the other one's, whose Master brings
+    // its files in (SetAsideOf leaves it out).
+    // Once the newest of its files is older than UnknownLessonAge, no home is
+    // coming for them (this PC's own, from before its data was set up again,
+    // say): they are cleared, so they don't pile up on the PC.
     private void CollectSetAside(
         KnownMachine machine, IReadOnlyList<IGrouping<Guid, ClassFolderEntry>> lessons, List<string> failures, Allowance allowance)
     {
@@ -38,11 +43,12 @@ public sealed partial class ClassFolderSync
             }
 
             var lessonId = files.Key;
-            if (!_store.KnowsLesson(lessonId))
+            var known = _store.CollectsSetAsideOf(lessonId);
+            if (!known && !LongAbandoned(files))
             {
                 continue;
             }
-            if (!_store.IsCollected(lessonId) && _store.TurmaOfLesson(lessonId) is { } turma && _store.Exists(turma)
+            if (known && !_store.IsCollected(lessonId) && _store.TurmaOfLesson(lessonId) is { } turma && _store.Exists(turma)
                 && !PullSetAside(machine, lessonId, turma, files, failures, allowance))
             {
                 continue; // what is missing comes at a later round; nothing is cleared before
@@ -55,6 +61,15 @@ public sealed partial class ClassFolderSync
     // How many set-aside files one ClearSetAside carries: the Session moves each to the
     // Recycle Bin, which can take a moment per file on a lab PC's disk.
     private const int ClearPartSize = 1_000;
+
+    // How old the newest file a PC set aside for a lesson this PC doesn't know
+    // must be before it is cleared. That lesson's own date isn't known here
+    // (the lessons map hasn't got it), so the files' times stand for it.
+    internal static readonly TimeSpan UnknownLessonAge = TimeSpan.FromDays(60);
+
+    // Whether the newest of those files is older than UnknownLessonAge.
+    private bool LongAbandoned(IEnumerable<ClassFolderEntry> files) =>
+        files.Max(entry => entry.LastWriteTicks) < new DateTimeOffset(_localNow()).UtcTicks - UnknownLessonAge.Ticks;
 
     // Exactly the files of the listing, so one the PC set aside after it waits for the next round.
     private void ClearSetAside(KnownMachine machine, Guid lessonId, List<ClassFolderEntry> files, List<string> failures)

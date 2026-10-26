@@ -1210,7 +1210,8 @@ public partial class MainWindow : Window
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
             appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
             thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
-            classLesson: LessonForPollers, classHomeClaim: StragglerClaim, classLessonOver: EndOfLessonOver);
+            classLesson: LessonForPollers, classHomeClaim: StragglerClaim, classLessonOver: EndOfLessonOver,
+            classLessonHeldEnd: HandsOutAHeldEnd);
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>

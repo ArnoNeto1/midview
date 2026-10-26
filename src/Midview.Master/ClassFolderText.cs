@@ -152,6 +152,11 @@ public static partial class ClassFolderText
     // this PC's poller hands it the lesson in a moment (ThumbnailPoller.DefaultBusyRetryInterval).
     public const string LessonBusy = "ocupado agora; o Midview tenta de novo em instantes";
 
+    // The end of a lesson this PC held for the room while another teacher PC
+    // keeps the folders, for a PC that wasn't in it (it follows that PC's
+    // lesson, or none): nothing to end there.
+    public const string NotInThisLesson = "não estava nesta aula";
+
     // After a start (started) or an end: how many PCs took it. offline: how
     // many of the others were switched off, which get it from their poller
     // once they answer again; said only when that is all of them (any other

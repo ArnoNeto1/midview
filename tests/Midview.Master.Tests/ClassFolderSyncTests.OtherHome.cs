@@ -93,6 +93,33 @@ public sealed partial class ClassFolderSyncTests
         Assert.DoesNotContain(pc1.Folder.List().Entries, entry => entry.LessonId == lesson.LessonId);
     }
 
+    // A PC whose Agent took the lesson but whose Session is still behind:
+    // its Agent is asked again at most once per AgentRecheckInterval, not at
+    // every round.
+    [Fact]
+    public async Task APcWhoseSessionIsBehind_IsAskedAgainAtMostOncePerInterval()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var home = rig.NewSync();
+        var statuses = ClassSyncRig.Watch(home);
+        await home.StartAsync(Turma);
+        var pc1 = rig.Pcs[0];
+        pc1.SessionLessonOverride = ClassLesson.None(0);
+        var rechecks = 0;
+        home.RecheckingAgent = machine => Interlocked.Increment(ref rechecks);
+
+        for (var round = 0; round < 3; round++)
+        {
+            await home.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        }
+
+        Assert.Equal(1, rechecks);
+        Assert.Equal((PcSyncState.Copying, "atualizando a aula"), (statuses[pc1.Name].State, statuses[pc1.Name].Detail));
+        home.AgentRecheckInterval = TimeSpan.Zero;
+        await home.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        Assert.Equal(2, rechecks);
+    }
+
     // A PC whose Agent took this lesson once but follows another one now (a
     // teacher PC with the same certificate handed it a newer lesson): the
     // round asks the Agent again rather than waiting for its Session, and

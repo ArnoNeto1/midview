@@ -56,7 +56,10 @@ public partial class MainWindow
     private ClassLesson? LessonForPollers() => _classRole.LessonForPollers;
 
     // The end the pollers hand an Agent still in a lesson this PC knows is over (on their threads).
-    private ClassLesson? EndOfLessonOver(ClassLesson followed) => _classRole.EndOfLessonOver(followed);
+    private ClassLesson? EndOfLessonOver(ClassLesson followed, ClassHome? keptHome) => _classRole.EndOfLessonOver(followed, keptHome);
+
+    // Whether the pollers hand out a held lesson's end, only to the Agents still in it (on their threads).
+    private bool HandsOutAHeldEnd() => _classRole.HandsOutAHeldEnd;
 
     // While this PC keeps the class folders: its claim on an Agent that keeps
     // an older home (on the pollers' threads), as its start claims (ClassFolderSync).

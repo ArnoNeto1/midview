@@ -120,6 +120,27 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Empty(_inspector.Ended);
     }
 
+    // "No lesson" (an end with no lesson id), however new, is no end of the
+    // lesson on here either: nothing changes, with or without a home.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Handle_NoLessonWhileALessonIsOn_IsNotTaken(bool withAHome)
+    {
+        var handler = withAHome ? HandlerWithHomeClaimedBy(HomePc, "PROF-1").Handler : Create();
+        var lesson = Lesson("3º A", 100);
+        Assert.True(handler.Handle(lesson.Encode(), HomePc, "10.0.0.5").Succeeded);
+        var stateFile = File.ReadAllBytes(_statePath);
+
+        var (ok, detail) = handler.Handle(ClassLesson.None(500).Encode(), OtherPc, "10.0.0.7");
+
+        Assert.True(ok);
+        Assert.Equal($"{ClassLesson.KeptNewerText}: aula do 3º A", detail);
+        Assert.Equal(lesson, handler.Current);
+        Assert.Equal(stateFile, File.ReadAllBytes(_statePath));
+        Assert.Equal(FolderOf("3º A"), Policy(DownloadFolderPolicy.ChromeKey));
+    }
+
     // With no lesson on, an end of any lesson is taken, newest first, as before.
     [Fact]
     public void Handle_WithNoLessonOn_AnEndOfAnyLesson_IsTaken()

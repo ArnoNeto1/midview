@@ -50,11 +50,12 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // raised on them. Nothing a PC does (failing, going away, answering nonsense)
 // escapes as an exception: it becomes that PC's status.
 //
-// In six files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
+// In seven files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
 // its rounds), ClassFolderSync.Round.cs (one PC's round), ClassFolderSync.Copy.cs
 // (each file's pull, push, rename or deletion), ClassFolderSync.SetAside.cs
-// (what PCs set aside for lessons that are over) and ClassFolderSync.Home.cs
-// (the class folders' home).
+// (what PCs set aside for lessons that are over), ClassFolderSync.Home.cs
+// (the class folders' home) and ClassFolderSync.Held.cs (a lesson held for
+// the room while another PC is the home, and lessons known to be over).
 public sealed partial class ClassFolderSync : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
@@ -250,6 +251,11 @@ public sealed partial class ClassFolderSync : IDisposable
     // The ended lesson is saved before the choice is applied: a Master that stops
     // in between keeps files it should have deleted, rather than finding the lesson
     // on with the per-PC records gone and pulling the deleted files back in.
+    //
+    // While another PC is, or may be, the home (one seen, or named by an
+    // Agent: this PC holds the lesson for the room), the end is saved one
+    // second after the lesson and goes only to the Agents still in it
+    // (ClassFolderSync.Held.cs), and the pollers hand it only to those.
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> EndAsync(EndChoice choice)
     {
         if (!Enum.IsDefined(choice))
@@ -270,12 +276,16 @@ public sealed partial class ClassFolderSync : IDisposable
             _changingLesson = true;
             await RunningRounds().ConfigureAwait(false);
             await LastRoundsAsync(lesson, token).ConfigureAwait(false);
+            var held = await AnotherHomeSeenOrNamedAsync().ConfigureAwait(false);
 
             _store.MarkCollected(lesson.LessonId);
-            var ended = lesson with { SavedAt = NextSavedAt(), Ended = true };
+            var ended = held ? HeldEndOf(lesson) : lesson with { SavedAt = NextSavedAt(), Ended = true };
+            Volatile.Write(ref _heldEnd, held ? ended : null);
             Adopt(ended);
             LastEndProblems = EndInStore(lesson.Turma, choice);
-            return await SendToEveryAgentAsync(ended).ConfigureAwait(false);
+            return held
+                ? await SendHeldEndAsync(ended, await LessonsOnTheAgentsAsync(token).ConfigureAwait(false)).ConfigureAwait(false)
+                : await SendToEveryAgentAsync(ended).ConfigureAwait(false);
         }
         finally
         {
@@ -353,6 +363,7 @@ public sealed partial class ClassFolderSync : IDisposable
         Volatile.Write(ref _lesson, lesson);
         _listings.Clear();
         _delivered.Clear();
+        _recheckedAt.Clear();
         _statuses.Clear();
         try
         {
@@ -425,7 +436,7 @@ public sealed partial class ClassFolderSync : IDisposable
         var (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);
         if (!succeeded && !lesson.IsOn && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal)
             && ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log) is { } followed
-            && EndOfLessonOver(followed) is { } over
+            && EndOfLessonOver(followed, HomeOf(machine)?.Home) is { } over
             && ClassLessonOnAgents.Send(machine, _masterCertificate, over, _agentPort).Ok)
         {
             (succeeded, detail) = ClassLessonOnAgents.Send(machine, _masterCertificate, lesson, _agentPort);

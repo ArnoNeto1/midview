@@ -162,13 +162,14 @@ public sealed partial class ClassFolderSync
     }
 
     // The files of a listing that the PC set aside for lessons that are over,
-    // by lesson: only lessons this PC knows (CollectSetAside), so a PC with
-    // nothing else but another teacher PC's files is in sync without a copy turn.
+    // by lesson: only lessons this PC knows, or long abandoned (CollectSetAside),
+    // so a PC with nothing else but another teacher PC's files is in sync
+    // without a copy turn.
     private List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(ClassFolderClient.ListResult listing, ClassLesson lesson) =>
         listing.Entries
             .Where(entry => entry.LessonId != listing.CurrentLessonId && entry.LessonId != lesson.LessonId && entry.LessonId != Guid.Empty)
             .GroupBy(entry => entry.LessonId)
-            .Where(files => _store.KnowsLesson(files.Key))
+            .Where(files => _store.CollectsSetAsideOf(files.Key) || LongAbandoned(files))
             .ToList();
 
     // What one listing of the PC needs: files already in sync, to record, and the
@@ -263,16 +264,23 @@ public sealed partial class ClassFolderSync
     // seconds). An Agent that took it once is asked again rather than trusted:
     // it may follow another lesson since (another teacher PC handed it one, or
     // its state was lost), which nothing else would hand this one back for. One
-    // that doesn't answer is taken at its word.
+    // that doesn't answer is taken at its word. Asked at most once per
+    // AgentRecheckInterval (a Session can lag a few rounds); one found on
+    // another lesson is sent this one at every round, as one that never took it.
     private async Task UpdateLessonAsync(KnownMachine machine, ClassLesson lesson, CancellationToken token)
     {
-        var delivered = _delivered.TryGetValue(Key(machine), out var savedAt) && savedAt == lesson.SavedAt;
-        if (delivered
-            && await Task.Run(() => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token).ConfigureAwait(false)
-                is { } follows
-            && follows != lesson)
+        var key = Key(machine);
+        var delivered = _delivered.TryGetValue(key, out var savedAt) && savedAt == lesson.SavedAt;
+        if (delivered && RecheckDue(key))
         {
-            delivered = false;
+            RecheckingAgent?.Invoke(machine);
+            if (await Task.Run(() => ClassLessonOnAgents.Read(machine, _masterCertificate, _agentPort, _log), token).ConfigureAwait(false)
+                    is { } follows
+                && follows != lesson)
+            {
+                _delivered.TryRemove(key, out _);
+                delivered = false;
+            }
         }
         if (!delivered)
         {
@@ -284,6 +292,27 @@ public sealed partial class ClassFolderSync
             }
         }
         Report(machine, PcSyncState.Copying, UpdatingLesson);
+    }
+
+    // How often at most an Agent that took the lesson is asked whether it still follows it.
+    internal TimeSpan AgentRecheckInterval { get; set; } = TimeSpan.FromSeconds(30);
+
+    // For the tests: called as an Agent that took the lesson is asked again.
+    internal Action<KnownMachine>? RecheckingAgent { get; set; }
+
+    // When each PC's Agent was last asked again (Environment.TickCount64), by machine key.
+    private readonly ConcurrentDictionary<string, long> _recheckedAt = new(StringComparer.OrdinalIgnoreCase);
+
+    // Whether that PC's Agent may be asked again now; if so, now is when it was.
+    private bool RecheckDue(string key)
+    {
+        var now = Environment.TickCount64;
+        if (_recheckedAt.TryGetValue(key, out var at) && now - at < (long)AgentRecheckInterval.TotalMilliseconds)
+        {
+            return false;
+        }
+        _recheckedAt[key] = now;
+        return true;
     }
 
     private void SaveIndex(string turma)

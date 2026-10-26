@@ -197,10 +197,15 @@ public sealed partial class ClassFolderRole : IDisposable
         }
     }
 
+    // Whether what the pollers hand out is the end of a lesson this PC held for
+    // the room while another PC is, or may be, the home
+    // (ClassFolderSync.EndGoesOnlyToItsLesson): only an Agent still in it gets it.
+    public bool HandsOutAHeldEnd => _sync.EndGoesOnlyToItsLesson;
+
     // For a lesson an Agent follows, the end the pollers hand it when this PC
     // knows that lesson is over (ClassFolderSync.EndOfLessonOver), while they
     // hand lessons out; null otherwise.
-    public ClassLesson? EndOfLessonOver(ClassLesson followed)
+    public ClassLesson? EndOfLessonOver(ClassLesson followed, ClassHome? keptHome)
     {
         lock (_lock)
         {
@@ -209,7 +214,7 @@ public sealed partial class ClassFolderRole : IDisposable
                 return null;
             }
         }
-        return _sync.EndOfLessonOver(followed);
+        return _sync.EndOfLessonOver(followed, keptHome);
     }
 
     // This PC's generation as the home, which the pollers claim stragglers

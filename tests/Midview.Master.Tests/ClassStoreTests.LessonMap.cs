@@ -152,6 +152,45 @@ public partial class ClassStoreTests
         Assert.Throws<ArgumentException>(() => _store.RememberLessonHeardOf(Guid.NewGuid(), "..\\fora"));
     }
 
+    // A take-over's swap puts the received lessons map in place of this PC's
+    // own, which goes aside with this PC's classes: the two are merged, so no
+    // lesson this PC ran is forgotten. A lesson this PC ran wins over the same
+    // one only heard of in the received map. One whose class didn't come with
+    // the received classes stays known, but what PCs set aside for it is left
+    // on them: its class went aside, it wasn't deleted.
+    [Fact]
+    public void LessonMap_ATakeOversSwap_MergesThisPcsOwnLessonsIntoTheReceivedOnes()
+    {
+        MakeClass();
+        MakeClass("Só aqui");
+        var older = Guid.NewGuid();
+        var heard = Guid.NewGuid();
+        var onlyHere = Guid.NewGuid();
+        var collected = Guid.NewGuid();
+        _store.RememberLesson(older, Turma);
+        _store.RememberLesson(heard, Turma);
+        _store.RememberLesson(onlyHere, "Só aqui");
+        _store.RememberLesson(collected, "Só aqui");
+        _store.MarkCollected(collected);
+        var staging = _store.Staging;
+        Directory.CreateDirectory(Path.Combine(staging.Files, Turma));
+        var received = new ClassStore(staging.Files, staging.Index, _bin, () => _now, _log.Add, lessonsPath: staging.Lessons);
+        var theirs = Guid.NewGuid();
+        received.RememberLessonHeardOf(heard, Turma);
+        received.RememberLesson(theirs, Turma);
+
+        _store.SwapIn("antes de 20-10-2026 1330");
+
+        var reopened = NewStore(_bin);
+        Assert.Equal(new[] { Turma }, reopened.ClassNames());
+        Assert.All(new[] { older, heard, onlyHere, collected, theirs }, lesson => Assert.True(reopened.RanLesson(lesson)));
+        Assert.All(new[] { older, heard, collected, theirs }, lesson => Assert.True(reopened.CollectsSetAsideOf(lesson)));
+        Assert.False(reopened.CollectsSetAsideOf(onlyHere));
+        Assert.Equal(Turma, reopened.TurmaOfLesson(older));
+        Assert.True(reopened.IsCollected(collected));
+        Assert.False(reopened.CollectsSetAsideOf(Guid.NewGuid()));
+    }
+
     [Fact]
     public void LessonMap_ACorruptFile_IsSetAside_AndTheMapStartsEmpty()
     {

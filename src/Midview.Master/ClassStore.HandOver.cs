@@ -254,6 +254,13 @@ public sealed partial class ClassStore
                     moves.File(staging.Lessons, _lessons.Path);
                 }
                 moves.Folder(staging.Files, FilesRootPath);
+                // This PC's own lessons, aside now, join the received ones:
+                // none it ran is forgotten (its undo puts its own map back).
+                if (moves.DestinationOf(_lessons.Path) is { } ownLessons)
+                {
+                    _lessons.Reload();
+                    _lessons.MergeOwn(ownLessons, Exists);
+                }
                 return new Swap(this, moves, aside, staging.Files);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

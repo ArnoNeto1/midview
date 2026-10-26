@@ -15,6 +15,7 @@ namespace Midview.Master;
 // aside for it is cleared, unlike a lesson the map never had (another teacher
 // PC's, whose files are that PC's to bring in). A lesson only heard of from the
 // room's Agents (HeardOf) is known too, with its class, though another PC ran it.
+// At a take-over this PC's own map joins the received one (MergeOwn).
 // One JSON file, MasterData.Folder\class-lessons.json by default: not in the
 // index folder, where a class named "lessons" would have its index.
 //
@@ -73,6 +74,46 @@ internal sealed class ClassLessonsFile
         lock (_gate)
         {
             return Lessons().TryGetValue(lessonId, out var lesson) && !lesson.HeardOf;
+        }
+    }
+
+    // Whether what a PC set aside for the lesson is this map's to bring in or
+    // clear: known, and its class not gone aside at a take-over (MergeOwn).
+    public bool Collects(Guid lessonId)
+    {
+        lock (_gate)
+        {
+            return Lessons().TryGetValue(lessonId, out var lesson) && !lesson.ClassAside;
+        }
+    }
+
+    // After a take-over put a received map in place of this PC's own (now at
+    // ownPath): every lesson of this PC's own map the received one hasn't got,
+    // or has only heard of, is taken in as this PC had it, so no lesson this
+    // PC ran is forgotten. One not collected whose class isn't among the
+    // received ones (classHere) went aside with this PC's classes: it stays
+    // known, but what PCs set aside for it is left on them (ClassAside).
+    public void MergeOwn(string ownPath, Func<string, bool> classHere)
+    {
+        var own = LoadFrom(ownPath, setAsideCorrupt: false);
+        lock (_gate)
+        {
+            var lessons = Lessons();
+            var taken = false;
+            foreach (var (lessonId, mine) in own)
+            {
+                if (lessons.TryGetValue(lessonId, out var theirs) && !(theirs.HeardOf && !mine.HeardOf))
+                {
+                    continue;
+                }
+                mine.ClassAside |= !mine.Collected && mine.Turma is { } turma && !classHere(turma);
+                lessons[lessonId] = mine;
+                taken = true;
+            }
+            if (taken)
+            {
+                Save();
+            }
         }
     }
 
@@ -209,19 +250,21 @@ internal sealed class ClassLessonsFile
     }
 
     // With _gate held.
-    private Dictionary<Guid, Lesson> Lessons() => _lessons ??= Load();
+    private Dictionary<Guid, Lesson> Lessons() => _lessons ??= LoadFrom(_path, setAsideCorrupt: true);
 
-    private Dictionary<Guid, Lesson> Load()
+    // The map at path; one that isn't a map is set aside as .corrupt when
+    // setAsideCorrupt (this map's own file), else only logged.
+    private Dictionary<Guid, Lesson> LoadFrom(string path, bool setAsideCorrupt)
     {
         var lessons = new Dictionary<Guid, Lesson>();
-        if (!File.Exists(_path))
+        if (!File.Exists(path))
         {
             return lessons;
         }
 
         try
         {
-            var stored = JsonSerializer.Deserialize<List<StoredLesson?>>(File.ReadAllBytes(_path))
+            var stored = JsonSerializer.Deserialize<List<StoredLesson?>>(File.ReadAllBytes(path))
                 ?? throw new JsonException("The lessons map is not a list.");
             foreach (var entry in stored)
             {
@@ -230,12 +273,15 @@ internal sealed class ClassLessonsFile
                     continue;
                 }
 
-                var lesson = new Lesson { Turma = entry.Turma, Collected = entry.Collected, HeardOf = entry.HeardOf };
+                var lesson = new Lesson
+                {
+                    Turma = entry.Turma, Collected = entry.Collected, HeardOf = entry.HeardOf, ClassAside = entry.ClassAside,
+                };
                 foreach (var known in entry.Known ?? new())
                 {
-                    if (known?.Path is { } path)
+                    if (known?.Path is { } knownPath)
                     {
-                        lesson.Known.Add(KnownOf(path, new FileVersion(known.Size, known.LastWriteTicks)));
+                        lesson.Known.Add(KnownOf(knownPath, new FileVersion(known.Size, known.LastWriteTicks)));
                     }
                 }
                 lessons[entry.LessonId] = lesson;
@@ -243,20 +289,25 @@ internal sealed class ClassLessonsFile
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
         {
-            _log($"The lessons map {_path} is not readable and was set aside: {ex.Message}");
+            lessons.Clear();
+            if (!setAsideCorrupt)
+            {
+                _log($"The lessons map {path} is not readable: {ex.Message}");
+                return lessons;
+            }
+            _log($"The lessons map {path} is not readable and was set aside: {ex.Message}");
             try
             {
-                File.Move(_path, _path + ".corrupt", overwrite: true);
+                File.Move(path, path + ".corrupt", overwrite: true);
             }
             catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException)
             {
                 // Written over at the next change.
             }
-            lessons.Clear();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _log($"The lessons map {_path} could not be read: {ex.Message}");
+            _log($"The lessons map {path} could not be read: {ex.Message}");
             lessons.Clear();
         }
         return lessons;
@@ -278,7 +329,7 @@ internal sealed class ClassLessonsFile
                 pair.Value.Known.Count == 0
                     ? null
                     : pair.Value.Known.Select(known => (StoredVersion?)new StoredVersion(known.Path, known.Size, known.LastWriteTicks)).ToList(),
-                pair.Value.HeardOf))
+                pair.Value.HeardOf, pair.Value.ClassAside))
                 .ToList();
             var tempPath = _path + ".tmp";
             File.WriteAllBytes(tempPath, JsonSerializer.SerializeToUtf8Bytes(stored));
@@ -299,12 +350,16 @@ internal sealed class ClassLessonsFile
         // Only heard of from the room's Agents: another PC ran it (ClassStore.RememberLessonHeardOf).
         public bool HeardOf { get; set; }
 
+        // Its class went aside with this PC's own classes at a take-over (MergeOwn).
+        public bool ClassAside { get; set; }
+
         // Paths upper-cased (invariant), so they compare ignoring case.
         public HashSet<(string Path, long Size, long LastWriteTicks)> Known { get; } = new();
     }
 
-    // HeardOf: false in a map written before it.
-    private sealed record StoredLesson(Guid LessonId, string? Turma, bool Collected, List<StoredVersion?>? Known, bool HeardOf = false);
+    // HeardOf and ClassAside: false in a map written before them.
+    private sealed record StoredLesson(
+        Guid LessonId, string? Turma, bool Collected, List<StoredVersion?>? Known, bool HeardOf = false, bool ClassAside = false);
 
     private sealed record StoredVersion(string? Path, long Size, long LastWriteTicks);
 }

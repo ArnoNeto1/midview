@@ -42,6 +42,11 @@ public sealed partial class ClassStore
     // lesson: known, and not only heard of.
     public bool RanLesson(Guid lessonId) => _lessons.Ran(lessonId);
 
+    // Whether what PCs set aside for the lesson is this store's to bring in or
+    // clear: known, and its class not gone aside with this PC's own classes at
+    // a take-over (those files are left on the PCs, as an unknown lesson's).
+    public bool CollectsSetAsideOf(Guid lessonId) => _lessons.Collects(lessonId);
+
     // The lesson's end was collected: what a PC set aside for it afterwards is
     // its own (it goes to that student's Recycle Bin), never the class's.
     public void MarkCollected(Guid lessonId) => _lessons.MarkCollected(lessonId);

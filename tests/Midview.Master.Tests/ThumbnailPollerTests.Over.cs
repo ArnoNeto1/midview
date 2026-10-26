@@ -12,9 +12,16 @@ public partial class ThumbnailPollerTests
     // One teacher PC: a PC off since a lesson this PC ran comes back still in
     // it, having missed its end and the whole next lesson. The poller hands it
     // that next lesson's end, as before two teacher PCs, and the PC is out of
-    // the old lesson: its downloads go to the student's own folder again.
-    [Fact]
-    public async Task APcBackInALessonThisPcRan_GetsTheLastLessonsEnd()
+    // the old lesson: the Agent gives the folder back and takes Midview's
+    // download folder off the browsers (ClassLessonHandlerTests), and the
+    // Session sets what the student saved there aside, kept. The same when
+    // this PC's lessons map lost that lesson (or another Windows account here
+    // ran it): a PC that never saw another home takes any lesson on that
+    // isn't its own for one that is over.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task APcBackInALessonThisPcRan_GetsTheLastLessonsEnd(bool inTheMap)
     {
         using var rig = new ClassSyncRig(pcs: 1, homes: 1);
         var pc = rig.Pcs[0];
@@ -22,7 +29,12 @@ public partial class ThumbnailPollerTests
         var now = new DateTimeOffset(rig.Now).ToUnixTimeSeconds();
         var missed = new ClassLesson(now - 600, Guid.NewGuid(), ClassSyncRig.Turma, now - 600, Ended: false);
         Assert.True(ClassFolderClient.SetLesson(pc.Machine, rig.Master, missed, rig.AgentPort).Succeeded);
-        rig.Store.RememberLesson(missed.LessonId, ClassSyncRig.Turma);
+        pc.Follow();
+        pc.Write("baixado.txt", new byte[] { 1, 2, 3 }, new DateTime(2026, 10, 20, 12, 0, 0, DateTimeKind.Utc));
+        if (inTheMap)
+        {
+            rig.Store.RememberLesson(missed.LessonId, ClassSyncRig.Turma);
+        }
         var last = new ClassLesson(now - 60, Guid.NewGuid(), "3º B", now - 300, Ended: true);
         rig.Store.RememberLesson(last.LessonId, "3º B");
         ClassLessonFileMaster.Write(last, rig.LessonPath);
@@ -35,6 +47,10 @@ public partial class ThumbnailPollerTests
         poller.Start();
 
         await WaitUntil(() => pc.Agent.Current == last);
+        pc.Follow();
+        Assert.False(Directory.Exists(Path.Combine(pc.Desktop, missed.FolderName)));
+        Assert.Contains(pc.Folder.List().Entries, entry => entry.LessonId == missed.LessonId && entry.Path == "baixado.txt");
+        Assert.Empty(pc.Bin.FileNames());
     }
 
     // After a take-over: a PC that was off for the old home's last end comes
@@ -76,11 +92,39 @@ public partial class ThumbnailPollerTests
         Assert.Equal(new byte[] { 4, 2 }, File.ReadAllBytes(rig.StorePath("tarde.txt")));
     }
 
-    // Only a lesson this PC (or a home before it) ran is ended: one it only
-    // heard of from the Agents, or never knew, is another PC's, which may
-    // still be on there; and this PC's own lesson is never "over".
+    // The end of a lesson this PC held for the room while another PC is the
+    // home, handed out a while longer for the PCs that missed it: only a PC
+    // still in that lesson is given it; one with no lesson on is not, so it
+    // never holds an end newer than what the other home hands it.
     [Fact]
-    public void OnlyALessonThisPcRan_AndNotTheOneOnHere_IsOver()
+    public async Task TheEndOfAHeldLesson_IsHandedOnlyToAPcStillInIt()
+    {
+        using var rig = new ClassSyncRig(pcs: 2, homes: 2);
+        var (inIt, none) = (rig.Pcs[0], rig.Pcs[1]);
+        ClaimFor(rig, inIt, rig.Master, ClassSyncRig.MachineName, HomeGeneration);
+        var now = new DateTimeOffset(rig.Now).ToUnixTimeSeconds();
+        var held = new ClassLesson(now - 600, Guid.NewGuid(), ClassSyncRig.Turma, now - 600, Ended: false);
+        Assert.True(ClassFolderClient.SetLesson(inIt.Machine, rig.Master, held, rig.AgentPort).Succeeded);
+        var ended = held with { SavedAt = held.SavedAt + 1, Ended = true };
+        using var toIt = new ThumbnailPoller(
+            inIt.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: () => true);
+        using var toNone = new ThumbnailPoller(
+            none.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: () => true);
+
+        await Task.WhenAll(ThreeThumbnails(toIt), ThreeThumbnails(toNone));
+
+        Assert.Equal(ended, inIt.Agent.Current);
+        Assert.Equal(ClassLesson.None(0), none.Agent.Current);
+    }
+
+    // A lesson this PC (or a home before it) ran is over, and so is one it
+    // never knew while it has never seen another home (one teacher PC), on an
+    // Agent that keeps this PC as its home. One only heard of from the Agents
+    // is another PC's, which may still be on there, and so is one never known
+    // on an Agent that keeps another PC, or none it says, or once another home
+    // was seen; this PC's own lesson is never "over".
+    [Fact]
+    public void WhichLessonsAnAgentFollows_AreOverHere()
     {
         using var rig = new ClassSyncRig(pcs: 1, homes: 1);
         var now = new DateTimeOffset(rig.Now).ToUnixTimeSeconds();
@@ -95,10 +139,20 @@ public partial class ThumbnailPollerTests
         ClassLessonFileMaster.Write(here, rig.LessonPath);
         var sync = rig.NewSync();
 
-        Assert.Equal(ran with { SavedAt = ran.SavedAt + 1, Ended = true }, sync.EndOfLessonOver(ran));
-        Assert.Null(sync.EndOfLessonOver(ran with { Ended = true }));
-        Assert.Null(sync.EndOfLessonOver(heard));
-        Assert.Null(sync.EndOfLessonOver(unknown));
-        Assert.Null(sync.EndOfLessonOver(here));
+        var thisPc = new ClassHome(rig.Master.Thumbprint, ClassSyncRig.MachineName, "127.0.0.1", ClassFolderRemote.Port, 7);
+        var otherPc = new ClassHome(rig.OtherMaster.Thumbprint, "PROF-2", "127.0.0.1", ClassFolderRemote.Port, 7);
+
+        Assert.Equal(ran with { SavedAt = ran.SavedAt + 1, Ended = true }, sync.EndOfLessonOver(ran, otherPc));
+        Assert.Null(sync.EndOfLessonOver(ran with { Ended = true }, thisPc));
+        Assert.Null(sync.EndOfLessonOver(heard, thisPc));
+        Assert.Equal(unknown with { SavedAt = unknown.SavedAt + 1, Ended = true }, sync.EndOfLessonOver(unknown, thisPc));
+        Assert.Null(sync.EndOfLessonOver(unknown, otherPc));
+        Assert.Null(sync.EndOfLessonOver(unknown, null));
+        Assert.Null(sync.EndOfLessonOver(here, thisPc));
+
+        ClassHomeFileMaster.WriteLastOtherHome(otherPc, rig.HomePath);
+
+        Assert.Null(sync.EndOfLessonOver(unknown, thisPc));
+        Assert.NotNull(sync.EndOfLessonOver(ran, thisPc));
     }
 }
