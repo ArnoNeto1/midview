@@ -13,6 +13,11 @@ public static class ScreenLockText
         : wasLocked ? ($"⚠ Saiu do bloqueio ({detail})", true)
         : ($"⚠ Não bloqueou ({detail})", true);
 
+    // A machine's menu has one item too, by the same rule for the machines it
+    // acts on (the one clicked, or every selected one): it gives them back
+    // while any of them is locked, and locks them otherwise.
+    public static string MachineMenuItem(bool anyLocked) => anyLocked ? "Desbloquear a tela" : "Bloquear a tela";
+
     // The toolbar's one screen-lock button: it locks the class, and while
     // any screen is locked (the class's or a single machine's) it gives them
     // all back instead. Badge is a Segoe Fluent Icons glyph: a closed or an

@@ -42,4 +42,13 @@ public class ScreenLockTextTests
         Assert.Equal("", button.Badge);
         Assert.Contains("todos os alunos", button.ToolTip);
     }
+
+    // One item in a machine's menu too, by the same rule for the machines it acts on.
+    [Fact]
+    public void TheMachineMenu_LocksWhileNoneOfItsMachinesIsLocked() =>
+        Assert.Equal("Bloquear a tela", ScreenLockText.MachineMenuItem(anyLocked: false));
+
+    [Fact]
+    public void TheMachineMenu_UnlocksOnceAnyOfItsMachinesIsLocked() =>
+        Assert.Equal("Desbloquear a tela", ScreenLockText.MachineMenuItem(anyLocked: true));
 }

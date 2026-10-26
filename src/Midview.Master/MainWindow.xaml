@@ -187,10 +187,15 @@
                                         <ContextMenu>
                                             <MenuItem Tag="varias" IsEnabled="False" FontWeight="SemiBold" Visibility="Collapsed" />
                                             <Separator Tag="varias" Visibility="Collapsed" />
+                                            <!-- Energia first, as on the toolbar. -->
+                                            <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
+                                            <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
+                                            <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
+                                            <Separator />
                                             <MenuItem Tag="uma" Header="Ver a tela" Click="OnViewMachineClicked" />
                                             <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" Click="OnControlMachineClicked" />
-                                            <MenuItem Header="Bloquear a tela" Click="OnLockMachineClicked" />
-                                            <MenuItem Header="Desbloquear a tela" Click="OnUnlockMachineClicked" />
+                                            <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
+                                            <MenuItem Tag="bloqueio" Header="Bloquear a tela" Click="OnScreenLockMachineClicked" />
                                             <Separator />
                                             <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
                                             <MenuItem Tag="uma" Header="Conversar (chat)..." Click="OnChatMachineClicked" />
@@ -209,10 +214,6 @@
                                             <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
                                             <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
                                             <MenuItem Tag="uma" Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
-                                            <Separator />
-                                            <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
-                                            <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
-                                            <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
                                             <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
                                             <Separator Tag="uma" />
                                             <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />

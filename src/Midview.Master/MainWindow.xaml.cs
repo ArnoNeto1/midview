@@ -56,6 +56,8 @@ public partial class MainWindow : Window
     // those for one machine only (MainWindow.xaml).
     private const string SeveralOnlyTag = "varias";
     private const string OneOnlyTag = "uma";
+    // The menu's one item that locks or gives back the screen (OnMachineMenuOpening words it).
+    private const string ScreenLockTag = "bloqueio";
 
     // The machines whose screen is locked, each kept so by its own
     // connection; how each one last answered, for the status line.
@@ -389,7 +391,12 @@ public partial class MainWindow : Window
             return;
         }
         RightClickTileOf(sender);
-        ShowMenuFor(menu, TargetsOf(tile).Count);
+        var targets = TargetsOf(tile);
+        ShowMenuFor(menu, targets.Count);
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
+        {
+            item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
+        }
     }
 
     // With several machines the menu first says how many, and leaves out what
@@ -560,23 +567,17 @@ public partial class MainWindow : Window
         ScreenLockButton.ToolTip = toolTip;
     }
 
-    private void OnLockMachineClicked(object sender, RoutedEventArgs e)
+    // One item for both, like the toolbar's button: while any of the machines
+    // it acts on is locked it gives them back, otherwise it locks them.
+    private void OnScreenLockMachineClicked(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
         {
-            foreach (var target in TargetsOf(tile))
-            {
-                LockScreen(target);
-            }
-            ShowScreenLockStatus();
+            return;
         }
-    }
-
-    private void OnUnlockMachineClicked(object sender, RoutedEventArgs e)
-    {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        var targets = TargetsOf(tile);
+        if (targets.Any(_screenLocks.ContainsKey))
         {
-            var targets = TargetsOf(tile);
             foreach (var target in targets)
             {
                 UnlockScreen(target);
@@ -584,6 +585,14 @@ public partial class MainWindow : Window
             StatusTextBlock.Text = targets.Count == 1
                 ? $"Tela de {tile.Name} desbloqueada."
                 : $"Telas de {targets.Count} máquinas desbloqueadas.";
+        }
+        else
+        {
+            foreach (var target in targets)
+            {
+                LockScreen(target);
+            }
+            ShowScreenLockStatus();
         }
     }
 
