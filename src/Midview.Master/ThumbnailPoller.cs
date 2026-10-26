@@ -44,7 +44,7 @@ public sealed partial class ThumbnailPoller : IDisposable
     private readonly Func<ClassLesson?>? _classLesson;
     private readonly Func<ClassHomeClaim?>? _classHomeClaim;
     private readonly Func<ClassLesson, ClassHome?, ClassLesson?>? _classLessonOver;
-    private readonly Func<bool>? _classLessonHeldEnd;
+    private readonly Func<ClassLesson, bool>? _classLessonHeldEnd;
     private readonly TimeSpan _agentRetryInterval;
     private long? _sentAppBlockSavedAt;
     private DateTime _nextAppBlockAttempt = DateTime.MinValue;
@@ -69,8 +69,8 @@ public sealed partial class ThumbnailPoller : IDisposable
     // connection (ClassFolderRole.HomeGeneration); null otherwise. classLessonOver:
     // for a lesson the Agent follows and the home it keeps, that lesson's end
     // when this PC knows it is over (ClassFolderRole.EndOfLessonOver); null otherwise. classLessonHeldEnd:
-    // whether classLesson is the end of a lesson this PC held for the room
-    // while another PC is the home (ClassFolderRole.HandsOutAHeldEnd), handed
+    // whether a lesson classLesson gave is the end of a lesson this PC held for the room
+    // while another PC is the home (ClassFolderRole.IsHeldEnd), handed
     // only to an Agent still in that lesson.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
@@ -78,7 +78,7 @@ public sealed partial class ThumbnailPoller : IDisposable
         Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
         TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null,
         Func<ClassLesson?>? classLesson = null, Func<ClassHomeClaim?>? classHomeClaim = null,
-        Func<ClassLesson, ClassHome?, ClassLesson?>? classLessonOver = null, Func<bool>? classLessonHeldEnd = null)
+        Func<ClassLesson, ClassHome?, ClassLesson?>? classLessonOver = null, Func<ClassLesson, bool>? classLessonHeldEnd = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;

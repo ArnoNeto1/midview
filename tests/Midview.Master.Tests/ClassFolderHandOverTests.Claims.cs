@@ -41,6 +41,28 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Null(ClassHomeFileMaster.Read(lab.NewHomePath));
     }
 
+    // Every Agent from before two teacher PCs: they answered, as old ones, so
+    // the teacher is told they need the new Midview (not that none answered),
+    // and everything is put back.
+    [Fact]
+    public async Task AClaimOnlyOldAgentsAnswer_SaysTheyNeedTheNewMidview_AndEverythingIsPutBack()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        lab.FillTheOldHome();
+        var before = lab.Snapshot();
+        lab.Taker.SendClaim = (_, _, _) => (false, string.Empty, true);
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home);
+
+        Assert.Equal((false, ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.PcsNeedTheNewMidview)), (result.Ok, result.Detail));
+        lab.AssertUnchanged(before);
+        Assert.Equal(
+            "Os PCs da sala estão com um Midview antigo, que não passa as pastas para outro computador: atualize o Midview neles.",
+            ClassFolderText.PcsNeedTheNewMidview);
+    }
+
     // Ruling 18 (5): what couldn't be put back is said, with where this PC's
     // own classes are, never "nada mudou".
     [Fact]

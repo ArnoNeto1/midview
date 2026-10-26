@@ -11,7 +11,7 @@ namespace Midview.Master;
 // a no 30 seconds, so a colleague's PC asking every couple of seconds doesn't
 // ask the room each time, and one just given access ("Dar acesso a um colega")
 // gets in within half a minute; a no never replaces a yes still in date. At
-// most maxKept answers are kept, the oldest going first.
+// most maxKept answers are kept, the oldest no going first.
 //
 // Asking the room is a round. One teacher has one round at a time, which every
 // check for it shares; and one address (where the request came from) starts
@@ -70,6 +70,18 @@ public sealed class ColleagueTrust
         _agentPort = agentPort;
         _wait = wait ?? DefaultWait;
         _maxKept = maxKept;
+    }
+
+    // For the tests: how many rounds of the room are out now.
+    internal int RoundsOut
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _roundsFor.Count;
+            }
+        }
     }
 
     // from: the address the request came from. Never throws: anything that
@@ -147,7 +159,8 @@ public sealed class ColleagueTrust
     }
 
     // Under _lock. A no never replaces a yes still in date; answers out of
-    // date go, and then the oldest while there are too many.
+    // date go, and then, while there are too many, the oldest no, and only
+    // then the oldest yes (strangers asking can't push a colleague's yes out).
     private void Keep(string key, bool? answer)
     {
         if (answer is not { } trusted)
@@ -167,7 +180,7 @@ public sealed class ColleagueTrust
         }
         while (_answers.Count >= _maxKept)
         {
-            _answers.Remove(_answers.MinBy(entry => entry.Value.Order).Key);
+            _answers.Remove(_answers.MinBy(entry => (entry.Value.Trusted, entry.Value.Order)).Key);
         }
         _answers[key] = new Kept(trusted, now + (trusted ? TrustedFor : RefusedFor), ++_keptCount);
     }

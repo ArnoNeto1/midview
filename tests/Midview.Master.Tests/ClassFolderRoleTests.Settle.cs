@@ -46,12 +46,24 @@ public sealed partial class ClassFolderRoleTests
         using var disposeHome = prof1;
         using var disposeOther = prof2;
         var late = rig.Pcs[2].Machine;
+        var namingProf2 = 0;
+        prof1.Tracker.Refreshed += reading =>
+        {
+            if (reading.Home?.Name == Prof2)
+            {
+                Interlocked.Increment(ref namingProf2);
+            }
+        };
+        // Late until PROF-1 read the room name PROF-2 twice (enough to go
+        // Remote) and acted on it: what PROF-1 was then (asserted after).
+        (bool Read, ClassFolderMode? Mode, bool Listens) whileLate = default;
         prof2.HandOver.SendClaim = (machine, claim, sending) =>
         {
             var answer = ClassFolderClient.ClaimHome(machine, rig.OtherMaster, claim, rig.AgentPort, sending);
             if (machine == late)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(3));
+                var read = SpinWait.SpinUntil(() => Volatile.Read(ref namingProf2) >= 2, Wait) && prof1.Role.ActedOnAsync().Wait(Wait);
+                whileLate = (read, prof1.Role.Mode, Listens(prof1.HostPort));
             }
             return answer;
         };
@@ -60,6 +72,7 @@ public sealed partial class ClassFolderRoleTests
         var result = await remote.TakeOverAsync(prof2.HandOver, remote.Home, homeClosed: false);
 
         Assert.True(result.Ok, result.Detail);
+        Assert.Equal((true, ClassFolderMode.Local, true), whileLate);
         Assert.Contains(ClassFolderText.OldCopyAside(Prof1, "Turmas (passadas para PROF-2)"), result.Detail);
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
         await Until(() => prof1.Role.Mode == ClassFolderMode.Remote && prof2.Role.Mode == ClassFolderMode.Local);
@@ -179,6 +192,28 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
         Assert.Null(prof1.Role.Host);
         await Until(() => prof1.Role.Host is not null);
+        Assert.True(Listens(prof1.HostPort));
+    }
+
+    // ...but a port still taken after two quick tries (another program on it)
+    // is tried again only at the room's next reading, not every few seconds.
+    [Fact]
+    public async Task AHostThatStillCantListen_IsTriedAgainOnlyAtTheNextReading()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master) { FailedOpens = 3 };
+
+        await prof1.Role.RefreshAndActAsync();
+        await Until(() => prof1.Opens == 3); // the reading's try, and two quick ones
+        await prof1.Role.ActedOnAsync();
+
+        Assert.False(prof1.Role.RefreshPending);
+        Assert.Null(prof1.Role.Host);
+
+        await prof1.Role.RefreshAndActAsync();
+
+        Assert.Equal(4, prof1.Opens);
+        Assert.NotNull(prof1.Role.Host);
         Assert.True(Listens(prof1.HostPort));
     }
 }

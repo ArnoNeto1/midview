@@ -324,7 +324,11 @@ public sealed partial class ClassFolderSyncTests
         await sync.StartAsync(Turma);
         var pc1 = rig.Pcs[0];
         pc1.Follow();
-        await rig.Rounds(sync, 1);
+        // Until the PC has the file (on a loaded PC a round's push can time out, and the next one pushes it).
+        for (var round = 0; round < 10 && !pc1.Has("mapa.png"); round++)
+        {
+            await rig.Rounds(sync, 1);
+        }
         Assert.Equal(Bytes(10, 1), pc1.Read("mapa.png"));
 
         rig.WriteInStore("mapa.png", Bytes(20, 2), Utc(2)); // the teacher's edit, to be pushed

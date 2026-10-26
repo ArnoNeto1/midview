@@ -387,6 +387,17 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.True(File.Exists(_statePath + ".corrupt"));
     }
 
+    // A file kept from before the latest generation existed (long.MaxValue,
+    // say) is read at that generation: no Master's claim can go past it.
+    [Fact]
+    public void AFileWithAGenerationPastTheLatest_IsReadAtTheLatest()
+    {
+        File.WriteAllText(_statePath, "{\"Thumbprint\":\"" + Home + "\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903,"
+            + $"\"Generation\":{long.MaxValue}}}");
+
+        Assert.Equal(HomeOf(Home, "PROF-1", "10.0.0.5", ClassHome.MaxGeneration), Create().Current);
+    }
+
     [Fact]
     public void AFileWithNoGeneration_IsAHomeWithNone()
     {

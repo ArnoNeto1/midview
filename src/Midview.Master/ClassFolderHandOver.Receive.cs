@@ -101,7 +101,7 @@ public sealed partial class ClassFolderHandOver
                 }
                 try
                 {
-                    channel.Send(new Message(MessageType.RemoteHandOver, Array.Empty<byte>()));
+                    channel.Send(new Message(MessageType.RemoteHandOver, Encoding.UTF8.GetBytes(_machineName)));
                     CommandClient.EnableKeepAlive(tcp.Client);
                     return new Copy(this, channel, name, progress, cancel).Run();
                 }

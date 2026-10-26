@@ -68,7 +68,7 @@ public sealed partial class ClassFolderHandOver
 
     // Taken when at least one Agent took it (the others are taken back at
     // this PC's next start); NotTaken with why, as an Agent said it (a lesson
-    // on), or that they were busy or none answered; Unknown (see the class
+    // on), or that they were busy, old or none answered; Unknown (see the class
     // comment). Generation: the one claimed, newer than now, than every home
     // the Agents report (reported: as just read, else read now) or this PC
     // saw (ClassHomeFileMaster: one that took the room back, say), and than
@@ -121,7 +121,9 @@ public sealed partial class ClassFolderHandOver
 
         var refusals = answers.Where(answer => answer.Answer == Answer.Refused).Select(answer => answer.Detail).ToList();
         var why = refusals.FirstOrDefault(detail => detail.Length > 0 && detail != ClassHomeClaim.BusyText)
-            ?? (refusals.Contains(ClassHomeClaim.BusyText) ? ClassFolderText.PcsBusy : ClassFolderText.NoPcTookIt);
+            ?? (refusals.Contains(ClassHomeClaim.BusyText) ? ClassFolderText.PcsBusy
+                : answers.Any(answer => answer.Answer == Answer.Old) ? ClassFolderText.PcsNeedTheNewMidview
+                : ClassFolderText.NoPcTookIt);
         return new ClaimResult(Outcome.NotTaken, why, generation, Array.Empty<string>());
     }
 

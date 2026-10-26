@@ -114,15 +114,16 @@ public sealed partial class ClassFolderRoleTests
     }
 
     // Ruling 17: a PC whose lesson the room still follows keeps the folders (and
-    // its own window, to end that lesson) until it ends; then it stands down.
-    // Meanwhile the lesson is still handed out (Fix round 1, minor 3: the
-    // Agents enforce the home on lesson sets), and once it ends its end goes on
-    // being handed out for EndedGrace, to the PCs that were busy or off.
+    // its own window, to end that lesson) until it ends; then it stands down,
+    // and goes Remote at the next reading. Meanwhile the lesson is still handed
+    // out (Fix round 1, minor 3: the Agents enforce the home on lesson sets),
+    // and once it ends its end goes on being handed out for EndedGrace, Remote,
+    // only to the PCs still in it (those that were busy or off).
     [Fact]
     public async Task ALessonOfThisPcTheRoomFollows_KeepsItLocal_UntilItEnds()
     {
         using var rig = new ClassSyncRig(homes: 3);
-        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(2));
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(5));
         await prof1.Sync.StartAsync(Turma);
         await prof1.Sync.EndAsync(EndChoice.Keep);
         // PC1 took another PC's take-over, and was off for this PC's start (its
@@ -154,15 +155,58 @@ public sealed partial class ClassFolderRoleTests
         var ended = prof1.Sync.Lesson;
         await prof1.Role.RefreshAndActAsync();
 
-        Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
         Assert.Equal(ended, prof1.Role.LessonForPollers);
-        Assert.True(Listens(prof1.HostPort));
-
-        await Until(() => prof1.Role.Mode == ClassFolderMode.Remote); // the grace over, by itself
+        Assert.True(prof1.Role.IsHeldEnd(ended));
+        Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
         Assert.IsType<RemoteClassFolderController>(prof1.Role.Controller);
-        Assert.False(Listens(prof1.HostPort));
         Assert.Equal(ClassLesson.None(0), prof1.Sync.Lesson);
-        Assert.Null(prof1.Role.LessonForPollers);
+        Assert.Null(prof1.Role.HomeGeneration);
+        Assert.False(Listens(prof1.HostPort));
+
+        await Until(() => prof1.Role.LessonForPollers is null); // the grace over, by itself
+        Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
+    }
+
+    // A start backed out for a home that outranks this PC (it took PC1 while
+    // PC1 was off for this PC): once the readings say Remote, this PC goes
+    // Remote, and the back-out's end is still handed out for EndedGrace, only
+    // to the PCs still in that lesson.
+    [Fact]
+    public async Task ABackedOutStart_GoesRemote_AndItsEndIsStillHandedOutForTheGrace()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(5));
+        Claim(rig, rig.Pcs[0], rig.OtherMaster, Prof2, rig.NowTicks + TimeSpan.TicksPerHour);
+        rig.Offline[rig.Pcs[0].Name] = true;
+        await prof1.Role.RefreshAndActAsync(); // Local: PC2 and PC3 keep no home
+        await prof1.Sync.StartAsync(Turma);
+        var ended = prof1.Sync.Lesson;
+        Assert.False(ended.IsOn);
+        Assert.Equal(ended, prof1.Role.LessonForPollers);
+        rig.Offline.Clear();
+
+        await prof1.Role.RefreshAndActAsync();
+        await prof1.Role.RefreshAndActAsync();
+
+        Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
+        Assert.Equal(ended, prof1.Role.LessonForPollers);
+        Assert.True(prof1.Role.IsHeldEnd(ended));
+        await Until(() => prof1.Role.LessonForPollers is null);
+    }
+
+    // A reading naming this PC past the latest generation (an Agent's file
+    // from before that limit): the pollers claim at the latest, which the Agents take.
+    [Fact]
+    public async Task TheGenerationThePollersClaimWith_NeverPassesTheLatest()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master);
+        var past = new ClassHome(rig.Master.Thumbprint, Prof1, "127.0.0.1", prof1.HostPort, long.MaxValue);
+
+        await prof1.Role.ActOnAsync(new ClassHomeReading(past, ClassFolderMode.Local, 3));
+
+        Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
+        Assert.Equal(ClassHome.MaxGeneration, prof1.Role.HomeGeneration);
     }
 
     // The toolbar's lesson: this PC's when Local; the home's when Remote, as the

@@ -216,6 +216,41 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal((OldHome, generation + 2), (seen.Name, seen.Generation));
     }
 
+    // A take-over given up at the latest generation (the room one below it):
+    // the old home's yes is kept at the latest, never past it, whatever it names.
+    [Fact]
+    public async Task ATakeBackAnswer_ForATakeOverAtTheLatest_IsKeptAtTheLatest()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig, openHost: false);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        foreach (var pc in rig.Pcs)
+        {
+            Assert.True(ClassFolderClient.ClaimHome(
+                pc.Machine, rig.Master, new ClassHomeClaim(OldHome, ClassFolderRemote.Port, false, ClassHome.MaxGeneration - 1),
+                rig.AgentPort).Ok);
+        }
+        lab.PutALessonOnTheAgentOf(rig.Pcs[1]);
+        lab.PutALessonOnTheAgentOf(rig.Pcs[2]);
+        lab.LetPc1TakeTheClaimAndGoOff(takes: true);
+        using var home = new ScriptedHandOverHome(rig, channel =>
+        {
+            SendManifest(channel, new[] { Turma });
+            Done(channel);
+        })
+        {
+            TakeBackAnswer = (true, ClassHome.MaxGeneration.ToString(CultureInfo.InvariantCulture)),
+        };
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home with { Port = home.Port });
+
+        Assert.Equal(ClassFolderText.TakeOverTakenBack(OldHome, new[] { "PC1" }), result.Detail);
+        var pc1Home = rig.Pcs[0].Agent.CurrentHome!;
+        Assert.Equal((NewHome, ClassHome.MaxGeneration), (pc1Home.Name, pc1Home.Generation));
+        var seen = ClassHomeFileMaster.ReadLastOtherHome(lab.NewHomePath)!;
+        Assert.Equal((OldHome, ClassHome.MaxGeneration), (seen.Name, seen.Generation));
+    }
+
     // Item 3: the old home takes longer than one network wait to take the room
     // back (its Agents slow to answer): this PC waits for its answer, and says
     // the folders stayed there, not that it can't tell.

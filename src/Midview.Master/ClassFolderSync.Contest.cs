@@ -18,6 +18,11 @@ namespace Midview.Master;
 // refuses it for a home that outranks this one.
 public sealed partial class ClassFolderSync
 {
+    // The PC whose lesson was on where this PC couldn't take its PCs back
+    // (SettleWithAnotherClaimAsync), while a PC that keeps it may still refuse
+    // a take-over for that lesson. Under the lesson lock.
+    private ClassHome? _contestRival;
+
     // A start's claims were refused for another home (ClaimHomeAsync): the
     // Agents are asked again which home they keep. When that PC outranks
     // this one (Outranks), or no Agent keeps this PC, nothing starts: every
@@ -65,11 +70,36 @@ public sealed partial class ClassFolderSync
         if (answers.Any(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst))
         {
             _log($"{rival.Name}'s lesson is on before this PC took its PCs back: nothing starts here until it ends.");
-            return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonFirst(rival.Name.Length > 0 ? rival.Name : ClassHome.UnnamedText)));
+            _contestRival = rival;
+            return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonFirst(NameOf(rival))));
         }
         return new HomeClaim(
             null, busy.Union(answers.Where(answer => answer.Busy).Select(answer => Key(answer.Machine))).ToHashSet(), generation);
     }
+
+    // A start after one that met the rival's lesson (_contestRival): while a
+    // PC that keeps that rival refuses a take-over for a lesson on there, no
+    // lesson starts here (that PC never heard of this one, so its lesson goes
+    // on): the rival, and every PC's line says to try once it ends. Null, and
+    // the rival forgotten, once none does.
+    private ClassHome? RivalsLessonStillOn(IReadOnlyList<HomeReport> reports, IReadOnlyList<ClaimAnswer> answers)
+    {
+        if (_contestRival is not { } rival)
+        {
+            return null;
+        }
+        if (answers.Any(answer => !answer.Ok && answer.Detail == ClassFolderText.EndLessonFirst
+                && reports.Any(report => report.Machine == answer.Machine
+                    && report.Home is { } kept && kept.IsSameIdentity(rival.Thumbprint, rival.Name))))
+        {
+            _log($"{rival.Name}'s lesson is still on where this PC couldn't take its PCs back: nothing starts here.");
+            return rival;
+        }
+        _contestRival = null;
+        return null;
+    }
+
+    private static string NameOf(ClassHome home) => home.Name.Length > 0 ? home.Name : ClassHome.UnnamedText;
 
     // After a start's lesson went to the Agents: one that refused it for a
     // home that outranks this PC (it claimed the room meanwhile, on PCs this
@@ -77,9 +107,11 @@ public sealed partial class ClassFolderSync
     // The lesson is ended as a held lesson's end (SendHeldEndAsync: one second
     // after it, never newer than that PC's lesson of the same moment): on the
     // Agents still in it, and on those that can't be read (one whose answer
-    // was lost may have taken it). It is the lesson here then, ended (no
-    // lesson on that no PC follows), and the pollers hand it only to a PC
-    // still in it; every PC's line names that PC, which this PC has now seen.
+    // was lost may have taken it), but not on one that refused it firmly
+    // (naming another home, or keeping a newer lesson: it never took it). It
+    // is the lesson here then, ended (no lesson on that no PC follows), and
+    // the pollers hand it only to a PC still in it; every PC's line names that
+    // PC, which this PC has now seen.
     // Null otherwise, as for a refusal naming an older home (a PC still in
     // that home's lesson). With the lesson lock held, the lesson just adopted.
     private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>?> BackOutForANewerHomeAsync(
@@ -101,7 +133,10 @@ public sealed partial class ClassFolderSync
 
         _log($"{newer.Name} keeps the class folders since this PC's claims: the lesson of {lesson.Turma} is taken back.");
         var ended = HeldEndOf(lesson);
-        await SendHeldEndAsync(ended, await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false)).ConfigureAwait(false);
+        var refused = lines.Where(line => !line.Ok && (line.Detail.StartsWith(ClassHomeClaim.OtherHomeText, StringComparison.Ordinal)
+                || line.Detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal)))
+            .Select(line => Key(line.Machine)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        await SendHeldEndAsync(ended, await LessonsOnTheAgentsAsync(_stop.Token).ConfigureAwait(false), refused).ConfigureAwait(false);
         RememberOtherHome(newer);
         RaiseSavedAtFloor(ended.SavedAt);
         EndUncollected(lesson);
@@ -114,7 +149,5 @@ public sealed partial class ClassFolderSync
     // computer name, as every teacher PC decides it (ClassHomeTracker.Outranks).
     private static bool Outranks(ClassHome home, long generation, string name) => ClassHomeTracker.Outranks(home, generation, name);
 
-    // The home that outranks every other one of homes; null for none.
-    private static ClassHome? Strongest(IEnumerable<ClassHome> homes) =>
-        homes.Aggregate((ClassHome?)null, (best, home) => best is null || Outranks(home, best.Generation, best.Name) ? home : best);
+    private static ClassHome? Strongest(IEnumerable<ClassHome> homes) => ClassHomeTracker.Strongest(homes);
 }

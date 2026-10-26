@@ -20,8 +20,8 @@ public sealed partial class ClassFolderHandOver
     // the manifest was made stops the copy, saying so. stop (the host closing)
     // breaks the copy off, between two chunks: the connection closes with the
     // copy unfinished. The network's exceptions go up (the host lets the
-    // connection go).
-    internal void Send(SecureChannel channel, CancellationToken stop)
+    // connection go). taker: that PC's computer name as it gave it (empty: none).
+    internal void Send(SecureChannel channel, CancellationToken stop, string taker = "")
     {
         if (!_sync.BeginGiving())
         {
@@ -47,7 +47,7 @@ public sealed partial class ClassFolderHandOver
 
         // Not settled from before the last answer goes: that PC claims the
         // Agents as soon as it has it. Its settling lets lessons start again.
-        CopySent(channel.RemoteThumbprint);
+        CopySent(channel.RemoteThumbprint, taker);
         try
         {
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, $"{count} arquivos")));

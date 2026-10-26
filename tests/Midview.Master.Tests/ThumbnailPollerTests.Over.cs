@@ -107,9 +107,9 @@ public partial class ThumbnailPollerTests
         Assert.True(ClassFolderClient.SetLesson(inIt.Machine, rig.Master, held, rig.AgentPort).Succeeded);
         var ended = held with { SavedAt = held.SavedAt + 1, Ended = true };
         using var toIt = new ThumbnailPoller(
-            inIt.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: () => true);
+            inIt.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: _ => true);
         using var toNone = new ThumbnailPoller(
-            none.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: () => true);
+            none.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classLesson: () => ended, classLessonHeldEnd: _ => true);
 
         await Task.WhenAll(ThreeThumbnails(toIt), ThreeThumbnails(toNone));
 

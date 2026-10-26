@@ -55,6 +55,39 @@ public sealed class ClassSetAsideSightingsTests : IDisposable
         Assert.Null(New().FirstSeen("pc-0", oldest));
     }
 
+    // ...but first those of PCs this Master no longer sees (none of their
+    // listings noted since it opened: a PC taken out of the lab, say), however
+    // new, so a PC still in the lab keeps its oldest clock running.
+    [Fact]
+    public void AtTheCap_APcNoLongerSeen_GoesFirst()
+    {
+        var oldest = Guid.NewGuid();
+        var gone = Guid.NewGuid();
+        var before = New();
+        before.Note("pc-1", new[] { oldest }, 1);
+        before.Note("pc-gone", new[] { gone }, 2);
+
+        var reopened = New();
+        reopened.Note("pc-1", Enumerable.Range(0, ClassSetAsideSightings.MaxEntries - 1).Select(_ => Guid.NewGuid()).Append(oldest).ToList(), 3);
+
+        Assert.Equal(1, New().FirstSeen("pc-1", oldest));
+        Assert.Null(New().FirstSeen("pc-gone", gone));
+    }
+
+    // A first sighting is never earlier than the newest one on file: a clock
+    // that was behind for a while doesn't make files go before their 60 days.
+    [Fact]
+    public void AFirstSighting_IsNeverEarlierThanTheNewestOnFile()
+    {
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var sightings = New();
+        sightings.Note("pc-1", new[] { a }, 1_000);
+
+        Assert.Equal(1_000, sightings.Note("pc-2", new[] { b }, 400)[b]);
+        Assert.Equal(1_000, New().FirstSeen("pc-2", b));
+        Assert.Equal(2_000, New().Note("pc-2", new[] { b, Guid.NewGuid() }, 2_000).Values.Max());
+    }
+
     // A file that isn't one is taken as empty, and said so.
     [Fact]
     public void AnUnreadableFile_IsTakenAsEmpty()

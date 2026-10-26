@@ -13,6 +13,18 @@ public sealed partial class ClassFolderRole
         await ActedOnAsync().ConfigureAwait(false);
     }
 
+    // For the tests: whether a refresh asked for (RefreshSoon) is still to begin.
+    internal bool RefreshPending
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _refreshDue != long.MaxValue;
+            }
+        }
+    }
+
     // For the tests: a reading acted on, as one from the tracker would be.
     internal async Task ActOnAsync(ClassHomeReading reading)
     {
@@ -20,8 +32,8 @@ public sealed partial class ClassFolderRole
         await ActedOnAsync().ConfigureAwait(false);
     }
 
-    // Once every reading before it is acted on.
-    private Task ActedOnAsync()
+    // Once every reading before it is acted on (and for the tests).
+    internal Task ActedOnAsync()
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         return _readings.Writer.TryWrite((null, done)) ? done.Task : Task.CompletedTask;
@@ -122,7 +134,6 @@ public sealed partial class ClassFolderRole
                 {
                     // The room names this PC (or none) again: nothing held any more.
                     _holding = false;
-                    _graceUntil = null;
                 }
                 _lessonsOpen |= reading.Asked > 0 && (reading.Mode == ClassFolderMode.Local || _holding);
             }
@@ -156,6 +167,7 @@ public sealed partial class ClassFolderRole
             }
             _mode = ClassFolderMode.Local;
             _homesLesson = null;
+            _graceEnd = null;
         }
         if (retired is not null)
         {
@@ -169,29 +181,13 @@ public sealed partial class ClassFolderRole
     // Never while a lesson of this PC's is on that the room still follows: it
     // stays Local (or becomes it, the first time), holding: its pollers go on
     // handing that lesson out (the Agents take a lesson set only from the home
-    // they keep), until it ends; then its end goes on being handed out for
-    // EndedGrace, to the PCs that were busy or off (Ruling 17, Task 7 fix round 1).
+    // they keep), until it ends (Ruling 17). Then it goes Remote at once, and
+    // that lesson's end (or a start's backed out) goes on being handed out for
+    // EndedGrace, only to the PCs still in it: those that were busy or off.
     private async Task GoRemoteAsync()
     {
-        if (Holding() && !_sync.Lesson.IsOn)
-        {
-            var now = Environment.TickCount64;
-            if (_graceUntil is not { } until)
-            {
-                lock (_lock)
-                {
-                    _graceUntil = now + (long)EndedGrace.TotalMilliseconds;
-                }
-                _log($"The lesson this PC kept the class folders for is over: its end is still handed out for {EndedGrace}.");
-                RefreshSoon(EndedGrace);
-                return;
-            }
-            if (now < until)
-            {
-                return;
-            }
-        }
-
+        var lesson = _sync.Lesson;
+        var heldEnd = !lesson.IsOn && _sync.IsHeldEnd(lesson) ? lesson : null;
         if (await _sync.StandDownForAnotherHomeAsync().ConfigureAwait(false) is { } on)
         {
             if (!Holding())
@@ -201,7 +197,6 @@ public sealed partial class ClassFolderRole
             lock (_lock)
             {
                 _holding = true;
-                _graceUntil = null;
             }
             if (_confirmation.Acted is null)
             {
@@ -221,16 +216,27 @@ public sealed partial class ClassFolderRole
             _mode = ClassFolderMode.Remote;
             _lessonsOpen = false;
             _holding = false;
-            _graceUntil = null;
+            _graceEnd = heldEnd;
+            _graceUntil = Environment.TickCount64 + (long)EndedGrace.TotalMilliseconds;
         }
         host?.Dispose();
+        _hostFailures = 0;
         _confirmation.Acting(ClassFolderMode.Remote);
         _log($"Another PC keeps the class folders ({_latest?.Home?.Name}): this PC works them through it.");
+        if (heldEnd is not null)
+        {
+            _log($"The end of the lesson of {heldEnd.Turma} is still handed out for {EndedGrace}, to the PCs still in it.");
+        }
     }
+
+    // How many times in a row the host couldn't listen (only the acting thread uses it).
+    private int _hostFailures;
 
     // Ruling 3: only while this PC acts Local; logged by the host when the
     // port can't be had, and tried again after HostRetryWait (the port a host
-    // closed a moment ago, after a quick switch back, may not be free yet).
+    // closed a moment ago, after a quick switch back, may not be free yet),
+    // up to HostQuickTries times; after that (another program holds the port,
+    // say) at each of the room's readings.
     private void OpenHostIfClosed()
     {
         lock (_lock)
@@ -243,9 +249,13 @@ public sealed partial class ClassFolderRole
         var host = _openHost();
         if (host is null)
         {
-            RefreshSoon(HostRetryWait);
+            if (++_hostFailures <= HostQuickTries)
+            {
+                RefreshSoon(HostRetryWait);
+            }
             return;
         }
+        _hostFailures = 0;
         lock (_lock)
         {
             if (_host is null && _mode == ClassFolderMode.Local && !_disposed)

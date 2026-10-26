@@ -103,6 +103,8 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(backedOut, rig.Pcs[2].Agent.Current);
         Assert.Equal(backedOut, sync.Lesson);
         Assert.Equal(OtherPc, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)?.Name);
+        // PC1 refused the lesson, naming PROF-2: never in it, it isn't sent its end.
+        Assert.NotEqual(backedOut.LessonId, pc1.Agent.Current.LessonId);
 
         rig.Offline.Clear();
         var other = ProfTwo(rig);
@@ -190,10 +192,59 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
+    // The same PROF-2 tries again at once, PROF-1's lesson still on: PROF-1
+    // never heard a refusal naming PROF-2, so its PCs still refuse a take-over
+    // ("Encerre a aula…"). The retry is refused again, saying to try once that
+    // lesson is over: no lesson starts beside PROF-1's on the PCs PROF-2 holds.
+    [Fact]
+    public async Task ARetryWhileTheOtherPcsLessonIsStillOn_IsRefusedAgain_AndStartsNothing()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc1 = rig.Pcs[0];
+        ClaimFor(rig, pc1, OtherPc, takeOver: false, rig.NowTicks);
+        var others = rig.Machines.Skip(1).ToList();
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => others, _ => true, () => rig.Now, ThisPc, agentPort: rig.AgentPort,
+            sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1), lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            var other = ProfTwo(rig);
+            Assert.All(await other.StartAsync("3º B"), line => Assert.Equal(ClassFolderText.OtherPcsLessonFirst(ThisPc), line.Detail));
+            rig.Now = rig.Now.AddMinutes(1);
+
+            var retry = await other.StartAsync("3º B");
+
+            Assert.Equal(3, retry.Count);
+            Assert.All(retry, line => Assert.Equal((false, ClassFolderText.OtherPcsLessonOn(ThisPc)), (line.Ok, line.Detail)));
+            Assert.False(other.Lesson.IsOn);
+            Assert.False(pc1.Agent.Current.IsOn);
+            Assert.All(rig.Pcs.Skip(1), pc => Assert.Equal((lesson, ThisPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
+
+            rig.Now = rig.Now.AddMinutes(1);
+            await sync.EndAsync(EndChoice.Keep);
+            rig.Now = rig.Now.AddMinutes(1);
+            var started = await other.StartAsync("3º B");
+
+            Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
+            Assert.All(rig.Pcs, pc => Assert.Equal((other.Lesson, OtherPc), (pc.Agent.Current, pc.Agent.CurrentHome?.Name)));
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
     // That lesson may be taken back by then: the line doesn't say it is on.
     [Fact]
     public void TheOtherPcsLessonFirstText_IsTheOneAgreed() => Assert.Equal(
         "o PC PROF-1 começou uma aula ao mesmo tempo; tente de novo", ClassFolderText.OtherPcsLessonFirst("PROF-1"));
+
+    // A retry that finds that lesson still on.
+    [Fact]
+    public void TheOtherPcsLessonOnText_IsTheOneAgreed() => Assert.Equal(
+        "a aula do PC PROF-1 continua em andamento; tente de novo quando ela acabar", ClassFolderText.OtherPcsLessonOn("PROF-1"));
 
     // PROF-2, the other teacher PC of the lab, with its own store, files and (maybe) clock.
     private static ClassFolderSync ProfTwo(ClassSyncRig rig, Func<DateTime>? clock = null) =>

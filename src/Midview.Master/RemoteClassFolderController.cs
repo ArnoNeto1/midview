@@ -101,6 +101,7 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
     // The polling loop while the window is open. Under _runLock.
     private readonly object _runLock = new();
     private CancellationTokenSource? _running;
+    private Task _loop = Task.CompletedTask;
     private bool _disposed;
 
     // masterCertificate: this teacher PC's. home: the class folders' home as
@@ -223,7 +224,19 @@ public sealed partial class RemoteClassFolderController : IClassFolderController
             _running = running;
             // Read here: a Stop right after disposes the source before the loop would.
             var token = running.Token;
-            _ = Task.Run(() => LoopAsync(token));
+            _loop = Task.Run(() => LoopAsync(token));
+        }
+    }
+
+    // For the tests: the polling loop last started, which ends once stopped.
+    internal Task Loop
+    {
+        get
+        {
+            lock (_runLock)
+            {
+                return _loop;
+            }
         }
     }
 

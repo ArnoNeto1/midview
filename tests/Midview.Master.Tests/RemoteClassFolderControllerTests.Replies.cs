@@ -87,10 +87,8 @@ public sealed partial class RemoteClassFolderControllerTests
         Assert.All(created, result => Assert.True(result.Ok, result.Detail));
         Assert.Equal(1, scripted.MostReadsAtOnce);
         Assert.Equal(1, scripted.MostCommandsAtOnce);
-        await Task.Delay(300);
-        var readsSoFar = scripted.Reads;
-        await Task.Delay(300);
-        Assert.Equal(readsSoFar, scripted.Reads);
+        await remote.Loop.WaitAsync(Wait); // the loop ended: nothing asks the home any more
+        Assert.True(scripted.Reads > 0);
     }
 
     // A PC at the home's address with another certificate (Midview reinstalled
@@ -147,13 +145,12 @@ public sealed partial class RemoteClassFolderControllerTests
 
         remote.Dispose();
         remote.Dispose();
+        await remote.Loop.WaitAsync(Wait); // the loop ended
+        var reads = scripted.Reads;
         await remote.PollAsync();
 
+        Assert.Equal(reads, scripted.Reads); // the poll asked nothing
         await Assert.ThrowsAsync<ObjectDisposedException>(() => remote.CreateAsync("9º A"));
-        await Task.Delay(300);
-        var reads = scripted.Reads;
-        await Task.Delay(300);
-        Assert.Equal(reads, scripted.Reads);
     }
 
     // Task 7a, item 13: what the home says of its own disk ("neste

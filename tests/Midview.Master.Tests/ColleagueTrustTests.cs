@@ -155,12 +155,14 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         var rounds = 0;
         var trust = NewTrust(wait: Long, isOnline: Counting(() => Interlocked.Increment(ref rounds), held));
 
+        // Each check picks its round before it first waits: one round out for the four.
         var checks = Enumerable.Range(0, 4).Select(_ => trust.IsTrustedAsync(NewThumbprint(), From)).ToList();
-        await Until(() => Volatile.Read(ref rounds) >= 1);
-        await Task.Delay(500);
-        Assert.Equal(1, Volatile.Read(ref rounds));
+        Assert.Equal(1, trust.RoundsOut);
+        await Until(() => Volatile.Read(ref rounds) == 1);
+        Assert.All(checks, check => Assert.False(check.IsCompleted));
 
         var elsewhere = trust.IsTrustedAsync(NewThumbprint(), Elsewhere);
+        Assert.Equal(2, trust.RoundsOut);
         await Until(() => Volatile.Read(ref rounds) == 2);
 
         held.Set();
@@ -180,7 +182,7 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         var first = trust.IsTrustedAsync(Colleague, From);
         await Until(() => Volatile.Read(ref rounds) == 1);
         var second = trust.IsTrustedAsync(Colleague.ToLowerInvariant(), Elsewhere);
-        await Task.Delay(300);
+        Assert.Equal(1, trust.RoundsOut); // the second took the first's round before it first waited
         held.Set();
 
         Assert.True(await first.WaitAsync(Long));
@@ -196,7 +198,8 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
     public async Task ANoFromARacingRound_DoesNotReplaceAFreshYes()
     {
         using var held = new ManualResetEventSlim(initialState: true);
-        var trust = NewTrust(wait: Long, isOnline: Counting(() => { }, held));
+        var rounds = 0;
+        var trust = NewTrust(wait: Long, isOnline: Counting(() => Interlocked.Increment(ref rounds), held));
         Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
         var yesAt = _now;
 
@@ -204,7 +207,7 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         _offline["PC1"] = true; // only PC2 left, which says no
         held.Reset();
         var racing = trust.IsTrustedAsync(Colleague, From);
-        await Task.Delay(300);
+        await Until(() => Volatile.Read(ref rounds) == 2); // its round is out, held at PC2
         _now = yesAt.AddMinutes(1);
         held.Set();
 
@@ -237,6 +240,25 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         Assert.False(await trust.IsTrustedAsync(c, From).WaitAsync(Long)); // kept
         Assert.Equal(3, Volatile.Read(ref rounds));
         Assert.False(await trust.IsTrustedAsync(a, From).WaitAsync(Long)); // the oldest, gone
+        Assert.Equal(4, Volatile.Read(ref rounds));
+    }
+
+    // ...a no going before any yes, however old: strangers asking can't push
+    // a colleague's yes out (its PC would ask the room again every poll).
+    [Fact]
+    public async Task TheAnswersKept_AtTheCap_LoseANoBeforeAYes()
+    {
+        var rounds = 0;
+        var trust = NewTrust(isOnline: Counting(() => Interlocked.Increment(ref rounds)), maxKept: 2);
+        var (a, b) = (NewThumbprint(), NewThumbprint());
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long));
+        Assert.False(await trust.IsTrustedAsync(a, From).WaitAsync(Long));
+        Assert.False(await trust.IsTrustedAsync(b, From).WaitAsync(Long));
+        Assert.Equal(3, Volatile.Read(ref rounds));
+
+        Assert.True(await trust.IsTrustedAsync(Colleague, From).WaitAsync(Long)); // kept
+        Assert.Equal(3, Volatile.Read(ref rounds));
+        Assert.False(await trust.IsTrustedAsync(a, From).WaitAsync(Long)); // the no, gone
         Assert.Equal(4, Volatile.Read(ref rounds));
     }
 

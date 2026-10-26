@@ -87,7 +87,8 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 // Agents keep the sender as the home. Never while a lesson is on.
 //
 // On the wire (ClassFolderRemote.Port, after the host's checks), RemoteHandOver
-// is answered with one CommandAck refusing it (CommandResult false, why), or
+// (the taking PC's computer name, UTF-8, which the old home only shows) is
+// answered with one CommandAck refusing it (CommandResult false, why), or
 // with the store: first ManifestPath (JSON: every class, and every file that
 // follows, in order, with its size and last write time in UTC ticks), then each
 // of those files as a SendFile header (FileTransfer.EncodeHeader: the size, then
@@ -181,7 +182,7 @@ public sealed partial class ClassFolderHandOver
         _homePath = homePath ?? ClassHomeFileMaster.Path;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderHandOver: " + message));
         // A hand-over an earlier run made (one on a file unread now is read again when it matters).
-        _handedOverTo = HandedOverStanding().To;
+        HandedOverStanding();
     }
 
     // How far a take-over got, for what to say when it breaks off.

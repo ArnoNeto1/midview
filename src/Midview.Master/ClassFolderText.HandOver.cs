@@ -241,15 +241,37 @@ public static partial class ClassFolderText
     // retry finds the room as it is (this PC keeps the newer claim).
     public static string OtherPcsLessonFirst(string pc) => $"o PC {pc} começou uma aula ao mesmo tempo; tente de novo";
 
+    // ...a retry that finds pc's lesson still on those PCs.
+    public static string OtherPcsLessonOn(string pc) => $"a aula do PC {pc} continua em andamento; tente de novo quando ela acabar";
+
     // No PC of the room took this PC as the home (none answered).
     public const string NoPcTookIt = "Nenhum PC da sala respondeu.";
+
+    // ...those that answered are from before two teacher PCs (they keep no home).
+    public const string PcsNeedTheNewMidview =
+        "Os PCs da sala estão com um Midview antigo, que não passa as pastas para outro computador: atualize o Midview neles.";
 
     // The home PC's Midview answers again since the window asked about it closed: asked again, its classes can come.
     public static string HomeAnswersAgain(string name) => $"O Midview do PC {name} voltou a responder. Tente de novo.";
 
-    // Closing the Master while a take-over, a hand-over or a take-back runs (ClassFolderHandOver.IsBusy).
+    // Closing the Master while a take-over, a hand-over or a take-back runs (ClassFolderHandOver.IsRunning).
     public const string HandOverStillRunning =
         "As pastas das turmas estão passando de um computador para outro. Espere a troca terminar para fechar o Midview.";
+
+    // ...while only a copy sent waits for the PCs that took it (by name; empty:
+    // one that didn't say) to confirm (ClassFolderHandOver.Unconfirmed).
+    public static string HandOverUnconfirmed(IReadOnlyList<string> pcs)
+    {
+        var named = pcs.Where(pc => pc.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var who = named.Count switch
+        {
+            0 => "O outro computador ainda não confirmou",
+            1 => $"O PC {named[0]} ainda não confirmou",
+            _ => $"Os PCs {PcNames(named)} ainda não confirmaram",
+        };
+        return $"{who} a troca das pastas das turmas. Fechar o Midview mesmo assim? "
+            + "Se fechar, a troca pode não terminar: depois confira qual computador guarda as pastas.";
+    }
 
     // AsideNote for this PC's store (where: the folder its "Turmas" is in):
     // the folders a take-over left beside it, and, while this PC works another

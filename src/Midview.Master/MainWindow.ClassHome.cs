@@ -58,8 +58,8 @@ public partial class MainWindow
     // The end the pollers hand an Agent still in a lesson this PC knows is over (on their threads).
     private ClassLesson? EndOfLessonOver(ClassLesson followed, ClassHome? keptHome) => _classRole.EndOfLessonOver(followed, keptHome);
 
-    // Whether the pollers hand out a held lesson's end, only to the Agents still in it (on their threads).
-    private bool HandsOutAHeldEnd() => _classRole.HandsOutAHeldEnd;
+    // Whether a lesson the pollers hand out is a held lesson's end, only for the Agents still in it (on their threads).
+    private bool IsHeldEnd(ClassLesson lesson) => _classRole.IsHeldEnd(lesson);
 
     // While this PC keeps the class folders: its claim on each Agent, once per
     // connection, taking back one that keeps an older home and refreshing
@@ -79,15 +79,27 @@ public partial class MainWindow
     // A take-over goes on for minutes after its copy is in place, on both
     // teacher PCs: closing now would leave it half done, so the Master stays
     // open until it ends (before the copy is in place, "Cancelar" in the
-    // window stops it). Not when Windows signs out or shuts down: a message
-    // here would only hold that up, and a take-over cut off is one the PCs
-    // already settle (Rulings 17 to 21).
+    // window stops it). A copy this PC sent that only waits for the PC that
+    // took it to confirm runs nothing here: the teacher may close anyway. Not
+    // when Windows signs out or shuts down: a message here would only hold
+    // that up, and a take-over cut off is one the PCs already settle (Rulings
+    // 17 to 21).
     private void OnWindowClosing(object? sender, CancelEventArgs e)
     {
-        if (_classHandOver.IsBusy && !_sessionEnding && !Dispatcher.HasShutdownStarted)
+        if (_sessionEnding || Dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+        if (_classHandOver.IsRunning)
         {
             e.Cancel = true;
             MessageBox.Show(this, ClassFolderText.HandOverStillRunning, "Midview", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else if (_classHandOver.Unconfirmed is { Count: > 0 } pcs)
+        {
+            e.Cancel = MessageBox.Show(
+                this, ClassFolderText.HandOverUnconfirmed(pcs), "Midview", MessageBoxButton.YesNo, MessageBoxImage.Question,
+                MessageBoxResult.No) != MessageBoxResult.Yes;
         }
     }
 }

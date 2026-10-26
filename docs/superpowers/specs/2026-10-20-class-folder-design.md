@@ -360,9 +360,9 @@ settled what this section left open; the reviews changed some of it:
   does one whose own generation is older than a home it has seen. Two PCs
   claiming at once settle it before any lesson goes out: the newer
   generation (then the name that sorts last) takes the other's PCs back,
-  unless the other's lesson is on there already; the other, or a PC holding
-  none, starts nothing. A lesson a PC refuses for a home outranking this
-  one is ended on its PCs, a second after it.
+  unless the other's lesson is on there (then nothing starts until it ends);
+  the other, or a PC holding none, starts nothing. A lesson a PC refuses for
+  a home outranking this one is ended on the PCs that took it, a second after.
 - **Stragglers and refreshes.** A student PC that was off during a take-over
   still names the old home. The home's next start, and its Master once per
   connection to each PC, claim it back with the home's generation (a lesson
@@ -407,17 +407,17 @@ settled what this section left open; the reviews changed some of it:
 - **Switching modes.** A Master switches between working the folders itself
   and the home's only when two readings in a row say so (at once when the
   Agents name it, or it handed the folders over). It never stands down while
-  a lesson of its own is on that the room still follows (it keeps the
-  folders until that lesson ends, and hands its end out a few minutes more);
-  one the room left behind is ended, keeping the files, here and on the PCs
-  still in it. Standing down with no hand-over leaves its `Turmas` as it is
+  a lesson of its own is on that the room still follows; once it ends (or a
+  start backs out) it switches, its end handed a few minutes more to the PCs
+  still in it. One the room left behind is ended, keeping the files, here and
+  on those PCs. Standing down with no hand-over leaves its `Turmas` as it is
   (the room may name it again), and its window says those classes are there.
   Nothing changes while a take-over isn't over, on either PC: the old home
   keeps its listener open until the taking PC says how it went (or a few
   minutes pass). The listener is open only while the PC is the home or no PC
   is; the window switches by itself after a take-over. The Master doesn't
-  close while a take-over runs (unless Windows is shutting down), and its
-  window says where classes set aside by a take-over are.
+  close while a take-over runs (unless Windows is shutting down), asks while
+  a copy only awaits the taking PC, and says where set-aside classes are.
 - **Firewall.** The teacher setup adds the rule `MidviewProfessorPastaDaTurma`
   (TCP 28903, this program only, local network only) with the invite's
   rules, and removes it with them. The Master never opens the firewall.

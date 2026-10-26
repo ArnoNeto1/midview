@@ -238,7 +238,9 @@ public sealed class ClassHomeState
             && IsUsable(stored.Name, stored.Port)
             && stored.Generation >= 0)
         {
-            return new ClassHome(Normalize(stored.Thumbprint), stored.Name, stored.Address, stored.Port, stored.Generation);
+            // Never past the latest generation (a file kept from before that limit), which no Master claims past.
+            return new ClassHome(
+                Normalize(stored.Thumbprint), stored.Name, stored.Address, stored.Port, Math.Min(stored.Generation, ClassHome.MaxGeneration));
         }
 
         _log("The class folders' home file is corrupt, following none; it is kept aside as .corrupt.");

@@ -193,24 +193,25 @@ public sealed class ClassHomeTracker : IDisposable
         home.Generation > generation
         || (home.Generation == generation && string.Compare(home.Name, name, StringComparison.OrdinalIgnoreCase) > 0);
 
-    // The home of the newest generation the answers name (none: no home);
-    // between PCs of that generation, the name that sorts last (Outranks);
-    // between records of one PC (another certificate, say), the one most
+    // The home that outranks every other one of homes (Outranks); null for none.
+    internal static ClassHome? Strongest(IEnumerable<ClassHome> homes) =>
+        homes.Aggregate((ClassHome?)null, (best, home) => best is null || Outranks(home, best.Generation, best.Name) ? home : best);
+
+    // The home that outranks the others the answers name (none: no home);
+    // between records of that PC (another certificate, say), the one most
     // answers name, then current (the home known so far), then the one of the
     // newest answer. It is told as its newest answer has it (the address a
     // claim refreshed last, most likely). answers: in the order they arrived.
     internal static ClassHome? Choose(IReadOnlyList<ClassHome?> answers, ClassHome? current)
     {
         var homes = answers.OfType<ClassHome>().Select((home, order) => (Home: home, Order: order)).ToList();
-        if (homes.Count == 0)
+        if (Strongest(homes.Select(answer => answer.Home)) is not { } strongest)
         {
             return null;
         }
 
-        var newest = homes.Max(answer => answer.Home.Generation);
-        var atNewest = homes.Where(answer => answer.Home.Generation == newest).ToList();
-        var lastName = atNewest.Select(answer => answer.Home.Name).Max(StringComparer.OrdinalIgnoreCase);
-        var groups = atNewest.Where(answer => string.Equals(answer.Home.Name, lastName, StringComparison.OrdinalIgnoreCase))
+        // Its own records: none of them outranked by it (its generation and name).
+        var groups = homes.Where(answer => !Outranks(strongest, answer.Home.Generation, answer.Home.Name))
             .GroupBy(answer => KeyOf(answer.Home)).ToList();
         var most = groups.Max(group => group.Count());
         var tied = groups.Where(group => group.Count() == most).ToList();

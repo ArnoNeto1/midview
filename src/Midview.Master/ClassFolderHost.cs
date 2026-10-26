@@ -255,7 +255,7 @@ public sealed partial class ClassFolderHost : IDisposable
             }
             else if (request.Type == MessageType.RemoteHandOver)
             {
-                SendTheFolders(client, channel);
+                SendTheFolders(client, channel, request);
             }
             else if (request.Type == MessageType.RemoteHandOverDone)
             {

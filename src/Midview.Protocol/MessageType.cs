@@ -268,9 +268,10 @@ public enum MessageType : byte
     // JSON (ClassFolderRemote.EncodeJson). RemoteClassFolderState, no payload,
     // is answered with RemoteClassFolderStateReply (a RemoteState);
     // RemoteClassFolderCommand (a RemoteCommand), with
-    // RemoteClassFolderCommandReply (a RemoteReply); RemoteHandOver, a PC asking
-    // the home for the class folders to take them over, with RemoteHandOverDone
-    // once the home has sent all of them. The home refuses with one CommandAck
+    // RemoteClassFolderCommandReply (a RemoteReply); RemoteHandOver (its
+    // computer name, UTF-8), a PC asking the home for the class folders to
+    // take them over, with RemoteHandOverDone once the home has sent all of
+    // them. The home refuses with one CommandAck
     // carrying a CommandResult (false): ClassFolderRemote.NotTrustedText to a PC
     // it doesn't serve, UnknownRequestText to any other message, and, to
     // RemoteClassFolderState when it can't read the class folders just now, a

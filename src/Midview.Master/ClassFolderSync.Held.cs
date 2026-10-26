@@ -19,7 +19,11 @@ public sealed partial class ClassFolderSync
     // to an Agent still in that lesson.
     private ClassLesson? _heldEnd;
 
-    public bool EndGoesOnlyToItsLesson => Volatile.Read(ref _heldEnd) is { } ended && ended == Lesson;
+    public bool EndGoesOnlyToItsLesson => IsHeldEnd(Lesson);
+
+    // Whether lesson is such an end (the last one this PC made, though the
+    // lesson here may have been cleared since: a stand-down).
+    public bool IsHeldEnd(ClassLesson lesson) => Volatile.Read(ref _heldEnd) is { } ended && ended == lesson;
 
     // For a PC whose room keeps another PC as the home, as ClassFolderRole
     // confirmed it: StandDownIfNoLessonAsync, except for a lesson on here that
@@ -150,12 +154,17 @@ public sealed partial class ClassFolderSync
     // there this PC knows is over is ended (EndOfLessonOver); one known to
     // have this lesson ended already says so; any other (in it, off, or not
     // answering) is sent it. lessons: what the online Agents follow.
+    // notIn: the PCs (by Key) known never to have taken this lesson.
     private async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> SendHeldEndAsync(
-        ClassLesson ended, IReadOnlyList<(KnownMachine Machine, ClassLesson? Lesson)> lessons)
+        ClassLesson ended, IReadOnlyList<(KnownMachine Machine, ClassLesson? Lesson)> lessons, IReadOnlySet<string>? notIn = null)
     {
         var known = lessons.Where(read => read.Lesson is not null).ToDictionary(read => Key(read.Machine), read => read.Lesson!);
         return await Task.WhenAll(Machines().Select(machine => Task.Run<(KnownMachine Machine, bool Ok, string Detail)>(() =>
         {
+            if (notIn?.Contains(Key(machine)) == true)
+            {
+                return (machine, true, ClassFolderText.NotInThisLesson);
+            }
             if (!known.TryGetValue(Key(machine), out var followed) || (followed.IsOn && followed.LessonId == ended.LessonId))
             {
                 return SendLesson(machine, ended);

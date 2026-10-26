@@ -45,12 +45,13 @@ public sealed partial class ClassFolderRoleTests
                 // The rig's Agents wait StudentPc.ClaimWait for their lock, not ClassHomeClaim.MaxLockWait.
                 LostAnswerWait = StudentPc.ClaimWait + TimeSpan.FromMilliseconds(500),
             };
-            var tracker = new ClassHomeTracker(
+            var tracker = Tracker = new ClassHomeTracker(
                 certificate, name, Machines, IsOnline, trackerInterval ?? TimeSpan.FromHours(1), rig.AgentPort, homePath);
             Role = new ClassFolderRole(
                 tracker, Sync, Local, HandOver,
                 () =>
                 {
+                    Interlocked.Increment(ref _opens);
                     if (Interlocked.Decrement(ref _failedOpens) >= 0)
                     {
                         return null; // the port taken just now
@@ -76,11 +77,15 @@ public sealed partial class ClassFolderRoleTests
         }
 
         private int _failedOpens;
+        private int _opens;
 
         public int FailedOpens
         {
             set => Volatile.Write(ref _failedOpens, value);
         }
+
+        // How many times the role tried to open the host.
+        public int Opens => Volatile.Read(ref _opens);
 
         public int HostPort { get; }
 
@@ -93,6 +98,9 @@ public sealed partial class ClassFolderRoleTests
         public ClassFolderHandOver HandOver { get; }
 
         public ClassFolderRole Role { get; }
+
+        // The role's (it owns it).
+        public ClassHomeTracker Tracker { get; }
 
         public void Dispose()
         {

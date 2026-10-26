@@ -135,7 +135,7 @@ public sealed partial class ClassFolderSyncTests
             var thumbnails = 0;
             using (var poller = new ThumbnailPoller(
                 pc2.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: TimeSpan.Zero,
-                classLesson: () => sync.Lesson, classLessonHeldEnd: () => sync.EndGoesOnlyToItsLesson))
+                classLesson: () => sync.Lesson, classLessonHeldEnd: sync.IsHeldEnd))
             {
                 poller.ThumbnailReceived += _ => Interlocked.Increment(ref thumbnails);
                 poller.Start();

@@ -35,7 +35,7 @@ public sealed partial class ThumbnailPoller
 
         try
         {
-            if (!lesson.IsOn && _classLessonHeldEnd?.Invoke() == true && !StillIn(agentThumbprint, lesson))
+            if (!lesson.IsOn && _classLessonHeldEnd?.Invoke(lesson) == true && !StillIn(agentThumbprint, lesson))
             {
                 _sentClassLessonSavedAt = lesson.SavedAt;
                 return;

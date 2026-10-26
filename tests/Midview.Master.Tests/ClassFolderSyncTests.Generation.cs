@@ -62,6 +62,26 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(1_001, ClassHomeFileMaster.TakeOverGeneration(500, new[] { At(1_000) }));
     }
 
+    // Two PCs claiming the room at the latest generation: the one an Agent
+    // keeps there can't be taken back (nothing is newer), so it keeps the
+    // room even against a name that sorts after its own. Nothing starts here,
+    // and no PC is in a lesson (none split between two homes).
+    [Fact]
+    public async Task ARivalAtTheLatestGeneration_KeepsTheRoom_EvenAgainstANameThatSortsAfter()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        ClassHomeFileMaster.Write(ClassHome.MaxGeneration, rig.HomePath);
+        ClaimFor(rig, rig.Pcs[0], "PROF-0", takeOver: false, ClassHome.MaxGeneration);
+        var sync = rig.NewSync();
+
+        var refused = await sync.StartAsync(Turma);
+
+        Assert.Equal(3, refused.Count);
+        Assert.All(refused, line => Assert.Equal((false, ClassHomeClaim.OtherHomeText + "PROF-0"), (line.Ok, line.Detail)));
+        Assert.False(sync.Lesson.IsOn);
+        Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+    }
+
     // An Agent that names another PC never counts toward this PC's generation.
     [Fact]
     public async Task AnotherPcsNewerGeneration_IsNeverTakenForThisPcs()

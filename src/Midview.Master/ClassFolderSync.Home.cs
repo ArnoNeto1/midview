@@ -279,6 +279,10 @@ public sealed partial class ClassFolderSync
         {
             KeepGeneration(claimed);
         }
+        if (RivalsLessonStillOn(reports, answers) is { } rival)
+        {
+            return HomeClaim.Refused(EveryPc(ClassFolderText.OtherPcsLessonOn(NameOf(rival))));
+        }
         return new HomeClaim(null, busy, claimed);
     }
 

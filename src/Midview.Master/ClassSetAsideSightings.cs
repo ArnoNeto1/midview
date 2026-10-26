@@ -9,11 +9,14 @@ namespace Midview.Master;
 // zip, or the teacher's own material, keeps an old one. Kept apart from the
 // lessons map (which says which lessons are known, and goes with the folders
 // at a take-over), in a small JSON file next to it. A PC's entry for a lesson
-// goes once that lesson is known, or its files are gone from that PC, and at
-// most MaxEntries are kept: the newest. Never throws: a file that can't be
-// read is taken as empty (each lesson's clock starts again, so its files go
-// later, never sooner), and one that can't be written is written again with
-// the next change; both are logged.
+// goes once that lesson is known, is the PC's current one, or its files are
+// gone from that PC. A first sighting is never recorded earlier than the
+// newest on file (a clock that was behind would make files go early). At
+// most MaxEntries are kept: those of PCs no longer seen (none of their
+// listings noted since this Master opened) go first, then the oldest. Never
+// throws: a file that can't be read is taken as empty (each lesson's clock
+// starts again, so its files go later, never sooner), and one that can't be
+// written is written again with the next change; both are logged.
 internal sealed class ClassSetAsideSightings
 {
     public const int MaxEntries = 10_000;
@@ -22,6 +25,9 @@ internal sealed class ClassSetAsideSightings
     private readonly Action<string> _log;
     private readonly object _gate = new();
     private Dictionary<(string Machine, Guid LessonId), long>? _seen; // loaded on first use
+
+    // The PCs noted since this Master opened. Under _gate.
+    private readonly HashSet<string> _noted = new(StringComparer.Ordinal);
 
     public ClassSetAsideSightings(string path, Action<string> log)
     {
@@ -38,6 +44,8 @@ internal sealed class ClassSetAsideSightings
         lock (_gate)
         {
             var seen = Seen();
+            _noted.Add(key);
+            var notBefore = seen.Count > 0 ? Math.Max(nowUtcTicks, seen.Values.Max()) : nowUtcTicks;
             var changed = false;
             foreach (var gone in seen.Keys.Where(entry => entry.Machine == key && !unknown.Contains(entry.LessonId)).ToList())
             {
@@ -48,7 +56,7 @@ internal sealed class ClassSetAsideSightings
             {
                 if (!seen.TryGetValue((key, lessonId), out var at))
                 {
-                    at = nowUtcTicks;
+                    at = notBefore;
                     seen[(key, lessonId)] = at;
                     changed = true;
                 }
@@ -56,9 +64,10 @@ internal sealed class ClassSetAsideSightings
             }
             if (seen.Count > MaxEntries)
             {
-                foreach (var oldest in seen.OrderBy(entry => entry.Value).Take(seen.Count - MaxEntries).Select(entry => entry.Key).ToList())
+                foreach (var dropped in seen.OrderBy(entry => _noted.Contains(entry.Key.Machine)).ThenBy(entry => entry.Value)
+                    .Take(seen.Count - MaxEntries).Select(entry => entry.Key).ToList())
                 {
-                    seen.Remove(oldest);
+                    seen.Remove(dropped);
                 }
             }
             if (changed)

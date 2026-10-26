@@ -15,8 +15,10 @@ public sealed partial class ClassFolderHost
     // How long one write of the copy to the colleague's PC may take.
     internal TimeSpan HandOverTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
-    // RemoteHandOver: the store, as ClassFolderHandOver.Send streams it.
-    private void SendTheFolders(TcpClient client, SecureChannel channel)
+    // RemoteHandOver (the colleague's PC's computer name, UTF-8: only for the
+    // teacher's eyes, so one that isn't a name is none): the store, as
+    // ClassFolderHandOver.Send streams it.
+    private void SendTheFolders(TcpClient client, SecureChannel channel, Message request)
     {
         if (_handOver is null)
         {
@@ -28,7 +30,21 @@ public sealed partial class ClassFolderHost
         client.SendTimeout = wait;
         client.ReceiveTimeout = wait;
         CommandClient.EnableKeepAlive(client.Client);
-        _handOver.Send(channel, _stop.Token);
+        _handOver.Send(channel, _stop.Token, NameIn(request.Payload) ?? string.Empty);
+    }
+
+    // A computer name in UTF-8 (1 to ClassHome.MaxNameLength characters); null for anything else.
+    private static string? NameIn(byte[] payload)
+    {
+        try
+        {
+            var name = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(payload);
+            return name.Length is 0 or > ClassHome.MaxNameLength ? null : name;
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
     }
 
     // RemoteTakeBack: the colleague's PC (its certificate's thumbprint) gave up
@@ -74,16 +90,7 @@ public sealed partial class ClassFolderHost
             return Refusal(ClassFolderRemote.UnknownRequestText);
         }
 
-        string name;
-        try
-        {
-            name = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(request.Payload);
-        }
-        catch (DecoderFallbackException)
-        {
-            return Refusal(IncompleteText);
-        }
-        if (name.Length is 0 or > ClassHome.MaxNameLength)
+        if (NameIn(request.Payload) is not { } name)
         {
             return Refusal(IncompleteText);
         }

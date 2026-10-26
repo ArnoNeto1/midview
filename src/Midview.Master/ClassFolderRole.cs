@@ -15,22 +15,24 @@ namespace Midview.Master;
 // - Local (this PC is the home, or no PC is yet): the window works this PC's
 //   own store and sync (local); its ClassFolderHost serves them to colleagues'
 //   PCs (openHost: when the port can't be had, the host logs it and it is
-//   tried again after HostRetryWait; the Master never opens the firewall); and
-//   the pollers hand the lesson to the Agents (LessonForPollers), take back
-//   Agents that keep an older home and refresh where the others find this PC
-//   (HomeGeneration), once a reading that asked an Agent said Local, and only
-//   while the last one says so.
+//   tried again after HostRetryWait, twice, then at the room's readings; the
+//   Master never opens the firewall); and the pollers hand the lesson to the
+//   Agents (LessonForPollers), take back Agents that keep an older home and
+//   refresh where the others find this PC (HomeGeneration), once a reading
+//   that asked an Agent said Local, and only while the last one says so.
 // - Remote (another PC is the home): the window works that PC's, through a
 //   RemoteClassFolderController (newRemote); the host is closed; the pollers
-//   hand nothing; and the toolbar shows the lesson that PC runs (ShownLesson:
-//   as the room's Agents follow it, agentsLesson, or as the window last read
-//   it from that PC, the newer). Going Remote, this PC stands down
+//   hand nothing but a held end in its grace (below); and the toolbar shows
+//   the lesson that PC runs (ShownLesson: as the room's Agents follow it,
+//   agentsLesson, or as the window last read it from that PC, the newer).
+//   Going Remote, this PC stands down
 //   (ClassFolderSync.StandDownForAnotherHomeAsync): never while a lesson of
 //   its own is on that the room's Agents still follow, which keeps it Local,
 //   holding, so that lesson can still be ended here (Ruling 17): its pollers
-//   go on handing it out, and its end too for EndedGrace once it is over; a
-//   lesson of its own the room left behind is ended first, on the PCs still
-//   in it and here.
+//   go on handing it out; once it is over this PC goes Remote, and its end
+//   (or a backed-out start's) is still handed out for EndedGrace, only to the
+//   PCs still in it; a lesson of its own the room left behind is ended first,
+//   on the PCs still in it and here.
 //
 // While a take-over isn't over (handOver.IsBusy: one runs here, a hand-over or
 // a take-back runs for a colleague's PC, or a copy sent hasn't settled), no
@@ -56,8 +58,11 @@ public sealed partial class ClassFolderRole : IDisposable
     // out (Ruling 17): the pollers' wait after a refusal, and a minute of polls.
     public static readonly TimeSpan DefaultEndedGrace = ThumbnailPoller.DefaultAgentRetryInterval + TimeSpan.FromMinutes(1);
 
-    // After the host couldn't listen, how soon it is tried again.
+    // After the host couldn't listen, how soon it is tried again, and how many
+    // times so in a row before only the room's readings try it.
     public static readonly TimeSpan DefaultHostRetryWait = TimeSpan.FromSeconds(5);
+
+    private const int HostQuickTries = 2;
 
     // After the first machine of the run answers, how long until the room is
     // asked: a few more answer meanwhile, and are asked too.
@@ -97,11 +102,12 @@ public sealed partial class ClassFolderRole : IDisposable
     private ClassLesson? _homesLesson;
     private bool _disposed;
 
-    // Local only for a lesson of this PC's the room still follows (Ruling 17),
-    // and, once it ended, until when its end is still handed out
-    // (Environment.TickCount64; null: not ended yet). Under _lock.
+    // Local only for a lesson of this PC's the room still follows (Ruling 17).
+    // Once Remote, the end of such a lesson (or of a start backed out) that is
+    // still handed out, and until when (Environment.TickCount64). Under _lock.
     private bool _holding;
-    private long? _graceUntil;
+    private ClassLesson? _graceEnd;
+    private long _graceUntil;
 
     // The last reading was held for a take-over not over yet (only the acting thread uses it).
     private bool _heldForHandOver;
@@ -193,15 +199,26 @@ public sealed partial class ClassFolderRole : IDisposable
         {
             lock (_lock)
             {
-                return HandsOutLocked() ? _sync.Lesson : null;
+                return HandsOutLocked() ? _sync.Lesson : GraceEndLocked();
             }
         }
     }
 
-    // Whether what the pollers hand out is the end of a lesson this PC held for
-    // the room while another PC is, or may be, the home
-    // (ClassFolderSync.EndGoesOnlyToItsLesson): only an Agent still in it gets it.
-    public bool HandsOutAHeldEnd => _sync.EndGoesOnlyToItsLesson;
+    // Whether lesson, as the pollers hand it out, is the end of a lesson this
+    // PC held for the room while another PC is, or may be, the home
+    // (ClassFolderSync.IsHeldEnd, or the one still handed out once Remote):
+    // only an Agent still in it gets it.
+    public bool IsHeldEnd(ClassLesson lesson)
+    {
+        lock (_lock)
+        {
+            if (_graceEnd is { } ended && ended == lesson)
+            {
+                return true;
+            }
+        }
+        return _sync.IsHeldEnd(lesson);
+    }
 
     // For a lesson an Agent follows, the end the pollers hand it when this PC
     // knows that lesson is over (ClassFolderSync.EndOfLessonOver), while they
@@ -368,6 +385,10 @@ public sealed partial class ClassFolderRole : IDisposable
     // Under _lock. Also while holding for a lesson the room still follows.
     private bool HandsOutLocked() =>
         _mode == ClassFolderMode.Local && _lessonsOpen && (_latest?.Mode == ClassFolderMode.Local || _holding);
+
+    // Under _lock: Remote, the end still handed out for EndedGrace; null once it is over.
+    private ClassLesson? GraceEndLocked() =>
+        _mode == ClassFolderMode.Remote && Environment.TickCount64 < _graceUntil ? _graceEnd : null;
 
     // What Changed is about.
     private (ClassFolderMode?, IClassFolderController, ClassLesson) Seen() => (Mode, Controller, ShownLesson);
