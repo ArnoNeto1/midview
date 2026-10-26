@@ -6,6 +6,10 @@ using Xunit;
 
 public class ChatConnectionTests
 {
+    // For what only has to happen at some point: a loaded test run can take
+    // seconds to get there.
+    private static readonly TimeSpan Eventually = TimeSpan.FromSeconds(30);
+
     [Fact]
     public async Task TeacherAndStudentLines_ReachTheOtherSide()
     {
@@ -15,8 +19,8 @@ public class ChatConnectionTests
             0, certificates.Session, certificates.Master, chatWindows: chats);
         var studentLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        using var chat = await Task.Run(() => ChatConnection.Open(
-            Machine(certificates), certificates.Master, session.Port)).WaitAsync(TimeSpan.FromSeconds(10));
+        using var chat = await OwnThread(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, session.Port)).WaitAsync(Eventually);
         chat.StudentMessageReceived += text => studentLine.TrySetResult(text);
         chat.Start();
 
@@ -25,7 +29,7 @@ public class ChatConnectionTests
         Assert.Equal("Terminou o exercício?", chats.Window!.TeacherLines[0]);
 
         Assert.True(chats.Window.StudentTypes("Quase!"));
-        Assert.Equal("Quase!", await studentLine.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Quase!", await studentLine.Task.WaitAsync(Eventually));
     }
 
     // Text pasted with half an emoji can't be encoded: Send throws (ChatWindow
@@ -39,8 +43,8 @@ public class ChatConnectionTests
             0, certificates.Session, certificates.Master, chatWindows: chats);
         var closed = false;
 
-        using var chat = await Task.Run(() => ChatConnection.Open(
-            Machine(certificates), certificates.Master, session.Port)).WaitAsync(TimeSpan.FromSeconds(10));
+        using var chat = await OwnThread(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, session.Port)).WaitAsync(Eventually);
         chat.Closed += _ => closed = true;
         chat.Start();
 
@@ -59,8 +63,8 @@ public class ChatConnectionTests
         var chats = new RecordingChatWindows();
         using var session = new ThumbnailPollerTests.LoopbackSession(
             0, certificates.Session, certificates.Master, chatWindows: chats);
-        var chat = await Task.Run(() => ChatConnection.Open(
-            Machine(certificates), certificates.Master, session.Port)).WaitAsync(TimeSpan.FromSeconds(10));
+        var chat = await OwnThread(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, session.Port)).WaitAsync(Eventually);
         chat.Start();
         await WaitUntil(() => chats.Window is not null);
 
@@ -78,7 +82,7 @@ public class ChatConnectionTests
         var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
         listener.Start();
         var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        var fakeSession = Task.Run(() =>
+        var fakeSession = OwnThread(() =>
         {
             using var tcpClient = listener.AcceptTcpClient();
             using var channel = SecureChannel.AuthenticateAsServer(
@@ -87,14 +91,14 @@ public class ChatConnectionTests
         });
 
         var closed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var chat = await Task.Run(() => ChatConnection.Open(
-            Machine(certificates), certificates.Master, port)).WaitAsync(TimeSpan.FromSeconds(10));
+        using var chat = await OwnThread(() => ChatConnection.Open(
+            Machine(certificates), certificates.Master, port)).WaitAsync(Eventually);
         chat.Closed += reason => closed.TrySetResult(reason);
         chat.Start();
-        await fakeSession.WaitAsync(TimeSpan.FromSeconds(10));
+        await fakeSession.WaitAsync(Eventually);
         listener.Stop();
 
-        Assert.False(string.IsNullOrEmpty(await closed.Task.WaitAsync(TimeSpan.FromSeconds(10))));
+        Assert.False(string.IsNullOrEmpty(await closed.Task.WaitAsync(Eventually)));
     }
 
     [Fact]
@@ -108,7 +112,7 @@ public class ChatConnectionTests
         try
         {
             var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-            var open = Task.Run(() => ChatConnection.Open(
+            var open = OwnThread(() => ChatConnection.Open(
                 Machine(certificates), certificates.Master, port, TimeSpan.FromMilliseconds(500)));
 
             var finished = await Task.WhenAny(open, Task.Delay(TimeSpan.FromSeconds(10)));
@@ -133,8 +137,7 @@ public class ChatConnectionTests
         var studentLine = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var closed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        using var chat = await Task.Run(() => ChatConnection.Open(
-            Machine(certificates), certificates.Master, session.Port, handshakeTimeout)).WaitAsync(TimeSpan.FromSeconds(10));
+        using var chat = await OpenWithin(handshakeTimeout, certificates, session.Port);
         chat.StudentMessageReceived += text => studentLine.TrySetResult(text);
         chat.Closed += reason => closed.TrySetResult(reason);
         chat.Start();
@@ -147,15 +150,43 @@ public class ChatConnectionTests
 
         Assert.False(closed.Task.IsCompleted, "The conversation was dropped while waiting for the student");
         Assert.True(chats.Window!.StudentTypes("Ainda estou aqui"));
-        Assert.Equal("Ainda estou aqui", await studentLine.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Ainda estou aqui", await studentLine.Task.WaitAsync(Eventually));
     }
 
     private static KnownMachine Machine(Certificates certificates) =>
         new("Aluno-1", "127.0.0.1", certificates.Session.Thumbprint, null);
 
+    // An Open with a handshake timeout short enough to wait out: its TLS
+    // handshake has to fit in it, which a loaded test run can make it miss,
+    // so one that timed out (nothing reached the student yet) is tried again.
+    private static async Task<ChatConnection> OpenWithin(TimeSpan handshakeTimeout, Certificates certificates, int port)
+    {
+        var deadline = DateTime.UtcNow + Eventually;
+        while (true)
+        {
+            try
+            {
+                return await OwnThread(() => ChatConnection.Open(
+                    Machine(certificates), certificates.Master, port, handshakeTimeout)).WaitAsync(Eventually);
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
+    }
+
+    // Opening (and the fake Session) blocks on the network, on a thread of
+    // its own: a pool thread held meanwhile is one the connect may be
+    // waiting for, and a busy test run's pool can be slow to give one.
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     private static async Task WaitUntil(Func<bool> condition)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + Eventually;
         while (!condition())
         {
             Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the condition");

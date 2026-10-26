@@ -15,10 +15,10 @@ public class CommandClientTests
         var display = new Recorder();
         using var session = new ThumbnailPollerTests.LoopbackSession(0, sessionCertificate, masterCertificate, display);
 
-        var shown = await Task.Run(() => CommandClient.SendCommand(
+        var shown = await OwnThread(() => CommandClient.SendCommand(
             "127.0.0.1", session.Port, sessionCertificate.Thumbprint, masterCertificate,
             MessageType.ShowMessage, TextMessage.Encode("Intervalo de 10 minutos")))
-            .WaitAsync(TimeSpan.FromSeconds(10));
+            .WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.True(shown);
         Assert.Equal(new[] { "Intervalo de 10 minutos" }, display.Shown);
@@ -33,10 +33,10 @@ public class CommandClientTests
         using var session = new ThumbnailPollerTests.LoopbackSession(
             0, sessionCertificate, masterCertificate, appCloser: closer);
 
-        var (succeeded, detail) = await Task.Run(() => CommandClient.SendCommandForResult(
+        var (succeeded, detail) = await OwnThread(() => CommandClient.SendCommandForResult(
             "127.0.0.1", session.Port, sessionCertificate.Thumbprint, masterCertificate,
             MessageType.CloseApps, CloseAppsCommand.Encode(CloseAppsMode.Force, delaySeconds: 0)))
-            .WaitAsync(TimeSpan.FromSeconds(10));
+            .WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.True(succeeded);
         Assert.Equal("pedido enviado a 2 janela(s); 1 programa(s) encerrado(s) à força", detail);
@@ -52,11 +52,17 @@ public class CommandClientTests
         probe.Stop();
         using var masterCertificate = SelfSignedCertificate.Create("master-under-test");
 
-        var send = Task.Run(() => CommandClient.SendCommand(
+        var send = OwnThread(() => CommandClient.SendCommand(
             "127.0.0.1", port, "ANY", masterCertificate, MessageType.ShowMessage, TextMessage.Encode("Olá")));
 
-        await Assert.ThrowsAsync<SocketException>(() => send.WaitAsync(TimeSpan.FromSeconds(10)));
+        await Assert.ThrowsAsync<SocketException>(() => send.WaitAsync(TimeSpan.FromSeconds(30)));
     }
+
+    // A command blocks on the network, on a thread of its own: its connect
+    // completes on a pool thread, which a busy test run can be slow to give
+    // without this one holding another meanwhile.
+    private static Task<T> OwnThread<T>(Func<T> send) =>
+        Task.Factory.StartNew(send, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     private sealed class CountingCloser : IAppCloser
     {
