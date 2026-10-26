@@ -11,9 +11,13 @@ using Xunit;
 // than its header says, an answer out of turn). Never a lab machine.
 public sealed class ClassFolderClientScriptedTests
 {
-    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(30);
 
-    private static Task<T> Run<T>(Func<T> call) => Task.Run(call).WaitAsync(Limit);
+    // The Master's side blocks on the network, on a thread of its own: a pool
+    // thread held meanwhile is one its connect may be waiting for, and a busy
+    // test run's pool can be slow to give one.
+    private static Task<T> Run<T>(Func<T> call) =>
+        Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).WaitAsync(Limit);
 
 
     // ---- an old Session, and a hostile one ----

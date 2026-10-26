@@ -19,13 +19,22 @@ public class PairingSessionTests : IDisposable
         _teacher.Dispose();
     }
 
+    // Work that blocks on the network (the Agent's accept and its script, the
+    // teacher's side of each step) on a thread of its own: a busy test run's
+    // pool can be slow to give one, past the other side's timeouts.
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
     // One connection to a scripted Agent on loopback.
     private (int Port, Task Done) FakeAgent(Action<SecureChannel> script)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        var done = Task.Run(() =>
+        var done = OwnThread(() =>
         {
             try
             {
@@ -75,12 +84,12 @@ public class PairingSessionTests : IDisposable
         var agent = new HonestAgent();
         var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
 
-        using var session = await Task.Run(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        using var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(agent.Code, session.Code);
         Assert.Equal(Pairing.Format(agent.Code), session.CodeText);
         Assert.Equal(_agentCert.Thumbprint, session.AgentThumbprint);
 
-        var machine = await Task.Run(session.Confirm).WaitAsync(TimeSpan.FromSeconds(30));
+        var machine = await OwnThread(session.Confirm).WaitAsync(TimeSpan.FromSeconds(30));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal("PROF-01", agent.TeacherName);
@@ -93,7 +102,7 @@ public class PairingSessionTests : IDisposable
         var agent = new HonestAgent();
         var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
 
-        using (var session = await Task.Run(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)))
+        using (var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)))
         {
             session.Cancel();
         }
@@ -122,7 +131,7 @@ public class PairingSessionTests : IDisposable
         });
 
         var error = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            Task.Run(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(PairingSession.InvalidAnswer, error.Message);
@@ -138,7 +147,7 @@ public class PairingSessionTests : IDisposable
         });
 
         var error = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            Task.Run(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal("Esta máquina já tem professor.", error.Message);
@@ -154,7 +163,7 @@ public class PairingSessionTests : IDisposable
         });
 
         var error = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            Task.Run(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(PairingSession.OldAgent, error.Message);
