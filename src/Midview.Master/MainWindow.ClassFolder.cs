@@ -91,7 +91,8 @@ public partial class MainWindow
             return window;
         });
 
-    // Closed: no remote controller polls for it, and those given up meanwhile go (Task 5 note: only now).
+    // Closed: no remote controller polls for it, and those given up meanwhile go
+    // (only now: one disposed while its window is open would leave a click hanging).
     private void OnClassFolderWindowClosed(ClassFolderWindow window)
     {
         (window.Controller as RemoteClassFolderController)?.Stop();

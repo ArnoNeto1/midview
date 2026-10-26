@@ -71,7 +71,7 @@ public static partial class ClassFolderText
         + $"As turmas deste computador continuam onde estão. Quando {(pcs.Count == 1 ? "esse PC voltar" : "esses PCs voltarem")}, "
         + "os PCs da sala decidem qual computador guarda as pastas.";
 
-    // An undecided take-over the old home took back (Ruling 21): the folders
+    // An undecided take-over the old home took back: the folders
     // stay on it, because pcs didn't confirm; this PC is as it was.
     public static string TakeOverTakenBack(string home, IReadOnlyList<string> pcs) =>
         $"As pastas das turmas continuam no PC {home}: "

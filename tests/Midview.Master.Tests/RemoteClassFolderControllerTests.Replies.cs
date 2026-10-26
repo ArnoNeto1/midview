@@ -153,7 +153,7 @@ public sealed partial class RemoteClassFolderControllerTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => remote.CreateAsync("9º A"));
     }
 
-    // Task 7a, item 13: what the home says of its own disk ("neste
+    // What the home says of its own disk ("neste
     // computador"), relayed, is said of the home on this PC ("no PC PROF-1"):
     // in a PC's line, and in a start's.
     [Fact]
@@ -161,7 +161,7 @@ public sealed partial class RemoteClassFolderControllerTests
     {
         var certificates = Certificates.Shared;
         var unreadable = ClassFolderText.ClassFolderUnreadable("acesso negado");
-        // A file that couldn't come in for the home's full disk, as a round says it (Ruling 23).
+        // A file that couldn't come in for the home's full disk, as a round says it.
         var full = "a.docx (não há espaço livre suficiente neste computador) e mais 2";
         var scripted = new ScriptedHome
         {

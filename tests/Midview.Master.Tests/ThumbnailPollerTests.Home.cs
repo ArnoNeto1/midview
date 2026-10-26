@@ -5,7 +5,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ThumbnailPoller taking back a straggler (Ruling 9, Task 7): while this PC is
+// ThumbnailPoller taking back a straggler: while this PC is
 // the class folders' home, an Agent that keeps an older home (another PC's,
 // or this PC's at an older generation: it was off when this PC took the
 // folders over) is claimed with this PC's generation as its machine comes
@@ -78,7 +78,7 @@ public partial class ThumbnailPollerTests
     }
 
     // The Agent refuses a take-over while it follows a lesson of its home
-    // (Ruling 7): that PC is left in it, and taken back once the lesson is over.
+    // (the folders never move mid-lesson): that PC is left in it, and taken back once the lesson is over.
     [Fact]
     public async Task AnAgentInALessonOfItsHome_IsTakenBackOnlyOnceItEnds()
     {

@@ -116,37 +116,15 @@ public sealed partial class RemoteClassFolderController
     // the class folder), as the home counts it; null for none.
     private async Task<ClassLesson?> AgentsNewestAsync()
     {
-        var online = Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
+        var online = ClassLessonOnAgents.Online(_machines, _isOnline, _log);
         var lessons = await Task.WhenAll(online.Select(machine => OwnThread(
             () => ClassLessonOnAgents.Read(machine, _certificate, _agentPort, _log)))).ConfigureAwait(false);
         return ClassLessonOnAgents.Newest(lessons, UnixNow());
     }
 
-    private IReadOnlyList<KnownMachine> Machines()
-    {
-        try
-        {
-            return _machines();
-        }
-        catch (Exception ex)
-        {
-            _log($"Reading the classroom list failed: {ex}");
-            return Array.Empty<KnownMachine>();
-        }
-    }
+    private IReadOnlyList<KnownMachine> Machines() => ClassLessonOnAgents.Machines(_machines, _log);
 
-    // A machine whose state can't be told is taken for off.
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    private bool IsOnline(KnownMachine machine) => ClassLessonOnAgents.IsOnline(_isOnline, machine);
 
     private long UnixNow() => new DateTimeOffset(_localNow()).ToUnixTimeSeconds();
 }

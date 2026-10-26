@@ -4,7 +4,7 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // ClassFolderSync: the class folders' home, with two teacher PCs in one lab
-// (plan decisions 2, 8 and 9, Rulings 9, 10, 18 and 19). A start first claims
+// (plan decisions 2, 8 and 9). A start first claims
 // the home on every online Agent, going by generations (ClassHome.Generation);
 // a PC that stops being the home stands down; and a lesson another PC ended
 // straight on the Agents, while this PC's Master was closed, is adopted. An
@@ -27,34 +27,18 @@ public sealed partial class ClassFolderSync
     private int _takingOver;
 
     // For a PC that stopped being the home (another one took the class folders
-    // over): rounds in progress are waited for, as for a lesson change, then the
-    // saved lesson is cleared to no lesson ever saved (ClassLesson.None(0)), which
-    // the pollers never hand an Agent: a newer "no lesson" would end the new
-    // home's lesson on every PC. LessonChanged says so; a Master opened again
-    // doesn't carry on with the lesson, and the loop has nothing left to do. The
-    // store is left as it is, and a later StartAsync, with the folders back on
-    // this PC, starts lessons again. Waits for a start or an end in progress, so
-    // never from a handler of this sync's own events (raised while it may hold
-    // its lesson lock); nothing when there is no lesson to clear.
-    public async Task StandDownAsync()
-    {
-        await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
-        try
-        {
-            await ClearLessonLocked().ConfigureAwait(false);
-        }
-        finally
-        {
-            _changingLesson = false;
-            _lessonGate.Release();
-        }
-    }
-
-    // StandDownAsync, unless a lesson is on: then nothing changes, and that
-    // lesson is the answer (null once stood down, or with no lesson to clear).
-    // The look and the stand-down are one step under the lesson lock (Ruling
-    // 22): a lesson starting meanwhile is either on when it looks, or starts
-    // after (and the Agents that keep the new home refuse it), never cleared.
+    // over), unless a lesson is on: then nothing changes, and that lesson is
+    // the answer. Otherwise the saved lesson is cleared to no lesson ever
+    // saved (ClassLesson.None(0)), which the pollers never hand an Agent: a
+    // newer "no lesson" would end the new home's lesson on every PC.
+    // LessonChanged says so, and a Master opened again doesn't carry on with
+    // the lesson. The store is left as it is, and a later StartAsync, with the
+    // folders back on this PC, starts lessons again. Null once stood down, or
+    // with no lesson to clear. The look and the stand-down are one step under
+    // the lesson lock: a lesson starting meanwhile is either on when it looks,
+    // or starts after (and the Agents that keep the new home refuse it), never
+    // cleared. Waits for a start or an end in progress, so never from a
+    // handler of this sync's own events (raised while it may hold its lesson lock).
     public async Task<ClassLesson?> StandDownIfNoLessonAsync()
     {
         await _lessonGate.WaitAsync(_stop.Token).ConfigureAwait(false);
@@ -77,7 +61,7 @@ public sealed partial class ClassFolderSync
     // A take-over of the class folders begins on this PC (ClassFolderHandOver):
     // no lesson starts until EndTakeOver (a start says why, on every PC's
     // line), so what the take-over puts back or throws away never holds files a
-    // lesson here brought in (Ruling 22). False, and nothing held, while a
+    // lesson here brought in. False, and nothing held, while a
     // lesson is on here (it may be bringing files in): the take-over doesn't
     // begin. Waits for a start or an end in progress; on the caller's thread.
     internal bool BeginTakeOver()
@@ -131,8 +115,8 @@ public sealed partial class ClassFolderSync
 
     internal void EndGiving() => Interlocked.Decrement(ref _giving);
 
-    // With the lesson lock held: the lesson cleared to ClassLesson.None(0)
-    // (StandDownAsync), after the rounds in progress; nothing when it is already.
+    // With the lesson lock held: the lesson cleared to ClassLesson.None(0) (a
+    // stand-down), after the rounds in progress; nothing when it is already.
     private async Task ClearLessonLocked()
     {
         var lesson = Lesson;
@@ -191,8 +175,9 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // The claim (plan decision 2, by generations, Ruling 9). First every online
-    // Agent says which home it keeps; an Agent from before two teacher PCs keeps
+    // The claim (plan decision 2, by generations: a home that took the folders
+    // over while some PCs were off isn't undone by the old one). First every
+    // online Agent says which home it keeps; an Agent from before two teacher PCs keeps
     // none and takes any start, and one that doesn't answer says nothing. When
     // one keeps another PC as home with a newer generation than this PC's (or
     // this PC was never the home, and has none), that PC is the home: nothing is
@@ -202,12 +187,13 @@ public sealed partial class ClassFolderSync
     // the folders over. Null then. A PC with no generation on file goes by the
     // one the Agents recorded for it, and one that was never the home claims
     // with now's; either is kept once an Agent took the claim. But a PC that
-    // was never the home and saw another one as the home (ClassHomeFileMaster,
-    // Ruling 11) is refused as if every PC still kept it: it becomes the home
-    // only by taking the folders over; so is one whose generation is older
-    // than another home it saw (Ruling 22). And a file of this PC's that is there
-    // but can't be read refuses the start too, saying so (Ruling 12): it isn't
-    // taken for "never the home". A refusal of either kind has a line for
+    // was never the home and saw another one as the home (ClassHomeFileMaster)
+    // is refused as if every PC still kept it: it becomes the home only by
+    // taking the folders over (else, starting while only Agents with no home
+    // are on, it would take the room when the others are back); so is one
+    // whose generation is older than another home it saw. And a file of this
+    // PC's that is there but can't be read refuses the start too, saying so: it
+    // isn't taken for "never the home". A refusal of either kind has a line for
     // every PC of the room. Busy: the PCs still busy after being asked twice.
     // Claims refused for another home (another PC claimed the room at the
     // same moment) are settled before anything starts (SettleWithAnotherClaimAsync).
@@ -222,7 +208,7 @@ public sealed partial class ClassFolderSync
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Ruling 12: not "never the home", which would claim with now.
+            // Not "never the home", which would claim with now.
             _log($"What this PC knows of the class folders' home could not be read: {ex.Message}");
             return HomeClaim.Refused(EveryPc(ClassFolderText.HomeFileUnreadable(ErrorText.Describe(ex))));
         }
@@ -231,15 +217,13 @@ public sealed partial class ClassFolderSync
         var reports = (await Task.WhenAll(AgentsOnline().Select(machine => Task.Run(() => HomeOf(machine))))
             .ConfigureAwait(false)).OfType<HomeReport>().ToList();
 
-        var thisPc = reports.Where(report => report.Home is { } home && IsThisPc(home, saved)).ToList();
         var others = reports.Where(report => report.Home is { } home && !IsThisPc(home, saved)).ToList();
 
-        // The newest of the one on file and the ones the Agents recorded for
-        // this PC (Ruling 21: a take-over this PC made that its file doesn't
-        // have, an older generation kept from when it was the home before);
-        // never one an Agent keeps for another PC. Saved once an Agent takes the claim.
-        var recorded = thisPc.Select(report => (long?)report.Home!.Generation).Where(generation => generation > 0).Max();
-        var ours = saved is { } kept && recorded is { } fromAgents ? Math.Max(kept, fromAgents) : saved ?? recorded;
+        // An older generation on file (kept from when it was the home before)
+        // gives way to a take-over this PC made that its file doesn't have.
+        // Saved once an Agent takes the claim.
+        var ours = ClassHomeFileMaster.OwnGeneration(
+            saved, reports.Select(report => report.Home).OfType<ClassHome>(), _masterCertificate.Thumbprint, _machineName);
         var newer = others.Where(report => ours is not { } generation || report.Home!.Generation > generation).ToList();
         if (newer.Count > 0)
         {
@@ -247,12 +231,12 @@ public sealed partial class ClassFolderSync
             return HomeClaim.Refused(newer.Select(report => (report.Machine, false, report.Home!.RefusalText)).ToList());
         }
 
-        // Ruling 11: never the home, but it saw another PC as the home: as if
-        // every PC still said so (Ruling 12: every PC's line, even with no
-        // Agent answering). Ruling 22: the same for another home seen newer
-        // than this PC's own (one that took the room back after this PC gave
-        // a take-over up, or that this PC handed the folders to), even with
-        // only Agents naming this PC on (stragglers, older).
+        // Never the home, but it saw another PC as the home: as if every PC
+        // still said so (every PC's line, even with no Agent answering). The
+        // same for another home seen newer than this PC's own (one that took
+        // the room back after this PC gave a take-over up, or that this PC
+        // handed the folders to), even with only Agents naming this PC on
+        // (stragglers, older).
         if (seen is not null && (ours is null || (seen.Generation > ours && !IsThisPc(seen, ours))))
         {
             return HomeClaim.Refused(EveryPc(seen.RefusalText));
@@ -303,7 +287,8 @@ public sealed partial class ClassFolderSync
     private bool IsThisPc(ClassHome home, long? generation) =>
         home.IsSamePc(_masterCertificate.Thumbprint, _machineName, generation);
 
-    // A start refused for another home has seen it (Ruling 11), as the tracker does.
+    // A start refused for another home has seen it, as the tracker does (this
+    // PC then never becomes the home by a start).
     private void RememberOtherHome(ClassHome home)
     {
         try
@@ -368,8 +353,7 @@ public sealed partial class ClassFolderSync
     }
 
     // The online machines whose Agent the classroom list knows.
-    private List<KnownMachine> AgentsOnline() =>
-        Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
+    private List<KnownMachine> AgentsOnline() => ClassLessonOnAgents.Online(_machines, _isOnline, _log);
 
     // A machine off, unreachable or not trusting this teacher is no news.
     private void LogUnexpected(Exception ex, string what) => ClassLessonOnAgents.LogUnexpected(_log, ex, what);

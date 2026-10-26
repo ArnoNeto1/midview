@@ -3,7 +3,7 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderSync.StandDownForAnotherHomeAsync: what ClassFolderRole does once
-// the room confirmed another PC as the home (Task 7: stand down only on a
+// the room confirmed another PC as the home (stand down only on a
 // confirmed flip, never while a lesson of this PC's is on that the room still
 // follows; a lesson the room left behind is ended here first, so it doesn't
 // keep this PC from taking the folders over until the day ends).
@@ -25,7 +25,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs, pc => Assert.Equal(ended, pc.Agent.Current)); // nothing sent
     }
 
-    // Ruling 17: the folders stay with this PC until the lesson the room follows ends.
+    // The folders stay with this PC until the lesson the room follows ends.
     [Fact]
     public async Task ALessonTheRoomStillFollows_StaysOn_AndIsTheAnswer()
     {

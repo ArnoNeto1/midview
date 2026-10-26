@@ -5,27 +5,28 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // ClassFolderHandOver: a take-over that can't be told done, settled through the
-// old home (Ruling 21). An Agent that may have taken this PC's claim doesn't
-// answer, so this PC asks the old home to take the room back
+// old home (left open, the room could later move to a stale copy while newer
+// work stays on the old home). An Agent that may have taken this PC's claim
+// doesn't answer, so this PC asks the old home to take the room back
 // (MessageType.RemoteTakeBack, with the generation it gave up): the old home,
 // still the home, claims every Agent it reaches with a newer generation and
 // keeps it. This PC then puts its own classes back, throws the copy away and
-// keeps the old home, at that generation, as the home it saw (Ruling 22: with
-// only that Agent on, naming this PC, this PC still goes by the old home);
+// keeps the old home, at that generation, as the home it saw (with only that
+// Agent on, naming this PC, this PC still goes by the old home);
 // the Agent that didn't answer, if it took the claim, keeps an older home than
 // the old home's, and is taken back like any straggler. No PC runs on the
 // copy. When the old home can't be reached, or refuses, the copy stays where
-// it is (Ruling 20) until that Agent answers.
+// it is until that Agent answers (nothing is lost either way).
 //
-// The old home is still the home (Ruling 22) while no hand-over of its counts
+// The old home is still the home while no hand-over of its counts
 // (ClassFolderHandOver.Busy.cs: kept on file, also once its Master is opened
 // again), an online Agent names it, and neither an online Agent nor the
 // last other home it saw names another PC newer than it (the PC asking, only
 // when newer than what it gave up). It believes a generation given up no
 // further ahead than a day of its clock, or of its own generation when the
 // room is ahead of the clock; the PC asking believes the same of the one it
-// is answered with (Ruling 23). It
-// takes the room back one thing at a time with a hand-over (never both), and
+// is answered with (a bogus one would put every later take-over out of
+// reach). It takes the room back one thing at a time with a hand-over (never both), and
 // starts claiming within TakeBackClaimBy of being asked or not at all, so the
 // PC asking always gets its answer (it waits TakeBackWait).
 public sealed partial class ClassFolderHandOver
@@ -127,7 +128,7 @@ public sealed partial class ClassFolderHandOver
     {
         var askedAt = Milliseconds();
         var saved = await Task.Run(SavedGeneration).ConfigureAwait(false);
-        // A day past this PC's clock, or past its own generation when the room is ahead of the clock (Ruling 23).
+        // A day past this PC's clock, or past its own generation when the room is ahead of the clock.
         if (abandoned > Plus(Math.Max(new DateTimeOffset(_localNow()).UtcTicks, saved ?? 0), TakeBackHorizon))
         {
             _log($"A colleague's PC asked this PC to take the class folders back from generation {abandoned}, too far ahead of its clock.");
@@ -154,10 +155,8 @@ public sealed partial class ClassFolderHandOver
         var saved = SavedGeneration();
         var homes = Homes(AgentsOnline()).Select(read => read.Home).OfType<ClassHome>().ToList();
 
-        // The newest of the one on file and the ones the Agents keep for this PC (as a start goes by: Ruling 21).
-        var recorded = homes.Where(home => home.IsSamePc(_certificate.Thumbprint, _machineName, saved))
-            .Select(home => (long?)home.Generation).Where(generation => generation > 0).Max();
-        var own = saved is { } kept && recorded is { } fromAgents ? Math.Max(kept, fromAgents) : saved ?? recorded;
+        // As a start goes by it: a take-over this PC made that its file doesn't have counts.
+        var own = ClassHomeFileMaster.OwnGeneration(saved, homes, _certificate.Thumbprint, _machineName);
         bool IsThisPc(ClassHome home) => home.IsSamePc(_certificate.Thumbprint, _machineName, own);
         bool IsSender(ClassHome home) => string.Equals(home.Thumbprint, sender, StringComparison.OrdinalIgnoreCase);
 

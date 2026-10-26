@@ -3,7 +3,7 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderSync's start going by the newest generation the Agents keep for
-// this PC (Ruling 21): a PC that was the home once keeps an older generation on
+// this PC: a PC that was the home once keeps an older generation on
 // file; when the Agents name it at a newer one (a take-over it made that its
 // file doesn't have yet), that one is this PC's, saved, and the start takes
 // the PCs that keep an older home back.

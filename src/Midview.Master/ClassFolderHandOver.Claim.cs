@@ -4,22 +4,23 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // ClassFolderHandOver: the room's Agents taking this PC as the class folders'
-// home (Ruling 9). Every online Agent is claimed with a take-over and a
-// generation newer than now and than any home they keep.
+// home. Every online Agent is claimed with a take-over and a generation newer
+// than now and than any home they keep, so no older home can undo it.
 //
 // An Agent's answer can be lost once the claim went out (the connection reset
 // while the Agent still waits for its lesson lock, which it may get later; the
 // Agent's PC went off): the Agent may take the claim up to
 // ClassHomeClaim.MaxLockWait after it read it, which was before its answer
 // was lost. So when no answer said yes and some were lost, this PC waits that
-// long, and a margin, from the last of those losses (Rulings 19 and 20), then
+// long, and a margin, from the last of those losses (not from the send: a
+// slow dispatch or handshake would cut the wait short), then
 // asks the Agents which home they keep: one that keeps this PC at that
 // generation took it. One whose answer was lost and that doesn't answer that
 // either can't be told: the claim is neither done nor not (Unknown), and
 // nothing is put back. A claim that never went out (no connection, no
 // handshake) was taken by nobody and needs no wait. An Agent busy with its
 // student's folders refuses at once (ClassHomeClaim.BusyText) and never
-// applies the claim later (Ruling 18): not taken.
+// applies the claim later: not taken.
 public sealed partial class ClassFolderHandOver
 {
     // How long after a claim's answer was lost the claim can still be taken:
@@ -72,9 +73,9 @@ public sealed partial class ClassFolderHandOver
     // comment). Generation: the one claimed, newer than now, than every home
     // the Agents report (reported: as just read, else read now) or this PC
     // saw (ClassHomeFileMaster: one that took the room back, say), and than
-    // above (a generation another PC gave up, or this PC's own: Rulings 21 and
-    // 22). retryBusy: an Agent busy with its student's folders is asked once
-    // more, as a start does (Ruling 19).
+    // above (a generation another PC gave up, or this PC's own). retryBusy: an
+    // Agent busy with its student's folders is asked once more, as a start
+    // does (a busy answer is conclusive: it took nothing).
     private ClaimResult Claim(long above = 0, bool retryBusy = false, IReadOnlyList<ClassHome>? reported = null)
     {
         var online = AgentsOnline();
@@ -246,33 +247,8 @@ public sealed partial class ClassFolderHandOver
         }
     }
 
-    // The online machines whose Agent the classroom list knows (one whose state can't be told is off).
-    private List<KnownMachine> AgentsOnline()
-    {
-        IReadOnlyList<KnownMachine> machines;
-        try
-        {
-            machines = _machines();
-        }
-        catch (Exception ex)
-        {
-            _log($"Reading the classroom list failed: {ex}");
-            return new List<KnownMachine>();
-        }
-        return machines.Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
-    }
-
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    // The online machines whose Agent the classroom list knows.
+    private List<KnownMachine> AgentsOnline() => ClassLessonOnAgents.Online(_machines, _isOnline, _log);
 
     // Each machine at once, each on a thread of its own: a claim can wait on
     // an Agent's lock for MaxLockWait, and many of those mustn't queue behind

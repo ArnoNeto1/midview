@@ -37,7 +37,7 @@ public sealed partial class ClassLessonHandler
     internal const string FolderPrefix = "Pasta da turma – ";
 
     // How long a claim on the class folders' home, or a lesson set, waits for
-    // the lesson's lock (Rulings 18, 19 and 22): ClassHomeClaim.MaxLockWait,
+    // the lesson's lock (never applied after a busy answer): ClassHomeClaim.MaxLockWait,
     // which the Master waits out before taking a claim it got no answer to as refused.
     public static readonly TimeSpan DefaultClaimWait = ClassHomeClaim.MaxLockWait;
 
@@ -100,16 +100,12 @@ public sealed partial class ClassLessonHandler
     // PC while a lesson is on. A look at the student's folders can hold that
     // lock a long time (closing the browsers, the registry): a claim that
     // can't have it within the claim wait is refused as busy
-    // (ClassHomeClaim.BusyText) and is never applied later (Ruling 18), so a
+    // (ClassHomeClaim.BusyText) and is never applied later, so a
     // Master that got no answer finds the home as it is when it asks again.
     public (bool Ok, string Detail) ClaimHome(string senderThumbprint, string senderAddress, ClassHomeClaim claim) =>
         _home is null
             ? (false, "esta máquina não guarda o PC das pastas")
             : Locked(() => _home.Claim(senderThumbprint, senderAddress, claim, lessonOn: _lesson.IsOn));
-
-    // For the tests from before two teacher PCs (the Master's too): a sender
-    // with no identity, which only a handler with no home lets start a lesson.
-    public (bool Succeeded, string Detail) Handle(byte[] payload) => Handle(payload, "", "");
 
     // senderThumbprint: the TLS channel's; senderAddress: the connection's.
     // A start or a class change from a PC that isn't the home is refused
@@ -117,7 +113,8 @@ public sealed partial class ClassLessonHandler
     // the lesson on here or no lesson is on (one of another lesson changes
     // nothing, answered as an older lesson is). With no home,
     // the PC that starts a lesson becomes it. Under the lesson's lock, had
-    // within the claim wait or refused as busy, as a claim (Ruling 22): the
+    // within the claim wait or refused as busy, as a claim (a look at the
+    // student's folders can hold it long): the
     // Master's poller sends the lesson again, and this one is never applied later.
     public (bool Succeeded, string Detail) Handle(byte[] payload, string senderThumbprint, string senderAddress)
     {

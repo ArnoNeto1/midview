@@ -2,8 +2,8 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver and this PC's own lessons (Ruling 22's Task 7a, item
-// 5): no lesson starts on the PC taking the folders over until the take-over
+// ClassFolderHandOver and this PC's own lessons: no lesson starts on the PC
+// taking the folders over until the take-over
 // is over, and none may be on when it begins, so what a take-over puts back
 // or throws away never holds files a lesson there brought in.
 public sealed partial class ClassFolderHandOverTests

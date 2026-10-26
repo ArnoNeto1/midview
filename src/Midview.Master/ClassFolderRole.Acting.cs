@@ -93,7 +93,7 @@ public sealed partial class ClassFolderRole
 
         if (_handOver is { } handOver && (handOver.IsBusy || reading.StartedAt < handOver.QuietSince))
         {
-            // Ruling 24: a take-over runs, here or for a colleague's PC, or a copy
+            // A take-over runs, here or for a colleague's PC, or a copy
             // sent hasn't settled: its answer must find this PC as it is (its host
             // open). Nothing changes on a reading, nor on one begun before that was
             // over (what the room said meanwhile); the hand-over says when it is
@@ -181,7 +181,7 @@ public sealed partial class ClassFolderRole
     // Never while a lesson of this PC's is on that the room still follows: it
     // stays Local (or becomes it, the first time), holding: its pollers go on
     // handing that lesson out (the Agents take a lesson set only from the home
-    // they keep), until it ends (Ruling 17). Then it goes Remote at once, and
+    // they keep), until it ends. Then it goes Remote at once, and
     // that lesson's end (or a start's backed out) goes on being handed out for
     // EndedGrace, only to the PCs still in it: those that were busy or off.
     private async Task GoRemoteAsync()
@@ -232,11 +232,11 @@ public sealed partial class ClassFolderRole
     // How many times in a row the host couldn't listen (only the acting thread uses it).
     private int _hostFailures;
 
-    // Ruling 3: only while this PC acts Local; logged by the host when the
-    // port can't be had, and tried again after HostRetryWait (the port a host
-    // closed a moment ago, after a quick switch back, may not be free yet),
-    // up to HostQuickTries times; after that (another program holds the port,
-    // say) at each of the room's readings.
+    // Only while this PC acts Local (a remote has nothing to serve); logged by
+    // the host when the port can't be had, and tried again after HostRetryWait
+    // (the port a host closed a moment ago, after a quick switch back, may not
+    // be free yet), up to HostQuickTries times; after that (another program
+    // holds the port, say) at each of the room's readings.
     private void OpenHostIfClosed()
     {
         lock (_lock)

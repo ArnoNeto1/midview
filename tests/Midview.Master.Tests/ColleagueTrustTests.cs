@@ -9,7 +9,7 @@ using Midview.Protocol;
 using Xunit;
 
 // ColleagueTrust: whether the room's Agents trust a colleague's teacher PC
-// (plan decision 5, Ruling 14), asked of real AgentServers over loopback, each
+// (plan decision 5), asked of real AgentServers over loopback, each
 // on its own address and all on one port, as in a lab (ColleagueTrustRoom):
 // PC1 trusts the colleague, PC2 doesn't, PC3 is off, and PC4 takes connections
 // but never answers (off unless a test says so). Every Agent trusts the home,
@@ -145,7 +145,7 @@ public sealed class ColleagueTrustTests : IClassFixture<ColleagueTrustRoom>
         }
     }
 
-    // Ruling 15: a stranger making a new certificate for every connection gets
+    // A stranger making a new certificate for every connection gets
     // one round of the room at a time from its address; another PC isn't held
     // up by it; and every certificate is still asked about, one after the other.
     [Fact]

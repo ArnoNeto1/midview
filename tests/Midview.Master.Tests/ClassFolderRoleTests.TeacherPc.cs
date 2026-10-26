@@ -56,6 +56,7 @@ public sealed partial class ClassFolderRoleTests
                     {
                         return null; // the port taken just now
                     }
+                    Interlocked.Increment(ref _opened);
                     return ClassFolderHost.Open(
                         certificate, Local,
                         (thumbprint, _) => Task.FromResult(
@@ -78,14 +79,17 @@ public sealed partial class ClassFolderRoleTests
 
         private int _failedOpens;
         private int _opens;
+        private int _opened;
 
         public int FailedOpens
         {
             set => Volatile.Write(ref _failedOpens, value);
         }
 
-        // How many times the role tried to open the host.
+        // How many times the role tried to open the host, and how many of those opened it.
         public int Opens => Volatile.Read(ref _opens);
+
+        public int Opened => Volatile.Read(ref _opened);
 
         public int HostPort { get; }
 

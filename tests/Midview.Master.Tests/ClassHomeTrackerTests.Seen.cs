@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassHomeFileMaster's last other home seen (Ruling 23): a tracker's refresh
+// ClassHomeFileMaster's last other home seen: a tracker's refresh
 // that read the Agents before that PC took the room back, and writes after
 // this PC kept the newer generation, never takes it back to the older one.
 public sealed partial class ClassHomeTrackerTests

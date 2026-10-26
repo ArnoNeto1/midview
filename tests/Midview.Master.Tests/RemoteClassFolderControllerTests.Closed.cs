@@ -70,7 +70,7 @@ public sealed partial class RemoteClassFolderControllerTests
                 ended.Count(line => !line.Ok && line.Detail == FailureText.Offline), lab.Remote.HomeName));
     }
 
-    // Task 7a, item 12: whether an end was made straight on the Agents (the
+    // Whether an end was made straight on the Agents (the
     // home closed) is the controller's to say once the end is over, so the
     // window's headline follows what was done, not what it saw at the click.
     [Fact]

@@ -4,8 +4,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // How this Master works the "Pasta da turma" ("Two teacher PCs in one lab",
-// docs/superpowers/specs/2026-10-20-class-folder-design.md; plan decision 8,
-// Rulings 1, 3, 9, 17 and 24): as the class folders' home, or as a remote
+// docs/superpowers/specs/2026-10-20-class-folder-design.md; plan decision 8):
+// as the class folders' home, or as a remote
 // control of the teacher PC that is. It goes by ClassHomeTracker's readings,
 // acting on a change only once two in a row say it (ClassHomeConfirmation), or
 // at once when the Agents name this PC as the home (its file read) or this PC
@@ -28,16 +28,17 @@ namespace Midview.Master;
 //   Going Remote, this PC stands down
 //   (ClassFolderSync.StandDownForAnotherHomeAsync): never while a lesson of
 //   its own is on that the room's Agents still follow, which keeps it Local,
-//   holding, so that lesson can still be ended here (Ruling 17): its pollers
-//   go on handing it out; once it is over this PC goes Remote, and its end
-//   (or a backed-out start's) is still handed out for EndedGrace, only to the
+//   holding, so that lesson can still be ended here (not left with nobody to
+//   end it): its pollers go on handing it out; once it is over this PC goes
+//   Remote, and its end (or a backed-out start's) is still handed out for EndedGrace, only to the
 //   PCs still in it; a lesson of its own the room left behind is ended first,
 //   on the PCs still in it and here.
 //
 // While a take-over isn't over (handOver.IsBusy: one runs here, a hand-over or
 // a take-back runs for a colleague's PC, or a copy sent hasn't settled), no
 // reading changes anything: this PC neither stands down nor closes its host,
-// which the PC taking the folders over must still reach (Ruling 24). A reading
+// which the PC taking the folders over must still reach (to say how it went,
+// or have it take the room back). A reading
 // naming this PC the home above the generation it handed the folders over at
 // voids that hand-over (handOver.SeenAsHome).
 //
@@ -55,7 +56,8 @@ public sealed partial class ClassFolderRole : IDisposable
     public static readonly TimeSpan DefaultConfirmWait = TimeSpan.FromSeconds(3);
 
     // How long the end of a lesson this PC held the folders for is still handed
-    // out (Ruling 17): the pollers' wait after a refusal, and a minute of polls.
+    // out (to PCs busy or off at the end): the pollers' wait after a refusal,
+    // and a minute of polls.
     public static readonly TimeSpan DefaultEndedGrace = ThumbnailPoller.DefaultAgentRetryInterval + TimeSpan.FromMinutes(1);
 
     // After the host couldn't listen, how soon it is tried again, and how many
@@ -102,7 +104,7 @@ public sealed partial class ClassFolderRole : IDisposable
     private ClassLesson? _homesLesson;
     private bool _disposed;
 
-    // Local only for a lesson of this PC's the room still follows (Ruling 17).
+    // Local only for a lesson of this PC's the room still follows (so it can be ended here).
     // Once Remote, the end of such a lesson (or of a start backed out) that is
     // still handed out, and until when (Environment.TickCount64). Under _lock.
     private bool _holding;
@@ -176,18 +178,6 @@ public sealed partial class ClassFolderRole : IDisposable
             lock (_lock)
             {
                 return (IClassFolderController?)_remote ?? _local;
-            }
-        }
-    }
-
-    // The host while it listens.
-    public ClassFolderHost? Host
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _host;
             }
         }
     }

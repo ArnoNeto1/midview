@@ -5,7 +5,7 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // ClassFolderHost: a colleague's PC taking the class folders over (plan decision
-// 7, Ruling 4), through this PC's ClassFolderHandOver. The copy is long: each
+// 7), through this PC's ClassFolderHandOver. The copy is long: each
 // write to the colleague's PC may take HandOverTimeout (not the state read's
 // bound) and the whole has no limit; TCP keep-alive notices a PC switched off,
 // and closing the host breaks the copy off. It is one connection of the

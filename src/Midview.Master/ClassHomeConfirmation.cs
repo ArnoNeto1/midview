@@ -4,7 +4,7 @@ namespace Midview.Master;
 // ClassHomeTracker reads (ClassHomeReading). A change counts only once
 // Readings readings in a row say it: the same mode and, for Remote, the same
 // home PC; one reading can be wrong (this PC's class-home.json unreadable for
-// a moment shows it, renamed, as another PC: Task 3's note). The first
+// a moment shows it, renamed, as another PC). The first
 // reading that says Local is taken at once: a Master starts with nothing to
 // undo (no host open, no lesson handed out); and so is one that names this PC
 // as the home, with this PC's file read: the Agents' own word, never a reading

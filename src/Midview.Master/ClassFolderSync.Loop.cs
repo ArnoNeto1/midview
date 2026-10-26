@@ -156,30 +156,9 @@ public sealed partial class ClassFolderSync
 
     // --- Around the callers' functions ---
 
-    private IReadOnlyList<KnownMachine> Machines()
-    {
-        try
-        {
-            return _machines();
-        }
-        catch (Exception ex)
-        {
-            _log($"The list of machines could not be read: {ex.Message}");
-            return Array.Empty<KnownMachine>();
-        }
-    }
+    private IReadOnlyList<KnownMachine> Machines() => ClassLessonOnAgents.Machines(_machines, _log);
 
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    private bool IsOnline(KnownMachine machine) => ClassLessonOnAgents.IsOnline(_isOnline, machine);
 
     private static string Key(KnownMachine machine) => machine.SessionThumbprint;
 

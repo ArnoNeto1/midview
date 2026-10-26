@@ -218,7 +218,7 @@ public class ClassHomeTests
         Assert.False(Home().IsSamePc(Thumbprint, "PC-PROF-2", null));
     }
 
-    // Ruling 5: the home's name under another certificate (Midview reinstalled).
+    // The home's name under another certificate (Midview reinstalled): the same PC.
     [Fact]
     public void IsSamePc_TheHomesNameUnderAnotherThumbprint_IsTrue_ButNotAnEmptyName()
     {

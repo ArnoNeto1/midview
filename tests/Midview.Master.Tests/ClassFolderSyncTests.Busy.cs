@@ -2,9 +2,9 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderSync's start with an Agent busy with its student's folders
-// (Rulings 18 and 19): its claim is refused as busy (ClassHomeClaim.BusyText),
-// which is an Agent that didn't answer, never another home. A busy claim is
+// ClassFolderSync's start with an Agent busy with its student's folders: its
+// claim is refused as busy (ClassHomeClaim.BusyText), which is an Agent that
+// didn't answer, never another home. A busy claim is
 // asked once more; still busy, that PC's line says so rather than naming the
 // home it still keeps. The rig's Agents keep the home; BusyAgents holds their
 // lesson locks, and frees them when the sync's log says what the test waits for.
@@ -82,7 +82,7 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
-    // Ruling 22 (Task 7a, item 8): "no lesson on" and the stand-down are one
+    // "no lesson on" and the stand-down are one
     // step under the lesson lock. A start under way (held up by a busy PC)
     // finishes first; the stand-down then finds its lesson on, says so, and
     // leaves it as it is.
@@ -112,7 +112,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(sync.Lesson, kept);
     }
 
-    // With no lesson on, it stands down: no lesson ever saved, as StandDownAsync.
+    // With no lesson on, it stands down: no lesson ever saved.
     [Fact]
     public async Task StandingDownIfNoLesson_WithNoneOn_StandsDown()
     {
@@ -126,7 +126,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(ClassLesson.None(0), ClassLessonFileMaster.Read(rig.LessonPath));
     }
 
-    // Ruling 22 (Task 7a, item 9) and Ruling 23: an Agent busy with its
+    // An Agent busy with its
     // student's folders when the lesson's end reaches it refuses it at once,
     // never taking it later; its line says Midview tries again in a moment,
     // which is true: this PC's poller of it (as MainWindow makes it, the usual

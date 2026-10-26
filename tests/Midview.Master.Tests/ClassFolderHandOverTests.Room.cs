@@ -2,14 +2,14 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver: what doesn't come over, and room for what does
-// (Ruling 22's Task 7a, items 16 and 17). Files the store doesn't list stay
+// ClassFolderHandOver: what doesn't come over, and room for what does.
+// Files the store doesn't list stay
 // only in the old home's copy, and the result says how many and where; the
 // copy must fit on each disk it is received on (the index's and the lessons
 // map's too, when theirs isn't the class folders' disk).
 public sealed partial class ClassFolderHandOverTests
 {
-    // Item 16: a loose file in Turmas, one in a folder that can't be a class,
+    // A loose file in Turmas, one in a folder that can't be a class,
     // a lock file, one still downloading, one too deep and a hidden one: not
     // copied (the PCs never get them either), counted by the old home, and
     // said to be in its copy.
@@ -42,7 +42,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.False(File.Exists(Path.Combine(lab.NewRoot, "Turmas", "solto.txt")));
     }
 
-    // Item 16: a home that says a negative number of files stayed behind is refused like any copy that doesn't add up.
+    // A home that says a negative number of files stayed behind is refused like any copy that doesn't add up.
     [Fact]
     public async Task AHomeSayingANegativeNumberLeftBehind_IsRefused()
     {
@@ -79,7 +79,7 @@ public sealed partial class ClassFolderHandOverTests
             ClassFolderText.LeftOnTheOldHome("PROF-1", 2, null));
     }
 
-    // Item 17: the classes' disk has room, but the one the index and the
+    // The classes' disk has room, but the one the index and the
     // lessons map are received on doesn't: refused before anything is written.
     [Fact]
     public async Task ACopyWhoseIndexDoesntFitOnItsOwnDisk_IsRefusedBeforeAnythingIsWritten()
@@ -100,7 +100,7 @@ public sealed partial class ClassFolderHandOverTests
 
         var result = await lab.Taker.TakeOverAsync(lab.Home);
 
-        // What doesn't fit there (Ruling 23): the indexes and the lessons map, as the old home sent them.
+        // What doesn't fit there (the result names that disk): the indexes and the lessons map, as the old home sent them.
         var oldData = Path.Combine(rig.Root, "dados");
         var dataBytes = Directory.GetFiles(Path.Combine(oldData, "turmas"), "*.json").Sum(file => new FileInfo(file).Length)
             + new FileInfo(Path.Combine(oldData, "class-lessons.json")).Length;

@@ -4,8 +4,8 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// What this teacher PC knows of the class folders' home (plan Rulings 9, 11
-// and 12), kept next to the classroom list (MasterData.Folder): its own
+// What this teacher PC knows of the class folders' home, kept next to the
+// classroom list (MasterData.Folder): its own
 // generation as the home (ClassHome.Generation), when it became the home in
 // UTC ticks on its own clock, which its claims carry ever after; the last
 // other PC it saw as the home, so that a PC that was never the home but saw
@@ -52,8 +52,8 @@ public static class ClassHomeFileMaster
 
     // Keeps the last other home seen; writes nothing when that home is
     // already the one on file. The same PC (its certificate and name) never
-    // goes back to an older generation (Ruling 23: a tracker's refresh that
-    // read the Agents before that PC took the room back, writing after): its
+    // goes back to an older generation (a tracker's refresh that read the
+    // Agents before that PC took the room back, writing after): its
     // generation stays, the rest is taken. Throws if it can't be read or written.
     public static void WriteLastOtherHome(ClassHome home, string? path = null)
     {
@@ -82,7 +82,7 @@ public static class ClassHomeFileMaster
     // took them over again, or the room named it the home above that
     // generation since). While there is one, this PC takes no room back
     // (ClassFolderHandOver.TakeBackAsync), also once its Master is opened
-    // again (Task 7). Throws if the file can't be read.
+    // again. Throws if the file can't be read.
     public static ClassHome? ReadHandedOverTo(string? path = null) =>
         Load(path ?? Path).HandedOverTo is { } stored && stored.ToHome() is { } home && IsHome(home) ? home : null;
 
@@ -104,6 +104,18 @@ public static class ClassHomeFileMaster
                 Save(path, file with { HandedOverTo = stored });
             }
         }
+    }
+
+    // This PC's own generation as the home: the newest of the one on file
+    // (saved) and those the Agents keep for this PC (ClassHome.IsSamePc with
+    // its certificate thumbprint and computer name: a take-over it made that
+    // its file doesn't have yet), never one they keep for another PC; null
+    // when it has none.
+    public static long? OwnGeneration(long? saved, IEnumerable<ClassHome> homes, string thumbprint, string name)
+    {
+        var recorded = homes.Where(home => home.Generation > 0 && home.IsSamePc(thumbprint, name, saved))
+            .Select(home => (long?)home.Generation).Max();
+        return saved is { } kept && recorded is { } fromAgents ? Math.Max(kept, fromAgents) : saved ?? recorded;
     }
 
     // The generation a takeover claims with: newer than every home the Agents

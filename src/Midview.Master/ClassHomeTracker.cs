@@ -23,13 +23,13 @@ public enum ClassFolderMode
 // and Mode were then, and how many online Agents it asked (none: no machine
 // was on, so it found nothing out, whatever it says). FileRead: whether this
 // PC's class-home.json could be read for it (a missing one can); when not,
-// neither this PC's generation nor the last home it saw counted (Rulings 12
-// and 22), so a Local naming this PC may come from stragglers alone.
+// neither this PC's generation nor the last home it saw counted, so a Local
+// naming this PC may come from stragglers alone.
 // StartedAt: when the refresh began asking (Environment.TickCount64), so a
 // reading that says what the room said before something changed is told apart.
 public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int Asked, bool FileRead = true, long StartedAt = 0);
 
-// Which teacher PC keeps the class folders (plan decision 8, Ruling 9): what
+// Which teacher PC keeps the class folders (plan decision 8): what
 // the room's online Agents say (MessageType.GetClassHome), asked every
 // interval (30 s by default) and whenever RefreshAsync is called (the window
 // opening). An Agent from before two teacher PCs, one that doesn't answer, or
@@ -46,13 +46,13 @@ public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int
 // the generation it keeps on file (ClassHomeFileMaster: the PC renamed), or its
 // name under another certificate (Midview reinstalled, or paired again).
 //
-// Another PC seen as the home is kept on file (ClassHomeFileMaster, Ruling 11),
-// and with no home reported, a PC that was never the home but saw one goes by
-// it (Ruling 12): Remote, as its starts are refused for it. So does a PC whose
-// own generation is older than the one seen, whatever Agents naming it say
-// (Ruling 22: stragglers).
+// Another PC seen as the home is kept on file (ClassHomeFileMaster), and with
+// no home reported, a PC that was never the home but saw one goes by it:
+// Remote, as its starts are refused for it (no silent cancel). So does a PC
+// whose own generation is older than the one seen, whatever Agents naming it
+// say (stragglers).
 //
-// machines and isOnline are called from background threads, and Changed is
+// machines and isOnline are called from background threads, and Refreshed is
 // raised on them. Nothing an Agent does escapes as an exception.
 public sealed class ClassHomeTracker : IDisposable
 {
@@ -100,12 +100,10 @@ public sealed class ClassHomeTracker : IDisposable
         _loop = Task.Run(LoopAsync);
     }
 
-    // Raised (on a background thread) when the home or the mode changes.
-    public event Action? Changed;
-
     // Raised (on a background thread) after every refresh, changed or not,
-    // after Changed and before RefreshAsync returns: what it found, so a
-    // change can be taken only once two readings in a row say it (ClassFolderRole).
+    // once Home and Mode are what it found and before RefreshAsync returns:
+    // what it found, so a change can be taken only once two readings in a row
+    // say it (ClassFolderRole).
     public event Action<ClassHomeReading>? Refreshed;
 
     // The PC that keeps the class folders, as the room says; null for none.
@@ -113,11 +111,10 @@ public sealed class ClassHomeTracker : IDisposable
 
     public ClassFolderMode Mode => Volatile.Read(ref _state).Mode;
 
-    // Asks every online Agent at once and goes by what they answer. Changed and
-    // Refreshed are raised once the refresh is over, so a handler may refresh again.
+    // Asks every online Agent at once and goes by what they answer. Refreshed
+    // is raised once the refresh is over, so a handler may refresh again.
     public async Task RefreshAsync()
     {
-        bool changed;
         ClassHomeReading reading;
         await _refreshing.WaitAsync().ConfigureAwait(false);
         try
@@ -125,7 +122,7 @@ public sealed class ClassHomeTracker : IDisposable
             var startedAt = Environment.TickCount64;
             // In the order they arrive.
             var answers = new ConcurrentQueue<ClassHome?>();
-            var online = Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
+            var online = ClassLessonOnAgents.Online(_machines, _isOnline, Log);
             await Task.WhenAll(online.Select(machine => Task.Run(() => Ask(machine, answers)))).ConfigureAwait(false);
 
             // This PC's generation and the last other home it saw; neither when
@@ -135,19 +132,19 @@ public sealed class ClassHomeTracker : IDisposable
             var home = Choose(answers.ToList(), Home);
             if (home is null && fileRead && generation is null)
             {
-                // Ruling 12: never the home, but it saw another PC as the home.
+                // Never the home, but it saw another PC as the home.
                 home = seen;
             }
             else if (fileRead && seen is not null && IsNewerThanThisPc(seen, home, generation))
             {
-                // Ruling 22: another home seen newer than this PC is (one that
+                // Another home seen newer than this PC is (one that
                 // took the room back after this PC gave a take-over up, say),
                 // even with only Agents naming this PC, or none, answering.
                 home = seen;
             }
             var state = new State(
                 home, home is not null && !IsThisPc(home, generation) ? ClassFolderMode.Remote : ClassFolderMode.Local);
-            changed = Interlocked.Exchange(ref _state, state) != state;
+            Volatile.Write(ref _state, state);
             if (state.Mode == ClassFolderMode.Remote && fileRead)
             {
                 RememberOtherHome(home!);
@@ -159,10 +156,6 @@ public sealed class ClassHomeTracker : IDisposable
             _refreshing.Release();
         }
 
-        if (changed)
-        {
-            RaiseChanged();
-        }
         RaiseRefreshed(reading);
     }
 
@@ -254,7 +247,7 @@ public sealed class ClassHomeTracker : IDisposable
         }
     }
 
-    // Ruling 11: a PC that saw another one as the home doesn't become the home
+    // A PC that saw another one as the home doesn't become the home
     // by starting a lesson (ClassFolderSync), only by taking the folders over.
     private void RememberOtherHome(ClassHome home)
     {
@@ -306,43 +299,6 @@ public sealed class ClassHomeTracker : IDisposable
             {
                 Log($"Asking for the class folders' home failed: {ex}");
             }
-        }
-    }
-
-    private IReadOnlyList<KnownMachine> Machines()
-    {
-        try
-        {
-            return _machines();
-        }
-        catch (Exception ex)
-        {
-            Log($"The list of machines could not be read: {ex.Message}");
-            return Array.Empty<KnownMachine>();
-        }
-    }
-
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
-    private void RaiseChanged()
-    {
-        try
-        {
-            Changed?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            Log($"A Changed handler failed: {ex}");
         }
     }
 

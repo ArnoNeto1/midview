@@ -5,10 +5,10 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderHandOver: a take-over that can't be told done (an Agent that may
-// have taken the claim doesn't answer) settled through the old home (Ruling
-// 21): this PC asks it to take the room back (MessageType.RemoteTakeBack) and,
-// once it has, puts its own classes back and throws the copy away. Only when
-// the old home can't be reached, or refuses, does the copy stay (Ruling 20).
+// have taken the claim doesn't answer) settled through the old home: this PC
+// asks it to take the room back (MessageType.RemoteTakeBack) and, once it
+// has, puts its own classes back and throws the copy away. Only when the old
+// home can't be reached, or refuses, does the copy stay (nothing lost).
 public sealed partial class ClassFolderHandOverTests
 {
     // PC1 took the claim and went off before answering. The old home takes the
@@ -55,8 +55,8 @@ public sealed partial class ClassFolderHandOverTests
     }
 
     // The old home refuses to take the room back when it isn't the home any
-    // more (no Agent it reaches names it, here): Ruling 20's way, the copy
-    // stays. Told apart from a take-back that couldn't be asked: the old home
+    // more (no Agent it reaches names it, here): the copy stays, until the
+    // Agents decide. Told apart from a take-back that couldn't be asked: the old home
     // answered, saying why.
     [Fact]
     public async Task ATakeBackTheOldHomeRefuses_LeavesTheCopyInPlace()

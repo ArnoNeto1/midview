@@ -10,14 +10,14 @@ using Xunit;
 // the swap says how far it got (never "nada mudou").
 public sealed partial class ClassFolderHandOverTests
 {
-    // Ruling 19 (f): an Agent's lock wait, twice over, still fits in a Master's read timeout.
+    // An Agent's lock wait, twice over, still fits in a Master's read timeout.
     [Fact]
     public void TheAgentsLockWait_FitsTwiceInTheMastersReadTimeout()
     {
         Assert.True(ClassHomeClaim.MaxLockWait * 2 <= TimeSpan.FromMilliseconds(CommandClient.TimeoutMs));
     }
 
-    // Ruling 18: Agents busy with their students' folders refuse the claim as
+    // Agents busy with their students' folders refuse the claim as
     // busy, and never apply it later: not taken, so everything is put back,
     // and the teacher is told to try again.
     [Fact]
@@ -63,7 +63,7 @@ public sealed partial class ClassFolderHandOverTests
             ClassFolderText.PcsNeedTheNewMidview);
     }
 
-    // Ruling 18 (5): what couldn't be put back is said, with where this PC's
+    // What couldn't be put back is said, with where this PC's
     // own classes are, never "nada mudou".
     [Fact]
     public async Task WhatCouldntBePutBack_IsSaid_WithWhereThisPcsClassesAre()
@@ -103,7 +103,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Null(ClassHomeFileMaster.Read(lab.NewHomePath));
     }
 
-    // Ruling 17 (b): the old home with a lesson on (some PCs took the claim,
+    // The old home with a lesson on (some PCs took the claim,
     // others still follow its lesson) doesn't let go of the folders yet, and says so.
     [Fact]
     public async Task TheOldHomeWithALessonOn_DoesntLetGoYet_AndSaysSo()
@@ -129,7 +129,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.False(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
     }
 
-    // Ruling 17 (g, h): the old home's copy is named after the new home as the
+    // The old home's copy is named after the new home as the
     // Agents recorded it, and the answer names the folder it went to.
     [Fact]
     public async Task TheOldHomesCopy_IsNamedAfterTheAgentsRecord()
@@ -149,7 +149,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(ClassLesson.None(0), lab.OldSync.Lesson);
     }
 
-    // Ruling 17 (g): a home an Agent recorded with no name (a Master from
+    // A home an Agent recorded with no name (a Master from
     // before two teacher PCs started a lesson there) is never taken for the
     // sender, whatever name it gives, even on a PC with no generation of its own.
     [Fact]
@@ -171,7 +171,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.False(Directory.EnumerateDirectories(rig.Root, "Turmas (*").Any());
     }
 
-    // Ruling 17 (e): a take-over that breaks off after the copy went in place
+    // A take-over that breaks off after the copy went in place
     // says how far it got, never that nothing changed.
     [Theory]
     [InlineData("didn't take this PC")] // while the Agents are claimed

@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// What MainWindow and ClassFolderRole go by (Task 7): IsBusy while a take-over
+// What MainWindow and ClassFolderRole go by: IsBusy while a take-over
 // runs on this PC (closing the Master waits for it to end), and Changed once
 // it is over, on the PC taking the folders over and on the old home (each
 // role then asks the room again, and the two PCs swap modes).
@@ -40,7 +40,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(1, Volatile.Read(ref giver)); // it stood down before it answered
     }
 
-    // Task 7 item 14: an old home that handed the folders over still refuses a
+    // An old home that handed the folders over still refuses a
     // take-back once its Master was opened again (a new ClassFolderHandOver over
     // the same files), even from the PC it handed them to with a straggler
     // still naming it; taking the folders over again lifts that.

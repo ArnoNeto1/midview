@@ -3,7 +3,7 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // RemoteClassFolderController: "Guardar as pastas das turmas neste computador"
-// (ClassFolderHandOver, plan decision 7, Ruling 17).
+// (ClassFolderHandOver, plan decision 7).
 public sealed partial class RemoteClassFolderController
 {
     // The class folders' home as the room says now (null: none known), for

@@ -3,8 +3,8 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver: take-overs that stop before anything changes (Ruling
-// 17): a half copy an earlier take-over couldn't remove, the teacher's
+// ClassFolderHandOver: take-overs that stop before anything changes: a half
+// copy an earlier take-over couldn't remove, the teacher's
 // "Cancelar", the room keeping another home than the one the teacher was
 // asked about, a lesson started on the home during the copy, and a PC at the
 // home's address with another certificate. Each leaves both stores and the
@@ -65,7 +65,7 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertUnchanged(before);
     }
 
-    // Ruling 18 (2): a home that sends its manifest and then nothing more:
+    // A home that sends its manifest and then nothing more:
     // cancelling closes the connection at once, long before the network's
     // own wait would give up, and the half copy is gone.
     [Fact]
@@ -104,7 +104,7 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertUnchanged(before);
     }
 
-    // Ruling 19 (e): once the copy is going in place, "Cancelar" is too late,
+    // Once the copy is going in place, "Cancelar" is too late,
     // and says so at once (the window shows nothing of a cancel then); the
     // take-over goes on to the end.
     [Fact]
@@ -151,7 +151,7 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertUnchanged(before);
     }
 
-    // Ruling 18 (4): the copy says when it is in place (from then on it can't
+    // The copy says when it is in place (from then on it can't
     // be cancelled, and the window's "Cancelar" goes), once, after every file.
     [Fact]
     public async Task TheCopySaysWhenItIsInPlace_AfterEveryFile()

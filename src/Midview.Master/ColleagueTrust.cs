@@ -5,7 +5,7 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Whether a colleague's teacher PC may work this PC's "Pasta da turma" window
-// (ClassFolderHost; plan decision 5, Rulings 14 and 15): the room's online
+// (ClassFolderHost; plan decision 5): the room's online
 // Agents are asked at once whether they trust that teacher (ClassFolderClient.
 // IsTeacherTrusted), and the first yes admits it. A yes is kept 10 minutes and
 // a no 30 seconds, so a colleague's PC asking every couple of seconds doesn't
@@ -189,22 +189,14 @@ public sealed class ColleagueTrust
     // no; null when none answered, or the wait ran out first.
     private async Task<bool?> AskTheRoomAsync(string thumbprint)
     {
-        List<Task<bool?>> pending;
-        try
-        {
-            // Each on a thread of its own: an exchange blocks on the network
-            // (up to its own timeouts, past this check's), and a room's worth
-            // of them must not hold the thread pool.
-            pending = _machines()
-                .Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine))
-                .Select(machine => Task.Factory.StartNew(
-                    () => Ask(machine, thumbprint), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))
-                .ToList();
-        }
-        catch (Exception)
-        {
-            return null; // the classroom list couldn't be read: nobody to ask
-        }
+        // Each on a thread of its own: an exchange blocks on the network (up
+        // to its own timeouts, past this check's), and a room's worth of them
+        // must not hold the thread pool. A classroom list that can't be read
+        // is nobody to ask.
+        var pending = ClassLessonOnAgents.Online(_machines, _isOnline, _ => { })
+            .Select(machine => Task.Factory.StartNew(
+                () => Ask(machine, thumbprint), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default))
+            .ToList();
 
         var deadline = Task.Delay(_wait);
         var saidNo = false;
@@ -227,19 +219,6 @@ public sealed class ColleagueTrust
             }
         }
         return saidNo ? false : null;
-    }
-
-    // A machine whose view can't be had just now (the list changing under it, say) counts as off.
-    private bool IsOnline(KnownMachine machine)
-    {
-        try
-        {
-            return _isOnline(machine);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
     }
 
     // That Agent's answer; null when it couldn't be had.

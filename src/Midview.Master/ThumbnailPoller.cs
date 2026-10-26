@@ -26,7 +26,8 @@ public sealed partial class ThumbnailPoller : IDisposable
 
     // After the Agent refused the class folder's lesson as busy with its
     // student's folders (ClassHomeClaim.BusyText): it took nothing and is
-    // asked again in a moment, as the line the teacher saw says (Ruling 23).
+    // asked again in a moment, as the line the teacher saw says (an end that
+    // waited minutes would leave that PC in the lesson meanwhile).
     public static readonly TimeSpan DefaultBusyRetryInterval = TimeSpan.FromSeconds(10);
 
     // How often a machine is asked what program block it follows, for its tile.

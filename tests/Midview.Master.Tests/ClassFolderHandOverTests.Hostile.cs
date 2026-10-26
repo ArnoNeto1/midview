@@ -113,17 +113,17 @@ public sealed partial class ClassFolderHandOverTests
         { false, "uma linha\r\noutra\tlinha\u0007", "uma linha outra linha" },
         { false, new string('x', 300), new string('x', 200) + "…" },
         { true, "Turmas (passadas\npara PROF-2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2)\"." },
-        // Ruling 19 (d): the case goes by what that PC said, not by what is left of it to show.
+        // The case goes by what that PC said, not by what is left of it to show.
         { true, "|", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (motivo desconhecido): ela continua na pasta Turmas dele." },
         { true, "|\r\n ", "O PC PROF-1 não conseguiu pôr a cópia dele à parte (motivo desconhecido): ela continua na pasta Turmas dele." },
         { true, "   ", "A cópia do PC PROF-1 ficou nele, numa pasta à parte." },
         { false, " \n ", "O PC PROF-1 ainda não confirmou a troca: a cópia dele continua na pasta Turmas dele." },
-        // Ruling 20 (d): its copy went aside but not all of it, and couldn't come back.
+        // Its copy went aside but not all of it, and couldn't come back.
         { true, "*Turmas (passadas para PROF-2)", "A cópia do PC PROF-1 ficou nele, na pasta \"Turmas (passadas para PROF-2)\", mas nem tudo foi para lá: confira as turmas dele." },
         { true, "* \n", "A cópia do PC PROF-1 ficou nele, numa pasta à parte, mas nem tudo foi para lá: confira as turmas dele." },
     };
 
-    // Ruling 17 (b, h), Ruling 18 (6): what the old home answered
+    // What the old home answered
     // RemoteHandOverDone is in the result line: the folder its copy went to
     // (numbered, say), why it couldn't go aside, that it had none, or that it
     // keeps the folders until its lesson ends.
@@ -191,7 +191,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(new[] { Turma, "3º B" }, rig.Store.List().Select(summary => summary.Turma));
     }
 
-    // Rulings 11 and 12: no Agent keeps a home now (the room's PCs were set up
+    // No Agent keeps a home now (the room's PCs were set up
     // again, say), but this PC saw PROF-1 as the home once, so its starts are
     // refused and its window works PROF-1, which doesn't answer. The take-over
     // claims the Agents with now's generation, and this PC starts lessons from then on.

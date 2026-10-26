@@ -5,12 +5,11 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderRole around a take-over, with the trackers reading the room by
-// themselves every 200 ms, as in a lab only faster (Task 7 fix round 1,
-// Ruling 24): the old home keeps its host open, and its mode, until the PC
-// taking the folders over says how it went; that PC doesn't go Local before
-// its own take-over is over. Also: a hand-over the room left behind no
-// longer makes a single reading sure (minor 2), and a host that can't listen
-// is tried again soon (minor 5).
+// themselves every 200 ms, as in a lab only faster: the old home keeps its
+// host open, and its mode, until the PC taking the folders over says how it
+// went; that PC doesn't go Local before its own take-over is over. Also: a
+// hand-over the room left behind no longer makes a single reading sure, and
+// a host that can't listen is tried again soon, then only at the readings.
 public sealed partial class ClassFolderRoleTests
 {
     private static readonly TimeSpan Fast = TimeSpan.FromMilliseconds(200);
@@ -80,7 +79,7 @@ public sealed partial class ClassFolderRoleTests
         Assert.True(Listens(prof2.HostPort));
     }
 
-    // Ruling 21(a): PC1 takes PROF-2's claim and its answer is lost, it gives no
+    // PC1 takes PROF-2's claim and its answer is lost, it gives no
     // answer to the re-read either, and the others refuse: PROF-2 can't tell,
     // and asks PROF-1 to take the room back. PROF-1, reading PC1 name PROF-2
     // meanwhile, still has its host open: it takes the room back. PROF-2 never
@@ -118,7 +117,7 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Remote, prof2.Role.Mode);
     }
 
-    // Minor 2: once the room names this PC above the generation it handed the
+    // Once the room names this PC above the generation it handed the
     // folders over at, that hand-over is void: a single Remote reading is no
     // longer sure.
     [Fact]
@@ -179,8 +178,8 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Local, prof2.Role.Mode); // a fresh one does
     }
 
-    // Minor 5: a host that can't listen just now (the port not let go yet after
-    // a quick switch back) is tried again in seconds, not at the next 30 s reading.
+    // A host that can't listen just now (the port not let go yet after a
+    // quick switch back) is tried again in seconds, not at the next 30 s reading.
     [Fact]
     public async Task AHostThatCantListen_IsTriedAgainSoon()
     {
@@ -190,8 +189,8 @@ public sealed partial class ClassFolderRoleTests
         await prof1.Role.RefreshAndActAsync();
 
         Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
-        Assert.Null(prof1.Role.Host);
-        await Until(() => prof1.Role.Host is not null);
+        await Until(() => prof1.Opened == 1);
+        Assert.Equal(2, prof1.Opens); // the reading's try, then one in seconds
         Assert.True(Listens(prof1.HostPort));
     }
 
@@ -208,12 +207,11 @@ public sealed partial class ClassFolderRoleTests
         await prof1.Role.ActedOnAsync();
 
         Assert.False(prof1.Role.RefreshPending);
-        Assert.Null(prof1.Role.Host);
+        Assert.Equal(0, prof1.Opened);
 
         await prof1.Role.RefreshAndActAsync();
 
-        Assert.Equal(4, prof1.Opens);
-        Assert.NotNull(prof1.Role.Host);
+        Assert.Equal((4, 1), (prof1.Opens, prof1.Opened));
         Assert.True(Listens(prof1.HostPort));
     }
 }

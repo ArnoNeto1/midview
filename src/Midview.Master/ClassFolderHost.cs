@@ -23,9 +23,9 @@ namespace Midview.Master;
 // their request was read. RemoteHandOver, RemoteHandOverDone and
 // RemoteTakeBack (a colleague's PC taking the class folders over, or giving an
 // undecided take-over back) are served only with a ClassFolderHandOver
-// (ClassFolderHost.HandOver.cs). What the messages can't carry is left out or cut
-// (Ruling 4): a class folder made by hand with a name over
-// ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
+// (ClassFolderHost.HandOver.cs). What the messages can't carry is left out or
+// cut, never the whole state refused for it: a class folder made by hand with
+// a name over ClassLesson.MaxTurmaLength is not listed, and a PC's name is cut to
 // ClassHome.MaxNameLength. What a colleague's PC sends as a class is taken only
 // when it is a class name (ClassStore.IsValidName); and what the home tells it
 // is always in the teacher's words, never an exception's own message.

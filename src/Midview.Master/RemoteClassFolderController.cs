@@ -20,7 +20,7 @@ namespace Midview.Master;
 // returns (the window looks at Lesson right after a start). A connection the
 // home turns away before the request goes (its cap on one PC's connections) is
 // tried again shortly; a handshake that hangs for the whole wait (the home's
-// Master hung) is not (Ruling 22: a poll costs one wait, not three).
+// Master hung) is not (a poll costs one wait, not three).
 //
 // The home is closed (HomeClosed) only once ClosedAfter polls found nobody
 // there, with nothing but neutral polls between them: the connection refused

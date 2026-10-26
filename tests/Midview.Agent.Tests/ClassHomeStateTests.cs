@@ -109,7 +109,7 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.Equal(logged, _log.Count);
     }
 
-    // Ruling 5: the home's own PC with another certificate (Midview
+    // The home's own PC (its name) with another certificate (Midview
     // reinstalled, paired again, or another Windows account on it).
     [Fact]
     public void ClaimWithTheHomesName_AndAnotherThumbprint_IsTheSamePc()
@@ -128,7 +128,7 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.False(TryStart(state, Home));
     }
 
-    // Ruling 9: the home PC renamed keeps its certificate and its generation.
+    // The home PC renamed keeps its certificate and its generation.
     [Fact]
     public void SameThumbprintAndGeneration_UnderANewName_IsTheHomeRenamed()
     {
@@ -177,7 +177,7 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.True(TryStart(state, Other));
     }
 
-    // Ruling 9: an older home (the one the folders were taken from) can't take them back by itself.
+    // An older home (the one the folders were taken from) can't take them back by itself.
     [Theory]
     [InlineData(Generation)]
     [InlineData(Generation - 1)]

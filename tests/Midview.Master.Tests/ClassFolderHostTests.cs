@@ -268,7 +268,7 @@ public sealed partial class ClassFolderHostTests
         Assert.Equal((false, ClassFolderText.StartFailed(Turma, "acesso negado")), (started.Ok, started.Detail));
     }
 
-    // Ruling 4: a class folder made by hand with a name over 60 characters is
+    // A class folder made by hand with a name over 60 characters is
     // left out of the state, and a PC's name over 64 is cut, instead of the
     // colleague's PC refusing the whole state (or reply).
     [Fact]

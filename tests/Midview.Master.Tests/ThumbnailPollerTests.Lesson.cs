@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ThumbnailPoller handing the class folder's lesson to the Agent (Ruling 23):
+// ThumbnailPoller handing the class folder's lesson to the Agent:
 // an Agent busy with its student's folders took nothing and is asked again in
 // a moment (BusyRetryInterval); any other no waits the usual retry interval.
 public partial class ThumbnailPollerTests
@@ -41,7 +41,7 @@ public partial class ThumbnailPollerTests
     }
 
     // The wait after a refusal is that lesson's: a lesson started or ended
-    // since goes at the next poll, not minutes after (Task 7a minor); the
+    // since goes at the next poll, not minutes after; the
     // refused new one waits in its turn.
     [Fact]
     public async Task ANewLesson_IsNotHeldBehindTheWaitOfAnOlderOneRefused()

@@ -1,7 +1,7 @@
 using Midview.Master;
 using Xunit;
 
-// What the Master says around the two teacher PCs' wiring (Task 7).
+// What the Master says around the two teacher PCs' wiring.
 public partial class ClassFolderTextTests
 {
     private const string Where = @"C:\Users\prof\Documents\Midview";

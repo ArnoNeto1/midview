@@ -36,23 +36,18 @@ public sealed partial class ClassHomeTrackerTests
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var tracker = NewTracker(rig);
-        var changes = 0;
-        tracker.Changed += () => Interlocked.Increment(ref changes);
 
         await tracker.RefreshAsync();
 
         Assert.Null(tracker.Home);
         Assert.Equal(ClassFolderMode.Local, tracker.Mode);
-        Assert.Equal(0, changes);
     }
 
     [Fact]
-    public async Task ThisPcAsHome_IsLocal_AndChangedIsRaisedOnce()
+    public async Task ThisPcAsHome_IsLocal()
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var tracker = NewTracker(rig);
-        var changes = 0;
-        tracker.Changed += () => Interlocked.Increment(ref changes);
         foreach (var pc in rig.Pcs)
         {
             Claim(rig, pc, rig.Master, ThisPc);
@@ -67,11 +62,11 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(ClassFolderRemote.Port, tracker.Home.Port);
         Assert.Equal(Older, tracker.Home.Generation);
         Assert.Equal(ClassFolderMode.Local, tracker.Mode);
-        Assert.Equal(1, changes);
         Assert.Null(ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath)); // this PC is no other home
     }
 
-    // Ruling 11: the last other PC seen as the home is kept on file, next to this PC's generation.
+    // The last other PC seen as the home is kept on file, next to this PC's generation
+    // (so it never becomes the home by starting a lesson).
     [Fact]
     public async Task AnotherPcSeenAsHome_IsKeptOnFile()
     {
@@ -91,7 +86,7 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(seen, ClassHomeFileMaster.ReadLastOtherHome(rig.HomePath));
         Assert.Null(ClassHomeFileMaster.Read(rig.HomePath));
 
-        // Ruling 12: with no Agent saying anything (all off), still the home this PC goes by.
+        // With no Agent saying anything (all off), still the home this PC goes by.
         foreach (var pc in rig.Pcs)
         {
             rig.Offline[pc.Name] = true;
@@ -102,7 +97,7 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
     }
 
-    // Ruling 12: no Agent reports a home, this PC never was one, but it saw another: that
+    // No Agent reports a home, this PC never was one, but it saw another: that
     // one is the home. Once this PC has a generation (it took the folders over), no longer.
     [Fact]
     public async Task TheLastHomeSeen_IsTheHome_WhileNoAgentReportsOne_AndThisPcHasNoGeneration()
@@ -153,8 +148,6 @@ public sealed partial class ClassHomeTrackerTests
     {
         using var rig = new ClassSyncRig(homes: 3);
         using var tracker = NewTracker(rig);
-        var changes = 0;
-        tracker.Changed += () => Interlocked.Increment(ref changes);
         foreach (var pc in rig.Pcs)
         {
             Claim(rig, pc, sameCertificate ? rig.Master : rig.OtherMaster, OtherPc);
@@ -164,7 +157,6 @@ public sealed partial class ClassHomeTrackerTests
 
         Assert.Equal(OtherPc, tracker.Home?.Name);
         Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
-        Assert.Equal(1, changes);
     }
 
     // Midview reinstalled on this PC (a new certificate): the Agents still know it by its name.
@@ -218,7 +210,7 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(ClassFolderMode.Remote, tracker.Mode);
     }
 
-    // Ruling 9: the newest home wins, however few Agents have heard of it yet;
+    // The newest home wins, however few Agents have heard of it yet;
     // an Agent that isn't online, or doesn't answer, says nothing.
     [Fact]
     public async Task TheHomeOfTheNewestGeneration_Wins_AndOnlyAnsweringAgentsCount()
@@ -317,7 +309,7 @@ public sealed partial class ClassHomeTrackerTests
         }
     }
 
-    // Ruling 12: a file that is there but can't be read is tried once more, then said so;
+    // A file that is there but can't be read is tried once more, then said so;
     // it never passes for no file (which would let this PC claim the home with now).
     [Fact]
     public async Task AFileThatCantBeRead_IsTriedAgain_ThenThrows()

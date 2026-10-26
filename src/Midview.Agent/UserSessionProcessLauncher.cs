@@ -296,7 +296,7 @@ public sealed class UserSessionProcessLauncher : ISessionProcessLauncher
     // The student, and their Desktop as their own registry says it is (User
     // Shell Folders, which the student can change) only where it really is,
     // and only if that is in their profile or their own folder
-    // (StudentDesktopCheck, Ruling 12): never another account's Desktop.
+    // (StudentDesktopCheck): never another account's Desktop.
     // Desktop null when there is none (refusal null) or it is refused
     // (refusal says why); the student is kept either way.
     internal static (string? Desktop, SecurityIdentifier Student) StudentAndDesktop(

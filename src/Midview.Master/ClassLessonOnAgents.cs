@@ -9,9 +9,44 @@ namespace Midview.Master;
 // The class lesson straight on the Agents, read and sent the same way by the
 // class folders' home (ClassFolderSync) and by a colleague's teacher PC that
 // ends a lesson with the home's Master closed (RemoteClassFolderController):
-// what an Agent's answer means, and which of the Agents' lessons counts.
+// what an Agent's answer means, and which of the Agents' lessons counts. And
+// which Agents there are to ask, for every part of the class folder that asks
+// them (the classroom list and the grid's view of it, called from background
+// threads).
 internal static class ClassLessonOnAgents
 {
+    // The classroom list; empty when it can't be read (logged).
+    public static IReadOnlyList<KnownMachine> Machines(Func<IReadOnlyList<KnownMachine>> machines, Action<string> log)
+    {
+        try
+        {
+            return machines();
+        }
+        catch (Exception ex)
+        {
+            log($"The list of machines could not be read: {ex.Message}");
+            return Array.Empty<KnownMachine>();
+        }
+    }
+
+    // Whether the grid shows the machine on; off when that can't be told (the list changing under it, say).
+    public static bool IsOnline(Func<KnownMachine, bool> isOnline, KnownMachine machine)
+    {
+        try
+        {
+            return isOnline(machine);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // The online machines whose Agent the classroom list knows.
+    public static List<KnownMachine> Online(
+        Func<IReadOnlyList<KnownMachine>> machines, Func<KnownMachine, bool> isOnline, Action<string> log) =>
+        Machines(machines, log).Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(isOnline, machine)).ToList();
+
     // A lesson saved further ahead of this PC's clock than this is not believed.
     public static readonly TimeSpan Horizon = TimeSpan.FromDays(1);
 

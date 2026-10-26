@@ -2,8 +2,8 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderSync with two teacher PCs in one lab (plan decisions 2 and 8,
-// Rulings 9 to 12): the claim on the class folders' home before a start, by
+// ClassFolderSync with two teacher PCs in one lab (plan decisions 2 and 8):
+// the claim on the class folders' home before a start, by
 // generation, and standing down when another PC keeps them. Adopting an end
 // another PC made on the Agents is in ClassFolderSyncTests.Adopt.cs. The rig's
 // Agents keep the home (homes).
@@ -73,7 +73,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(homes, rig.Pcs.Select(pc => pc.Agent.CurrentHome));
     }
 
-    // Ruling 11: B saw A as the home; with only Agents that keep no home on, B's start is
+    // B saw A as the home; with only Agents that keep no home on, B's start is
     // still cancelled, naming A, and nothing is claimed: B becomes the home only by taking
     // the folders over.
     [Fact]
@@ -97,7 +97,7 @@ public sealed partial class ClassFolderSyncTests
 
         var refused = await other.StartAsync("3º B");
 
-        // Ruling 12: a line for every PC of the room, as a start's lesson goes to every one.
+        // A line for every PC of the room, as a start's lesson goes to every one.
         Assert.Equal(new[] { "PC1", "PC2", "PC3" }, refused.Select(result => result.Machine.Name).Order());
         Assert.All(refused, result => Assert.Equal((false, ClassHomeClaim.OtherHomeText + ThisPc), (result.Ok, result.Detail)));
         Assert.False(other.Lesson.IsOn);
@@ -106,7 +106,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
     }
 
-    // Ruling 12: no Agent answers at all; the start still says why it didn't happen, on
+    // No Agent answers at all; the start still says why it didn't happen, on
     // every PC's line, never with no line.
     [Fact]
     public async Task APcThatSawAnotherHome_WithNoAgentOn_SaysSoForEveryPc()
@@ -128,7 +128,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
     }
 
-    // Ruling 12: this PC's file is there but can't be read: the start doesn't go by "no
+    // This PC's file is there but can't be read: the start doesn't go by "no
     // generation" (claiming with now); it says why, on every PC's line, and claims nothing.
     [Fact]
     public async Task AnUnreadableGenerationFile_CancelsTheStart_SayingWhy()
@@ -159,7 +159,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(started, result => Assert.True(result.Ok, $"{result.Machine.Name}: {result.Detail}"));
     }
 
-    // Ruling 12: a generation that couldn't be saved is saved at the next start.
+    // A generation that couldn't be saved is saved at the next start.
     [Fact]
     public async Task AGenerationThatCouldNotBeSaved_IsSavedAtTheNextStart()
     {
@@ -181,7 +181,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(rig.NowTicks - TimeSpan.FromMinutes(5).Ticks, ClassHomeFileMaster.Read(homePath));
     }
 
-    // Ruling 11: a PC that never saw a home starts in a lab where no Agent keeps one.
+    // A PC that never saw a home starts in a lab where no Agent keeps one.
     [Fact]
     public async Task AFreshPcThatSawNoHome_StartsInAnEmptyLab()
     {
@@ -225,7 +225,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs.Skip(1), pc => Assert.Null(pc.Agent.CurrentHome));
     }
 
-    // Ruling 9: a PC took the folders over while only one PC was on. Once the others are
+    // A PC took the folders over while only one PC was on. Once the others are
     // back, the old home's start sees the newer home on that one and cancels; the new
     // home's start brings the others over.
     [Fact]
@@ -279,7 +279,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.All(rig.Pcs, pc => Assert.Equal((ThisPc, rig.NowTicks), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
     }
 
-    // Ruling 9: the home PC renamed (same certificate, its generation on file) keeps the folders.
+    // The home PC renamed (same certificate, its generation on file) keeps the folders.
     [Fact]
     public async Task ARenamedPc_KeepsItsHome()
     {
@@ -333,7 +333,7 @@ public sealed partial class ClassFolderSyncTests
     }
 
     [Fact]
-    public async Task StandDown_ClearsTheLesson_StopsTheRounds_AndKeepsTheStore()
+    public async Task StandDown_ClearsTheLesson_AndKeepsTheStore()
     {
         using var rig = new ClassSyncRig(homes: 3);
         rig.WriteInStore("mapa.png", Bytes(10, 1), Utc(1));
@@ -341,23 +341,17 @@ public sealed partial class ClassFolderSyncTests
         await sync.StartAsync(Turma);
         var lesson = sync.Lesson;
         await rig.Rounds(sync, 1);
+        await sync.EndAsync(EndChoice.Keep);
         var changes = new List<ClassLesson>();
         sync.LessonChanged += changes.Add;
 
-        await sync.StandDownAsync();
-        await sync.StandDownAsync();
+        Assert.Null(await sync.StandDownIfNoLessonAsync());
+        Assert.Null(await sync.StandDownIfNoLessonAsync());
 
         Assert.Equal(ClassLesson.None(0), sync.Lesson);
         Assert.Equal(sync.Lesson, ClassLessonFile.Read(rig.LessonPath));
         Assert.Equal(new[] { ClassLesson.None(0) }, changes);
         Assert.Equal(new[] { "mapa.png" }, rig.StoreFiles());
-        Assert.False(rig.Store.IsCollected(lesson.LessonId));
-
-        // No more rounds: what a student saves stays on their PC.
-        rig.Pcs[0].Write("novo.txt", Bytes(10, 2), Utc(2));
-        await rig.Rounds(sync, 2);
-        Assert.Equal(new[] { "mapa.png" }, rig.StoreFiles());
-        Assert.All(rig.Pcs.Skip(1), pc => Assert.DoesNotContain("novo.txt", pc.Files()));
 
         // The folders back on this PC: it starts lessons again, each newer than the last.
         var again = await sync.StartAsync("3º B");
@@ -366,7 +360,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.True(sync.Lesson.SavedAt > lesson.SavedAt);
     }
 
-    // Ruling 10: a PC that stood down hands its Agents nothing, so the new home's lesson
+    // A PC that stood down hands its Agents nothing, so the new home's lesson
     // stays on every PC, even when this PC's clock is ahead of the new home's.
     [Fact]
     public async Task AfterStandingDown_ThePollersHandNothingOver()
@@ -383,7 +377,7 @@ public sealed partial class ClassFolderSyncTests
         }
         rig.Now = rig.Now.AddHours(1);
 
-        await sync.StandDownAsync();
+        Assert.Null(await sync.StandDownIfNoLessonAsync());
         var theirs = new ClassLesson(ended.SavedAt + 2, Guid.NewGuid(), "3º B", ended.StartedAt, Ended: false);
         foreach (var pc in rig.Pcs)
         {

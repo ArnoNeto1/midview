@@ -296,7 +296,7 @@ public sealed partial class ClassFolderSyncTests
         var newer = new ClassLesson(
             new DateTimeOffset(rig.Now).ToUnixTimeSeconds() + 1_000_000, Guid.NewGuid(), "3º B",
             new DateTimeOffset(rig.Now).ToUnixTimeSeconds(), Ended: false);
-        Assert.True(pc1.Agent.Handle(newer.Encode()).Succeeded);
+        Assert.True(pc1.Agent.Handle(newer.Encode(), "", "").Succeeded); // a Master from before two teacher PCs
         var sync = rig.NewSync();
         var statuses = ClassSyncRig.Watch(sync);
 

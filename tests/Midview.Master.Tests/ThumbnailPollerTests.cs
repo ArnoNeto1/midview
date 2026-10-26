@@ -333,7 +333,7 @@ public partial class ThumbnailPollerTests
         Assert.Equal(new[] { 1000L, 1001L }, agent.LessonsReceived);
     }
 
-    // No lesson at all (a Master that stood down, Ruling 10) is never handed over, however
+    // No lesson at all (a Master that stood down) is never handed over, however
     // it is saved: an Agent would take it for a newer end of the lesson it follows.
     [Fact]
     public async Task NoLesson_IsNeverHandedOver()

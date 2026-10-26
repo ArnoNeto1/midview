@@ -268,7 +268,7 @@ public sealed partial class ClassLessonHandlerTests
         Assert.False(File.Exists(_homePath));
     }
 
-    // Ruling 5: the home PC with another certificate (reinstalled, paired
+    // The home PC (its name) with another certificate (reinstalled, paired
     // again, another Windows account) is still the home, and starts lessons.
     [Fact]
     public void ClaimHome_TheHomesNameWithAnotherThumbprint_ThenStartsALesson()
@@ -316,7 +316,7 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal(new ClassHome(OtherPc, "PROF-2", "10.0.0.7", ClassFolderRemote.Port, 200), home.Current);
     }
 
-    // Ruling 18: a claim that can't have the lesson's lock within the claim
+    // A claim that can't have the lesson's lock within the claim
     // wait (a look at the student's folders holds it: closing the browsers, the
     // registry) is refused as busy, quickly, and never applied later. A Master
     // whose answer timed out reads the home again, and must find it as it is.
@@ -364,7 +364,7 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal("PROF-2", handler.CurrentHome!.Name);
     }
 
-    // Ruling 22 (Task 7a, item 9): a lesson set waits for the lesson's lock no
+    // A lesson set waits for the lesson's lock no
     // longer than a claim does, and is refused the same way (the Master's
     // poller sends it again), never applied later.
     [Fact]
@@ -407,7 +407,7 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal("3º A", handler.Current.Turma);
     }
 
-    // Ruling 19: the Agent waits for its lock as long as the Master counts on
+    // The Agent waits for its lock as long as the Master counts on
     // (ClassHomeClaim.MaxLockWait; the Master's tests check it against its read timeout).
     [Fact]
     public void TheClaimWait_IsTheOneTheMasterCountsOn()
@@ -425,4 +425,12 @@ public sealed partial class ClassLessonHandlerTests
         Assert.False(handler.ClaimHome(HomePc, "10.0.0.5", ClaimOf("PROF-1")).Ok);
         Assert.True(handler.Handle(Lesson("3º A", 100).Encode(), OtherPc, "10.0.0.7").Succeeded);
     }
+}
+
+// For the tests from before two teacher PCs: a lesson from a sender with no
+// identity, which only a handler with no home lets start a lesson.
+internal static class ClassLessonHandlerForTests
+{
+    public static (bool Succeeded, string Detail) Handle(this ClassLessonHandler handler, byte[] payload) =>
+        handler.Handle(payload, "", "");
 }

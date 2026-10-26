@@ -48,8 +48,8 @@ public sealed partial class ClassHomeTrackerTests
         }
     }
 
-    // Whether this PC's class-home.json was read for it (Fix round 1, minor 1):
-    // missing is read (none of it); held open by another program is not.
+    // Whether this PC's class-home.json was read for it (stragglers alone can't
+    // be trusted otherwise): missing is read (none of it); held open by another program is not.
     [Fact]
     public async Task AReading_SaysWhetherThisPcsFileWasRead()
     {
@@ -69,19 +69,18 @@ public sealed partial class ClassHomeTrackerTests
         Assert.Equal(new[] { true, true, false }, readings.Select(reading => reading.FileRead));
     }
 
-    // Raised after Changed, so a handler of either sees the home already taken.
+    // Raised once the home is taken, so a handler sees it already.
     [Fact]
-    public async Task Refreshed_ComesAfterChanged()
+    public async Task Refreshed_SeesTheHomeAlreadyTaken()
     {
         using var rig = new ClassSyncRig(homes: 1, pcs: 1);
         using var tracker = NewTracker(rig);
         var order = new List<string>();
-        tracker.Changed += () => order.Add("changed");
-        tracker.Refreshed += reading => order.Add($"refreshed {reading.Mode} {tracker.Mode}");
+        tracker.Refreshed += reading => order.Add($"refreshed {reading.Mode} {tracker.Mode} {tracker.Home?.Name}");
         Claim(rig, rig.Pcs[0], rig.OtherMaster, OtherPc);
 
         await tracker.RefreshAsync();
 
-        Assert.Equal(new[] { "changed", "refreshed Remote Remote" }, order);
+        Assert.Equal(new[] { $"refreshed Remote Remote {OtherPc}" }, order);
     }
 }

@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderSync with two teacher PCs in one lab (plan decision 9, Ruling 10):
+// ClassFolderSync with two teacher PCs in one lab (plan decision 9):
 // a lesson another PC ended straight on the Agents, while the home's Master was
 // closed, is adopted by the home. The rig's Agents keep the home (homes).
 public sealed partial class ClassFolderSyncTests
@@ -46,7 +46,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Empty(rig.StoreFiles("3º B"));
     }
 
-    // Ruling 10: what is adopted is this lesson, ended when the Agents say, whatever else
+    // What is adopted is this lesson, ended when the Agents say, whatever else
     // their copy says.
     [Fact]
     public async Task AnAgentsEnd_IsAdoptedAsThisLessonEnded()
@@ -62,7 +62,7 @@ public sealed partial class ClassFolderSyncTests
         Assert.Equal(lesson with { SavedAt = lesson.SavedAt + 5, Ended = true }, sync.Lesson);
     }
 
-    // Ruling 10: an end saved more than a day ahead of this PC's clock is not believed.
+    // An end saved more than a day ahead of this PC's clock is not believed.
     [Fact]
     public async Task AnEndFromMoreThanADayAhead_IsNotAdopted()
     {

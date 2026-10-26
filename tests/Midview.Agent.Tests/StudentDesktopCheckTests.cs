@@ -4,7 +4,7 @@ using System.Security.Principal;
 using Midview.Agent;
 using Xunit;
 
-// Ruling 12: the Desktop path is the student's to set (HKCU User Shell Folders),
+// The Desktop path is the student's to set (HKCU User Shell Folders),
 // so the Agent, as SYSTEM, only works on a Desktop that really is in the
 // student's profile, or is the student's own folder. Against real folders under
 // %TEMP%: a made-up "profile", a place outside it, and junctions between them.

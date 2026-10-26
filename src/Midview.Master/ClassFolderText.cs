@@ -249,7 +249,7 @@ public static partial class ClassFolderText
     // A line the home built about itself, as a colleague's PC shows it (home:
     // the home's name); any other line as it is. Also a file a round couldn't
     // bring in for the home's full disk: "a.docx (não há espaço livre
-    // suficiente neste computador)", and maybe " e mais 2" (Ruling 23), with
+    // suficiente neste computador)", and maybe " e mais 2" (a round's line), with
     // nothing else after it.
     public static string Relayed(string detail, string home)
     {

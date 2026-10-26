@@ -5,8 +5,8 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderRole: how a Master works the "Pasta da turma" by the room's word
-// (Task 7). Whole teacher PCs over loopback (TeacherPc: store, sync, local
+// ClassFolderRole: how a Master works the "Pasta da turma" by the room's word.
+// Whole teacher PCs over loopback (TeacherPc: store, sync, local
 // controller, hand-over, tracker, role, and a host on a port of its own),
 // against the rig's real Agents. Temp roots only; no lab machine.
 public sealed partial class ClassFolderRoleTests
@@ -34,7 +34,6 @@ public sealed partial class ClassFolderRoleTests
 
         Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
         Assert.Same(prof1.Local, prof1.Role.Controller);
-        Assert.NotNull(prof1.Role.Host);
         Assert.True(Listens(prof1.HostPort));
         Assert.Null(prof1.Role.LessonForPollers);
         Assert.Null(prof1.Role.HomeGeneration);
@@ -68,7 +67,7 @@ public sealed partial class ClassFolderRoleTests
 
         Assert.Null(prof1.Role.Mode); // not decided yet: as a Master that just opened
         Assert.Same(prof1.Local, prof1.Role.Controller);
-        Assert.Null(prof1.Role.Host);
+        Assert.Equal(0, prof1.Opens);
         Assert.Null(prof1.Role.LessonForPollers);
 
         await prof1.Role.RefreshAndActAsync();
@@ -76,7 +75,7 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
         var remote = Assert.IsType<RemoteClassFolderController>(prof1.Role.Controller);
         Assert.Equal(Prof2, remote.HomeName);
-        Assert.Null(prof1.Role.Host);
+        Assert.Equal(0, prof1.Opens);
         Assert.False(Listens(prof1.HostPort));
         Assert.Null(prof1.Role.LessonForPollers);
         Assert.Null(prof1.Role.HomeGeneration);
@@ -113,10 +112,10 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
     }
 
-    // Ruling 17: a PC whose lesson the room still follows keeps the folders (and
+    // A PC whose lesson the room still follows keeps the folders (and
     // its own window, to end that lesson) until it ends; then it stands down,
     // and goes Remote at the next reading. Meanwhile the lesson is still handed
-    // out (Fix round 1, minor 3: the Agents enforce the home on lesson sets),
+    // out (the Agents take lesson sets only from the home they keep),
     // and once it ends its end goes on being handed out for EndedGrace, Remote,
     // only to the PCs still in it (those that were busy or off).
     [Fact]

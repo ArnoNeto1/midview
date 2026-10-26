@@ -4,13 +4,13 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// RemoteClassFolderController's loop and requests over its life (Ruling 22's
-// Task 7a, items 10, 11 and 14): started and stopped at once it leaves no
+// RemoteClassFolderController's loop and requests over its life: started and
+// stopped at once it leaves no
 // failed loop behind; disposed, nothing waiting its turn is left waiting; and
 // a home whose handshake hangs costs a poll one wait, not three.
 public sealed partial class RemoteClassFolderControllerTests
 {
-    // Item 10: Start, then Stop before the loop got going: the loop finds its
+    // Start, then Stop before the loop got going: the loop finds its
     // token stopped, rather than failing on a token source already disposed
     // (an exception nobody sees).
     [Fact]
@@ -48,7 +48,7 @@ public sealed partial class RemoteClassFolderControllerTests
         }
     }
 
-    // Item 11: disposed while a command and a state read wait their turn (the
+    // Disposed while a command and a state read wait their turn (the
     // window closing in the middle of a click): both end at once, the command
     // refused as disposed; the command already at the home still gets its reply.
     [Fact]
@@ -72,7 +72,7 @@ public sealed partial class RemoteClassFolderControllerTests
         await reading.WaitAsync(Wait);
     }
 
-    // Item 14: a home that takes the connection and never answers the
+    // A home that takes the connection and never answers the
     // handshake (its Master hung) is tried once per poll; a connection it
     // turns away at once is still tried again (its cap on one PC's connections).
     [Fact]

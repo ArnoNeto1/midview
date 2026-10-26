@@ -32,10 +32,6 @@ public sealed class ClassHomeState
     // The folders don't move while a lesson is on (plan decision 7).
     public const string EndLessonFirstText = "Encerre a aula antes de passar as pastas.";
 
-    // In a refusal, for a home recorded with no name (a Master that sent no
-    // claim): "As pastas das turmas ficam no PC de outro professor".
-    public const string UnnamedHomeText = ClassHome.UnnamedText;
-
     // A claim whose generation is past ClassHome.MaxGeneration.
     public const string GenerationTooLargeText = "pedido inválido: data da troca além do limite";
 

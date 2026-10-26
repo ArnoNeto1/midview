@@ -2,7 +2,7 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver: a claim whose answer never came back (Rulings 18 to 20).
+// ClassFolderHandOver: a claim whose answer never came back.
 // A claim that went out may still be taken: this PC waits until no Agent can
 // take it any more (its lock wait, from when the answer was lost, and a
 // margin), then asks the Agents which home they keep. One that took it makes
@@ -82,7 +82,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
     }
 
-    // Ruling 19 (a): the claim's connection breaks (a reset) while the Agent
+    // The claim's connection breaks (a reset) while the Agent
     // still waits for its lesson lock; the lock is freed a moment after the
     // answer was lost, and the claim is taken then. Done, never split.
     [Fact]
@@ -124,7 +124,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(Directory.Exists(Path.Combine(rig.Root, "Turmas (passadas para PROF-2)")));
     }
 
-    // Ruling 20 (1): a claim slow to reach the Agent (a dispatch behind the
+    // A claim slow to reach the Agent (a dispatch behind the
     // others, a slow handshake: longer than the whole wait from the start)
     // whose answer is then lost, and the Agent takes it a moment later. The
     // wait runs from when the answer was lost, so this PC finds it: done.
@@ -168,7 +168,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(new[] { Turma, "3º B", "Vídeos" }, lab.NewStore.List().Select(summary => summary.Turma));
     }
 
-    // Ruling 20 (1): the wait runs from when the answer was lost, not from when
+    // The wait runs from when the answer was lost, not from when
     // the claim went out (3 s before, here: the clock and the wait are the
     // test's), and a claim that never went out (no connection, no handshake)
     // needs none.
@@ -203,7 +203,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(wentOut ? new[] { ClassFolderHandOver.DefaultLostAnswerWait } : Array.Empty<TimeSpan>(), slept);
     }
 
-    // Ruling 20 (2), Ruling 21 (b): PC1 may have taken the claim (its answer
+    // PC1 may have taken the claim (its answer
     // was lost) and doesn't answer when asked again (it went off), and the old
     // home's Master closed before it could be asked to take the room back.
     // Nothing is put back (that could split the classes): the copy stays in

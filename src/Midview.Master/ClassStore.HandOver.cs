@@ -47,7 +47,7 @@ internal sealed class StoreMoveException : IOException
 }
 
 // ClassStore: the whole store passing to another teacher PC ("Guardar as pastas
-// das turmas neste computador", plan decision 7, Ruling 4). The PC that keeps
+// das turmas neste computador", plan decision 7). The PC that keeps
 // the folders reads its whole store out (HandOverContents) and, once the other
 // PC has it, moves it aside (MoveAside); the PC taking them over receives into
 // Staging and swaps it in (SwapIn), its own earlier store going aside. Aside is

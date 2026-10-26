@@ -1,7 +1,7 @@
 using Midview.Protocol;
 using Xunit;
 
-// MessageType.RemoteTakeBack (Ruling 21): a PC whose take-over can't be told
+// MessageType.RemoteTakeBack: a PC whose take-over can't be told
 // done asks the home to claim the room back above the generation it gave up.
 public sealed class ClassFolderRemoteTakeBackTests
 {

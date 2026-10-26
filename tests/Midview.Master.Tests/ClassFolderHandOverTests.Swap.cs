@@ -3,7 +3,7 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderHandOver when the copy can't all go in place, or can't all go
-// back (Ruling 19 (b)): the result says where things are, never "nada mudou"
+// back: the result says where things are, never "nada mudou"
 // unless all of it went back. The store's moves fail where the test says
 // (ClassStore.MoveHook), as a file open in another program would make them.
 public sealed partial class ClassFolderHandOverTests
@@ -79,7 +79,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(OldHome, rig.Pcs[0].Agent.CurrentHome!.Name);
     }
 
-    // Ruling 20 (d): the old home's copy can't all go aside (its index is in
+    // The old home's copy can't all go aside (its index is in
     // use), nor all come back (its classes stay aside): its answer says where
     // its classes are, rather than that they are still in Turmas.
     [Fact]

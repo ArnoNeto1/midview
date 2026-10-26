@@ -354,7 +354,7 @@ public sealed partial class ClassFolderSync : IDisposable
         return last == long.MaxValue ? long.MaxValue : Math.Max(UnixNow(), last + 1);
     }
 
-    // A lesson cleared to ClassLesson.None(0) (StandDownAsync) still had a
+    // A lesson cleared to ClassLesson.None(0) (a stand-down) still had a
     // SavedAt: the next lesson is newer than it, even in the same second.
     private long _savedAtFloor;
 
@@ -448,8 +448,8 @@ public sealed partial class ClassFolderSync : IDisposable
     // An Agent that keeps a newer lesson didn't take this one (ClassLessonOnAgents.Send),
     // and the PC's status says why rather than "atualizando a aula". One busy
     // with its student's folders took nothing (ClassHomeClaim.BusyText): this
-    // PC's poller hands it the lesson later, so its line doesn't ask the
-    // teacher to try again (Ruling 22).
+    // PC's poller hands it the lesson in a moment, so its line doesn't ask
+    // the teacher to try again.
     // An end kept out because the Agent is still in a lesson this PC knows is
     // over (the PC was off for that end and for this lesson's start) goes once
     // that one is ended there (EndOfLessonOver).

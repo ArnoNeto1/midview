@@ -82,8 +82,8 @@ public partial class MainWindow
     // window stops it). A copy this PC sent that only waits for the PC that
     // took it to confirm runs nothing here: the teacher may close anyway. Not
     // when Windows signs out or shuts down: a message here would only hold
-    // that up, and a take-over cut off is one the PCs already settle (Rulings
-    // 17 to 21).
+    // that up, and a take-over cut off is one the PCs already settle (lost
+    // answers waited out, an undecided one taken back by the old home).
     private void OnWindowClosing(object? sender, CancelEventArgs e)
     {
         if (_sessionEnding || Dispatcher.HasShutdownStarted)

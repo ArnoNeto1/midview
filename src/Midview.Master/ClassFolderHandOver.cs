@@ -12,8 +12,8 @@ namespace Midview.Master;
 // What a take-over came to, in the teacher's words (the window shows Detail as it is).
 public sealed record HandOverResult(bool Ok, string Detail);
 
-// "Cancelar" for a copy of the class folders (ClassFolderHandOver.TakeOverAsync,
-// Ruling 19): a cancel and the copy going in place exclude each other, and
+// "Cancelar" for a copy of the class folders (ClassFolderHandOver.TakeOverAsync):
+// a cancel and the copy going in place exclude each other, and
 // whichever comes first wins, at once, so the window knows right away whether
 // a click stopped anything.
 public sealed class HandOverCancel
@@ -54,7 +54,7 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 
 // "Guardar as pastas das turmas neste computador" ("Two teacher PCs in one
 // lab", docs/superpowers/specs/2026-10-20-class-folder-design.md; plan
-// decision 7, Rulings 4, 9 and 17, Review Focus 5): this teacher PC takes the
+// decision 7, Review Focus 5): this teacher PC takes the
 // class folders over from the PC that keeps them (the home), or, as that home,
 // gives them. One per Master, for its store (ClassStore) and sync (ClassFolderSync).
 //
@@ -105,7 +105,7 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 //
 // A take-over whose claim can't be told taken or not (an Agent that may have
 // taken it doesn't answer: Claim's Unknown) asks the old home to take the room
-// back (ClassFolderHandOver.TakeBack.cs, Ruling 21), then puts this PC's own
+// back (ClassFolderHandOver.TakeBack.cs), then puts this PC's own
 // classes back and throws the copy away. Only when the old home can't be
 // reached or refuses does the copy stay in place, this PC's own classes
 // aside, the old home untold and no generation of its own kept: when that PC
@@ -113,8 +113,9 @@ public readonly record struct HandOverProgress(int Files, int TotalFiles, long B
 // certificate and name) makes it the home with the copy (ClassHomeTracker, and
 // a start goes by the generation the Agents recorded for it); all naming the
 // old home leave it a remote, and a start of its own is refused as one from a
-// PC that was never the home (Ruling 20). An unreachable home's take-over has
-// no copy to give back and nobody to ask: undecided, it leaves this PC's own
+// PC that was never the home (it keeps no generation of its own, so its
+// next start can't take the room without an Agent). An unreachable home's
+// take-over has no copy to give back and nobody to ask: undecided, it leaves this PC's own
 // classes as they are, keeps no generation, and the room's Agents decide.
 //
 // In six files: this one (taking over), ClassFolderHandOver.Claim.cs (the
@@ -397,7 +398,7 @@ public sealed partial class ClassFolderHandOver
         text.Append(' ').Append(said);
         if (received.LeftOut > 0)
         {
-            // The files its store doesn't list (Ruling 22): only in its copy, wherever that is.
+            // The files its store doesn't list (hidden, too big, odd names): only in its copy, wherever that is.
             text.Append(' ').Append(ClassFolderText.LeftOnTheOldHome(name, received.LeftOut, where));
         }
         return new HandOverResult(true, text.ToString());
@@ -483,6 +484,9 @@ public sealed partial class ClassFolderHandOver
         }
     }
 
-    private static bool IsNetwork(Exception ex) =>
+    // What a connection to a colleague's PC throws when it drops, is refused,
+    // fails its handshake, says what no Midview says, or is closed under it
+    // (RemoteClassFolderController's requests go by it too).
+    internal static bool IsNetwork(Exception ex) =>
         ex is IOException or SocketException or AuthenticationException or InvalidDataException or ObjectDisposedException;
 }

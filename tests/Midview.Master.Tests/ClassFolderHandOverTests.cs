@@ -6,7 +6,7 @@ using Midview.Protocol;
 using Xunit;
 
 // ClassFolderHandOver: "Guardar as pastas das turmas neste computador" (plan
-// decision 7, Rulings 4 and 9, Review Focus 5). Two teacher PCs over loopback,
+// decision 7, Review Focus 5). Two teacher PCs over loopback,
 // each with a store of its own in temp folders: the home is the rig's Master
 // (PROF-1: the rig's store, a sync, its window's controller and a
 // ClassFolderHost serving the hand-over) and PROF-2 (the rig's OtherMaster,

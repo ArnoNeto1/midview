@@ -2,13 +2,12 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver after its copy went to a colleague's PC (Task 7 fix
-// round 1, Ruling 24): until that PC says how its take-over went
-// (RemoteHandOverDone, or RemoteTakeBack when it can't tell), or SettleWait
-// passes, this PC is busy (IsBusy): its role neither stands down nor closes
-// the host that answer must reach. And a hand-over the room has left behind
-// (the Agents name this PC above the generation it handed over at) no longer
-// counts (minor 2).
+// ClassFolderHandOver after its copy went to a colleague's PC: until that PC
+// says how its take-over went (RemoteHandOverDone, or RemoteTakeBack when it
+// can't tell), or SettleWait passes, this PC is busy (IsBusy): its role
+// neither stands down nor closes the host that answer must reach. And a
+// hand-over the room has left behind (the Agents name this PC above the
+// generation it handed over at) no longer counts.
 public sealed partial class ClassFolderHandOverTests
 {
     [Fact]
@@ -108,7 +107,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(1, Volatile.Read(ref changes));
     }
 
-    // Minor 2: handed over to PROF-2 at G+1, then the room decided for this PC
+    // Handed over to PROF-2 at G+1, then the room decided for this PC
     // (an undecided take-over of its own, say: the Agents name it at G+5). That
     // hand-over is behind it: a colleague's take-back is taken again.
     [Fact]
@@ -156,7 +155,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(NewHome, ClassHomeFileMaster.ReadHandedOverTo(rig.HomePath)?.Name);
     }
 
-    // Minor 2: the room naming this PC above the generation it handed over at
+    // The room naming this PC above the generation it handed over at
     // voids that hand-over (in memory and on file); at or below it, not.
     [Fact]
     public async Task SeenAsTheHomeAboveTheHandOver_VoidsIt()

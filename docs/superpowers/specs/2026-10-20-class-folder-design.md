@@ -349,10 +349,9 @@ settled what this section left open; the reviews changed some of it:
   teacher PC's certificate and computer name, plus its generation: when it
   became the home (UTC ticks on its own clock). The Agents keep the claim
   with the newest generation (none past the last tick a clock can show; no
-  student PC's clock counts); a take-over must bring a newer one, so an old
-  home never undoes a newer take-over. The same PC is recognised under a new
-  name (same certificate and generation) or a new certificate (same name).
-  Masters ask the online Agents which home they keep, every 30 seconds and
+  student PC's clock counts); a take-over must bring a newer one. The same PC
+  is recognised under a new name (same certificate and generation) or a new
+  certificate (same name). Masters ask the online Agents every 30 seconds and
   when the window opens, and go by the newest, the last name between equals.
 - **Becoming the home.** The first start in a lab makes its PC the home. A
   PC that has seen another PC as the home never becomes it by starting a
@@ -376,24 +375,21 @@ settled what this section left open; the reviews changed some of it:
   may be, the home (seen, named, or a PC's lesson newer) goes only to the
   PCs still in it, saved a second after it; an Agent takes its home's start
   of that second, or of the one before, over such an end.
-- **Set-aside files.** Files set aside for a lesson the Master doesn't know
-  stay on the PC (usually the other home's) until 60 days old, then go to the
-  student's Recycle Bin; a known lesson's come in, or are cleared when it was
-  collected or its class deleted. A take-over merges both lessons maps; one
-  from a home that doesn't answer learns the lessons the room follows and
-  makes their classes.
+- **Set-aside files.** Those of a lesson the Master doesn't know stay on the
+  PC (usually the other home's) until 60 days after it first saw them, then
+  go to the student's Recycle Bin; a known lesson's come in, or are cleared
+  if it was collected or its class deleted. A take-over merges both lessons
+  maps; one from a home that doesn't answer learns the room's lessons.
 - **Busy Agents.** An Agent waits at most 10 seconds for its lesson lock; then
   it answers "busy" and applies nothing later. The Master asks a busy Agent
   once more at a start, and hands it a lesson again about 10 seconds later.
-- **Colleagues.** The home serves its window to a teacher PC with its own
-  certificate, or one an online Agent of the room trusts ("Dar acesso a um
-  colega"); a yes is kept 10 minutes, a no 30 seconds, and a stranger can't
-  make the home ask the room about many certificates at once.
-- **The remote window.** The home counts as closed after three polls in a
-  row found nobody there (the PC may be off, at a new address or without its
-  firewall rule, the window says). Closed, only "Encerrar a aula" works,
-  keeping the files, sent straight to the Agents; the home adopts that end
-  when it opens again. Texts about its disk and Recycle Bin say "do PC <nome>".
+- **Colleagues.** The home serves its window to a PC with its certificate or
+  one an online Agent trusts ("Dar acesso a um colega"): a yes kept 10
+  minutes, a no 30 seconds (a colleague's yes goes last); one round at a time.
+- **The remote window.** The home is closed after three polls in a row found
+  nobody (off, a new address or no firewall rule, the window says). Then only
+  "Encerrar a aula" works, keeping the files, sent straight to the Agents; the
+  home adopts it when it opens. Texts about its disk say "do PC <nome>".
 - **Taking the folders over.** Only with no lesson on, on either PC; none
   starts on the old home from its copy until that settles. The copy arrives
   into a staging folder and is checked (paths, sizes, free space) before
@@ -412,15 +408,19 @@ settled what this section left open; the reviews changed some of it:
   still in it. One the room left behind is ended, keeping the files, here and
   on those PCs. Standing down with no hand-over leaves its `Turmas` as it is
   (the room may name it again), and its window says those classes are there.
-  Nothing changes while a take-over isn't over, on either PC: the old home
-  keeps its listener open until the taking PC says how it went (or a few
-  minutes pass). The listener is open only while the PC is the home or no PC
-  is; the window switches by itself after a take-over. The Master doesn't
+  Nothing changes while a take-over isn't over, on either PC: the old home's
+  listener (open only while it is the home, or no PC is) stays open until
+  the taking PC says how it went, or a few minutes pass. The Master doesn't
   close while a take-over runs (unless Windows is shutting down), asks while
   a copy only awaits the taking PC, and says where set-aside classes are.
-- **Firewall.** The teacher setup adds the rule `MidviewProfessorPastaDaTurma`
-  (TCP 28903, this program only, local network only) with the invite's
-  rules, and removes it with them. The Master never opens the firewall.
+- **Firewall.** The teacher setup adds and removes the rule
+  `MidviewProfessorPastaDaTurma` (TCP 28903, local network) with the invite's.
+- **Known limits.** Two Windows accounts sharing a copied `master-identity.pfx`
+  can't be told apart; teacher PCs whose clocks differ by 2 seconds or more
+  fall outside the same-second rule; a hostile trusted teacher can push the
+  generations to the ceiling (`class-home.json` on the Agents recovers). A
+  start whose claims all found the Agents busy, and whose lesson every PC then
+  refuses, leaves a lesson on here with no PC in it until it is ended.
 
 ### Classes
 

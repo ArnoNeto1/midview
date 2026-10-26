@@ -196,7 +196,7 @@ public sealed partial class ClassFolderHostTests
         }
     }
 
-    // Ruling 15: a state read is a poll, answered within about ReadTimeout
+    // A state read is a poll, answered within about ReadTimeout
     // (the colleague's PC is waiting on it), not the minutes a command may take.
     [Fact]
     public void AStateReadThatHangs_IsAnsweredWithinTheReadTimeout()

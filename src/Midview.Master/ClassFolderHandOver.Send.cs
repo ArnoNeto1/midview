@@ -130,11 +130,11 @@ public sealed partial class ClassFolderHandOver
     // took the folders over, as name. Only when one of the room's online Agents
     // keeps it as the home (that certificate, and that name: never a home
     // recorded with none, which any name would match), newer than this PC, and
-    // no lesson is on here (Ruling 17: some PCs still follow it, and this PC
-    // keeps the folders until it ends; looked at and stood down in one step,
-    // ClassFolderSync.StandDownIfNoLessonAsync, Ruling 22): this PC stands
-    // down, keeps it as the other home seen
-    // (ClassHomeFileMaster), and moves its store aside to "Turmas (passadas para
+    // no lesson is on here (some PCs still follow it, and this PC keeps the
+    // folders until it ends; looked at and stood down in one step,
+    // ClassFolderSync.StandDownIfNoLessonAsync, so a lesson starting between
+    // the two is never cleared): this PC stands down, keeps it as the other
+    // home seen (ClassHomeFileMaster), and moves its store aside to "Turmas (passadas para
     // <the name the Agents recorded>)". Ok then, with the folder it went to
     // (empty: there was nothing to move), NotMovedMark and ErrorText's words for
     // why it couldn't go (it stays where it is), or PartlyMovedMark and the

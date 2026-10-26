@@ -3,8 +3,8 @@ using Microsoft.Win32;
 using Midview.Agent;
 using Xunit;
 
-// The student at the console when their Desktop is refused (Ruling 12,
-// StudentDesktopCheck): still the student, for everything that isn't Desktop
+// The student at the console when their Desktop is refused
+// (StudentDesktopCheck): still the student, for everything that isn't Desktop
 // work, such as the programs they installed "just for me" and the removals
 // the teacher left pending for them. A made-up "profile" under %TEMP%, and a
 // throwaway HKCU subtree for their registry: never the real ones.

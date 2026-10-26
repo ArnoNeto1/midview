@@ -3,13 +3,13 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// ClassFolderHandOver: what the Master goes by around a take-over (Task 7).
+// ClassFolderHandOver: what the Master goes by around a take-over.
 //
 // IsBusy: a take-over runs on this PC, a hand-over or a take-back runs for a
 // colleague's PC, or a copy this PC sent hasn't settled yet. Not settled: the
 // PC taking the folders over hasn't said how it went (RemoteHandOverDone, or
 // RemoteTakeBack when it can't tell), and its answer must find this PC's host
-// open even while the room's Agents already name it (Ruling 24), for up to
+// open even while the room's Agents already name it, for up to
 // SettleWait. Meanwhile closing the Master would leave a take-over half done,
 // and ClassFolderRole neither stands down nor closes the host. Once one is
 // over, whatever it came to, Changed tells the role to ask the room which PC

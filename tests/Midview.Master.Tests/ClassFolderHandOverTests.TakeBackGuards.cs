@@ -3,8 +3,8 @@ using Midview.Master;
 using Midview.Protocol;
 using Xunit;
 
-// ClassFolderHandOver: the old home's checks before it takes the room back
-// (Ruling 22's Task 7a, items 1 to 7). It is still the home only while no
+// ClassFolderHandOver: the old home's checks before it takes the room back.
+// It is still the home only while no
 // Agent names a PC newer than it (but the PC giving the take-over up) and it
 // handed nothing over meanwhile; a generation given up from too far ahead of
 // its clock is refused; a take-back that can't start claiming in time is
@@ -16,7 +16,7 @@ public sealed partial class ClassFolderHandOverTests
     // A third teacher PC (never one the rig's Agents are told about through TLS).
     private const string ThirdPcThumbprint = "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC";
 
-    // Item 1: PC1 and PC2 keep a third PC (PROF-3), newer than this PC but
+    // PC1 and PC2 keep a third PC (PROF-3), newer than this PC but
     // older than the generation given up; PC3, a straggler, still names this
     // PC. This PC isn't the home: refused, and nothing changes.
     [Fact]
@@ -40,7 +40,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
-    // Item 1: this PC saw a third PC as the home, newer than it (it stood down
+    // This PC saw a third PC as the home, newer than it (it stood down
     // for it before its Master was opened again, say), though no Agent on now
     // names that PC: not the home either.
     [Fact]
@@ -61,7 +61,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
-    // Item 7: the guard on the generation given up, on its own: PC1 keeps the
+    // The guard on the generation given up, on its own: PC1 keeps the
     // very PC asking, newer than what it says it gave up (the others still
     // name this PC, which has its generation on file).
     [Fact]
@@ -82,7 +82,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
-    // Item 1: once this PC handed the folders over (it stood down), a
+    // Once this PC handed the folders over (it stood down), a
     // take-back is refused, even from the PC it handed them to.
     [Fact]
     public async Task AnOldHomeThatHandedTheFoldersOver_DoesntTakeTheRoomBack()
@@ -103,7 +103,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
-    // Item 1: a take-back that arrives while this PC hands the folders over
+    // A take-back that arrives while this PC hands the folders over
     // waits for it, and then finds this PC isn't the home: never both.
     [Fact]
     public async Task ATakeBack_WaitsForAHandOverInProgress_ThenIsRefused()
@@ -145,7 +145,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.All(rig.Pcs.Skip(1), pc => Assert.Equal((OldHome, generation), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
     }
 
-    // Item 2: a generation given up from further ahead of this PC's clock than
+    // A generation given up from further ahead of this PC's clock than
     // a day (long.MaxValue would freeze every later take-over) is refused.
     [Fact]
     public async Task ATakeBack_OfAGenerationFromTooFarAhead_IsRefused()
@@ -166,7 +166,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(generation, ClassHomeFileMaster.Read(rig.HomePath));
     }
 
-    // Ruling 23 (2): a room whose generations are ahead of this PC's clock
+    // A room whose generations are ahead of this PC's clock
     // (the clock was set back since it became the home) is still taken back:
     // "too far ahead" counts from the later of the clock and its own generation.
     [Fact]
@@ -187,7 +187,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.All(rig.Pcs, pc => Assert.Equal((OldHome, takenBack), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
     }
 
-    // Ruling 23 (1): an old home's yes naming a generation from more than a
+    // An old home's yes naming a generation from more than a
     // day ahead isn't believed: this PC keeps that home at what it gave up
     // + 1, so a bogus answer can't put every later take-over out of reach.
     [Fact]
@@ -251,7 +251,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal((OldHome, ClassHome.MaxGeneration), (seen.Name, seen.Generation));
     }
 
-    // Item 3: the old home takes longer than one network wait to take the room
+    // The old home takes longer than one network wait to take the room
     // back (its Agents slow to answer): this PC waits for its answer, and says
     // the folders stayed there, not that it can't tell.
     [Fact]
@@ -278,7 +278,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(new[] { "Antiga" }, lab.NewStore.List().Select(summary => summary.Turma));
     }
 
-    // Item 3: a take-back that can't start claiming within TakeBackClaimBy of
+    // A take-back that can't start claiming within TakeBackClaimBy of
     // being asked (the Agents slow to answer, a hand-over in the way) is
     // refused, so it never finishes after the PC asking stopped waiting.
     [Fact]
@@ -305,7 +305,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(ClassFolderHandOver.TakeBackClaimBy * 3 < ClassFolderHandOver.TakeBackWait);
     }
 
-    // Items 4 and 7: after the old home took the room back, its answer carries
+    // After the old home took the room back, its answer carries
     // the generation it took it with, which this PC keeps as the home it saw.
     // With only PC1 on (it took this PC's claim, and names it), this PC still
     // goes by the old home: a remote, and its start is refused. The old home's
@@ -353,7 +353,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.Equal(lab.OldSync.Lesson, rig.Pcs[0].Agent.Current);
     }
 
-    // Item 6: the old home's own generation isn't on file (it couldn't be
+    // The old home's own generation isn't on file (it couldn't be
     // saved, say): it goes by the one the room's Agents recorded for it.
     [Fact]
     public async Task ATakeBackWithNoGenerationOnFile_GoesByTheOneTheAgentsKeep()
@@ -375,7 +375,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.All(rig.Pcs.Skip(1), pc => Assert.Equal((OldHome, takenBack), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation)));
     }
 
-    // Item 6: Agents busy with their students' folders are asked once more
+    // Agents busy with their students' folders are asked once more
     // (as a start does), and take the room back then; the answer carries the
     // generation the old home took it with, newer than its own.
     [Fact]

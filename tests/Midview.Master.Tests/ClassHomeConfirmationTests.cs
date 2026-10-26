@@ -93,7 +93,7 @@ public sealed class ClassHomeConfirmationTests
         Assert.False(confirmation.Confirming);
     }
 
-    // Fix round 1, minor 1: with this PC's class-home.json not read, the
+    // With this PC's class-home.json not read, the
     // tracker can't tell that a newer home it saw outranks stragglers that still
     // name this PC: such a Local is a reading like any other, two in a row.
     [Fact]

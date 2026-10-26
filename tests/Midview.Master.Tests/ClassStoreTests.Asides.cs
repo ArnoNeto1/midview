@@ -3,7 +3,7 @@ using Xunit;
 
 // ClassStore.AsideFolders: the folders a take-over left beside the classes
 // ("Turmas (antes de …)", "Turmas (passadas para …)"), which the window
-// doesn't show, so MainWindow says where they are once (Task 7).
+// doesn't show, so MainWindow says where they are.
 public partial class ClassStoreTests
 {
     [Fact]

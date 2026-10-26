@@ -1,6 +1,4 @@
-using System.IO;
 using System.Net.Sockets;
-using System.Security.Authentication;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -53,7 +51,8 @@ public sealed partial class RemoteClassFolderController
 
     // Whether the last EndAsync ended the lesson straight on the Agents (the
     // home closed: RemoteClassFolderController.Closed.cs) rather than through
-    // the home, decided as it ran: what the window's headline goes by (Ruling 22).
+    // the home, decided as it ran (not before: the home may close meanwhile):
+    // what the window's headline goes by.
     public bool LastEndOnTheAgents { get; private set; }
 
     public Task<IReadOnlyList<ResultLineDto>> EndAsync(string turma, EndChoice choice) => OneAtATime(async () =>
@@ -227,8 +226,7 @@ public sealed partial class RemoteClassFolderController
     private static Task<T> OwnThread<T>(Func<T> work) =>
         Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-    private static bool IsNetwork(Exception ex) =>
-        ex is IOException or SocketException or AuthenticationException or InvalidDataException or ObjectDisposedException;
+    private static bool IsNetwork(Exception ex) => ClassFolderHandOver.IsNetwork(ex);
 
     // This PC's read gave up waiting (the socket's timeout), whatever wraps it.
     private static bool TimedOut(Exception ex)
