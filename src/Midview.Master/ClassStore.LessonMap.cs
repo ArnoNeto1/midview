@@ -11,6 +11,9 @@ public sealed partial class ClassStore
     // Where the lessons map is for DefaultIndexRoot: next to the index folder, not in it.
     public static string DefaultLessonsPath => Path.Combine(MasterData.Folder, "class-lessons.json");
 
+    // Where this store's lessons map is (what is kept next to it, ClassSetAsideSightings, goes there too).
+    internal string LessonsMapPath => _lessons.Path;
+
     // Throws ArgumentException for a name that is no class name.
     public void RememberLesson(Guid lessonId, string turma)
     {

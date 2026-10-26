@@ -43,4 +43,42 @@ public sealed partial class ClassFolderSyncTests
             sync.Dispose();
         }
     }
+
+    // Two Windows accounts on this teacher PC (one computer name, a
+    // certificate each), both Masters running: account B starts its lesson,
+    // then account A ends its own, older one. B's lesson, which A never knew,
+    // stays on every PC: only a lesson on Agents that keep A's own
+    // certificate as the home is taken for one of A's own.
+    [Fact]
+    public async Task AnotherAccountOnThisPc_ItsLiveLessonSurvivesThisAccountsEnd()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        var a = rig.NewSync();
+        await a.StartAsync(Turma);
+        rig.Now = rig.Now.AddMinutes(1);
+        var bRoot = Path.Combine(rig.Root, "conta-b");
+        var bStore = new ClassStore(
+            Path.Combine(bRoot, "Turmas"), Path.Combine(bRoot, "dados", "turmas"), rig.TeacherBin, () => rig.Now,
+            lessonsPath: Path.Combine(bRoot, "dados", "class-lessons.json"));
+        Assert.True(bStore.Create("3º B").Ok);
+        var b = new ClassFolderSync(
+            bStore, rig.OtherMaster, () => rig.Machines, _ => true, () => rig.Now, ClassSyncRig.MachineName,
+            agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
+            lessonPath: Path.Combine(bRoot, "dados", "class-lesson.json"), homePath: Path.Combine(bRoot, "dados", "class-home.json"));
+        try
+        {
+            Assert.All(await b.StartAsync("3º B"), line => Assert.True(line.Ok, line.Detail));
+            var theirs = b.Lesson;
+            Assert.All(rig.Pcs, pc => Assert.Equal(theirs, pc.Agent.Current));
+            rig.Now = rig.Now.AddMinutes(1);
+
+            await a.EndAsync(EndChoice.Keep);
+
+            Assert.All(rig.Pcs, pc => Assert.Equal(theirs, pc.Agent.Current));
+        }
+        finally
+        {
+            b.Dispose();
+        }
+    }
 }

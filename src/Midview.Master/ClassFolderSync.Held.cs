@@ -158,12 +158,14 @@ public sealed partial class ClassFolderSync
     // take-over, would never reach it. The end is one second newer than what
     // the Agent has, no newer than the end it missed, so what this PC hands it
     // next is newer still. A PC that never saw another home (one teacher PC)
-    // takes a lesson it never knew, on an Agent that keeps this PC as its home
-    // (keptHome), for one of its own (its lessons map lost, or the lesson run
-    // under another Windows account here), as before two teacher PCs. Null
-    // for any other lesson: this PC's own, one only heard of from the Agents
-    // (another PC's, which may still be on there), or one it never knew on an
-    // Agent that keeps another PC or none, or once it has seen another home.
+    // takes a lesson it never knew, on an Agent whose home (keptHome) carries
+    // this Master's own certificate, for one of its own (its lessons map
+    // lost), as before two teacher PCs. Null for any other lesson: this PC's
+    // own, one only heard of from the Agents (another PC's, which may still be
+    // on there), or one it never knew on an Agent that keeps another
+    // certificate as the home (another PC, or another Windows account on this
+    // one, whose Master may run that lesson now) or none, or once it has seen
+    // another home.
     public ClassLesson? EndOfLessonOver(ClassLesson followed, ClassHome? keptHome)
     {
         if (!followed.IsOn || followed.LessonId == Lesson.LessonId
@@ -174,19 +176,19 @@ public sealed partial class ClassFolderSync
         return followed with { SavedAt = followed.SavedAt == long.MaxValue ? long.MaxValue : followed.SavedAt + 1, Ended = true };
     }
 
-    // Whether keptHome is this PC, and this PC never saw another PC as the
-    // home nor handed the folders to one (ClassHomeFileMaster); a file that
-    // can't be read says nothing of the kind.
+    // Whether keptHome is this Master itself (its certificate: the same PC by
+    // name alone may be another Windows account's Master), and this PC never
+    // saw another PC as the home nor handed the folders to one
+    // (ClassHomeFileMaster); a file that can't be read says nothing of the kind.
     private bool OnlyHome(ClassHome? keptHome)
     {
-        if (keptHome is null)
+        if (keptHome is null || !keptHome.IsSameIdentity(_masterCertificate.Thumbprint, _machineName))
         {
             return false;
         }
         try
         {
-            return ClassHomeFileMaster.ReadLastOtherHome(_homePath) is null && ClassHomeFileMaster.ReadHandedOverTo(_homePath) is null
-                && IsThisPc(keptHome, ClassHomeFileMaster.Read(_homePath) ?? _generation);
+            return ClassHomeFileMaster.ReadLastOtherHome(_homePath) is null && ClassHomeFileMaster.ReadHandedOverTo(_homePath) is null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

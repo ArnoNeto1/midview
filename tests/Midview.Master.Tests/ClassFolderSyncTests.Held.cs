@@ -61,6 +61,44 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
+    // A PC not in the held lesson but still in an older lesson this PC ran
+    // (it was off for that lesson's end and the next start) isn't sent the
+    // held end, and has that older lesson ended instead.
+    [Fact]
+    public async Task AHeldLessonsEnd_EndsAnOlderLessonOfThisPcWhereAPcIsStillInIt()
+    {
+        using var rig = new ClassSyncRig(pcs: 2, homes: 2);
+        var (pc1, pc2) = (rig.Pcs[0], rig.Pcs[1]);
+        var visible = new List<KnownMachine> { pc2.Machine };
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => visible, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
+            lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync("3º B");
+            var older = sync.Lesson;
+            visible = new List<KnownMachine> { pc1.Machine }; // PC2 off from here
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            Assert.True(ClassFolderClient.SetLesson(
+                pc1.Machine, rig.OtherMaster, lesson with { SavedAt = lesson.SavedAt + 5, Ended = true }, rig.AgentPort).Succeeded);
+            var theirs = StartAnotherHomesLesson(rig, lesson.SavedAt + 10, new[] { pc1 });
+            rig.Now = rig.Now.AddMinutes(1);
+            visible = rig.Machines.ToList(); // PC2 back, still in 3º B
+            Assert.Equal(older, pc2.Agent.Current);
+
+            Assert.Null(await sync.StandDownForAnotherHomeAsync());
+
+            Assert.Equal(older with { SavedAt = older.SavedAt + 1, Ended = true }, pc2.Agent.Current);
+            Assert.Equal(theirs, pc1.Agent.Current);
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
     // One teacher PC: its end is saved now, goes to every PC, and is handed to all.
     [Fact]
     public async Task WithNoOtherHomeEverSeen_AnEndIsAsBefore()

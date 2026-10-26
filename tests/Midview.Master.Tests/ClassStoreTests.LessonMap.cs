@@ -191,6 +191,36 @@ public partial class ClassStoreTests
         Assert.False(reopened.CollectsSetAsideOf(Guid.NewGuid()));
     }
 
+    // A take-over's swap undone (the room didn't take this PC), with or
+    // without a lessons map in what was received: everything goes back, and
+    // this PC's own map is as it was, its lessons ran and collected as before.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LessonMap_ATakeOversSwapUndone_PutsThisPcsOwnMapBackWhole(bool receivedAMap)
+    {
+        MakeClass();
+        var own = Guid.NewGuid();
+        _store.RememberLesson(own, Turma);
+        var staging = _store.Staging;
+        Directory.CreateDirectory(Path.Combine(staging.Files, "Outra"));
+        if (receivedAMap)
+        {
+            var received = new ClassStore(staging.Files, staging.Index, _bin, () => _now, _log.Add, lessonsPath: staging.Lessons);
+            received.RememberLesson(Guid.NewGuid(), "Outra");
+        }
+        Assert.Equal(receivedAMap, File.Exists(staging.Lessons));
+
+        var putBack = _store.SwapIn("antes de 20-10-2026 1330").Undo();
+
+        Assert.True(putBack.All, string.Join("\n", _log));
+        var reopened = NewStore(_bin);
+        Assert.Equal(new[] { Turma }, reopened.ClassNames());
+        Assert.True(reopened.RanLesson(own));
+        Assert.True(reopened.CollectsSetAsideOf(own));
+        Assert.Equal(Turma, reopened.TurmaOfLesson(own));
+    }
+
     [Fact]
     public void LessonMap_ACorruptFile_IsSetAside_AndTheMapStartsEmpty()
     {

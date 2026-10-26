@@ -40,7 +40,7 @@ public sealed partial class ClassFolderSync
         {
             // Its Session isn't on this lesson (yet): the files in its folder wait.
             _listings.TryRemove(key, out _);
-            var aside = SetAsideOf(listing, lesson);
+            var aside = SetAsideOf(key, listing, lesson);
             if (aside.Count > 0)
             {
                 await CopyingAsync(() => CollectSetAside(machine, aside, failures, allowance), token).ConfigureAwait(false);
@@ -56,7 +56,7 @@ public sealed partial class ClassFolderSync
             return;
         }
         _listings[key] = (lesson.LessonId, first.OnPc);
-        if (first.Work.Count == 0 && SetAsideOf(listing, lesson).Count == 0)
+        if (first.Work.Count == 0 && SetAsideOf(key, listing, lesson).Count == 0)
         {
             Record(lesson.Turma, key, first.InSync);
             SaveIndex(lesson.Turma);
@@ -99,7 +99,7 @@ public sealed partial class ClassFolderSync
             }
             _listings[key] = (lesson.LessonId, second.OnPc);
             Record(lesson.Turma, key, second.InSync);
-            var aside = SetAsideOf(fresh, lesson);
+            var aside = SetAsideOf(key, fresh, lesson);
             left = await Task.Run(() =>
             {
                 CopyingStarts?.Invoke(machine);
@@ -161,16 +161,20 @@ public sealed partial class ClassFolderSync
         return true;
     }
 
-    // The files of a listing that the PC set aside for lessons that are over,
-    // by lesson: only lessons this PC knows, or long abandoned (CollectSetAside),
-    // so a PC with nothing else but another teacher PC's files is in sync
-    // without a copy turn.
-    private List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(ClassFolderClient.ListResult listing, ClassLesson lesson) =>
-        listing.Entries
+    // The files of a listing of the PC (by machine key) that it set aside for
+    // lessons that are over, by lesson: only lessons this PC knows, or long
+    // abandoned (CollectSetAside), so a PC with nothing else but another
+    // teacher PC's files is in sync without a copy turn. The unknown ones are
+    // noted as seen on that PC (NoteUnknown).
+    private List<IGrouping<Guid, ClassFolderEntry>> SetAsideOf(string key, ClassFolderClient.ListResult listing, ClassLesson lesson)
+    {
+        var lessons = listing.Entries
             .Where(entry => entry.LessonId != listing.CurrentLessonId && entry.LessonId != lesson.LessonId && entry.LessonId != Guid.Empty)
             .GroupBy(entry => entry.LessonId)
-            .Where(files => _store.CollectsSetAsideOf(files.Key) || LongAbandoned(files))
             .ToList();
+        NoteUnknown(key, lessons);
+        return lessons.Where(files => _store.CollectsSetAsideOf(files.Key) || LongAbandoned(key, files)).ToList();
+    }
 
     // What one listing of the PC needs: files already in sync, to record, and the
     // rest. Null, with the PC's status saying so, when the class's folder on this

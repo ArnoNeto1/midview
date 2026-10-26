@@ -15,9 +15,9 @@ public partial class ThumbnailPollerTests
     // the old lesson: the Agent gives the folder back and takes Midview's
     // download folder off the browsers (ClassLessonHandlerTests), and the
     // Session sets what the student saved there aside, kept. The same when
-    // this PC's lessons map lost that lesson (or another Windows account here
-    // ran it): a PC that never saw another home takes any lesson on that
-    // isn't its own for one that is over.
+    // this PC's lessons map lost that lesson: a Master that never saw another
+    // home takes any lesson on an Agent that keeps its own certificate as the
+    // home for one of its own, over.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -147,6 +147,7 @@ public partial class ThumbnailPollerTests
         Assert.Null(sync.EndOfLessonOver(heard, thisPc));
         Assert.Equal(unknown with { SavedAt = unknown.SavedAt + 1, Ended = true }, sync.EndOfLessonOver(unknown, thisPc));
         Assert.Null(sync.EndOfLessonOver(unknown, otherPc));
+        Assert.Null(sync.EndOfLessonOver(unknown, thisPc with { Thumbprint = rig.OtherMaster.Thumbprint })); // another account here
         Assert.Null(sync.EndOfLessonOver(unknown, null));
         Assert.Null(sync.EndOfLessonOver(here, thisPc));
 

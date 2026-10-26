@@ -123,7 +123,9 @@ public sealed partial class ClassFolderSyncTests
     // A PC whose Agent took this lesson once but follows another one now (a
     // teacher PC with the same certificate handed it a newer lesson): the
     // round asks the Agent again rather than waiting for its Session, and
-    // the PC's line says why it isn't in the lesson.
+    // the PC's line says why it isn't in the lesson. From then on it is sent
+    // the lesson at every round, as one that never took it (asking again
+    // waits AgentRecheckInterval), and its line keeps saying why.
     [Fact]
     public async Task APcThatLeftTheLessonItTook_IsAskedAgain_AndItsLineSaysWhy()
     {
@@ -137,11 +139,17 @@ public sealed partial class ClassFolderSyncTests
         var at = home.Lesson.SavedAt + 60;
         var theirs = new ClassLesson(at, Guid.NewGuid(), "3º B", at, Ended: false);
         Assert.True(ClassLessonOnAgents.Send(pc1.Machine, rig.Master, theirs, rig.AgentPort).Ok);
+        var rechecks = 0;
+        home.RecheckingAgent = _ => Interlocked.Increment(ref rechecks);
 
-        await home.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        for (var round = 0; round < 3; round++)
+        {
+            await home.RunRoundAsync(pc1.Machine, CancellationToken.None);
 
-        Assert.Equal(theirs, pc1.Agent.Current);
-        Assert.Equal(
-            (PcSyncState.Failed, $"{ClassLesson.KeptNewerText}: aula do 3º B"), (statuses[pc1.Name].State, statuses[pc1.Name].Detail));
+            Assert.Equal(theirs, pc1.Agent.Current);
+            Assert.Equal(
+                (PcSyncState.Failed, $"{ClassLesson.KeptNewerText}: aula do 3º B"), (statuses[pc1.Name].State, statuses[pc1.Name].Detail));
+        }
+        Assert.Equal(1, rechecks);
     }
 }

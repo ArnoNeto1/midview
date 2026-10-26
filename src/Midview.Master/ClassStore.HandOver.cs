@@ -244,15 +244,20 @@ public sealed partial class ClassStore
             var moves = new Moves(_log, MoveHook);
             try
             {
+                // A received store with no lessons map gets an empty one: the
+                // map in place is then always a recorded move, which an undo
+                // takes back before putting this PC's own map back (MergeOwn
+                // writes into the map in place).
+                if (!File.Exists(staging.Lessons))
+                {
+                    File.WriteAllText(staging.Lessons, "[]");
+                }
                 var aside = PutAside(moves, why);
                 if (Directory.Exists(staging.Index))
                 {
                     moves.Folder(staging.Index, IndexRootPath);
                 }
-                if (File.Exists(staging.Lessons))
-                {
-                    moves.File(staging.Lessons, _lessons.Path);
-                }
+                moves.File(staging.Lessons, _lessons.Path);
                 moves.Folder(staging.Files, FilesRootPath);
                 // This PC's own lessons, aside now, join the received ones:
                 // none it ran is forgotten (its undo puts its own map back).

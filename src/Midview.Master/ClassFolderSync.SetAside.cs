@@ -29,9 +29,10 @@ public sealed partial class ClassFolderSync
     // ClassStore.CollectsSetAsideOf) is left as it is, on the PC: with two
     // teacher PCs in the lab it is often the other one's, whose Master brings
     // its files in (SetAsideOf leaves it out).
-    // Once the newest of its files is older than UnknownLessonAge, no home is
-    // coming for them (this PC's own, from before its data was set up again,
-    // say): they are cleared, so they don't pile up on the PC.
+    // UnknownLessonAge after this PC first saw them on that PC, or after the
+    // newest of them was written if later, no home is coming for them (this
+    // PC's own, from before its data was set up again, say): they are
+    // cleared, so they don't pile up on the PC.
     private void CollectSetAside(
         KnownMachine machine, IReadOnlyList<IGrouping<Guid, ClassFolderEntry>> lessons, List<string> failures, Allowance allowance)
     {
@@ -44,7 +45,7 @@ public sealed partial class ClassFolderSync
 
             var lessonId = files.Key;
             var known = _store.CollectsSetAsideOf(lessonId);
-            if (!known && !LongAbandoned(files))
+            if (!known && !LongAbandoned(Key(machine), files))
             {
                 continue;
             }
@@ -62,14 +63,30 @@ public sealed partial class ClassFolderSync
     // Recycle Bin, which can take a moment per file on a lab PC's disk.
     private const int ClearPartSize = 1_000;
 
-    // How old the newest file a PC set aside for a lesson this PC doesn't know
-    // must be before it is cleared. That lesson's own date isn't known here
-    // (the lessons map hasn't got it), so the files' times stand for it.
+    // How long files a PC set aside for a lesson this PC doesn't know stay on
+    // it: from when this PC first saw them there (ClassSetAsideSightings), or
+    // from the newest of them if it was written later. That lesson's own date
+    // isn't known here (the lessons map hasn't got it), and a file's own time
+    // can be old from the start (copied from a USB stick or a zip).
     internal static readonly TimeSpan UnknownLessonAge = TimeSpan.FromDays(60);
 
-    // Whether the newest of those files is older than UnknownLessonAge.
-    private bool LongAbandoned(IEnumerable<ClassFolderEntry> files) =>
-        files.Max(entry => entry.LastWriteTicks) < new DateTimeOffset(_localNow()).UtcTicks - UnknownLessonAge.Ticks;
+    // When each PC's set-aside files of each unknown lesson were first seen.
+    private readonly ClassSetAsideSightings _sightings;
+
+    // The lessons of a PC's listing (by machine key) that this PC doesn't
+    // know, noted as seen there (ClassSetAsideSightings.Note).
+    private void NoteUnknown(string key, IEnumerable<IGrouping<Guid, ClassFolderEntry>> lessons) =>
+        _sightings.Note(key, lessons.Select(files => files.Key).Where(lessonId => !_store.CollectsSetAsideOf(lessonId)).ToList(), NowUtcTicks());
+
+    // Whether those files of an unknown lesson are past UnknownLessonAge on that PC.
+    private bool LongAbandoned(string key, IGrouping<Guid, ClassFolderEntry> files)
+    {
+        var now = NowUtcTicks();
+        var since = Math.Max(files.Max(entry => entry.LastWriteTicks), _sightings.FirstSeen(key, files.Key) ?? now);
+        return since < now - UnknownLessonAge.Ticks;
+    }
+
+    private long NowUtcTicks() => new DateTimeOffset(_localNow()).UtcTicks;
 
     // Exactly the files of the listing, so one the PC set aside after it waits for the next round.
     private void ClearSetAside(KnownMachine machine, Guid lessonId, List<ClassFolderEntry> files, List<string> failures)

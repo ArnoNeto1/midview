@@ -148,6 +148,8 @@ public sealed partial class ClassFolderSync : IDisposable
         _lessonPath = lessonPath ?? ClassLessonFileMaster.Path;
         _homePath = homePath ?? ClassHomeFileMaster.Path;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderSync: " + message));
+        _sightings = new ClassSetAsideSightings(
+            Path.Combine(Path.GetDirectoryName(store.LessonsMapPath) ?? string.Empty, "class-lessons-seen.json"), _log);
 
         _lesson = ClassLessonFileMaster.Read(_lessonPath) ?? ClassLesson.None(0);
         if (_lesson.IsOn)

@@ -9,30 +9,54 @@ using Xunit;
 // class deleted here, as before two teacher PCs.
 public sealed partial class ClassFolderSyncTests
 {
-    // Kept while the newest of its files is at most 60 days old, then
-    // cleared, without ever coming into a class.
+    // Kept until 60 days after the later of when this PC first saw them on
+    // that PC and the newest file's time, then cleared, without ever coming
+    // into a class: files that kept old dates (from a USB stick, a zip, the
+    // teacher's own material) aren't old at the first look. The first look is
+    // remembered across a Master closed and opened again.
     [Fact]
-    public async Task SetAsideFilesOfAnUnknownLesson_AreClearedOnceTheirNewestIsOver60DaysOld()
+    public async Task SetAsideFilesOfAnUnknownLesson_AreCleared60DaysAfterTheyWereFirstSeen()
     {
         using var rig = new ClassSyncRig();
         var sync = rig.NewSync();
         await sync.StartAsync(Turma);
         var pc1 = rig.Pcs[0];
-        var nowUtc = new DateTimeOffset(rig.Now).UtcDateTime;
-        var old = Guid.NewGuid();
-        var recent = Guid.NewGuid();
-        SetAside(pc1, old, "velho.txt", nowUtc.AddDays(-61));
-        SetAside(pc1, old, "mais-velho.txt", nowUtc.AddDays(-90));
-        SetAside(pc1, recent, "novo.txt", nowUtc.AddDays(-59));
-        SetAside(pc1, recent, "antigo.txt", nowUtc.AddDays(-200));
+        var day0 = new DateTimeOffset(rig.Now).UtcDateTime;
+        var start = rig.Now;
+        var old = Guid.NewGuid(); // old-dated files, first seen on day 0
+        var touched = Guid.NewGuid(); // the same, and one more written on day 10
+        var later = Guid.NewGuid(); // old-dated files, first seen on day 30
+        SetAside(pc1, old, "velho.txt", day0.AddDays(-200));
+        SetAside(pc1, touched, "antigo.txt", day0.AddDays(-200));
 
-        await rig.Rounds(sync, 2);
+        await sync.RunRoundAsync(pc1.Machine, CancellationToken.None);
+
+        Assert.Equal(2, pc1.Folder.List().Entries.Count(entry => entry.LessonId == old || entry.LessonId == touched));
+        Assert.Empty(pc1.Bin.FileNames());
+        SetAside(pc1, touched, "novo.txt", day0.AddDays(10));
+        rig.Now = start.AddDays(30);
+        SetAside(pc1, later, "outro.txt", day0.AddDays(-300));
+        await sync.RunRoundAsync(pc1.Machine, CancellationToken.None);
+        sync.Dispose(); // the Master closed
+
+        rig.Now = start.AddDays(61);
+        var reopened = rig.NewSync();
+        await reopened.StartAsync("3º B");
+        await reopened.RunRoundAsync(pc1.Machine, CancellationToken.None);
 
         var entries = pc1.Folder.List().Entries;
         Assert.DoesNotContain(entries, entry => entry.LessonId == old);
-        Assert.Equal(new[] { "antigo.txt", "novo.txt" }, entries.Where(entry => entry.LessonId == recent).Select(entry => entry.Path).Order());
-        Assert.Equal(new[] { "mais-velho.txt", "velho.txt" }, pc1.Bin.FileNames());
+        Assert.Equal(new[] { "antigo.txt", "novo.txt" }, entries.Where(entry => entry.LessonId == touched).Select(entry => entry.Path).Order());
+        Assert.Contains(entries, entry => entry.LessonId == later);
+        Assert.Equal(new[] { "velho.txt" }, pc1.Bin.FileNames());
+
+        rig.Now = start.AddDays(72);
+        await reopened.RunRoundAsync(pc1.Machine, CancellationToken.None);
+
+        Assert.DoesNotContain(pc1.Folder.List().Entries, entry => entry.LessonId == touched);
+        Assert.Contains(pc1.Folder.List().Entries, entry => entry.LessonId == later);
         Assert.Empty(rig.StoreFiles(Turma));
+        Assert.Empty(rig.StoreFiles("3º B"));
     }
 
     // A class deleted here ("Excluir"): what a PC set aside for one of its
