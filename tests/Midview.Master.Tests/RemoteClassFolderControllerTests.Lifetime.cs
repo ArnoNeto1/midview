@@ -100,6 +100,13 @@ public sealed partial class RemoteClassFolderControllerTests
                 // Stopped.
             }
         });
+        int AcceptedCount()
+        {
+            lock (accepted)
+            {
+                return accepted.Count;
+            }
+        }
         var port = ((IPEndPoint)hung.LocalEndpoint).Port;
         using var remote = new RemoteClassFolderController(
             certificates.Colleague, () => new ClassHome(certificates.Home.Thumbprint, "PROF-1", IPAddress.Loopback.ToString(), port, 1),
@@ -110,7 +117,14 @@ public sealed partial class RemoteClassFolderControllerTests
         try
         {
             await remote.PollAsync();
-            await Task.Delay(500); // a retry would have connected by now
+            // The accept loop runs on the pool, which a busy test run can hold back:
+            // the first connection is counted first, then a retry would have had time.
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (AcceptedCount() == 0 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+            await Task.Delay(500);
 
             lock (accepted)
             {
