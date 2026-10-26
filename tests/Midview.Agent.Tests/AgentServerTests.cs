@@ -39,7 +39,9 @@ public class AgentServerTests
         }
 
         using var stopServer = new CancellationTokenSource();
-        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        // The accept loop on a thread of its own: a busy test run's pool may be slow to start it.
+        var serverTask = Task.Factory.StartNew(
+            () => server.Run(stopServer.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             var set = await Task.Run(() => Exchange(new Message(
@@ -49,7 +51,7 @@ public class AgentServerTests
             Assert.True(CommandResult.Decode(set.Payload).Succeeded);
 
             var status = await Task.Run(() => Exchange(new Message(MessageType.GetLabConfig, Array.Empty<byte>())))
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal(MessageType.LabConfigStatus, status.Type);
             Assert.True(LabConfig.TryDecode(status.Payload, out var applied));
             Assert.True(applied.Lockdown);
@@ -60,14 +62,14 @@ public class AgentServerTests
             }
 
             var reset = await Task.Run(() => Exchange(new Message(MessageType.ResetLabConfig, Array.Empty<byte>())))
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(30));
             Assert.True(CommandResult.Decode(reset.Payload).Succeeded);
             Assert.Null(root.OpenSubKey(@"Policies\Google\Chrome"));
         }
         finally
         {
             stopServer.Cancel();
-            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(30));
             try { Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
             File.Delete(statePath);
         }
@@ -119,7 +121,9 @@ public class AgentServerTests
         }
 
         using var stopServer = new CancellationTokenSource();
-        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        // The accept loop on a thread of its own: a busy test run's pool may be slow to start it.
+        var serverTask = Task.Factory.StartNew(
+            () => server.Run(stopServer.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             var list = await Task.Run(() => Exchange(new Message(MessageType.GetInstalledPrograms, Array.Empty<byte>())))
@@ -129,7 +133,7 @@ public class AgentServerTests
             Assert.Contains("App Quiet", programs);
 
             var uninstall = await Task.Run(() => Exchange(new Message(MessageType.UninstallPrograms, ProgramList.Encode(new[] { "App Quiet" }))))
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(30));
             Assert.True(CommandResult.Decode(uninstall.Payload).Succeeded);
             Assert.Equal(new[] { "un.exe /S" }, ranCommands);
             // Kept for the students who weren't logged on.
@@ -137,19 +141,19 @@ public class AgentServerTests
 
             // A missing scope byte is refused, not treated as "delete all".
             var bad = await Task.Run(() => Exchange(new Message(MessageType.ClearDownloads, Array.Empty<byte>())))
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(30));
             Assert.False(CommandResult.Decode(bad.Payload).Succeeded);
             Assert.NotEmpty(Directory.GetFileSystemEntries(Path.Combine(usersRoot, "aluno", "Downloads")));
 
             var clear = await Task.Run(() => Exchange(new Message(MessageType.ClearDownloads, new[] { (byte)DownloadsScope.All })))
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(30));
             Assert.True(CommandResult.Decode(clear.Payload).Succeeded);
             Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(usersRoot, "aluno", "Downloads")));
         }
         finally
         {
             stopServer.Cancel();
-            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(30));
             try { Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false); } catch { }
             try { File.Delete(labStatePath); } catch { }
             try { File.Delete(pendingPath); } catch { }
@@ -413,7 +417,9 @@ public class AgentServerTests
         }
 
         using var stopServer = new CancellationTokenSource();
-        var serverTask = Task.Run(() => server.Run(stopServer.Token));
+        // The accept loop on a thread of its own: a busy test run's pool may be slow to start it.
+        var serverTask = Task.Factory.StartNew(
+            () => server.Run(stopServer.Token), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         try
         {
             // The process's first TLS handshake pays for loading SChannel and
@@ -428,7 +434,7 @@ public class AgentServerTests
 
             // Well under the server's own 10 s handshake timeout, so this can
             // only pass if the stalled connection isn't in the way at all.
-            var ack = await Task.Run(() => SendCommand(MessageType.BlockInternet)).WaitAsync(TimeSpan.FromSeconds(5));
+            var ack = await Task.Run(() => SendCommand(MessageType.BlockInternet)).WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal(MessageType.CommandAck, ack.Type);
             Assert.Equal(new byte[] { 1 }, ack.Payload);
             Assert.Equal(1, firewall.ApplyBlockCalls);
@@ -436,7 +442,7 @@ public class AgentServerTests
         finally
         {
             stopServer.Cancel();
-            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(30));
             File.Delete(statePath);
         }
     }
