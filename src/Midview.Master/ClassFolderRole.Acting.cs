@@ -73,29 +73,58 @@ public sealed partial class ClassFolderRole
             _latest = reading;
         }
 
-        // This PC handed the folders over itself: another PC keeps them, no reading gone wrong.
-        var sure = reading.Mode == ClassFolderMode.Remote && _handOver?.HandedOver == true;
-        switch (_confirmation.Take(reading, sure))
+        // The room names this PC the home: a hand-over of its at an older generation is behind it.
+        if (reading is { Mode: ClassFolderMode.Local, Home: { } named, FileRead: true })
         {
-            case ClassFolderMode.Local:
-                GoLocal();
-                break;
-            case ClassFolderMode.Remote:
-                await GoRemoteAsync().ConfigureAwait(false);
-                break;
-            default:
-                if (_confirmation.Confirming)
-                {
-                    RefreshSoon(_confirmWait);
-                }
-                break;
+            _handOver?.SeenAsHome(named.Generation);
+        }
+
+        if (_handOver is { } handOver && (handOver.IsBusy || reading.StartedAt < handOver.QuietSince))
+        {
+            // Ruling 24: a take-over runs, here or for a colleague's PC, or a copy
+            // sent hasn't settled: its answer must find this PC as it is (its host
+            // open). Nothing changes on a reading, nor on one begun before that was
+            // over (what the room said meanwhile); the hand-over says when it is
+            // over (Changed), and the room is asked again then.
+            if (!_heldForHandOver)
+            {
+                _log("A take-over of the class folders isn't over yet: this PC stays as it is until it is.");
+            }
+            _heldForHandOver = true;
+        }
+        else
+        {
+            _heldForHandOver = false;
+            // This PC handed the folders over itself: another PC keeps them, no reading gone wrong.
+            var sure = reading.Mode == ClassFolderMode.Remote && _handOver?.HandedOver == true;
+            switch (_confirmation.Take(reading, sure))
+            {
+                case ClassFolderMode.Local:
+                    GoLocal();
+                    break;
+                case ClassFolderMode.Remote:
+                    await GoRemoteAsync().ConfigureAwait(false);
+                    break;
+                default:
+                    if (_confirmation.Confirming)
+                    {
+                        RefreshSoon(_confirmWait);
+                    }
+                    break;
+            }
         }
 
         if (_confirmation.Acted == ClassFolderMode.Local)
         {
             lock (_lock)
             {
-                _lessonsOpen |= reading.Mode == ClassFolderMode.Local && reading.Asked > 0;
+                if (reading.Mode == ClassFolderMode.Local)
+                {
+                    // The room names this PC (or none) again: nothing held any more.
+                    _holding = false;
+                    _graceUntil = null;
+                }
+                _lessonsOpen |= reading.Asked > 0 && (reading.Mode == ClassFolderMode.Local || _holding);
             }
             OpenHostIfClosed();
         }
@@ -138,12 +167,42 @@ public sealed partial class ClassFolderRole
     }
 
     // Never while a lesson of this PC's is on that the room still follows: it
-    // stays Local (or becomes it, the first time) until that lesson ends.
+    // stays Local (or becomes it, the first time), holding: its pollers go on
+    // handing that lesson out (the Agents take a lesson set only from the home
+    // they keep), until it ends; then its end goes on being handed out for
+    // EndedGrace, to the PCs that were busy or off (Ruling 17, Task 7 fix round 1).
     private async Task GoRemoteAsync()
     {
+        if (Holding() && !_sync.Lesson.IsOn)
+        {
+            var now = Environment.TickCount64;
+            if (_graceUntil is not { } until)
+            {
+                lock (_lock)
+                {
+                    _graceUntil = now + (long)EndedGrace.TotalMilliseconds;
+                }
+                _log($"The lesson this PC kept the class folders for is over: its end is still handed out for {EndedGrace}.");
+                RefreshSoon(EndedGrace);
+                return;
+            }
+            if (now < until)
+            {
+                return;
+            }
+        }
+
         if (await _sync.StandDownForAnotherHomeAsync().ConfigureAwait(false) is { } on)
         {
-            _log($"Another PC keeps the class folders, but the lesson of {on.Turma} is still on here: this PC keeps them until it ends.");
+            if (!Holding())
+            {
+                _log($"Another PC keeps the class folders, but the lesson of {on.Turma} is still on here: this PC keeps them until it ends.");
+            }
+            lock (_lock)
+            {
+                _holding = true;
+                _graceUntil = null;
+            }
             if (_confirmation.Acted is null)
             {
                 GoLocal();
@@ -161,13 +220,17 @@ public sealed partial class ClassFolderRole
             _remote = remote;
             _mode = ClassFolderMode.Remote;
             _lessonsOpen = false;
+            _holding = false;
+            _graceUntil = null;
         }
         host?.Dispose();
         _confirmation.Acting(ClassFolderMode.Remote);
         _log($"Another PC keeps the class folders ({_latest?.Home?.Name}): this PC works them through it.");
     }
 
-    // Ruling 3: only while this PC acts Local; logged by the host when the port can't be had.
+    // Ruling 3: only while this PC acts Local; logged by the host when the
+    // port can't be had, and tried again after HostRetryWait (the port a host
+    // closed a moment ago, after a quick switch back, may not be free yet).
     private void OpenHostIfClosed()
     {
         lock (_lock)
@@ -178,6 +241,11 @@ public sealed partial class ClassFolderRole
             }
         }
         var host = _openHost();
+        if (host is null)
+        {
+            RefreshSoon(HostRetryWait);
+            return;
+        }
         lock (_lock)
         {
             if (_host is null && _mode == ClassFolderMode.Local && !_disposed)
@@ -186,7 +254,15 @@ public sealed partial class ClassFolderRole
                 return;
             }
         }
-        host?.Dispose();
+        host.Dispose();
+    }
+
+    private bool Holding()
+    {
+        lock (_lock)
+        {
+            return _holding;
+        }
     }
 
     private ClassLesson? ReadAgentsLesson()

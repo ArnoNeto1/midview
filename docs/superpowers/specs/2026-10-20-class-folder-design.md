@@ -358,9 +358,9 @@ settled what this section left open; the reviews changed some of it:
   lesson, only with "Guardar as pastas das turmas neste computador"; nor
   does one whose own generation is older than a home it has seen.
 - **Stragglers.** A student PC that was off during a take-over still names
-  the old home. The home's next start, and its pollers as each PC comes
-  online, claim it back with the home's generation; an Agent refuses that
-  while it follows a lesson of the home it names.
+  the old home. The home's next start, and the home's Master again as each
+  PC comes online, claim it back with the home's generation; an Agent refuses
+  that while it follows a lesson of the home it names.
 - **Busy Agents.** An Agent waits at most 10 seconds for its lesson lock; then
   it answers "busy" and applies nothing later. The Master asks a busy Agent
   once more at a start, and hands it a lesson again about 10 seconds later.
@@ -389,12 +389,16 @@ settled what this section left open; the reviews changed some of it:
   and working the home's only when two readings in a row say so (at once
   when the Agents name it as the home, or it handed the folders over). It never
   stands down while a lesson of its own is on that the room still follows
-  (it keeps the folders, and its own window, until that lesson ends); a
-  lesson of its own that the room left behind is ended on that PC alone,
-  keeping the files. The listener for colleagues is open only while the PC
-  is the home or no PC is; the window switches by itself after a take-over,
-  on both PCs. The Master doesn't close while a take-over runs, and says
-  once, in the window, where classes set aside by a take-over are.
+  (it keeps the folders, and its own window, until that lesson ends, and
+  hands that lesson's end to the PCs a few minutes more); a lesson of its own
+  that the room left behind is ended on that PC alone, keeping the files.
+  Nothing changes while a take-over isn't over, on either PC: the old home
+  keeps its listener open until the PC taking the folders over says how it
+  went (or a few minutes pass). The listener for colleagues is open only
+  while the PC is the home or no PC is; the window switches by itself after a
+  take-over, on both PCs. The Master doesn't close while a take-over runs
+  (unless Windows is shutting down), and its window says, whenever it is
+  opened, where classes set aside by a take-over are.
 - **Firewall.** The teacher setup adds the rule `MidviewProfessorPastaDaTurma`
   (TCP 28903, this program only, local network only) with the invite's
   rules, and removes it with them. The Master never opens the firewall

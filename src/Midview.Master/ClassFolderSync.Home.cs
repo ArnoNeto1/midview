@@ -117,7 +117,10 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // Whether the newest lesson the room follows says ours is over there.
+    // Whether the newest lesson the room follows says ours is over there. The
+    // two SavedAt come from two teacher PCs' clocks (another home's lesson),
+    // so clocks far apart could get this wrong; as with generations (Ruling 9),
+    // a lab's teacher PCs are taken to agree within the time between lessons.
     private static bool LeftBehind(ClassLesson ours, ClassLesson? newest) =>
         newest is not null && newest.SavedAt > ours.SavedAt && (newest.LessonId != ours.LessonId || !newest.IsOn);
 

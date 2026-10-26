@@ -1,12 +1,25 @@
+using System.IO;
+using Midview.Protocol;
+
 namespace Midview.Master;
 
 // ClassFolderHandOver: what the Master goes by around a take-over (Task 7).
-// While one runs, here or for a colleague's PC (taking the folders over,
-// standing down for it, taking the room back), closing the Master would leave
-// it half done (a take-over goes on for minutes after its copy is in place),
-// so the Master waits for IsBusy to go. Once one is over, whatever it came
-// to, Changed tells ClassFolderRole to ask the room which PC keeps the
-// folders now, so both PCs swap modes without waiting for the next reading.
+//
+// IsBusy: a take-over runs on this PC, a hand-over or a take-back runs for a
+// colleague's PC, or a copy this PC sent hasn't settled yet. Not settled: the
+// PC taking the folders over hasn't said how it went (RemoteHandOverDone, or
+// RemoteTakeBack when it can't tell), and its answer must find this PC's host
+// open even while the room's Agents already name it (Ruling 24), for up to
+// SettleWait. Meanwhile closing the Master would leave a take-over half done,
+// and ClassFolderRole neither stands down nor closes the host. Once one is
+// over, whatever it came to, Changed tells the role to ask the room which PC
+// keeps the folders now.
+//
+// HandedOver: the PC this one handed the folders over to (it stood down for
+// it), kept on file too, so a Master opened again remembers. It no longer
+// counts once this PC takes the folders over again, or the room names this PC
+// the home above the generation it handed them over at (SeenAsHome: an
+// undecided take-over of its own the room later decided for it, say).
 public sealed partial class ClassFolderHandOver
 {
     // What the asides a take-over leaves beside the classes are named after:
@@ -15,17 +28,139 @@ public sealed partial class ClassFolderHandOver
 
     internal const string PassedToWhyStart = "passadas para ";
 
+    // How long the PC taking the folders over may take from the copy's end to
+    // saying how it went: its claims and the Agents asked again after a lost
+    // answer, each bounded by its network wait, and the lost answer's wait.
+    internal static TimeSpan DefaultSettleWait => 2 * DefaultNetworkWait + DefaultLostAnswerWait;
+
+    // Copies sent and not settled, by the thumbprint of the PC taking them:
+    // which copy (a newer one to the same PC replaces it). Under _settling.
+    private readonly object _settling = new();
+    private readonly Dictionary<string, long> _unsettled = new(StringComparer.OrdinalIgnoreCase);
+    private long _copies;
+
+    // The PC this one handed the folders over to (as the Agents recorded it,
+    // at its generation then); null for none. Written under _giving.
+    private ClassHome? _handedOverTo;
+
+    // When a take-over, hand-over, take-back or copy last stopped keeping this PC busy (Environment.TickCount64).
+    private long _quietSince;
+
     // Raised (on a background thread) once a take-over of this PC's is over,
-    // or once this PC stood down for a colleague's or took the room back.
+    // once a colleague's PC said how its take-over went (or never did), and
+    // once a copy settled by itself.
     public event Action? Changed;
 
-    // A take-over runs on this PC, or a hand-over or a take-back for a colleague's.
-    public bool IsBusy => Volatile.Read(ref _taking) == 1 || _giving.CurrentCount == 0;
+    public bool IsBusy => Volatile.Read(ref _taking) == 1 || _giving.CurrentCount == 0 || AnyUnsettled();
 
-    // In this run, this PC handed the folders over to a colleague's PC (it
-    // stood down for it) and hasn't taken them over since: the room keeps
+    // When the last of those ended (Environment.TickCount64; 0 before any): a
+    // reading of the room begun before then says what the room said meanwhile
+    // (ClassFolderRole doesn't go by it).
+    public long QuietSince => Interlocked.Read(ref _quietSince);
+
+    // This PC handed the folders over, and that still counts: the room keeps
     // another PC as the home, as no reading gone wrong would say (ClassFolderRole).
-    public bool HandedOver => _handedOver;
+    public bool HandedOver => Volatile.Read(ref _handedOverTo) is not null;
+
+    // DefaultSettleWait, or a test's.
+    internal TimeSpan SettleWait { get; set; } = DefaultSettleWait;
+
+    // The room names this PC the home at that generation (ClassFolderRole, from
+    // its readings): a hand-over at an older one is behind it.
+    public void SeenAsHome(long generation)
+    {
+        if (HandedOverStanding().To is { } to && generation > to.Generation)
+        {
+            _log($"The room names this PC the class folders' home again (generation {generation}): "
+                + $"its hand-over to {to.Name} no longer counts.");
+            KeepHandedOver(null);
+        }
+    }
+
+    // The whole copy went to that PC (before its last answer goes, so it can't
+    // claim the Agents first): not settled until it says how it went, or SettleWait.
+    private void CopySent(string thumbprint)
+    {
+        long copy;
+        lock (_settling)
+        {
+            copy = ++_copies;
+            _unsettled[thumbprint] = copy;
+        }
+        var wait = SettleWait;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(wait).ConfigureAwait(false);
+            bool expired;
+            lock (_settling)
+            {
+                expired = _unsettled.TryGetValue(thumbprint, out var still) && still == copy && _unsettled.Remove(thumbprint);
+            }
+            if (expired)
+            {
+                _log("A colleague's PC that took a copy of the class folders never said how its take-over went.");
+                Quiet();
+            }
+        });
+    }
+
+    // That PC said how its take-over went (or a copy to it couldn't end): settled, whatever it said.
+    private void Settled(string thumbprint)
+    {
+        lock (_settling)
+        {
+            _unsettled.Remove(thumbprint);
+        }
+        Quiet();
+    }
+
+    // Something that kept this PC busy ended: from now on, readings count again, and the room is asked afresh.
+    private void Quiet()
+    {
+        Interlocked.Exchange(ref _quietSince, Environment.TickCount64);
+        RaiseChanged();
+    }
+
+    private bool AnyUnsettled()
+    {
+        lock (_settling)
+        {
+            return _unsettled.Count > 0;
+        }
+    }
+
+    // Kept in memory and on file (this field covers a file that couldn't be written).
+    private void KeepHandedOver(ClassHome? to)
+    {
+        Volatile.Write(ref _handedOverTo, to);
+        try
+        {
+            ClassHomeFileMaster.WriteHandedOverTo(to, _homePath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"Which PC this one handed the class folders over to could not be saved: {ex.Message}");
+        }
+    }
+
+    // The hand-over that counts, as this run knows it or as the file has it
+    // (null: none); Unread when the file can't be read just now.
+    private (ClassHome? To, bool Unread) HandedOverStanding()
+    {
+        if (Volatile.Read(ref _handedOverTo) is { } known)
+        {
+            return (known, false);
+        }
+        try
+        {
+            return (ClassHomeFileMaster.ReadHandedOverTo(_homePath), false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log($"Which PC this one handed the class folders over to could not be read: {ex.Message}");
+            return (null, true);
+        }
+    }
 
     private void RaiseChanged()
     {

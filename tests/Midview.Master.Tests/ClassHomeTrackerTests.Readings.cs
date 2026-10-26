@@ -38,13 +38,35 @@ public sealed partial class ClassHomeTrackerTests
         lock (readings)
         {
             Assert.Equal(3, readings.Count);
-            Assert.Equal(new ClassHomeReading(null, ClassFolderMode.Local, 0), readings[0]);
-            Assert.Equal(new ClassHomeReading(null, ClassFolderMode.Local, 3), readings[1]);
+            Assert.Equal(new ClassHomeReading(null, ClassFolderMode.Local, 0), readings[0] with { StartedAt = 0 });
+            Assert.Equal(new ClassHomeReading(null, ClassFolderMode.Local, 3), readings[1] with { StartedAt = 0 });
+            Assert.True(readings[0].StartedAt > 0 && readings[0].StartedAt <= readings[1].StartedAt && readings[1].StartedAt <= readings[2].StartedAt);
             Assert.Equal(ClassFolderMode.Remote, readings[2].Mode);
             Assert.Equal(OtherPc, readings[2].Home?.Name);
             Assert.Equal(2, readings[2].Asked);
             Assert.Equal(tracker.Home, readings[2].Home);
         }
+    }
+
+    // Whether this PC's class-home.json was read for it (Fix round 1, minor 1):
+    // missing is read (none of it); held open by another program is not.
+    [Fact]
+    public async Task AReading_SaysWhetherThisPcsFileWasRead()
+    {
+        using var rig = new ClassSyncRig(homes: 1, pcs: 1);
+        using var tracker = NewTracker(rig);
+        var readings = new List<ClassHomeReading>();
+        tracker.Refreshed += reading => readings.Add(reading);
+
+        await tracker.RefreshAsync();
+        ClassHomeFileMaster.Write(Older, rig.HomePath);
+        await tracker.RefreshAsync();
+        using (new FileStream(rig.HomePath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await tracker.RefreshAsync();
+        }
+
+        Assert.Equal(new[] { true, true, false }, readings.Select(reading => reading.FileRead));
     }
 
     // Raised after Changed, so a handler of either sees the home already taken.

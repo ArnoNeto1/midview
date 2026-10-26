@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using Midview.Master;
 using Midview.Protocol;
@@ -16,28 +18,48 @@ public partial class ThumbnailPollerTests
         new(ClassSyncRig.MachineName, ClassFolderRemote.Port, TakeOver: true, HomeGeneration);
 
     [Theory]
-    [InlineData("PROF-2", 4_000, true)] // another PC, older: taken back
-    [InlineData(ClassSyncRig.MachineName, 4_000, true)] // this PC at an older generation: brought up to it
-    [InlineData("PROF-2", 6_000, false)] // another PC, newer: left as it is (this PC isn't the home any more)
-    [InlineData("PROF-2", HomeGeneration, false)] // the same generation: left as it is
-    public async Task AnAgentKeepingAnOlderHome_IsClaimed_AsItsMachineAnswers(string keeps, long at, bool claimed)
+    [InlineData("PROF-2")] // another PC, older: taken back
+    [InlineData(ClassSyncRig.MachineName)] // this PC at an older generation: brought up to it
+    public async Task AnAgentKeepingAnOlderHome_IsClaimed_AsItsMachineAnswers(string keeps)
     {
         using var rig = new ClassSyncRig(pcs: 1, homes: 1);
         var pc = rig.Pcs[0];
-        ClaimFor(rig, pc, keeps == ClassSyncRig.MachineName ? rig.Master : rig.OtherMaster, keeps, at);
+        ClaimFor(rig, pc, keeps == ClassSyncRig.MachineName ? rig.Master : rig.OtherMaster, keeps, HomeGeneration - 1_000);
         using var poller = new ThumbnailPoller(pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classHomeClaim: HomeClaim);
 
+        poller.Start();
+
+        await WaitUntil(() => pc.Agent.CurrentHome?.Generation == HomeGeneration);
+        Assert.Equal(ClassSyncRig.MachineName, pc.Agent.CurrentHome!.Name);
+        Assert.Equal(rig.Master.Thumbprint, pc.Agent.CurrentHome.Thumbprint, ignoreCase: true);
+    }
+
+    // Only an older home is claimed: one at least as new isn't even asked (the
+    // Agent would refuse such a take-over anyway, which is why this counts the
+    // claims that reach it rather than what it keeps afterwards).
+    [Theory]
+    [InlineData(HomeGeneration - 1_000, true)]
+    [InlineData(HomeGeneration + 1_000, false)] // another PC, newer: this PC isn't the home any more
+    [InlineData(HomeGeneration, false)]
+    public async Task OnlyAnAgentKeepingAnOlderHome_IsSentAClaim(long at, bool claimed)
+    {
+        using var session = new LoopbackSession();
+        using var agent = new HomeKeepingAgent(
+            session.MasterCertificate, new ClassHome(new string('A', 40), "PROF-2", "127.0.0.1", ClassFolderRemote.Port, at));
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint }, session.MasterCertificate, session.Port, agent.Port,
+            agentRetryInterval: TimeSpan.Zero, classHomeClaim: HomeClaim);
+
+        await ThreeThumbnails(poller);
+
+        Assert.True(agent.HomesAsked > 0);
         if (claimed)
         {
-            poller.Start();
-            await WaitUntil(() => pc.Agent.CurrentHome?.Generation == HomeGeneration);
-            Assert.Equal(ClassSyncRig.MachineName, pc.Agent.CurrentHome!.Name);
-            Assert.Equal(rig.Master.Thumbprint, pc.Agent.CurrentHome.Thumbprint, ignoreCase: true);
+            Assert.True(agent.Claims > 0);
         }
         else
         {
-            await ThreeThumbnails(poller);
-            Assert.Equal((keeps, at), (pc.Agent.CurrentHome!.Name, pc.Agent.CurrentHome.Generation));
+            Assert.Equal(0, agent.Claims);
         }
     }
 
@@ -91,5 +113,78 @@ public partial class ThumbnailPollerTests
     {
         var (ok, detail) = ClassFolderClient.SetLesson(pc.Machine, rig.OtherMaster, lesson, rig.AgentPort);
         Assert.True(ok, detail);
+    }
+
+    // An Agent that keeps the home it is given, counts the questions about it
+    // and the claims that reach it (refusing them), and says yes to the rest.
+    private sealed class HomeKeepingAgent : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate =
+            SelfSignedCertificate.Create("agent-under-test");
+        private int _homesAsked;
+        private int _claims;
+
+        public HomeKeepingAgent(System.Security.Cryptography.X509Certificates.X509Certificate2 masterCertificate, ClassHome home)
+        {
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            var masters = new TrustStore(new[] { masterCertificate.Thumbprint });
+            new Thread(() =>
+            {
+                while (true)
+                {
+                    TcpClient client;
+                    try
+                    {
+                        client = _listener.AcceptTcpClient();
+                    }
+                    catch (Exception)
+                    {
+                        return; // Dispose stopped the listener
+                    }
+                    using (client)
+                    {
+                        try
+                        {
+                            using var channel = SecureChannel.AuthenticateAsServer(client, _certificate, masters);
+                            var message = channel.Receive();
+                            if (message.Type == MessageType.GetClassHome)
+                            {
+                                Interlocked.Increment(ref _homesAsked);
+                                channel.Send(new Message(MessageType.ClassHomeStatus, home.Encode()));
+                            }
+                            else if (message.Type == MessageType.ClaimClassHome)
+                            {
+                                Interlocked.Increment(ref _claims);
+                                channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(false, home.RefusalText)));
+                            }
+                            else
+                            {
+                                channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, string.Empty)));
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            // The poller gave up on this connection.
+                        }
+                    }
+                }
+            }) { IsBackground = true }.Start();
+        }
+
+        public int Port { get; }
+
+        public string Thumbprint => _certificate.Thumbprint;
+
+        public int HomesAsked => Volatile.Read(ref _homesAsked);
+
+        public int Claims => Volatile.Read(ref _claims);
+
+        public void Dispose()
+        {
+            _listener.Stop();
+            _certificate.Dispose();
+        }
     }
 }

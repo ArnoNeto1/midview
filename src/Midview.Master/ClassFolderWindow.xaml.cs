@@ -87,8 +87,7 @@ public partial class ClassFolderWindow : Window
         _handOver = handOver;
         NameTextBox.MaxLength = ClassLesson.MaxTurmaLength;
         TakeOverButton.Content = ClassFolderText.TakeOverButton;
-        AsideText.Text = asideNote ?? string.Empty;
-        AsideBorder.Visibility = asideNote is null ? Visibility.Collapsed : Visibility.Visible;
+        ShowAsideNote(asideNote);
 
         _shownLesson = _controller.Lesson;
         _shownClosed = _controller.HomeClosed;
@@ -112,6 +111,13 @@ public partial class ClassFolderWindow : Window
 
     // What the window works now (MainWindow starts and stops a remote one's polling by it).
     internal IClassFolderController Controller => _controller;
+
+    // Where classes a take-over left aside are, as read again (MainWindow, after a take-over); null: nothing said.
+    public void ShowAsideNote(string? note)
+    {
+        AsideText.Text = note ?? string.Empty;
+        AsideBorder.Visibility = note is null ? Visibility.Collapsed : Visibility.Visible;
+    }
 
     // From now on, the window works controller (on the UI thread). With a
     // start, an end, a change to the list or a take-over running, once it is

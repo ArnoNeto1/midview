@@ -54,7 +54,7 @@ public sealed partial class ClassFolderHandOverTests
         Assert.True(ClassFolderClient.ClaimHome(
             rig.Pcs[0].Machine, rig.OtherMaster, new ClassHomeClaim(NewHome, ClassFolderRemote.Port, true, generation + 1), rig.AgentPort).Ok);
         Assert.True(lab.SendHandedOver(NewHome).Ok);
-        Assert.True(ClassHomeFileMaster.ReadHandedOver(rig.HomePath));
+        Assert.Equal((NewHome, generation + 1), (ClassHomeFileMaster.ReadHandedOverTo(rig.HomePath)?.Name, ClassHomeFileMaster.ReadHandedOverTo(rig.HomePath)?.Generation));
         var homes = lab.Homes();
         var reopened = new ClassFolderHandOver(
             rig.Store, lab.OldSync, rig.Master, OldHome, () => rig.Machines, machine => !rig.Offline.ContainsKey(machine.Name),
@@ -69,7 +69,8 @@ public sealed partial class ClassFolderHandOverTests
         var tookOver = await reopened.TakeOverUnreachableAsync(NewHome);
 
         Assert.True(tookOver.Ok, tookOver.Detail);
-        Assert.False(ClassHomeFileMaster.ReadHandedOver(rig.HomePath));
+        Assert.Null(ClassHomeFileMaster.ReadHandedOverTo(rig.HomePath));
+        Assert.False(reopened.HandedOver);
     }
 
     // A take-over that didn't happen says so too: which PC keeps the folders is asked again all the same.

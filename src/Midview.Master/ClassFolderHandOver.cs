@@ -178,6 +178,8 @@ public sealed partial class ClassFolderHandOver
         _homePort = homePort;
         _homePath = homePath ?? ClassHomeFileMaster.Path;
         _log = log ?? (message => System.Diagnostics.Trace.WriteLine("ClassFolderHandOver: " + message));
+        // A hand-over an earlier run made (one on a file unread now is read again when it matters).
+        _handedOverTo = HandedOverStanding().To;
     }
 
     // How far a take-over got, for what to say when it breaks off.
@@ -197,7 +199,9 @@ public sealed partial class ClassFolderHandOver
     public string MachineName => _machineName;
 
     // How long one read or write on the network may take during a hand-over.
-    internal TimeSpan NetworkWait { get; set; } = TimeSpan.FromMinutes(2);
+    internal static readonly TimeSpan DefaultNetworkWait = TimeSpan.FromMinutes(2);
+
+    internal TimeSpan NetworkWait { get; set; } = DefaultNetworkWait;
 
     // How many classes this PC has of its own now (they go aside in a take-over); 0 when that can't be read.
     public int OwnClassCount()
@@ -248,7 +252,7 @@ public sealed partial class ClassFolderHandOver
             }
             stage.Value = Stage.Claimed;
             KeepGeneration(claimed.Generation);
-            KeepHandedOver(false);
+            KeepHandedOver(null);
             _log($"This PC took the class folders over from {home}, which didn't answer, with generation {claimed.Generation}.");
             return new HandOverResult(true, ClassFolderText.TookOverUnreachable);
         },
@@ -306,7 +310,7 @@ public sealed partial class ClassFolderHandOver
                         _sync.EndTakeOver();
                     }
                     Volatile.Write(ref _taking, 0);
-                    RaiseChanged();
+                    Quiet();
                 }
             },
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -377,7 +381,7 @@ public sealed partial class ClassFolderHandOver
         }
         stage.Value = Stage.Claimed;
         KeepGeneration(claimed.Generation);
-        KeepHandedOver(false);
+        KeepHandedOver(null);
         _log($"This PC took the class folders over from {name} with generation {claimed.Generation}.");
 
         var text = new StringBuilder(ClassFolderText.TookOver(received.Classes, received.Files));

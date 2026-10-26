@@ -93,7 +93,17 @@ public sealed partial class ClassFolderHandOver
             return;
         }
         var classFiles = files.Count(file => file.WirePath.StartsWith(FilesPrefix, StringComparison.Ordinal));
-        channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, $"{classFiles} arquivos")));
+        // Not settled from before the last answer goes: that PC claims the Agents as soon as it has it.
+        CopySent(channel.RemoteThumbprint);
+        try
+        {
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, $"{classFiles} arquivos")));
+        }
+        catch (Exception)
+        {
+            Settled(channel.RemoteThumbprint); // it never had the whole copy
+            throw;
+        }
     }
 
     // The sender (its certificate's thumbprint, from the TLS channel) says it
@@ -112,23 +122,25 @@ public sealed partial class ClassFolderHandOver
     // come back. Not Ok otherwise, saying why in the teacher's words: nothing
     // changes. One at a time with a take-back (TakeBackAsync), which this PC
     // refuses once it stood down here.
+    // Whatever the answer, the copy that PC took has settled (ClassFolderHandOver.Busy.cs).
     internal async Task<(bool Ok, string Detail)> HandedOverAsync(string name, string senderThumbprint)
     {
-        (bool Ok, string Detail) answer;
-        await _giving.WaitAsync().ConfigureAwait(false);
         try
         {
-            answer = await HandOver(name, senderThumbprint).ConfigureAwait(false);
+            await _giving.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                return await HandOver(name, senderThumbprint).ConfigureAwait(false);
+            }
+            finally
+            {
+                _giving.Release();
+            }
         }
         finally
         {
-            _giving.Release();
+            Settled(senderThumbprint);
         }
-        if (answer.Ok)
-        {
-            RaiseChanged(); // stood down: this PC works the folders through the new home now
-        }
-        return answer;
     }
 
     // HandedOverAsync's work, under _giving.
@@ -162,7 +174,7 @@ public sealed partial class ClassFolderHandOver
             return (false, ClassFolderText.LetsGoAfterTheLesson(_machineName, lesson.Turma));
         }
 
-        KeepHandedOver(true);
+        KeepHandedOver(newHome);
         try
         {
             ClassHomeFileMaster.WriteLastOtherHome(newHome, _homePath);

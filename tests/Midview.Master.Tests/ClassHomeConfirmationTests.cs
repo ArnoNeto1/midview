@@ -93,6 +93,21 @@ public sealed class ClassHomeConfirmationTests
         Assert.False(confirmation.Confirming);
     }
 
+    // Fix round 1, minor 1: with this PC's class-home.json not read, the
+    // tracker can't tell that a newer home it saw outranks stragglers that still
+    // name this PC: such a Local is a reading like any other, two in a row.
+    [Fact]
+    public void BackToLocal_NamingThisPc_WithItsFileUnread_NeedsTwoReadings()
+    {
+        var confirmation = new ClassHomeConfirmation();
+        confirmation.Acting(ClassFolderMode.Remote);
+        var unread = new ClassHomeReading(ThisPc, ClassFolderMode.Local, 3, FileRead: false);
+
+        Assert.Null(confirmation.Take(unread));
+        Assert.True(confirmation.Confirming);
+        Assert.Equal(ClassFolderMode.Local, confirmation.Take(unread));
+    }
+
     // A Remote this PC knows is true (it handed the folders over itself) is taken at once.
     [Fact]
     public void ARemoteThisPcKnowsOf_IsTakenAtOnce()

@@ -30,7 +30,7 @@ public partial class MainWindow
     private ClassFolderWindow? _classWindow;
 
     // Where the classes a take-over left aside are (ClassFolderText.AsideNote),
-    // read once at the start, said in the window; null for none.
+    // read at the start and after every take-over, said in the window; null for none.
     private string? _classAsideNote;
 
     // Before the tiles: their pollers hand the lesson to each machine's Agent.
@@ -118,10 +118,11 @@ public partial class MainWindow
         window.Rebind(controller);
     }
 
-    // The folders beside the class folders that a take-over left (ClassStore.AsideFolders).
+    // The folders beside the class folders that a take-over left (ClassStore.AsideFolders), in the window too when open.
     private async Task ReadAsideNoteAsync()
     {
         var folders = await Task.Run(_classStore.AsideFolders);
         _classAsideNote = ClassFolderText.AsideNote(folders, Path.GetDirectoryName(ClassStore.DefaultFilesRoot) ?? string.Empty);
+        _classWindow?.ShowAsideNote(_classAsideNote);
     }
 }

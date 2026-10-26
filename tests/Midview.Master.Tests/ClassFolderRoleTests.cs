@@ -115,11 +115,14 @@ public sealed partial class ClassFolderRoleTests
 
     // Ruling 17: a PC whose lesson the room still follows keeps the folders (and
     // its own window, to end that lesson) until it ends; then it stands down.
+    // Meanwhile the lesson is still handed out (Fix round 1, minor 3: the
+    // Agents enforce the home on lesson sets), and once it ends its end goes on
+    // being handed out for EndedGrace, to the PCs that were busy or off.
     [Fact]
     public async Task ALessonOfThisPcTheRoomFollows_KeepsItLocal_UntilItEnds()
     {
         using var rig = new ClassSyncRig(homes: 3);
-        using var prof1 = new TeacherPc(rig, Prof1, rig.Master);
+        using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(2));
         await prof1.Sync.StartAsync(Turma);
         await prof1.Sync.EndAsync(EndChoice.Keep);
         // PC1 took another PC's take-over, and was off for this PC's start: its
@@ -139,15 +142,22 @@ public sealed partial class ClassFolderRoleTests
         Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
         Assert.Same(prof1.Local, prof1.Role.Controller);
         Assert.True(prof1.Sync.Lesson.IsOn);
-        Assert.Null(prof1.Role.LessonForPollers);
+        Assert.Equal(prof1.Sync.Lesson, prof1.Role.LessonForPollers);
+        Assert.Null(prof1.Role.HomeGeneration); // no straggler is taken back meanwhile
 
         await prof1.Sync.EndAsync(EndChoice.Keep);
+        var ended = prof1.Sync.Lesson;
         await prof1.Role.RefreshAndActAsync();
 
-        Assert.Equal(ClassFolderMode.Remote, prof1.Role.Mode);
+        Assert.Equal(ClassFolderMode.Local, prof1.Role.Mode);
+        Assert.Equal(ended, prof1.Role.LessonForPollers);
+        Assert.True(Listens(prof1.HostPort));
+
+        await Until(() => prof1.Role.Mode == ClassFolderMode.Remote); // the grace over, by itself
         Assert.IsType<RemoteClassFolderController>(prof1.Role.Controller);
         Assert.False(Listens(prof1.HostPort));
         Assert.Equal(ClassLesson.None(0), prof1.Sync.Lesson);
+        Assert.Null(prof1.Role.LessonForPollers);
     }
 
     // The toolbar's lesson: this PC's when Local; the home's when Remote, as the
@@ -224,11 +234,11 @@ public sealed partial class ClassFolderRoleTests
         }
     }
 
-    private static void ClaimEveryAgent(ClassSyncRig rig, X509Certificate2 master, string name, long generation)
+    private static void ClaimEveryAgent(ClassSyncRig rig, X509Certificate2 master, string name, long generation, bool takeOver = false)
     {
         foreach (var pc in rig.Pcs)
         {
-            Claim(rig, pc, master, name, generation);
+            Claim(rig, pc, master, name, generation, takeOver);
         }
     }
 

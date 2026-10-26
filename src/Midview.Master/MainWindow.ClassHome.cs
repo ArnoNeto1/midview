@@ -39,9 +39,18 @@ public partial class MainWindow
             AgentsLesson);
         // Raised on the role's own thread: only queued here.
         _classRole.Changed += () => Dispatcher.BeginInvoke(OnClassRoleChanged);
+        // A take-over over may have put classes aside here (on the hand-over's threads).
+        _classHandOver.Changed += () => Dispatcher.BeginInvoke(() => _ = ReadAsideNoteAsync());
+        if (Application.Current is { } app)
+        {
+            app.SessionEnding += (_, _) => _sessionEnding = true;
+        }
         _classRole.Start();
         _ = ReadAsideNoteAsync();
     }
+
+    // Windows signs out or shuts down: the Master closes, take-over or not.
+    private bool _sessionEnding;
 
     // What the pollers hand each machine's Agent (on their threads).
     private ClassLesson? LessonForPollers() => _classRole.LessonForPollers;
@@ -62,10 +71,12 @@ public partial class MainWindow
     // A take-over goes on for minutes after its copy is in place, on both
     // teacher PCs: closing now would leave it half done, so the Master stays
     // open until it ends (before the copy is in place, "Cancelar" in the
-    // window stops it).
+    // window stops it). Not when Windows signs out or shuts down: a message
+    // here would only hold that up, and a take-over cut off is one the PCs
+    // already settle (Rulings 17 to 21).
     private void OnWindowClosing(object? sender, CancelEventArgs e)
     {
-        if (_classHandOver.IsBusy)
+        if (_classHandOver.IsBusy && !_sessionEnding && !Dispatcher.HasShutdownStarted)
         {
             e.Cancel = true;
             MessageBox.Show(this, ClassFolderText.HandOverStillRunning, "Midview", MessageBoxButton.OK, MessageBoxImage.Information);

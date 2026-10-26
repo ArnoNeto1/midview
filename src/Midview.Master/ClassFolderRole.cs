@@ -5,16 +5,17 @@ namespace Midview.Master;
 
 // How this Master works the "Pasta da turma" ("Two teacher PCs in one lab",
 // docs/superpowers/specs/2026-10-20-class-folder-design.md; plan decision 8,
-// Rulings 1, 3, 9 and 17): as the class folders' home, or as a remote control
-// of the teacher PC that is. It goes by ClassHomeTracker's readings, acting on
-// a change only once two in a row say it (ClassHomeConfirmation), or at once
-// when the Agents name this PC as the home or this PC handed the folders over
-// itself (handOver.HandedOver), and keeps what goes with each mode:
+// Rulings 1, 3, 9, 17 and 24): as the class folders' home, or as a remote
+// control of the teacher PC that is. It goes by ClassHomeTracker's readings,
+// acting on a change only once two in a row say it (ClassHomeConfirmation), or
+// at once when the Agents name this PC as the home (its file read) or this PC
+// handed the folders over itself (handOver.HandedOver), and keeps what goes
+// with each mode:
 //
 // - Local (this PC is the home, or no PC is yet): the window works this PC's
 //   own store and sync (local); its ClassFolderHost serves them to colleagues'
 //   PCs (openHost: when the port can't be had, the host logs it and it is
-//   tried again at the next reading; the Master never opens the firewall); and
+//   tried again after HostRetryWait; the Master never opens the firewall); and
 //   the pollers hand the lesson to the Agents (LessonForPollers) and take back
 //   Agents that keep an older home (HomeGeneration), once a reading that asked
 //   an Agent said Local, and only while the last one says so.
@@ -25,8 +26,16 @@ namespace Midview.Master;
 //   it from that PC, the newer). Going Remote, this PC stands down
 //   (ClassFolderSync.StandDownForAnotherHomeAsync): never while a lesson of
 //   its own is on that the room's Agents still follow, which keeps it Local,
-//   so that lesson can still be ended here (Ruling 17); a lesson of its own
-//   the room left behind is ended here first.
+//   holding, so that lesson can still be ended here (Ruling 17): its pollers
+//   go on handing it out, and its end too for EndedGrace once it is over; a
+//   lesson of its own the room left behind is ended here first.
+//
+// While a take-over isn't over (handOver.IsBusy: one runs here, a hand-over or
+// a take-back runs for a colleague's PC, or a copy sent hasn't settled), no
+// reading changes anything: this PC neither stands down nor closes its host,
+// which the PC taking the folders over must still reach (Ruling 24). A reading
+// naming this PC the home above the generation it handed the folders over at
+// voids that hand-over (handOver.SeenAsHome).
 //
 // Readings are acted on one at a time, in order, on a thread of their own.
 // A change not confirmed yet asks for another reading after confirmWait, and
@@ -40,6 +49,13 @@ namespace Midview.Master;
 public sealed partial class ClassFolderRole : IDisposable
 {
     public static readonly TimeSpan DefaultConfirmWait = TimeSpan.FromSeconds(3);
+
+    // How long the end of a lesson this PC held the folders for is still handed
+    // out (Ruling 17): the pollers' wait after a refusal, and a minute of polls.
+    public static readonly TimeSpan DefaultEndedGrace = ThumbnailPoller.DefaultAgentRetryInterval + TimeSpan.FromMinutes(1);
+
+    // After the host couldn't listen, how soon it is tried again.
+    public static readonly TimeSpan DefaultHostRetryWait = TimeSpan.FromSeconds(5);
 
     // After the first machine of the run answers, how long until the room is
     // asked: a few more answer meanwhile, and are asked too.
@@ -78,6 +94,15 @@ public sealed partial class ClassFolderRole : IDisposable
     private bool _lessonsOpen;
     private ClassLesson? _homesLesson;
     private bool _disposed;
+
+    // Local only for a lesson of this PC's the room still follows (Ruling 17),
+    // and, once it ended, until when its end is still handed out
+    // (Environment.TickCount64; null: not ended yet). Under _lock.
+    private bool _holding;
+    private long? _graceUntil;
+
+    // The last reading was held for a take-over not over yet (only the acting thread uses it).
+    private bool _heldForHandOver;
 
     // When the next refresh asked for (RefreshSoon) begins (Environment.TickCount64;
     // long.MaxValue: none waits). Under _lock.
@@ -172,18 +197,24 @@ public sealed partial class ClassFolderRole : IDisposable
     }
 
     // This PC's generation as the home, which the pollers claim stragglers
-    // with (null while it isn't the home, or doesn't hand anything out): a
-    // Local reading with a home is this PC's, at the newest generation the room keeps for it.
+    // with (null while it isn't the home, or doesn't hand anything out, or only
+    // holds the folders for its lesson): a Local reading with a home is this
+    // PC's, at the newest generation the room keeps for it.
     public long? HomeGeneration
     {
         get
         {
             lock (_lock)
             {
-                return HandsOutLocked() && _latest?.Home is { } home ? home.Generation : null;
+                return HandsOutLocked() && _latest is { Mode: ClassFolderMode.Local, Home: { } home } ? home.Generation : null;
             }
         }
     }
+
+    // DefaultEndedGrace and DefaultHostRetryWait, or a test's.
+    internal TimeSpan EndedGrace { get; init; } = DefaultEndedGrace;
+
+    internal TimeSpan HostRetryWait { get; init; } = DefaultHostRetryWait;
 
     // The lesson under the toolbar button: this PC's own, or, Remote, the home's.
     public ClassLesson ShownLesson
@@ -309,8 +340,9 @@ public sealed partial class ClassFolderRole : IDisposable
         remotes.ForEach(remote => remote.Dispose());
     }
 
-    // Under _lock.
-    private bool HandsOutLocked() => _mode == ClassFolderMode.Local && _latest?.Mode == ClassFolderMode.Local && _lessonsOpen;
+    // Under _lock. Also while holding for a lesson the room still follows.
+    private bool HandsOutLocked() =>
+        _mode == ClassFolderMode.Local && _lessonsOpen && (_latest?.Mode == ClassFolderMode.Local || _holding);
 
     // What Changed is about.
     private (ClassFolderMode?, IClassFolderController, ClassLesson) Seen() => (Mode, Controller, ShownLesson);

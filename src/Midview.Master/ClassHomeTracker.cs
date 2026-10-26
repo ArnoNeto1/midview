@@ -21,8 +21,13 @@ public enum ClassFolderMode
 
 // What one refresh of ClassHomeTracker found: the home and the mode, as Home
 // and Mode were then, and how many online Agents it asked (none: no machine
-// was on, so it found nothing out, whatever it says).
-public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int Asked);
+// was on, so it found nothing out, whatever it says). FileRead: whether this
+// PC's class-home.json could be read for it (a missing one can); when not,
+// neither this PC's generation nor the last home it saw counted (Rulings 12
+// and 22), so a Local naming this PC may come from stragglers alone.
+// StartedAt: when the refresh began asking (Environment.TickCount64), so a
+// reading that says what the room said before something changed is told apart.
+public sealed record ClassHomeReading(ClassHome? Home, ClassFolderMode Mode, int Asked, bool FileRead = true, long StartedAt = 0);
 
 // Which teacher PC keeps the class folders (plan decision 8, Ruling 9): what
 // the room's online Agents say (MessageType.GetClassHome), asked every
@@ -116,6 +121,7 @@ public sealed class ClassHomeTracker : IDisposable
         await _refreshing.WaitAsync().ConfigureAwait(false);
         try
         {
+            var startedAt = Environment.TickCount64;
             // In the order they arrive.
             var answers = new ConcurrentQueue<ClassHome?>();
             var online = Machines().Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(machine)).ToList();
@@ -145,7 +151,7 @@ public sealed class ClassHomeTracker : IDisposable
             {
                 RememberOtherHome(home!);
             }
-            reading = new ClassHomeReading(state.Home, state.Mode, online.Count);
+            reading = new ClassHomeReading(state.Home, state.Mode, online.Count, fileRead, startedAt);
         }
         finally
         {

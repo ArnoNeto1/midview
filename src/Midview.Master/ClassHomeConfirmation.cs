@@ -7,8 +7,10 @@ namespace Midview.Master;
 // a moment shows it, renamed, as another PC: Task 3's note). The first
 // reading that says Local is taken at once: a Master starts with nothing to
 // undo (no host open, no lesson handed out); and so is one that names this PC
-// as the home: the Agents' own word, never a reading gone wrong (this PC took
-// the folders over, and its window is its own at once). Remote is never
+// as the home, with this PC's file read: the Agents' own word, never a reading
+// gone wrong (this PC took the folders over, and its window is its own at
+// once). With the file unread, stragglers naming this PC could outvote the
+// newer home it saw: two readings, as any change. Remote is never
 // taken from one, unless the role is sure of it (this PC handed the folders
 // over itself).
 //
@@ -43,7 +45,7 @@ internal sealed class ClassHomeConfirmation
             _count = 0;
             return null;
         }
-        if (reading.Mode == ClassFolderMode.Local && (Acted is null || reading.Home is not null))
+        if (reading.Mode == ClassFolderMode.Local && (Acted is null || (reading.Home is not null && reading.FileRead)))
         {
             return ClassFolderMode.Local;
         }

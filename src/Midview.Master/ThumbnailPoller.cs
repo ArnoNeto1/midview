@@ -22,7 +22,7 @@ public sealed class ThumbnailPoller : IDisposable
 
     // After a failed attempt at one of the Agent chores below (an Agent not
     // running); an answer, even "don't know", isn't asked for again.
-    private static readonly TimeSpan DefaultAgentRetryInterval = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan DefaultAgentRetryInterval = TimeSpan.FromMinutes(5);
 
     // After the Agent refused the class folder's lesson as busy with its
     // student's folders (ClassHomeClaim.BusyText): it took nothing and is

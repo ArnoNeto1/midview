@@ -12,11 +12,16 @@ public sealed partial class ClassFolderRoleTests
     // host listens on 127.0.0.1, on a port of its own that its claims carry
     // (the Agents keep it), and its remote controller reaches the home there
     // (the Agents keep the address a claim came from). Both of the rig's
-    // teachers are colleagues. confirmWait: a long one by default, so only the
-    // test's own refreshes are readings.
+    // teachers are colleagues. trackerInterval and confirmWait: long ones by
+    // default, so only the test's own refreshes are readings; short ones make
+    // the tracker read the room by itself, as in a lab. endedGrace: how long an
+    // end is still handed out after a lesson the room followed (the role's
+    // EndedGrace). FailedOpens: how many times the host can't be had first.
     private sealed class TeacherPc : IDisposable
     {
-        public TeacherPc(ClassSyncRig rig, string name, X509Certificate2 certificate, TimeSpan? confirmWait = null)
+        public TeacherPc(
+            ClassSyncRig rig, string name, X509Certificate2 certificate, TimeSpan? confirmWait = null,
+            TimeSpan? trackerInterval = null, TimeSpan? endedGrace = null)
         {
             HostPort = FreePort();
             var own = name == Prof1 ? rig.Root : Path.Combine(rig.Root, name.ToLowerInvariant());
@@ -41,22 +46,40 @@ public sealed partial class ClassFolderRoleTests
                 LostAnswerWait = StudentPc.ClaimWait + TimeSpan.FromMilliseconds(500),
             };
             var tracker = new ClassHomeTracker(
-                certificate, name, Machines, IsOnline, TimeSpan.FromHours(1), rig.AgentPort, homePath);
+                certificate, name, Machines, IsOnline, trackerInterval ?? TimeSpan.FromHours(1), rig.AgentPort, homePath);
             Role = new ClassFolderRole(
                 tracker, Sync, Local, HandOver,
-                () => ClassFolderHost.Open(
-                    certificate, Local,
-                    (thumbprint, _) => Task.FromResult(
-                        string.Equals(thumbprint, rig.Master.Thumbprint, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(thumbprint, rig.OtherMaster.Thumbprint, StringComparison.OrdinalIgnoreCase)),
-                    HostPort, _ => { }, IPAddress.Loopback, HandOver),
+                () =>
+                {
+                    if (Interlocked.Decrement(ref _failedOpens) >= 0)
+                    {
+                        return null; // the port taken just now
+                    }
+                    return ClassFolderHost.Open(
+                        certificate, Local,
+                        (thumbprint, _) => Task.FromResult(
+                            string.Equals(thumbprint, rig.Master.Thumbprint, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(thumbprint, rig.OtherMaster.Thumbprint, StringComparison.OrdinalIgnoreCase)),
+                        HostPort, _ => { }, IPAddress.Loopback, HandOver);
+                },
                 () => new RemoteClassFolderController(
                     certificate, () => tracker.Home is { } home ? home with { Address = IPAddress.Loopback.ToString() } : null,
                     Machines, IsOnline, TimeSpan.FromHours(1), rig.AgentPort, () => rig.Now),
                 () => ClassLessonOnAgents.Newest(
                     Machines().Where(IsOnline).Select(machine => ClassLessonOnAgents.Read(machine, certificate, rig.AgentPort, _ => { })),
                     new DateTimeOffset(rig.Now).ToUnixTimeSeconds()),
-                confirmWait ?? TimeSpan.FromHours(1));
+                confirmWait ?? TimeSpan.FromHours(1))
+            {
+                EndedGrace = endedGrace ?? ClassFolderRole.DefaultEndedGrace,
+                HostRetryWait = TimeSpan.FromMilliseconds(200),
+            };
+        }
+
+        private int _failedOpens;
+
+        public int FailedOpens
+        {
+            set => Volatile.Write(ref _failedOpens, value);
         }
 
         public int HostPort { get; }

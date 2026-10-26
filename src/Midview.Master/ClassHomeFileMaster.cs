@@ -11,7 +11,7 @@ namespace Midview.Master;
 // other PC it saw as the home, so that a PC that was never the home but saw
 // another one never becomes the home by starting a lesson while only Agents
 // with no home are on (only by taking the folders over), and goes on working
-// through that PC; and whether it handed the folders over. Written whole
+// through that PC; and the PC it handed the folders over to. Written whole
 // through a temp file, so a crash never leaves half of it. A file that isn't
 // there, or isn't one, means none of these (this PC was never the home, saw
 // none and handed nothing over); a file that is there but can't be read right
@@ -76,22 +76,32 @@ public static class ClassHomeFileMaster
         }
     }
 
-    // Whether this PC handed the class folders over (it stood down for the
-    // PC that took them) and hasn't taken them over since: it takes no room
-    // back (ClassFolderHandOver.TakeBackAsync), also once its Master is opened
+    // The PC this one handed the class folders over to (it stood down for it),
+    // as the Agents recorded it then, at the generation it took them with;
+    // null when it handed none over, or that hand-over no longer counts (it
+    // took them over again, or the room named it the home above that
+    // generation since). While there is one, this PC takes no room back
+    // (ClassFolderHandOver.TakeBackAsync), also once its Master is opened
     // again (Task 7). Throws if the file can't be read.
-    public static bool ReadHandedOver(string? path = null) => Load(path ?? Path).HandedOver == true;
+    public static ClassHome? ReadHandedOverTo(string? path = null) =>
+        Load(path ?? Path).HandedOverTo is { } stored && stored.ToHome() is { } home && IsHome(home) ? home : null;
 
-    // Keeps whether it did. Throws if it can't be read or written.
-    public static void WriteHandedOver(bool handedOver, string? path = null)
+    // Keeps it (null: none). Throws if it can't be read or written.
+    public static void WriteHandedOverTo(ClassHome? home, string? path = null)
     {
+        if (home is not null && !IsHome(home))
+        {
+            throw new ArgumentException("Not a home.", nameof(home));
+        }
+
         path ??= Path;
         lock (Gate)
         {
             var file = Load(path);
-            if ((file.HandedOver == true) != handedOver)
+            var stored = home is null ? null : StoredHome.Of(home);
+            if (file.HandedOverTo != stored)
             {
-                Save(path, file with { HandedOver = handedOver ? true : null });
+                Save(path, file with { HandedOverTo = stored });
             }
         }
     }
@@ -175,8 +185,8 @@ public static class ClassHomeFileMaster
         File.Move(tempPath, path, overwrite: true);
     }
 
-    // HandedOver: null in a file from before it was kept (none handed over).
-    private sealed record Stored(long? Generation, StoredHome? LastOtherHome, bool? HandedOver = null);
+    // HandedOverTo: null in a file from before it was kept (none handed over).
+    private sealed record Stored(long? Generation, StoredHome? LastOtherHome, StoredHome? HandedOverTo = null);
 
     private sealed record StoredHome(string Thumbprint, string Name, string Address, int Port, long Generation)
     {
