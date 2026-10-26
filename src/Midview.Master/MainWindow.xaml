@@ -2,12 +2,13 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Midview - Sala de aula" Height="760" Width="1530"
+        Title="Midview - Sala de aula" Height="760" Width="1340"
         Background="{StaticResource CanvasBrush}" FontFamily="{StaticResource UiFont}"
         Closing="OnWindowClosing" Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
     <DockPanel>
-        <!-- Grouped like the actions they hold; one row from about 1510 px wide,
-             and whole groups move to a second row on a narrower window. -->
+        <!-- Grouped like the actions they hold; one row from about 1310 px wide (so on a
+             1366px screen, and the window opens 1340 wide to fit one), and whole groups move
+             to a second row on a narrower window. -->
         <Border DockPanel.Dock="Top" Background="{StaticResource SlateBrush}" Padding="8,2">
             <WrapPanel>
                 <!-- Energia first, as the owner asked. -->
@@ -33,12 +34,11 @@
                         <local:ToolbarButton x:Name="ControlButton" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
                                              IsEnabled="False" ToolTip="Controla a máquina selecionada e trava o teclado e o mouse do aluno." />
                         <!-- Becomes "Desbloquear telas" while any screen is locked (UpdateScreenLockButton).
-                             Width overridden from the shared 74: "Desbloquear" alone measures 67px at this
-                             font, wider than the 66px the default width leaves (74 minus the chrome's 8px
-                             padding), so it broke mid-word instead of wrapping at the space. 84 leaves 76px,
-                             comfortably over the 67px it needs. -->
+                             Width overridden from the shared 64: "Desbloquear" alone measures 65px at this
+                             font, wider than the 58px the default width leaves, so it would break mid-word
+                             instead of wrapping at the space. 72 leaves 66px. -->
                         <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear telas" Icon="&#xE7F4;" Badge="&#xE72E;"
-                                             Width="84" Click="OnScreenLockClassClicked"
+                                             Width="72" Click="OnScreenLockClassClicked"
                                              ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
                     </StackPanel>
                     <TextBlock Text="Tela" Style="{StaticResource ToolbarGroupCaption}" />
@@ -56,9 +56,9 @@
                                              ToolTip="Envia um arquivo para a turma toda." />
                         <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" Click="OnCollectClassClicked" OpensOptions="True"
                                              ToolTip="Recolhe o que os alunos colocaram em &quot;Entregar ao professor&quot;." />
-                        <!-- Wider than the shared 74 so "Pasta da turma" stays on one line: while a
+                        <!-- Wider than the shared 64 so "Pasta da turma" (76px) stays on one line: while a
                              lesson is on, the class's name (Caption) takes the label's second line. -->
-                        <local:ToolbarButton x:Name="ClassFolderButton" Content="Pasta da turma" Icon="&#xE8F7;" Width="96"
+                        <local:ToolbarButton x:Name="ClassFolderButton" Content="Pasta da turma" Icon="&#xE8F7;" Width="84"
                                              Click="OnClassFolderClicked" OpensOptions="True"
                                              ToolTip="Escolhe a turma da aula: o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
                         <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" Click="OnOpenWebsiteClassClicked" OpensOptions="True"

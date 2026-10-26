@@ -30,7 +30,10 @@
         <Style TargetType="local:ToolbarButton">
             <Setter Property="Foreground" Value="{StaticResource ChalkTextBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-            <Setter Property="Width" Value="74" />
+            <!-- 64 with 2px sides leaves the label 58px: "Mensagem" and "laboratório", the widest
+                 words, take 57px at 11.5. Narrow enough for the toolbar to fit one row on a
+                 1366px screen. -->
+            <Setter Property="Width" Value="64" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
@@ -38,7 +41,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="local:ToolbarButton">
                         <Border x:Name="Chrome" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
-                                CornerRadius="4" Padding="4,7,4,3">
+                                CornerRadius="4" Padding="2,7,2,3">
                             <StackPanel>
                                 <Grid Width="26" Height="22" HorizontalAlignment="Center">
                                     <TextBlock x:Name="IconText" Text="{TemplateBinding Icon}" FontFamily="{StaticResource IconFont}"
@@ -60,7 +63,7 @@
                                 <!-- Two lines of label. The caption pill (Caption) takes the second one,
                                      so a captioned button keeps the others' height. -->
                                 <StackPanel Margin="0,5,0,0" Height="28">
-                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="12"
+                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="11.5"
                                                TextWrapping="Wrap" TextAlignment="Center"
                                                LineHeight="14" LineStackingStrategy="BlockLineHeight" />
                                     <Border x:Name="CaptionPill" CornerRadius="6" Padding="6,0" Margin="0,1,0,0" HorizontalAlignment="Center"
@@ -112,7 +115,7 @@
         <Style x:Key="ToolbarSeparator" TargetType="Rectangle">
             <Setter Property="Width" Value="1" />
             <Setter Property="Fill" Value="{StaticResource SlateLineBrush}" />
-            <Setter Property="Margin" Value="6,10,6,10" />
+            <Setter Property="Margin" Value="4,10,4,10" />
         </Style>
 
         <!-- A student machine in the grid: a card whose screen reaches its edges,
