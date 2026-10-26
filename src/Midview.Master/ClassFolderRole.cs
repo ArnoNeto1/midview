@@ -16,9 +16,10 @@ namespace Midview.Master;
 //   own store and sync (local); its ClassFolderHost serves them to colleagues'
 //   PCs (openHost: when the port can't be had, the host logs it and it is
 //   tried again after HostRetryWait; the Master never opens the firewall); and
-//   the pollers hand the lesson to the Agents (LessonForPollers) and take back
-//   Agents that keep an older home (HomeGeneration), once a reading that asked
-//   an Agent said Local, and only while the last one says so.
+//   the pollers hand the lesson to the Agents (LessonForPollers), take back
+//   Agents that keep an older home and refresh where the others find this PC
+//   (HomeGeneration), once a reading that asked an Agent said Local, and only
+//   while the last one says so.
 // - Remote (another PC is the home): the window works that PC's, through a
 //   RemoteClassFolderController (newRemote); the host is closed; the pollers
 //   hand nothing; and the toolbar shows the lesson that PC runs (ShownLesson:
@@ -217,7 +218,7 @@ public sealed partial class ClassFolderRole : IDisposable
         return _sync.EndOfLessonOver(followed, keptHome);
     }
 
-    // This PC's generation as the home, which the pollers claim stragglers
+    // This PC's generation as the home, which the pollers claim the Agents
     // with (null while it isn't the home, or doesn't hand anything out, or only
     // holds the folders for its lesson): a Local reading with a home is this
     // PC's, at the newest generation the room keeps for it.

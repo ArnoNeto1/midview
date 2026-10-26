@@ -78,14 +78,23 @@ public sealed partial class ClassFolderHandOver
     }
 
     // The whole copy went to that PC (before its last answer goes, so it can't
-    // claim the Agents first): not settled until it says how it went, or SettleWait.
+    // claim the Agents first): not settled until it says how it went, or
+    // SettleWait. It holds what Send began (ClassFolderSync.BeginGiving: no
+    // lesson starts here), let go once it settles, or once a newer copy to
+    // that PC replaces it.
     private void CopySent(string thumbprint)
     {
         long copy;
+        bool replaced;
         lock (_settling)
         {
             copy = ++_copies;
+            replaced = _unsettled.ContainsKey(thumbprint);
             _unsettled[thumbprint] = copy;
+        }
+        if (replaced)
+        {
+            _sync.EndGiving();
         }
         var wait = SettleWait;
         _ = Task.Run(async () =>
@@ -99,6 +108,7 @@ public sealed partial class ClassFolderHandOver
             if (expired)
             {
                 _log("A colleague's PC that took a copy of the class folders never said how its take-over went.");
+                _sync.EndGiving();
                 Quiet();
             }
         });
@@ -107,9 +117,14 @@ public sealed partial class ClassFolderHandOver
     // That PC said how its take-over went (or a copy to it couldn't end): settled, whatever it said.
     private void Settled(string thumbprint)
     {
+        bool settled;
         lock (_settling)
         {
-            _unsettled.Remove(thumbprint);
+            settled = _unsettled.Remove(thumbprint);
+        }
+        if (settled)
+        {
+            _sync.EndGiving();
         }
         Quiet();
     }

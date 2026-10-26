@@ -137,10 +137,46 @@ public sealed partial class ClassFolderSyncTests
         Assert.Empty(pc3.Bin.FileNames());
     }
 
-    // PROF-2 takes the folders over on those PCs (every one by default) and starts 3º B there, saved at savedAt.
-    private static ClassLesson StartAnotherHomesLesson(ClassSyncRig rig, long savedAt, IEnumerable<StudentPc>? pcs = null)
+    // The same split, with PROF-2's lesson saved in the very second of this
+    // PC's (two starts at once): the room still left this PC's behind, which
+    // is ended on PC3 (one second after it) and here, rather than held until
+    // the day ends. PC3 then takes PROF-2's lesson once PROF-2 claims it.
+    [Fact]
+    public async Task ALessonTheRoomLeftBehindForOneOfTheSameSecond_IsEndedToo()
     {
-        var lesson = new ClassLesson(savedAt, Guid.NewGuid(), "3º B", savedAt, Ended: false);
+        using var rig = new ClassSyncRig(homes: 3);
+        var pc3 = rig.Pcs[2];
+        var visible = new List<KnownMachine> { pc3.Machine };
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => visible, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
+            lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            var theirs = StartAnotherHomesLesson(rig, lesson.SavedAt, rig.Pcs.Take(2));
+            visible = rig.Machines.ToList();
+
+            Assert.Null(await sync.StandDownForAnotherHomeAsync());
+
+            Assert.Equal(ClassLesson.None(0), sync.Lesson);
+            Assert.Equal(lesson with { SavedAt = lesson.SavedAt + 1, Ended = true }, pc3.Agent.Current);
+            Assert.All(rig.Pcs.Take(2), pc => Assert.Equal(theirs, pc.Agent.Current));
+            StartAnotherHomesLesson(rig, theirs.SavedAt, new[] { pc3 }, theirs);
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
+    // PROF-2 takes the folders over on those PCs (every one by default) and starts 3º B there, saved at savedAt.
+    // lesson: that one, already started on other PCs.
+    private static ClassLesson StartAnotherHomesLesson(
+        ClassSyncRig rig, long savedAt, IEnumerable<StudentPc>? pcs = null, ClassLesson? lesson = null)
+    {
+        lesson ??= new ClassLesson(savedAt, Guid.NewGuid(), "3º B", savedAt, Ended: false);
         foreach (var pc in pcs ?? rig.Pcs)
         {
             var claim = new ClassHomeClaim(OtherPc, ClassFolderRemote.Port, TakeOver: true, rig.NowTicks + TimeSpan.TicksPerHour);

@@ -196,6 +196,59 @@ public sealed class ClassHomeStateTests : IDisposable
         Assert.Equal(before, File.ReadAllBytes(_statePath));
     }
 
+    // A generation from more than a day past this PC's clock (long.MaxValue,
+    // say) would put every later take-over out of reach on this PC for good:
+    // refused, from any PC, whatever it claims, and nothing recorded. A day
+    // ahead exactly is taken (teacher PCs' clocks may differ a little).
+    [Fact]
+    public void AClaimFromMoreThanADayAhead_IsRefused_AndNothingRecorded()
+    {
+        var now = new DateTime(2026, 10, 20, 13, 30, 0);
+        var day = new DateTimeOffset(now).UtcTicks + TimeSpan.TicksPerDay;
+        var state = new ClassHomeState(_statePath, _log.Add, () => now);
+
+        foreach (var generation in new[] { long.MaxValue, day + 1 })
+        {
+            var first = state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", generation: generation), lessonOn: false);
+            Assert.Equal((false, ClassHomeState.TooFarAheadText), first);
+        }
+        Assert.Null(state.Current);
+        Assert.False(File.Exists(_statePath));
+
+        Assert.True(state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", generation: day - TimeSpan.TicksPerDay), lessonOn: false).Ok);
+        var recorded = state.Current;
+        foreach (var (thumbprint, name, generation) in new[] { (Home, "PROF-1", long.MaxValue), (Other, "PROF-2", day + 1) })
+        {
+            var again = state.Claim(thumbprint, "10.0.0.7", ClaimOf(name, takeOver: true, generation: generation), lessonOn: false);
+            Assert.Equal((false, ClassHomeState.TooFarAheadText), again);
+        }
+        Assert.Equal(recorded, state.Current);
+        Assert.Equal(recorded, Create().Current);
+
+        Assert.True(state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: day), lessonOn: false).Ok);
+        Assert.Equal(day, state.Current!.Generation);
+    }
+
+    // A room whose generations already ran ahead of this PC's clock (a clock
+    // set back since) still works: the day counts from the newer of the clock
+    // and the generation recorded.
+    [Fact]
+    public void ARoomAheadOfThisPcsClock_StillTakesANewerTakeOver()
+    {
+        var now = new DateTime(2026, 10, 20, 13, 30, 0);
+        var ahead = new DateTimeOffset(now).UtcTicks + 3 * TimeSpan.TicksPerDay;
+        File.WriteAllText(_statePath, "{\"Thumbprint\":\"" + Home + "\",\"Name\":\"PROF-1\",\"Address\":\"10.0.0.5\",\"Port\":28903,"
+            + $"\"Generation\":{ahead}}}");
+        var state = new ClassHomeState(_statePath, _log.Add, () => now);
+
+        var taken = state.Claim(Other, "10.0.0.7", ClaimOf("PROF-2", takeOver: true, generation: ahead + TimeSpan.TicksPerHour), lessonOn: false);
+        var tooFar = state.Claim(Home, "10.0.0.5", ClaimOf("PROF-1", takeOver: true, generation: ahead + 2 * TimeSpan.TicksPerDay), lessonOn: false);
+
+        Assert.True(taken.Ok, taken.Detail);
+        Assert.Equal((false, ClassHomeState.TooFarAheadText), tooFar);
+        Assert.Equal(HomeOf(Other, "PROF-2", "10.0.0.7", ahead + TimeSpan.TicksPerHour), state.Current);
+    }
+
     // Plan decision 7: the folders move only while no lesson is on.
     [Fact]
     public void TakeOver_WhileALessonIsOn_IsRefused()

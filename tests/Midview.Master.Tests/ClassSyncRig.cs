@@ -217,7 +217,7 @@ internal sealed class StudentPc : IDisposable
         Directory.CreateDirectory(Desktop);
         Bin = new FolderBin(Path.Combine(Root, "lixeira"));
 
-        var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }) : null;
+        var home = number <= rig.Homes ? new ClassHomeState(Path.Combine(Root, "class-home.json"), _ => { }, () => rig.Now) : null;
         Agent = new ClassLessonHandler(
             Path.Combine(Root, "class-lesson.json"),
             () =>

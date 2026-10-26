@@ -24,13 +24,13 @@ public sealed partial class ClassFolderSync
     // For a PC whose room keeps another PC as the home, as ClassFolderRole
     // confirmed it: StandDownIfNoLessonAsync, except for a lesson on here that
     // the room's online Agents left behind (the newest lesson they follow is
-    // this one ended, or another one saved later: the new home's), which is
-    // first ended, as one nobody collected (no last rounds, the files kept,
-    // every version known of them remembered), as AdoptAgentsEndAsync ends one
-    // another PC ended: a stale lesson must not keep this PC from taking the
-    // folders over until the day ends. Its end goes first to the Agents still
-    // in it (SendHeldEndAsync), which would otherwise stay in it until the day
-    // ends, with nobody to end it. A lesson the room still follows, or one no
+    // this one ended, or another one saved later or in the same second: the
+    // new home's), which is first ended, as one nobody collected (no last
+    // rounds, the files kept, every version known of them remembered), as
+    // AdoptAgentsEndAsync ends one another PC ended: a stale lesson must not
+    // keep this PC from taking the folders over until the day ends. Its end
+    // goes first to the Agents still in it (SendHeldEndAsync), which would
+    // otherwise stay in it until the day ends, with nobody to end it. A lesson the room still follows, or one no
     // Agent says anything about, stays on, and is the answer (this PC keeps
     // the folders until it ends). The Agents are asked before the
     // lesson lock is taken; a lesson started or ended meanwhile is gone by as
@@ -42,7 +42,7 @@ public sealed partial class ClassFolderSync
         var lessons = ours.IsOn
             ? await LessonsOnTheAgentsAsync(token).ConfigureAwait(false)
             : new List<(KnownMachine Machine, ClassLesson? Lesson)>();
-        var newest = ClassLessonOnAgents.Newest(lessons.Select(read => read.Lesson), UnixNow());
+        var followed = lessons.Select(read => read.Lesson).ToList();
 
         await _lessonGate.WaitAsync(token).ConfigureAwait(false);
         try
@@ -50,7 +50,7 @@ public sealed partial class ClassFolderSync
             var lesson = Lesson;
             if (lesson.IsOn)
             {
-                if (lesson != ours || !LeftBehind(lesson, newest))
+                if (lesson != ours || !LeftBehind(lesson, followed, UnixNow()))
                 {
                     return lesson;
                 }
@@ -73,12 +73,19 @@ public sealed partial class ClassFolderSync
         }
     }
 
-    // Whether the newest lesson the room follows says ours is over there. The
-    // two SavedAt come from two teacher PCs' clocks (another home's lesson),
-    // so clocks far apart could get this wrong; as with generations, a lab's
-    // teacher PCs are taken to agree within the time between lessons.
-    private static bool LeftBehind(ClassLesson ours, ClassLesson? newest) =>
-        newest is not null && newest.SavedAt > ours.SavedAt && (newest.LessonId != ours.LessonId || !newest.IsOn);
+    // Whether the newest lesson the room follows (of those lessons) says ours
+    // is over there: a newer one that isn't ours on, or another lesson saved
+    // in the same second as ours (the other home's, started at the same
+    // moment), which the room keeps as the home's. The SavedAt come from two
+    // teacher PCs' clocks (another home's lesson), so clocks far apart could
+    // get this wrong; as with generations, a lab's teacher PCs are taken to
+    // agree within the time between lessons.
+    private static bool LeftBehind(ClassLesson ours, IReadOnlyList<ClassLesson?> lessons, long unixNow) =>
+        ClassLessonOnAgents.Newest(lessons, unixNow) is { } newest
+        && (newest.SavedAt > ours.SavedAt
+            ? newest.LessonId != ours.LessonId || !newest.IsOn
+            : newest.SavedAt == ours.SavedAt
+              && lessons.Any(lesson => lesson is { } other && other.SavedAt == ours.SavedAt && other.LessonId != ours.LessonId));
 
     // The newest lesson the online Agents follow (ClassLessonOnAgents.Newest); null for none.
     private async Task<ClassLesson?> NewestOnTheAgentsAsync(CancellationToken token) =>
@@ -98,7 +105,14 @@ public sealed partial class ClassFolderSync
 
     // Whether another teacher PC is, or may be, the class folders' home: one
     // this PC saw as the home (ClassHomeFileMaster), or one an online Agent
-    // names. A file that can't be read counts as one seen.
+    // names. A file that can't be read counts as one seen. So does an online
+    // Agent following a lesson newer than ours (another lesson: another PC
+    // started it since), whatever home it keeps or whether that can be read.
+    private async Task<bool> AnotherHomeSeenOrNamedAsync(ClassLesson ours, CancellationToken token) =>
+        await AnotherHomeSeenOrNamedAsync().ConfigureAwait(false)
+        || (await LessonsOnTheAgentsAsync(token).ConfigureAwait(false))
+            .Any(read => read.Lesson is { } followed && followed.SavedAt > ours.SavedAt && followed.LessonId != ours.LessonId);
+
     private async Task<bool> AnotherHomeSeenOrNamedAsync()
     {
         long? generation;

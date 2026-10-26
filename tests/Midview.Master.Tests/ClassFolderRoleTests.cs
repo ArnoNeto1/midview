@@ -125,11 +125,16 @@ public sealed partial class ClassFolderRoleTests
         using var prof1 = new TeacherPc(rig, Prof1, rig.Master, endedGrace: TimeSpan.FromSeconds(2));
         await prof1.Sync.StartAsync(Turma);
         await prof1.Sync.EndAsync(EndChoice.Keep);
-        // PC1 took another PC's take-over, and was off for this PC's start: its
-        // Agent refuses this PC's lesson, the other two follow it.
+        // PC1 took another PC's take-over, and was off for this PC's start (its
+        // Agent busy here: the rig's offline PCs still answer a lesson set, and
+        // one refused for a newer home would take the start back): it doesn't
+        // follow this PC's lesson, the other two do.
         Claim(rig, rig.Pcs[0], rig.OtherMaster, Prof2, rig.NowTicks + TimeSpan.TicksPerHour, takeOver: true);
         rig.Offline[rig.Pcs[0].Name] = true;
-        await prof1.Sync.StartAsync("3º B");
+        using (new BusyAgents(new[] { rig.Pcs[0] }))
+        {
+            await prof1.Sync.StartAsync("3º B");
+        }
         rig.Offline.Clear();
         Assert.False(rig.Pcs[0].Agent.Current.IsOn);
         Assert.True(rig.Pcs[1].Agent.Current.IsOn);

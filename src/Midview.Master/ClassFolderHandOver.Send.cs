@@ -13,20 +13,56 @@ public sealed partial class ClassFolderHandOver
     public const string ChangedText = "Um arquivo das turmas mudou durante a cópia no PC que guarda as pastas. Tente de novo.";
 
     // Answers RemoteHandOver on channel (see the class comment), on the host's
-    // thread. Refused while a lesson is on, before it starts and again before the
-    // last answer (one started meanwhile), and when the store can't be read
-    // whole. A file that changed after the manifest was made stops the copy,
-    // saying so. stop (the host closing) breaks the copy off, between two
-    // chunks: the connection closes with the copy unfinished. The network's
-    // exceptions go up (the host lets the connection go).
+    // thread. Refused while a lesson is on, and when the store can't be read
+    // whole; no lesson starts here from then until the copy settles
+    // (ClassFolderSync.BeginGiving: the whole copy went, until that PC says
+    // how its take-over went; else until it stops). A file that changed after
+    // the manifest was made stops the copy, saying so. stop (the host closing)
+    // breaks the copy off, between two chunks: the connection closes with the
+    // copy unfinished. The network's exceptions go up (the host lets the
+    // connection go).
     internal void Send(SecureChannel channel, CancellationToken stop)
     {
-        if (_sync.Lesson.IsOn)
+        if (!_sync.BeginGiving())
         {
             channel.Send(Refusal(ClassFolderText.EndLessonFirst));
             return;
         }
 
+        int? classFiles;
+        try
+        {
+            classFiles = SendWhole(channel, stop);
+        }
+        catch (Exception)
+        {
+            _sync.EndGiving();
+            throw;
+        }
+        if (classFiles is not { } count)
+        {
+            _sync.EndGiving();
+            return;
+        }
+
+        // Not settled from before the last answer goes: that PC claims the
+        // Agents as soon as it has it. Its settling lets lessons start again.
+        CopySent(channel.RemoteThumbprint);
+        try
+        {
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, $"{count} arquivos")));
+        }
+        catch (Exception)
+        {
+            Settled(channel.RemoteThumbprint); // it never had the whole copy
+            throw;
+        }
+    }
+
+    // Send's copy, the manifest and every file: how many of them are class
+    // files, or null when it stopped (said to the other side).
+    private int? SendWhole(SecureChannel channel, CancellationToken stop)
+    {
         IReadOnlyList<string> classes;
         IReadOnlyList<HandOverFile> files;
         int leftOut;
@@ -38,14 +74,14 @@ public sealed partial class ClassFolderHandOver
         {
             _log($"The class folders could not be read for a hand-over: {ex.Message}");
             channel.Send(Refusal(ClassFolderRemote.UnreadableText + ErrorText.Describe(ex)));
-            return;
+            return null;
         }
         catch (ArgumentException ex)
         {
             // A link put in a class's folder between its listing and the path of a file in it.
             _log($"The class folders changed while read for a hand-over: {ex.Message}");
             channel.Send(Refusal(ChangedText));
-            return;
+            return null;
         }
 
         var manifest = EncodeManifest(classes, files.Select(file => (file.WirePath, file.Size, file.LastWriteTicks)).ToList(), leftOut);
@@ -53,7 +89,7 @@ public sealed partial class ClassFolderHandOver
         {
             if (!SendOne(channel, ManifestPath, content, manifest.Length, stop))
             {
-                return;
+                return null;
             }
         }
 
@@ -69,7 +105,7 @@ public sealed partial class ClassFolderHandOver
                 channel.Send(Stopped(ex is FileNotFoundException or DirectoryNotFoundException
                     ? ChangedText
                     : ClassFolderRemote.UnreadableText + ErrorText.Describe(ex)));
-                return;
+                return null;
             }
 
             using (content)
@@ -78,32 +114,16 @@ public sealed partial class ClassFolderHandOver
                 if (content.Length != file.Size || File.GetLastWriteTimeUtc(file.FullPath).Ticks != file.LastWriteTicks)
                 {
                     channel.Send(Stopped(ChangedText));
-                    return;
+                    return null;
                 }
                 if (!SendOne(channel, file.WirePath, content, file.Size, stop))
                 {
-                    return;
+                    return null;
                 }
             }
         }
 
-        if (_sync.Lesson.IsOn)
-        {
-            channel.Send(Refusal(ClassFolderText.EndLessonFirst));
-            return;
-        }
-        var classFiles = files.Count(file => file.WirePath.StartsWith(FilesPrefix, StringComparison.Ordinal));
-        // Not settled from before the last answer goes: that PC claims the Agents as soon as it has it.
-        CopySent(channel.RemoteThumbprint);
-        try
-        {
-            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, $"{classFiles} arquivos")));
-        }
-        catch (Exception)
-        {
-            Settled(channel.RemoteThumbprint); // it never had the whole copy
-            throw;
-        }
+        return files.Count(file => file.WirePath.StartsWith(FilesPrefix, StringComparison.Ordinal));
     }
 
     // The sender (its certificate's thumbprint, from the TLS channel) says it

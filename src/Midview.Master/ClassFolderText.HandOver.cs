@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace Midview.Master;
 
 // ClassFolderText: what a take-over of the class folders says
@@ -230,6 +232,14 @@ public static partial class ClassFolderText
     // Each PC's line of a start on this PC while it takes the folders over (no lesson starts meanwhile).
     public const string TakeOverRunningHere = "este computador está recebendo as pastas das turmas; espere a troca terminar";
 
+    // ...while this PC's copy goes to a colleague's PC, or that PC hasn't said how its take-over went.
+    public const string HandOverRunningHere = "as pastas das turmas estão passando para outro computador; espere a troca terminar";
+
+    // ...when this PC and pc claimed the room at once, and pc's lesson was on
+    // the PCs before this PC could take them: the folders come to this PC
+    // once that lesson ends.
+    public static string OtherPcsLessonFirst(string pc) => $"o PC {pc} começou uma aula antes; tente de novo quando ela acabar";
+
     // No PC of the room took this PC as the home (none answered).
     public const string NoPcTookIt = "Nenhum PC da sala respondeu.";
 
@@ -241,16 +251,50 @@ public static partial class ClassFolderText
         "As pastas das turmas estão passando de um computador para outro. Espere a troca terminar para fechar o Midview.";
 
     // Said once in the window when a take-over left classes aside, beside the
-    // class folders (folders: their names; where: the folder they are in).
-    // Null for none.
-    public static string? AsideNote(IReadOnlyList<string> folders, string where) => folders.Count switch
+    // class folders (folders: their names; where: the folder they are in), or
+    // when this PC works another PC's folders while its own "Turmas" holds
+    // classes (ownClassesHidden: it stopped being the home with no hand-over,
+    // and they stay there, as the room may name this PC again). Null for none.
+    // ...for this PC's store, while it works another PC's folders (remote) or its own.
+    public static string? AsideNote(ClassStore store, bool remote, string where) =>
+        AsideNote(store.AsideFolders(), where, remote && HasClasses(store));
+
+    // None when they can't be listed.
+    private static bool HasClasses(ClassStore store)
     {
-        0 => null,
-        1 => $"Há turmas guardadas à parte na pasta \"{folders[0]}\", em {where}. "
-            + "Esta janela não mostra essas turmas: abra a pasta no Explorador de Arquivos para ver ou copiar os arquivos.",
-        _ => $"Há turmas guardadas à parte nas pastas {Quoted(folders)}, em {where}. "
-            + "Esta janela não mostra essas turmas: abra as pastas no Explorador de Arquivos para ver ou copiar os arquivos.",
-    };
+        try
+        {
+            return store.ClassNames().Count > 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public static string? AsideNote(IReadOnlyList<string> folders, string where, bool ownClassesHidden = false)
+    {
+        var said = new List<string>();
+        if (folders.Count > 0)
+        {
+            said.Add(folders.Count == 1
+                ? $"Há turmas guardadas à parte na pasta \"{folders[0]}\", em {where}."
+                : $"Há turmas guardadas à parte nas pastas {Quoted(folders)}, em {where}.");
+        }
+        if (ownClassesHidden)
+        {
+            said.Add("As turmas deste computador continuam na pasta \"Turmas\", "
+                + (folders.Count == 0 ? $"em {where}." : folders.Count == 1 ? "ao lado dela." : "ao lado delas."));
+        }
+        if (said.Count == 0)
+        {
+            return null;
+        }
+        var several = folders.Count + (ownClassesHidden ? 1 : 0) > 1;
+        said.Add($"Esta janela não mostra essas turmas: abra {(several ? "as pastas" : "a pasta")} "
+            + "no Explorador de Arquivos para ver ou copiar os arquivos.");
+        return string.Join(" ", said);
+    }
 
     // "\"A\" e \"B\"", "\"A\", \"B\" e \"C\"", "\"A\", \"B\", \"C\" e mais 2".
     private static string Quoted(IReadOnlyList<string> folders)

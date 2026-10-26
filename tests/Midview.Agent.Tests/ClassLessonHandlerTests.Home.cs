@@ -141,6 +141,62 @@ public sealed partial class ClassLessonHandlerTests
         Assert.Equal(FolderOf("3º A"), Policy(DownloadFolderPolicy.ChromeKey));
     }
 
+    // A lesson held for the room (or taken back when another PC claimed the
+    // room at the same moment) is ended one second after its own start; the
+    // home's start, saved in that second or in the second of the ended
+    // lesson's start, is taken over that end of another lesson rather than
+    // refused as "saved in the same second" or as older (which the home's
+    // poller would meet for ever). Only a start from the home, of another
+    // lesson than the one ended: anything else is refused as before.
+    [Theory]
+    [InlineData(101)]
+    [InlineData(100)]
+    public void Handle_AStartFromTheHome_SavedWithinASecondOfAnotherLessonsEnd_IsTaken(long savedAt)
+    {
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+        var held = Lesson("3º B", 100);
+        Assert.True(handler.Handle(held.Encode(), HomePc, "10.0.0.5").Succeeded);
+        var heldEnd = held with { SavedAt = 101, Ended = true };
+        Assert.True(handler.Handle(heldEnd.Encode(), OtherPc, "10.0.0.7").Succeeded);
+        var sameSecond = "outra aula foi salva no mesmo segundo; envie de novo";
+        var keptNewer = $"{ClassLesson.KeptNewerText}: aula encerrada";
+
+        Assert.Equal((false, sameSecond), handler.Handle((held with { SavedAt = 101 }).Encode(), HomePc, "10.0.0.5"));
+        Assert.Equal((false, sameSecond), handler.Handle((Lesson("3º C", 101) with { Ended = true }).Encode(), HomePc, "10.0.0.5"));
+        Assert.Equal((true, keptNewer), handler.Handle(Lesson("3º C", 99).Encode(), HomePc, "10.0.0.5"));
+        Assert.Equal((true, keptNewer), handler.Handle((Lesson("3º C", 100) with { Ended = true }).Encode(), HomePc, "10.0.0.5"));
+        Assert.Equal(heldEnd, handler.Current);
+
+        var homes = Lesson("3º A", savedAt);
+        var (ok, detail) = handler.Handle(homes.Encode(), HomePc, "10.0.0.5");
+
+        Assert.True(ok, detail);
+        Assert.Equal(homes, handler.Current);
+        Assert.Equal(homes, ClassLessonFile.Read(_statePath));
+        Assert.True(IsProtected(FolderOf("3º A")));
+    }
+
+    // Another teacher PC's start in those seconds is still refused, naming the
+    // home; and with no home kept (part 1), the order is by SavedAt alone.
+    [Fact]
+    public void Handle_AStartFromAnotherPcOrWithNoHome_SavedWithinASecondOfAnEnd_IsStillRefused()
+    {
+        var (handler, _) = HandlerWithHomeClaimedBy(HomePc, "PROF-1");
+        var held = Lesson("3º B", 100);
+        Assert.True(handler.Handle(held.Encode(), HomePc, "10.0.0.5").Succeeded);
+        var heldEnd = held with { SavedAt = 101, Ended = true };
+        Assert.True(handler.Handle(heldEnd.Encode(), HomePc, "10.0.0.5").Succeeded);
+
+        Assert.Equal((false, "As pastas das turmas ficam no PC PROF-1"), handler.Handle(Lesson("3º A", 101).Encode(), OtherPc, "10.0.0.7"));
+        Assert.Equal(heldEnd, handler.Current);
+
+        var partOne = Create(); // the same lesson file, no home
+        Assert.Equal(heldEnd, partOne.Current);
+        Assert.Equal((false, "outra aula foi salva no mesmo segundo; envie de novo"), partOne.Handle(Lesson("3º A", 101).Encode()));
+        Assert.Equal((true, $"{ClassLesson.KeptNewerText}: aula encerrada"), partOne.Handle(Lesson("3º A", 100).Encode()));
+        Assert.Equal(heldEnd, partOne.Current);
+    }
+
     // With no lesson on, an end of any lesson is taken, newest first, as before.
     [Fact]
     public void Handle_WithNoLessonOn_AnEndOfAnyLesson_IsTaken()

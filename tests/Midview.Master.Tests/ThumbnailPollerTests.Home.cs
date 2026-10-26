@@ -102,6 +102,76 @@ public partial class ThumbnailPollerTests
         Assert.Equal(HomeGeneration, pc.Agent.CurrentHome!.Generation);
     }
 
+    // The home's address changed (DHCP) while the Agents still keep the old
+    // one: a colleague's PC finds nobody there. One poller cycle of the home
+    // claims the Agent all the same (once per connection), which refreshes
+    // the address and port it keeps, and the colleague's PC finds the home again.
+    [Fact]
+    public async Task AHomeWhoseAddressChanged_IsFoundByTheRemoteAgain_AfterOnePollerCycle()
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        var pc = rig.Pcs[0];
+        var sync = rig.NewSync();
+        using var host = ClassFolderHost.Open(
+            rig.Master, LocalClassFolderControllerTests.NewController(rig, sync),
+            (thumbprint, _) => Task.FromResult(string.Equals(thumbprint, rig.OtherMaster.Thumbprint, StringComparison.OrdinalIgnoreCase)),
+            0, _ => { }, IPAddress.Loopback) ?? throw new InvalidOperationException("The host could not listen.");
+        var (ok, detail) = pc.Agent.ClaimHome(
+            rig.Master.Thumbprint, "127.0.0.9", new ClassHomeClaim(ClassSyncRig.MachineName, host.Port + 1, false, HomeGeneration));
+        Assert.True(ok, detail);
+        using var tracker = new ClassHomeTracker(
+            rig.OtherMaster, "PROF-2", () => rig.Machines, _ => true, TimeSpan.FromHours(1), rig.AgentPort,
+            Path.Combine(rig.Root, "outro-professor", "class-home.json"));
+        await tracker.RefreshAsync();
+        Assert.Equal(("127.0.0.9", host.Port + 1), (tracker.Home?.Address, tracker.Home?.Port));
+        var claim = new ClassHomeClaim(ClassSyncRig.MachineName, host.Port, TakeOver: true, HomeGeneration);
+
+        using (var poller = new ThumbnailPoller(pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, classHomeClaim: () => claim))
+        {
+            await ThreeThumbnails(poller);
+        }
+
+        Assert.Equal(new ClassHome(rig.Master.Thumbprint.ToUpperInvariant(), ClassSyncRig.MachineName, "127.0.0.1", host.Port, HomeGeneration),
+            pc.Agent.CurrentHome);
+        await tracker.RefreshAsync();
+        using var remote = new RemoteClassFolderController(
+            rig.OtherMaster, () => tracker.Home, () => rig.Machines, _ => true, TimeSpan.FromHours(1), rig.AgentPort, () => rig.Now);
+        var state = await remote.ReadAsync(lessonFiles: false);
+        Assert.False(remote.HomeClosed);
+        Assert.Equal(new[] { ClassSyncRig.Turma, "3º B" }, state.Classes.Select(summary => summary.Turma));
+    }
+
+    // Another Windows account on this PC (its own certificate, the same
+    // computer name: the same PC to the Agent) runs a lesson: this account's
+    // poller never claims that Agent meanwhile (the Agent would take the
+    // claim as the home's own, and hand this account the home mid-lesson),
+    // whether it keeps that home at an older generation or at this one. Once
+    // the lesson ends, it does.
+    [Theory]
+    [InlineData(HomeGeneration - 1_000)]
+    [InlineData(HomeGeneration)]
+    public async Task AnAgentInALessonOfAnotherCertificateWithThisName_IsNotClaimed_UntilItEnds(long kept)
+    {
+        using var rig = new ClassSyncRig(pcs: 1, homes: 1);
+        var pc = rig.Pcs[0];
+        ClaimFor(rig, pc, rig.OtherMaster, ClassSyncRig.MachineName, kept);
+        var now = new DateTimeOffset(rig.Now).ToUnixTimeSeconds();
+        var lesson = new ClassLesson(now, Guid.NewGuid(), ClassSyncRig.Turma, now, Ended: false);
+        SetLessonOn(rig, pc, lesson);
+        using var poller = new ThumbnailPoller(
+            pc.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: TimeSpan.FromMilliseconds(200),
+            classHomeClaim: HomeClaim);
+
+        await ThreeThumbnails(poller);
+        Assert.Equal(rig.OtherMaster.Thumbprint, pc.Agent.CurrentHome?.Thumbprint, ignoreCase: true);
+        Assert.Equal(lesson, pc.Agent.Current);
+
+        SetLessonOn(rig, pc, lesson with { SavedAt = now + 1, Ended = true });
+
+        await WaitUntil(() => string.Equals(pc.Agent.CurrentHome?.Thumbprint, rig.Master.Thumbprint, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(HomeGeneration, pc.Agent.CurrentHome!.Generation);
+    }
+
     private static void ClaimFor(ClassSyncRig rig, StudentPc pc, X509Certificate2 master, string name, long generation)
     {
         var (ok, detail, _) = ClassFolderClient.ClaimHome(

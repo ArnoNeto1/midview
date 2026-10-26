@@ -24,6 +24,20 @@ public partial class ClassFolderTextTests
     [Fact]
     public void AsideNote_ForNoFolder_IsNone() => Assert.Null(ClassFolderText.AsideNote(Array.Empty<string>(), Where));
 
+    // On a PC working another PC's folders whose own "Turmas" holds classes.
+    [Fact]
+    public void AsideNote_ForThisPcsOwnClasses_SaysTheyStayInTurmas() => Assert.Equal(
+        "As turmas deste computador continuam na pasta \"Turmas\", em C:\\Users\\prof\\Documents\\Midview. "
+        + "Esta janela não mostra essas turmas: abra a pasta no Explorador de Arquivos para ver ou copiar os arquivos.",
+        ClassFolderText.AsideNote(Array.Empty<string>(), Where, ownClassesHidden: true));
+
+    [Fact]
+    public void AsideNote_ForAnAsideAndThisPcsOwnClasses_SaysBoth() => Assert.Equal(
+        "Há turmas guardadas à parte na pasta \"Turmas (antes de 20-10-2026 1330)\", em C:\\Users\\prof\\Documents\\Midview. "
+        + "As turmas deste computador continuam na pasta \"Turmas\", ao lado dela. "
+        + "Esta janela não mostra essas turmas: abra as pastas no Explorador de Arquivos para ver ou copiar os arquivos.",
+        ClassFolderText.AsideNote(new[] { "Turmas (antes de 20-10-2026 1330)" }, Where, ownClassesHidden: true));
+
     [Fact]
     public void HandOverStillRunning_IsTheAgreedText() => Assert.Equal(
         "As pastas das turmas estão passando de um computador para outro. Espere a troca terminar para fechar o Midview.",

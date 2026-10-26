@@ -139,11 +139,12 @@ public sealed partial class ClassLessonHandler
         {
             return (false, refusal);
         }
-        if (lesson.SavedAt < _lesson.SavedAt || (!lesson.IsOn && _lesson.IsOn && lesson.LessonId != _lesson.LessonId))
+        var homesStart = HomesStartOverAnotherEnd(lesson, senderThumbprint);
+        if ((lesson.SavedAt < _lesson.SavedAt && !homesStart) || (!lesson.IsOn && _lesson.IsOn && lesson.LessonId != _lesson.LessonId))
         {
             return (true, $"{ClassLesson.KeptNewerText}: {Describe(_lesson)}");
         }
-        if (lesson.SavedAt == _lesson.SavedAt && lesson != _lesson)
+        if (lesson.SavedAt == _lesson.SavedAt && lesson != _lesson && !homesStart)
         {
             return (false, "outra aula foi salva no mesmo segundo; envie de novo");
         }
@@ -172,6 +173,19 @@ public sealed partial class ClassLessonHandler
         var what = _lesson.IsOn ? "preparar" : "liberar";
         return (true, $"{detail}; não foi possível {what} a pasta agora: {string.Join("; ", problems)}");
     }
+
+    // A start from the home (past TryStart) is taken over an end of another
+    // lesson saved in the same second or the next one, which SavedAt alone
+    // would refuse: a lesson held for the room, or taken back when another PC
+    // claimed the room at the same moment, is ended one second after its own
+    // start, and the home's start of either second would otherwise be
+    // refused for ever (its poller hands it again unchanged). One teacher
+    // PC's own lessons are always further apart: a lesson's start, its end,
+    // the next start and that one's end are each at least a second newer.
+    private bool HomesStartOverAnotherEnd(ClassLesson lesson, string senderThumbprint) =>
+        lesson.IsOn && !_lesson.IsOn && lesson.LessonId != _lesson.LessonId
+        && (lesson.SavedAt == _lesson.SavedAt || (_lesson.SavedAt > long.MinValue && lesson.SavedAt == _lesson.SavedAt - 1))
+        && _home?.Current is { } home && string.Equals(home.Thumbprint, senderThumbprint, StringComparison.OrdinalIgnoreCase);
 
     // work with the lesson's lock held; busy (ClassHomeClaim.BusyText) when it
     // can't be had within the claim wait (a look at the student's folders holds it).

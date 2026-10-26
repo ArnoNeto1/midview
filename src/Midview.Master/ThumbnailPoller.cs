@@ -10,7 +10,7 @@ namespace Midview.Master;
 // machine never delays any other machine's thumbnail. The connection stays
 // open between polls -- a full TLS handshake every few seconds, times 25+
 // machines, would be needless overhead.
-public sealed class ThumbnailPoller : IDisposable
+public sealed partial class ThumbnailPoller : IDisposable
 {
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
 
@@ -65,8 +65,8 @@ public sealed class ThumbnailPoller : IDisposable
     // read before each request; without it, the size tiles always had.
     // classLesson: the class folder's lesson (ClassFolderRole.LessonForPollers),
     // handed to the Agent like the program block. classHomeClaim: while this
-    // PC keeps the class folders, its claim on an Agent that keeps an older
-    // home (ClassFolderRole.HomeGeneration); null otherwise. classLessonOver:
+    // PC keeps the class folders, its claim on the Agent, made once per
+    // connection (ClassFolderRole.HomeGeneration); null otherwise. classLessonOver:
     // for a lesson the Agent follows and the home it keeps, that lesson's end
     // when this PC knows it is over (ClassFolderRole.EndOfLessonOver); null otherwise. classLessonHeldEnd:
     // whether classLesson is the end of a lesson this PC held for the room
@@ -156,7 +156,7 @@ public sealed class ThumbnailPoller : IDisposable
                 SendPowerScheduleIfChanged();
                 SendAppBlockIfChanged();
                 // The home first: an Agent that keeps an older one refuses its lesson.
-                ClaimClassHomeIfBehind();
+                ClaimClassHome();
                 SendClassLessonIfChanged();
                 ObserveAppBlock();
             }
@@ -270,155 +270,6 @@ public sealed class ThumbnailPoller : IDisposable
         catch (Exception)
         {
             _nextAppBlockAttempt = DateTime.UtcNow + _agentRetryInterval;
-        }
-    }
-
-    // The same for the class folder's lesson: a machine that was off when the
-    // teacher started or ended it gets it the next time it's on, and the Agent
-    // keeps an older one out by SavedAt; one that was busy (it waits for its
-    // lesson lock no longer than ClassHomeClaim.MaxLockWait) gets it after
-    // BusyRetryInterval, not the usual retry interval. The wait is that
-    // lesson's: one started or ended since goes at once. A lesson never saved
-    // (SavedAt 0: the Master hasn't had one yet) is nothing to hand over, nor is
-    // no lesson at all (a Master that stood down, however saved), which an
-    // Agent would take for a newer end of the lesson another teacher PC runs.
-    // An Agent that keeps its own newer lesson instead is asked which: one
-    // this PC knows is over (the PC was off for its end, and missed this
-    // lesson's start) is ended there, and this lesson handed again, as an
-    // Agent takes only the end of the lesson it follows. A held lesson's end
-    // (classLessonHeldEnd) goes only to an Agent still in that lesson: one
-    // with no lesson on would take it, and then hold an end newer than the
-    // other home's lesson, which it would refuse.
-    private void SendClassLessonIfChanged()
-    {
-        if (_classLesson?.Invoke() is not { SavedAt: > 0 } lesson || lesson.LessonId == Guid.Empty
-            || lesson.SavedAt == _sentClassLessonSavedAt
-            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
-            || (lesson.SavedAt == _failedClassLessonSavedAt && DateTime.UtcNow < _nextClassLessonAttempt)
-            || _stop.IsCancellationRequested)
-        {
-            return;
-        }
-
-        try
-        {
-            if (!lesson.IsOn && _classLessonHeldEnd?.Invoke() == true && !StillIn(agentThumbprint, lesson))
-            {
-                _sentClassLessonSavedAt = lesson.SavedAt;
-                return;
-            }
-            var (succeeded, detail) = SendClassLesson(agentThumbprint, lesson);
-            if (succeeded && detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal) && EndLessonOver(agentThumbprint))
-            {
-                (succeeded, detail) = SendClassLesson(agentThumbprint, lesson);
-            }
-            if (succeeded)
-            {
-                _sentClassLessonSavedAt = lesson.SavedAt;
-            }
-            else
-            {
-                // Busy with its student's folders, it is asked again in a moment (an end
-                // that waited minutes would leave that PC in the lesson meanwhile).
-                ClassLessonFailed(lesson, detail == ClassHomeClaim.BusyText ? BusyRetryInterval : _agentRetryInterval);
-            }
-        }
-        catch (Exception)
-        {
-            ClassLessonFailed(lesson, _agentRetryInterval);
-        }
-    }
-
-    private void ClassLessonFailed(ClassLesson lesson, TimeSpan wait)
-    {
-        _failedClassLessonSavedAt = lesson.SavedAt;
-        _nextClassLessonAttempt = DateTime.UtcNow + wait;
-    }
-
-    private (bool Succeeded, string Detail) SendClassLesson(string agentThumbprint, ClassLesson lesson) =>
-        CommandClient.SendCommandForResult(
-            _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate, MessageType.SetClassLesson, lesson.Encode());
-
-    // Whether the Agent still follows that lesson, on; one that follows a
-    // lesson this PC knows is over has it ended there (classLessonOver).
-    private bool StillIn(string agentThumbprint, ClassLesson lesson)
-    {
-        var (followed, _) = ClassFolderClient.GetLesson(_machine, _masterCertificate, _agentPort);
-        if (followed is { IsOn: true } && followed.LessonId == lesson.LessonId)
-        {
-            return true;
-        }
-        if (followed is not null)
-        {
-            EndLessonOver(agentThumbprint, followed);
-        }
-        return false;
-    }
-
-    // The lesson the Agent follows (followed, or read now), ended there when
-    // this PC knows it is over (classLessonOver), which goes by the home the
-    // Agent keeps (keptHome when read already, or read now): true when the
-    // Agent took that end.
-    private bool EndLessonOver(string agentThumbprint, ClassLesson? followed = null, (ClassHome? Home, bool Read) keptHome = default)
-    {
-        if (_classLessonOver is null || _stop.IsCancellationRequested)
-        {
-            return false;
-        }
-        followed ??= ClassFolderClient.GetLesson(_machine, _masterCertificate, _agentPort).Lesson;
-        if (followed is null)
-        {
-            return false;
-        }
-        var home = keptHome.Read ? keptHome.Home : ClassFolderClient.GetHome(_machine, _masterCertificate, _agentPort).Home;
-        if (_classLessonOver(followed, home) is not { } end)
-        {
-            return false;
-        }
-        var (succeeded, detail) = SendClassLesson(agentThumbprint, end);
-        return succeeded && !detail.StartsWith(ClassLesson.KeptNewerText, StringComparison.Ordinal);
-    }
-
-    // The class folders' home (Ruling 9): while this PC keeps them, an Agent
-    // that keeps an older home, another PC's or this PC's own at an older
-    // generation (a straggler: off when this PC took the folders over), is
-    // claimed with this PC's (classHomeClaim) once its machine answers, each
-    // time it comes back. The Agent itself refuses it while it follows a lesson
-    // of the home it keeps (tried again after the retry interval, or in a
-    // moment when it was busy), and takes this PC's own as a refresh. One that
-    // keeps no home, or one at least as new, is left as it is. A lesson the
-    // straggler still follows that this PC knows is over (it came with the
-    // old home's folders: the PC was off for its end too) is ended there
-    // first, or nobody would ever end it, and the PC would stay out of this
-    // PC's lessons until the day ends.
-    private void ClaimClassHomeIfBehind()
-    {
-        if (_classHomeClaim?.Invoke() is not { } claim || claim.Generation == _checkedClassHomeGeneration
-            || _machine.AgentThumbprint is not { Length: > 0 } agentThumbprint
-            || DateTime.UtcNow < _nextClassHomeAttempt || _stop.IsCancellationRequested)
-        {
-            return;
-        }
-
-        try
-        {
-            var (home, oldAgent) = ClassFolderClient.GetHome(_machine, _masterCertificate, _agentPort);
-            if (!oldAgent && home is not null && home.Generation < claim.Generation)
-            {
-                EndLessonOver(agentThumbprint, keptHome: (home, true));
-                var (ok, detail, _) = ClassFolderClient.ClaimHome(_machine, _masterCertificate, claim, _agentPort);
-                if (!ok)
-                {
-                    _nextClassHomeAttempt = DateTime.UtcNow
-                        + (detail == ClassHomeClaim.BusyText ? BusyRetryInterval : _agentRetryInterval);
-                    return;
-                }
-            }
-            _checkedClassHomeGeneration = claim.Generation;
-        }
-        catch (Exception)
-        {
-            _nextClassHomeAttempt = DateTime.UtcNow + _agentRetryInterval;
         }
     }
 

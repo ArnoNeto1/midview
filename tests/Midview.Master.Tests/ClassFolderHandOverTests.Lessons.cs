@@ -40,6 +40,64 @@ public sealed partial class ClassFolderHandOverTests
         Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
     }
 
+    // The old home: no lesson starts there while its copy goes to a
+    // colleague's PC, nor after, until that PC says how its take-over went
+    // (or the settle wait passes): a start among that PC's claims would
+    // split the room. Each PC's line says why, and nothing reaches the Agents.
+    [Fact]
+    public async Task AStartOnTheOldHome_WhileItsCopyIsSentOrUnsettled_IsRefused()
+    {
+        using var rig = new ClassSyncRig(homes: 3);
+        using var lab = new HandOverLab(rig);
+        await lab.MakeTheOldHomeTheHomeAsync();
+        lab.FillTheOldHome();
+        lab.Giver.SettleWait = TimeSpan.FromSeconds(2);
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? sending = null, unsettled = null;
+        var progress = new Inline(step =>
+        {
+            if (sending is null && step.Files > 0 && !step.InPlace)
+            {
+                sending = lab.OldSync.StartAsync(Turma).GetAwaiter().GetResult();
+            }
+        });
+        var claimed = new object();
+        lab.Taker.SendClaim = (_, _, _) =>
+        {
+            lock (claimed)
+            {
+                unsettled ??= lab.OldSync.StartAsync(Turma).GetAwaiter().GetResult();
+            }
+            return (false, "recusado", false);
+        };
+
+        var result = await lab.Taker.TakeOverAsync(lab.Home, progress);
+
+        Assert.False(result.Ok);
+        foreach (var lines in new[] { sending, unsettled })
+        {
+            Assert.NotNull(lines);
+            Assert.Equal(rig.Pcs.Count, lines!.Count);
+            Assert.All(lines, line => Assert.Equal((false, ClassFolderText.HandOverRunningHere), (line.Ok, line.Detail)));
+        }
+        Assert.False(lab.OldSync.Lesson.IsOn);
+        Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+
+        // Settled (never told here: the wait passed), it starts lessons again.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (lab.Giver.IsBusy)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "still busy");
+            await Task.Delay(50);
+        }
+        rig.Now = rig.Now.AddMinutes(1);
+        var started = await lab.OldSync.StartAsync(Turma);
+        Assert.All(started, line => Assert.True(line.Ok, $"{line.Machine.Name}: {line.Detail}"));
+    }
+
+    [Fact]
+    public void TheHandOverRunningHereText_IsTheOneAgreed() => Assert.Equal(
+        "as pastas das turmas estão passando para outro computador; espere a troca terminar", ClassFolderText.HandOverRunningHere);
+
     // With a lesson on here (one this PC ran as the home before, say), no
     // take-over begins, from a home that answers or one that doesn't.
     [Fact]

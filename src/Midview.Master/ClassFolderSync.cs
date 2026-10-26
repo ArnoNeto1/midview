@@ -50,12 +50,13 @@ public sealed record PcStatus(KnownMachine Machine, PcSyncState State, string De
 // raised on them. Nothing a PC does (failing, going away, answering nonsense)
 // escapes as an exception: it becomes that PC's status.
 //
-// In seven files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
+// In eight files: this one (the lesson), ClassFolderSync.Loop.cs (the loop and
 // its rounds), ClassFolderSync.Round.cs (one PC's round), ClassFolderSync.Copy.cs
 // (each file's pull, push, rename or deletion), ClassFolderSync.SetAside.cs
 // (what PCs set aside for lessons that are over), ClassFolderSync.Home.cs
-// (the class folders' home) and ClassFolderSync.Held.cs (a lesson held for
-// the room while another PC is the home, and lessons known to be over).
+// (the class folders' home), ClassFolderSync.Contest.cs (two PCs claiming the
+// room at once) and ClassFolderSync.Held.cs (a lesson held for the room while
+// another PC is the home, and lessons known to be over).
 public sealed partial class ClassFolderSync : IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(5);
@@ -201,8 +202,14 @@ public sealed partial class ClassFolderSync : IDisposable
     // Agent (ClaimHomeAsync). When an Agent keeps another PC as home with a
     // newer generation, nothing starts: nothing is saved or sent, and the
     // answer is those Agents' refusals, each naming that PC (the lesson stays
-    // as it was: the caller looks at Lesson). Nor while this PC takes the class
-    // folders over (BeginTakeOver): every PC's line says so.
+    // as it was: the caller looks at Lesson). Another PC claiming the room at
+    // the same moment is settled before any lesson goes out, and a lesson
+    // refused by a PC of a home that outranks this one is taken back
+    // (ClassFolderSync.Contest.cs): the room never splits between two
+    // lessons, and no lesson stays on here that no PC follows. Nor does one
+    // start while this PC takes the class folders over (BeginTakeOver), or
+    // gives them to a colleague's PC until that settles (BeginGiving): every
+    // PC's line says so.
     public async Task<IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>> StartAsync(string turma)
     {
         if (!_store.Exists(turma))
@@ -216,6 +223,10 @@ public sealed partial class ClassFolderSync : IDisposable
             if (Volatile.Read(ref _takingOver) > 0)
             {
                 return EveryPc(ClassFolderText.TakeOverRunningHere);
+            }
+            if (Volatile.Read(ref _giving) > 0)
+            {
+                return EveryPc(ClassFolderText.HandOverRunningHere);
             }
 
             var home = await ClaimHomeAsync().ConfigureAwait(false);
@@ -235,7 +246,8 @@ public sealed partial class ClassFolderSync : IDisposable
             var lesson = new ClassLesson(NextSavedAt(), Guid.NewGuid(), turma, UnixNow(), Ended: false);
             _store.RememberLesson(lesson.LessonId, turma);
             Adopt(lesson);
-            return SayBusy(await SendToEveryAgentAsync(lesson).ConfigureAwait(false), home.Busy);
+            var lines = SayBusy(await SendToEveryAgentAsync(lesson).ConfigureAwait(false), home.Busy);
+            return await BackOutForANewerHomeAsync(lesson, lines, home.Generation).ConfigureAwait(false) ?? lines;
         }
         finally
         {
@@ -278,7 +290,7 @@ public sealed partial class ClassFolderSync : IDisposable
             _changingLesson = true;
             await RunningRounds().ConfigureAwait(false);
             await LastRoundsAsync(lesson, token).ConfigureAwait(false);
-            var held = await AnotherHomeSeenOrNamedAsync().ConfigureAwait(false);
+            var held = await AnotherHomeSeenOrNamedAsync(lesson, token).ConfigureAwait(false);
 
             _store.MarkCollected(lesson.LessonId);
             var ended = held ? HeldEndOf(lesson) : lesson with { SavedAt = NextSavedAt(), Ended = true };

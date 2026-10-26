@@ -29,8 +29,10 @@ public partial class MainWindow
     // The window while it is open (one at a time: ShowOnce). UI thread only.
     private ClassFolderWindow? _classWindow;
 
-    // Where the classes a take-over left aside are (ClassFolderText.AsideNote),
-    // read at the start and after every take-over, said in the window; null for none.
+    // Where the classes a take-over left aside are, and, while this PC works
+    // another PC's folders, that its own stay in its "Turmas"
+    // (ClassFolderText.AsideNote): read at the start, after every take-over
+    // and at every change of the role, said in the window; null for none.
     private string? _classAsideNote;
 
     // Before the tiles: their pollers hand the lesson to each machine's Agent.
@@ -103,6 +105,7 @@ public partial class MainWindow
     private void OnClassRoleChanged()
     {
         ShowClassLesson();
+        _ = ReadAsideNoteAsync();
         if (_classWindow is not { } window)
         {
             _classRole.ReleaseRetired();
@@ -118,11 +121,13 @@ public partial class MainWindow
         window.Rebind(controller);
     }
 
-    // The folders beside the class folders that a take-over left (ClassStore.AsideFolders), in the window too when open.
+    // The folders beside the class folders that a take-over left (ClassStore.AsideFolders),
+    // and this PC's own classes while it works another PC's, in the window too when open.
     private async Task ReadAsideNoteAsync()
     {
-        var folders = await Task.Run(_classStore.AsideFolders);
-        _classAsideNote = ClassFolderText.AsideNote(folders, Path.GetDirectoryName(ClassStore.DefaultFilesRoot) ?? string.Empty);
+        var remote = _classRole.Mode == ClassFolderMode.Remote;
+        var where = Path.GetDirectoryName(ClassStore.DefaultFilesRoot) ?? string.Empty;
+        _classAsideNote = await Task.Run(() => ClassFolderText.AsideNote(_classStore, remote, where));
         _classWindow?.ShowAsideNote(_classAsideNote);
     }
 }

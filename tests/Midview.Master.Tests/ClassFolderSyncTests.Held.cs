@@ -99,6 +99,59 @@ public sealed partial class ClassFolderSyncTests
         }
     }
 
+    // A PC whose home can't be read (here an Agent from before two teacher
+    // PCs) but that follows a newer lesson of another PC: another PC may be
+    // the home, so this PC's end is a held one, as when an Agent names it.
+    // PC2, off meanwhile and with no lesson, isn't handed it by this PC's
+    // poller once back, and takes PROF-2's lesson: an end saved now would
+    // have made it refuse that lesson, saved earlier.
+    [Fact]
+    public async Task APcFollowingANewerLessonOfAnotherPc_MakesTheEndAHeldOne_EvenWithItsHomeUnread()
+    {
+        using var rig = new ClassSyncRig(pcs: 3, homes: 2);
+        var (pc1, pc2, pc3) = (rig.Pcs[0], rig.Pcs[1], rig.Pcs[2]);
+        var visible = new List<KnownMachine> { pc1.Machine, pc3.Machine };
+        var sync = new ClassFolderSync(
+            rig.Store, rig.Master, () => visible, machine => !rig.Offline.ContainsKey(machine.Name), () => rig.Now,
+            ClassSyncRig.MachineName, agentPort: rig.AgentPort, sessionPort: rig.SessionPort, interval: TimeSpan.FromHours(1),
+            lessonPath: rig.LessonPath, homePath: rig.HomePath);
+        try
+        {
+            await sync.StartAsync(Turma);
+            var lesson = sync.Lesson;
+            var theirs = new ClassLesson(lesson.SavedAt + 10, Guid.NewGuid(), "3º B", lesson.StartedAt, Ended: false);
+            Assert.True(ClassFolderClient.SetLesson(pc3.Machine, rig.OtherMaster, theirs, rig.AgentPort).Succeeded);
+            rig.Now = rig.Now.AddMinutes(1);
+
+            await sync.EndAsync(EndChoice.Keep);
+
+            var ended = lesson with { SavedAt = lesson.SavedAt + 1, Ended = true };
+            Assert.Equal(ended, sync.Lesson);
+            Assert.True(sync.EndGoesOnlyToItsLesson);
+            Assert.Equal(ended, pc1.Agent.Current);
+            Assert.Equal(theirs, pc3.Agent.Current);
+
+            visible = rig.Machines.ToList();
+            var thumbnails = 0;
+            using (var poller = new ThumbnailPoller(
+                pc2.Machine, rig.Master, rig.SessionPort, rig.AgentPort, agentRetryInterval: TimeSpan.Zero,
+                classLesson: () => sync.Lesson, classLessonHeldEnd: () => sync.EndGoesOnlyToItsLesson))
+            {
+                poller.ThumbnailReceived += _ => Interlocked.Increment(ref thumbnails);
+                poller.Start();
+                await WaitUntil(() => Volatile.Read(ref thumbnails) >= 2);
+            }
+            Assert.Equal(ClassLesson.None(0), pc2.Agent.Current);
+            var (ok, detail) = ClassLessonOnAgents.Send(pc2.Machine, rig.OtherMaster, theirs, rig.AgentPort);
+            Assert.True(ok, detail);
+            Assert.Equal(theirs, pc2.Agent.Current);
+        }
+        finally
+        {
+            sync.Dispose();
+        }
+    }
+
     // One teacher PC: its end is saved now, goes to every PC, and is handed to all.
     [Fact]
     public async Task WithNoOtherHomeEverSeen_AnEndIsAsBefore()

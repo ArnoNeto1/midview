@@ -199,10 +199,14 @@ public partial class ClassFolderTextTests
     public void HomeClosed_NamesTheHomePc() =>
         Assert.Equal("O Midview do PC PROF-1, que guarda as pastas das turmas, está fechado.", ClassFolderText.HomeClosed("PROF-1"));
 
+    // Not only the firewall: the PC may be off, or have a new address on the
+    // network (its Midview tells the room's PCs in a moment).
     [Fact]
-    public void HomeClosedHint_PointsAtTheFirewallRule() =>
+    public void HomeClosedHint_SaysThePcMayBeOffOrMoved_ThenPointsAtTheFirewallRule() =>
         Assert.Equal(
-            "Se ele está aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador (regra do firewall).",
+            "O PC pode estar desligado ou ter mudado de endereço na rede (um endereço novo se acerta sozinho em instantes). "
+            + "Se ele está ligado e aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador "
+            + "(regra do firewall).",
             ClassFolderText.HomeClosedHint);
 
     [Fact]

@@ -203,15 +203,14 @@ public sealed partial class ClassFolderHandOverTests
         lab.AssertUnchanged(before);
     }
 
-    // (i) A lesson started on the home while the copy runs: the home refuses
-    // before its last answer, so the Agents are never claimed and nothing
-    // changes on this PC. A home with a lessons map sees it change (the new
-    // lesson goes in it) when it comes to send it; one with none yet finds the
-    // lesson on at its second look, before the last answer.
+    // (i) A start on the home while the copy runs is refused there, saying
+    // why (a lesson starting then would meet the Agents' claims, splitting the
+    // room): the copy carries on and the take-over is made. A home with a
+    // lessons map, and one with none yet (the home by its claims alone).
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ALessonStartedOnTheHomeDuringTheCopy_StopsIt_BeforeTheAgentsAreClaimed(bool lessonsMap)
+    public async Task AStartOnTheHomeDuringTheCopy_IsRefusedThere_AndTheTakeOverIsMade(bool lessonsMap)
     {
         using var rig = new ClassSyncRig(pcs: 2, homes: 2);
         using var lab = new HandOverLab(rig);
@@ -233,34 +232,24 @@ public sealed partial class ClassFolderHandOverTests
         lab.FillTheOldHome();
         lab.FillTheOldHomeWithBigFiles();
         lab.GiveTheNewHomeAClassOfItsOwn();
-        var homes = lab.Snapshot().Homes;
-        var newFiles = lab.NewFiles();
-        var logged = new List<string>();
-        lab.TakerLog = message =>
-        {
-            lock (logged)
-            {
-                logged.Add(message);
-            }
-        };
-        var started = 0;
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? lines = null;
         var progress = new Inline(step =>
         {
-            if (step.Files > 0 && Interlocked.Exchange(ref started, 1) == 0)
+            if (lines is null && step.Files > 0 && !step.InPlace)
             {
-                lab.OldSync.StartAsync("3º B").Wait();
+                lines = lab.OldSync.StartAsync("3º B").GetAwaiter().GetResult();
             }
         });
 
         var result = await lab.Taker.TakeOverAsync(lab.Home, progress);
 
-        Assert.Equal(1, started);
-        Assert.False(result.Ok);
-        Assert.Equal(ClassFolderText.TakeOverFailed(OldHome, ClassFolderText.EndLessonFirst), result.Detail);
-        Assert.True(lab.OldSync.Lesson.IsOn);
-        Assert.Equal(homes, lab.Snapshot().Homes);
-        Assert.Equal(newFiles, lab.NewFiles());
-        Assert.DoesNotContain(logged, message => message.Contains("didn't take this PC", StringComparison.Ordinal));
+        Assert.True(result.Ok, result.Detail);
+        Assert.NotNull(lines);
+        Assert.All(lines!, line => Assert.Equal((false, ClassFolderText.HandOverRunningHere), (line.Ok, line.Detail)));
+        Assert.False(lab.OldSync.Lesson.IsOn);
+        Assert.All(rig.Pcs, pc => Assert.Equal(NewHome, pc.Agent.CurrentHome?.Name));
+        Assert.All(rig.Pcs, pc => Assert.False(pc.Agent.Current.IsOn));
+        Assert.True(File.Exists(lab.NewPath("Vídeos", "grande-39.bin")));
         lab.AssertNoStaging();
     }
 

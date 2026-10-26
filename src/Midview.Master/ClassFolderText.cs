@@ -219,8 +219,12 @@ public static partial class ClassFolderText
     // The home PC's Midview doesn't answer; then only "Encerrar a aula" works (keeping the files).
     public static string HomeClosed(string name) => $"O Midview do PC {name}, que guarda as pastas das turmas, está fechado.";
 
+    // Off, or on a new network address (which its Midview gives the room's
+    // PCs within a poll), before blaming the firewall rule.
     public const string HomeClosedHint =
-        "Se ele está aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador (regra do firewall).";
+        "O PC pode estar desligado ou ter mudado de endereço na rede (um endereço novo se acerta sozinho em instantes). "
+        + "Se ele está ligado e aberto, o Midview desse PC precisa ser instalado de novo para aceitar este computador "
+        + "(regra do firewall).";
 
     // The home took the connection but gave no answer (it may have done what was asked).
     public static string HomeNoAnswer(string name) => $"O Midview do PC {name} não respondeu. Tente de novo em instantes.";

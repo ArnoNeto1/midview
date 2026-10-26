@@ -100,6 +100,37 @@ public sealed partial class ClassFolderSync
 
     internal void EndTakeOver() => Interlocked.Decrement(ref _takingOver);
 
+    // How many copies of this PC's class folders go to a colleague's PC, or
+    // went and haven't settled (ClassFolderHandOver): no lesson starts while
+    // any does. Raised under the lesson lock, as _takingOver.
+    private int _giving;
+
+    // A copy of the class folders begins to go to a colleague's PC
+    // (ClassFolderHandOver.Send): no lesson starts until EndGiving (a start
+    // says why, on every PC's line), so no start here meets that PC's claims
+    // on the Agents, which would split the room. False, and nothing held,
+    // while a lesson is on. Waits for a start or an end in progress; on the
+    // caller's thread.
+    internal bool BeginGiving()
+    {
+        _lessonGate.Wait(_stop.Token);
+        try
+        {
+            if (Lesson.IsOn)
+            {
+                return false;
+            }
+            Interlocked.Increment(ref _giving);
+            return true;
+        }
+        finally
+        {
+            _lessonGate.Release();
+        }
+    }
+
+    internal void EndGiving() => Interlocked.Decrement(ref _giving);
+
     // With the lesson lock held: the lesson cleared to ClassLesson.None(0)
     // (StandDownAsync), after the rounds in progress; nothing when it is already.
     private async Task ClearLessonLocked()
@@ -178,6 +209,8 @@ public sealed partial class ClassFolderSync
     // but can't be read refuses the start too, saying so (Ruling 12): it isn't
     // taken for "never the home". A refusal of either kind has a line for
     // every PC of the room. Busy: the PCs still busy after being asked twice.
+    // Claims refused for another home (another PC claimed the room at the
+    // same moment) are settled before anything starts (SettleWithAnotherClaimAsync).
     private async Task<HomeClaim> ClaimHomeAsync()
     {
         long? onDisk;
@@ -226,21 +259,25 @@ public sealed partial class ClassFolderSync
         }
 
         var claimed = ours ?? new DateTimeOffset(_localNow()).UtcTicks;
-        var answers = await Task.WhenAll(reports.Select(report =>
+        var answers = (await Task.WhenAll(reports.Select(report =>
                 Task.Run(() => Claim(report.Machine, takeOver: others.Contains(report), claimed))))
-            .ConfigureAwait(false);
-        foreach (var answer in answers.OfType<ClaimAnswer>().Where(answer => !answer.Ok))
+            .ConfigureAwait(false)).OfType<ClaimAnswer>().ToList();
+        foreach (var answer in answers.Where(answer => !answer.Ok))
         {
             // Its lesson start says so too.
             _log($"{answer.Machine.Name} didn't take this PC as the class folders' home: {answer.Detail}");
         }
+        var busy = answers.Where(answer => answer.Busy).Select(answer => Key(answer.Machine)).ToHashSet();
+        if (answers.Any(answer => answer.NamesAnotherHome))
+        {
+            return await SettleWithAnotherClaimAsync(reports, claimed, onDisk, busy).ConfigureAwait(false);
+        }
         // Against what is on disk, so a generation that couldn't be saved is saved next time.
-        if (onDisk != claimed && answers.OfType<ClaimAnswer>().Any(answer => answer.Ok))
+        if (onDisk != claimed && answers.Any(answer => answer.Ok))
         {
             KeepGeneration(claimed);
         }
-        return new HomeClaim(
-            null, answers.OfType<ClaimAnswer>().Where(answer => answer.Busy).Select(answer => Key(answer.Machine)).ToHashSet());
+        return new HomeClaim(null, busy, claimed);
     }
 
     // A start's lines: a PC still busy at the claim whose lesson was refused
@@ -367,11 +404,16 @@ public sealed partial class ClassFolderSync
     private sealed record ClaimAnswer(KnownMachine Machine, bool Ok, string Detail)
     {
         public bool Busy => !Ok && Detail == ClassHomeClaim.BusyText;
+
+        // Refused for another PC that the Agent keeps as the home.
+        public bool NamesAnotherHome => !Ok && Detail.StartsWith(ClassHomeClaim.OtherHomeText, StringComparison.Ordinal);
     }
 
     // What a start's claim came to: the refusals when another PC is the home
-    // (nothing starts), and the PCs (by Key) still busy after two tries.
-    private sealed record HomeClaim(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? Refusals, IReadOnlySet<string> Busy)
+    // (nothing starts), the PCs (by Key) still busy after two tries, and the
+    // generation this PC claimed the room with.
+    private sealed record HomeClaim(
+        IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)>? Refusals, IReadOnlySet<string> Busy, long Generation = 0)
     {
         public static HomeClaim Refused(IReadOnlyList<(KnownMachine Machine, bool Ok, string Detail)> refusals) =>
             new(refusals, new HashSet<string>());

@@ -61,8 +61,10 @@ public partial class MainWindow
     // Whether the pollers hand out a held lesson's end, only to the Agents still in it (on their threads).
     private bool HandsOutAHeldEnd() => _classRole.HandsOutAHeldEnd;
 
-    // While this PC keeps the class folders: its claim on an Agent that keeps
-    // an older home (on the pollers' threads), as its start claims (ClassFolderSync).
+    // While this PC keeps the class folders: its claim on each Agent, once per
+    // connection, taking back one that keeps an older home and refreshing
+    // where the others find this PC (on the pollers' threads), as its start
+    // claims (ClassFolderSync).
     private ClassHomeClaim? StragglerClaim() => _classRole.HomeGeneration is { } generation
         ? new ClassHomeClaim(Environment.MachineName, ClassFolderRemote.Port, TakeOver: true, generation)
         : null;
