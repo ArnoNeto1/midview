@@ -6,7 +6,7 @@
        go by it: they compare each build's date, time and commit
        (midview-build.json). -->
   <PropertyGroup>
-    <Version>0.0.24</Version>
+    <Version>0.0.25</Version>
     <!-- "0.0.1" in the properties, not "0.0.1+<commit>". -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
