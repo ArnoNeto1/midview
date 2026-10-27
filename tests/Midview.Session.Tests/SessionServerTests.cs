@@ -656,6 +656,104 @@ public partial class SessionServerTests
         Assert.Equal(0, harness.Devices.DisableCalls);
     }
 
+    // How a Master that sees and drives the screen through another process
+    // locks the student's keyboard and mouse: this connection, which streams
+    // nothing (see HoldInputLock).
+    [Fact]
+    public async Task HoldInputLock_locks_the_student_input()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+
+        master.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+
+        await WaitUntil(() => harness.InputLock.IsLocked);
+        Assert.Equal(1, harness.Devices.DisableCalls);
+    }
+
+    [Fact]
+    public async Task HoldInputLock_sends_no_frames()
+    {
+        var capture = new CountingScreenCapture();
+        using var harness = new ServerHarness(capture);
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        // A connection that streamed the screen would have sent its first
+        // frame within a capture interval or two.
+        var next = Task.Run(() => master.Channel.Receive());
+        await Task.Delay(500);
+
+        Assert.False(next.IsCompleted);
+        Assert.Equal(0, capture.CallCount);
+
+        master.Dispose(); // the read above ends with the connection
+        await Assert.ThrowsAnyAsync<Exception>(() => next).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    // The slot is for the one Master that streams the screen: a hold that
+    // took it would keep every other Master out for as long as it lasts.
+    [Fact]
+    public async Task HoldInputLock_does_not_take_the_controlling_slot()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(200, 100));
+        using var holding = harness.ConnectMaster();
+        holding.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        using var watching = harness.ConnectMaster();
+        watching.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        watching.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+
+        // A Session that gave the hold the slot would make this one wait 15 s for it.
+        var message = await Task.Run(() => watching.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(MessageType.ScreenFrame, message.Type);
+    }
+
+    // The Master's heartbeats keep the hold from timing out as they do a
+    // control connection's: with one 4 s ago a lock 8 s old stays, and with
+    // none for 6 s it ends.
+    [Fact]
+    public async Task HoldInputLock_heartbeats_keep_the_lock_from_timing_out()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        harness.Clock.Advance(TimeSpan.FromSeconds(4));
+        var readsBefore = harness.Clock.Reads;
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await WaitUntil(() => harness.Clock.Reads > readsBefore); // the Session has taken the heartbeat
+
+        harness.Clock.Advance(TimeSpan.FromSeconds(4));
+        harness.InputLock.CheckHeartbeatTimeout();
+        Assert.True(harness.InputLock.IsLocked);
+
+        harness.Clock.Advance(TimeSpan.FromSeconds(2));
+        harness.InputLock.CheckHeartbeatTimeout();
+        Assert.False(harness.InputLock.IsLocked);
+    }
+
+    // Closing the connection is the Master's window closing or its program
+    // ending. The clock never moves here and no heartbeat comes, so only the
+    // connection's end can have released it.
+    [Fact]
+    public async Task Dropping_the_hold_unlocks()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        master.Dispose();
+
+        await WaitUntil(() => !harness.InputLock.IsLocked);
+        Assert.Equal(1, harness.Devices.EnableCalls);
+    }
+
     // The 11-byte InputEvent ViewControlWindow sends: kind, x, y, key.
     private static byte[] MouseMoveTo(int x, int y)
     {
@@ -1628,6 +1726,47 @@ public partial class SessionServerTests
         }
     }
 
+    // Stands still until a test moves it, and counts how often it was read, so
+    // a test can wait for the Session to have looked at the time (a heartbeat
+    // arriving) without sleeping.
+    private sealed class SteppedClock : ISystemClock
+    {
+        private readonly object _gate = new();
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        private int _reads;
+
+        public int Reads
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _reads;
+                }
+            }
+        }
+
+        public DateTimeOffset UtcNow
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    _reads++;
+                    return _now;
+                }
+            }
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            lock (_gate)
+            {
+                _now += by;
+            }
+        }
+    }
+
     private sealed class ServerHarness : IDisposable
     {
         private readonly TcpListener _listener;
@@ -1649,12 +1788,13 @@ public partial class SessionServerTests
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            InputLock = new InputLockManager(Devices, Clock, TimeSpan.FromSeconds(5));
 
             var server = new SessionServer(
                 _listener, _serverCert,
                 trustedMastersFile is null ? new TrustStore(new[] { _masterCert.Thumbprint }) : TrustStore.FromFile(trustedMastersFile),
                 capture, Injector,
-                new InputLockManager(Devices, new FakeClock(), TimeSpan.FromSeconds(5)),
+                InputLock,
                 messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms, screenLock,
                 fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter, frameAckTimeout,
                 classFolder: classFolder);
@@ -1667,6 +1807,11 @@ public partial class SessionServerTests
 
         // The student's keyboard and mouse, as the input lock sees them.
         public FakeInputDeviceController Devices { get; } = new();
+
+        // The lock the Session uses, and the time it measures heartbeats by.
+        public SteppedClock Clock { get; } = new();
+
+        public InputLockManager InputLock { get; }
 
         public FakeInputInjector Injector { get; } = new();
 

@@ -273,6 +273,15 @@ public sealed partial class SessionServer
             return;
         }
 
+        // Nor does holding the input lock, for a Master that drives the screen
+        // through another process (see HoldInputLock): it streams nothing, and
+        // falling through to the slot below would take it and start a capture.
+        if (firstMessage.Type == MessageType.HoldInputLock)
+        {
+            ServeInputLockHold(channel, cancellationToken);
+            return;
+        }
+
         if (!_servingSlot.Wait(ConnectionTimeoutMs, cancellationToken))
         {
             Console.WriteLine("Another MidviewMaster is still connected; closing the new connection.");
@@ -440,6 +449,34 @@ public sealed partial class SessionServer
             {
                 _screenLock!.Hide();
             }
+        }
+    }
+
+    // Locks the student's keyboard and mouse as StartControl does (the notice
+    // included) for as long as this connection lasts, however it ends: closed
+    // by the Master, broken, or silent for ConnectionTimeoutMs because the
+    // teacher's PC stopped answering -- the student is never left locked out.
+    // Streams nothing and never takes the control slot: this Master sees and
+    // drives the screen through another process, which can't lock the input.
+    // Only heartbeats are expected meanwhile, and each tells the lock it is
+    // still wanted, so the heartbeat check a Serve connection runs doesn't end
+    // it. A lock that can't be applied throws, which ends the connection.
+    private void ServeInputLockHold(SecureChannel channel, CancellationToken cancellationToken)
+    {
+        _inputLockManager.StartLock();
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (channel.Receive().Type == MessageType.Heartbeat)
+                {
+                    _inputLockManager.OnHeartbeatReceived();
+                }
+            }
+        }
+        finally
+        {
+            _inputLockManager.StopLock();
         }
     }
 
