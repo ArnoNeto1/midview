@@ -439,8 +439,8 @@ public sealed class UpdateReceiver
 
     // Into the attempt's own folder, with every entry's path checked and the
     // bytes actually written capped. The result must be exactly the files
-    // its manifest lists, the two programs among them, and fingerprint to
-    // the offered value. Returns the build's label.
+    // its manifest lists, the programs a build needs among them (RequiredFiles),
+    // and fingerprint to the offered value. Returns the build's label.
     private string ExtractAndVerify(UpdateOffer offer, string attemptId)
     {
         // New: CheckOffer refused an id whose folder exists, under the lock.

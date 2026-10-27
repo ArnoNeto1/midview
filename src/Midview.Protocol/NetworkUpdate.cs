@@ -20,8 +20,9 @@ public static class NetworkUpdate
 
     public const string ManifestFileName = "midview-build.json";
 
-    // A build that lacks either can't run the lab.
-    public static readonly IReadOnlyList<string> RequiredFiles = new[] { "Midview.Agent.exe", "Midview.Session.exe" };
+    // A build that lacks any of them can't run the lab.
+    public static readonly IReadOnlyList<string> RequiredFiles =
+        new[] { "Midview.Agent.exe", "Midview.Session.exe", "Midview.Desk.exe" };
 
     // The student program is ~70 MB zipped, ~160 MB unzipped, ~500 files.
     public const long MaxZipSize = 512L * 1024 * 1024;

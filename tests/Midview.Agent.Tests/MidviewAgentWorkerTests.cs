@@ -14,14 +14,7 @@ public sealed class MidviewAgentWorkerTests
     {
         var session = new FakeSessionProcessLauncher(true);
         var helper = new FakeSessionProcessLauncher(true);
-        var me = WindowsIdentity.GetCurrent().User!;
-        var worker = new MidviewAgentWorker(
-            new SessionSupervisor(session, TimeSpan.FromMinutes(1)),
-            new HelperSupervisor(new SessionSupervisor(helper, TimeSpan.FromMinutes(1))),
-            new StudentFolderGuard(() => null, me),
-            new ClassLessonHandler(
-                Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json"),
-                () => null, _ => null, new AppBlockEnforcer(new NoProcesses()), me, () => DateTime.Now));
+        var worker = Worker(session, helper, TimeSpan.FromMinutes(1));
 
         // The first pass runs before StartAsync returns; the loop then waits for the next poll.
         await worker.StartAsync(CancellationToken.None);
@@ -29,6 +22,79 @@ public sealed class MidviewAgentWorkerTests
 
         Assert.Equal(1, session.LaunchAttempts);
         Assert.Equal(1, helper.LaunchAttempts);
+    }
+
+    // A helper left by an earlier Agent (a restart, a crash, an update) still holds
+    // its port and its exe, and the supervisor can't adopt it: it doesn't know its
+    // pid. So it is ended once, before the first launch -- not on every pass, which
+    // would end the helper the supervisor itself started.
+    [Fact]
+    public async Task AStrayHelper_IsEndedOnce_BeforeTheFirstLaunch()
+    {
+        var session = new FakeSessionProcessLauncher(true);
+        var helper = new FakeSessionProcessLauncher(false); // never starts, so every pass tries again
+        var ended = 0;
+        var launchesBefore = -1;
+        var worker = Worker(session, helper, TimeSpan.FromMilliseconds(10), clearStrayHelper: () =>
+        {
+            ended++;
+            launchesBefore = helper.LaunchAttempts;
+        });
+
+        await worker.StartAsync(CancellationToken.None);
+        await WaitUntil(() => helper.LaunchAttempts >= 3);
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Equal(1, ended);
+        Assert.Equal(0, launchesBefore);
+    }
+
+    // Starting is how the Agent listens for the teacher: nothing about a leftover
+    // helper may stand in the way.
+    [Fact]
+    public async Task AStrayHelperThatCannotBeEnded_DoesNotKeepTheAgentFromRunning()
+    {
+        var session = new FakeSessionProcessLauncher(true);
+        var helper = new FakeSessionProcessLauncher(true);
+        var log = new List<string>();
+        var worker = Worker(session, helper, TimeSpan.FromMinutes(1),
+            clearStrayHelper: () => throw new InvalidOperationException("no process list"), log: log.Add);
+
+        await worker.StartAsync(CancellationToken.None);
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Contains("no process list", Assert.Single(log));
+        Assert.Equal(1, session.LaunchAttempts);
+        Assert.Equal(1, helper.LaunchAttempts);
+    }
+
+    // Ending a leftover helper and the log are injected, so no real process is ended
+    // (a helper someone is running on this machine stays) and the real agent.log is
+    // left alone.
+    private static MidviewAgentWorker Worker(
+        FakeSessionProcessLauncher session, FakeSessionProcessLauncher helper, TimeSpan poll,
+        Action? clearStrayHelper = null, Action<string>? log = null)
+    {
+        var me = WindowsIdentity.GetCurrent().User!;
+        return new MidviewAgentWorker(
+            new SessionSupervisor(session, poll),
+            new HelperSupervisor(new SessionSupervisor(helper, poll)),
+            new StudentFolderGuard(() => null, me),
+            new ClassLessonHandler(
+                Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json"),
+                () => null, _ => null, new AppBlockEnforcer(new NoProcesses()), me, () => DateTime.Now),
+            clearStrayHelper ?? (() => { }), log ?? (_ => { }));
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(condition(), "the loop didn't get that far in time");
     }
 
     private sealed class NoProcesses : IProcessInspector

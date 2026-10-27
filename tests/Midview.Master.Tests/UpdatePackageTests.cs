@@ -45,7 +45,8 @@ public class UpdatePackageTests : IDisposable
         }));
     }
 
-    private static readonly string[] Program = { "Midview.Agent.exe", "Midview.Session.exe", "runtimes/win-x64/native.dll" };
+    private static readonly string[] Program =
+        { "Midview.Agent.exe", "Midview.Session.exe", "Midview.Desk.exe", "runtimes/win-x64/native.dll" };
 
     [Fact]
     public void Identify_ReadsTheManifest_AndFingerprintsTheFolder()
@@ -95,6 +96,18 @@ public class UpdatePackageTests : IDisposable
         var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(_package));
 
         Assert.Equal("O programa do aluno não tem Midview.Session.exe.", error.Message);
+    }
+
+    // A program from before the Desk helper can't be pushed: the lab would lose
+    // remote control through the UAC prompt.
+    [Fact]
+    public void Identify_WithoutTheHelper_IsRefused()
+    {
+        WriteProgram("Midview.Agent.exe", "Midview.Session.exe", "Midview.Protocol.dll");
+
+        var error = Assert.Throws<InvalidDataException>(() => UpdatePackage.Identify(_package));
+
+        Assert.Equal("O programa do aluno não tem Midview.Desk.exe.", error.Message);
     }
 
     [Fact]

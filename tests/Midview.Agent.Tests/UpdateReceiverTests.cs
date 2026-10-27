@@ -471,6 +471,7 @@ public class UpdateReceiverTests : IDisposable
         {
             ["Midview.Agent.exe"] = "agent v2",
             ["Midview.Session.exe"] = "session v2",
+            ["Midview.Desk.exe"] = "desk v2",
             ["runtimes/win-x64/native/x.dll"] = "native",
         };
 

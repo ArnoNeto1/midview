@@ -91,6 +91,13 @@ public class NetworkUpdateTests : IDisposable
         Assert.False(UpdateStates.IsFinal(null));
     }
 
+    // A build without the Desk helper can't do what the lab needs (the remote
+    // control that follows the screen onto the UAC prompt), so it is neither
+    // pushed by the Master nor accepted by the Agent.
+    [Fact]
+    public void RequiredFiles_includes_the_helper() =>
+        Assert.Contains("Midview.Desk.exe", NetworkUpdate.RequiredFiles);
+
     [Fact]
     public void Manifest_ParsesAndNormalizesItsFiles()
     {

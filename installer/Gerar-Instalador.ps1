@@ -136,6 +136,10 @@ foreach ($earlier in 'MidviewSetup.exe', 'Midview-Instalador-*.exe') {
 # fine on those, while the Session would break on the Agent's stubs.
 Publish-Project 'Midview.Agent' (Join-Path $programs 'aluno')
 Publish-Project 'Midview.Session' (Join-Path $programs 'aluno')
+# The Desk helper goes beside them. Like the Session it needs the full Windows
+# Desktop runtime, so it publishes after the Agent; the manifest and the setup
+# pick it up from the folder, there is no list to keep in step.
+Publish-Project 'Midview.Desk' (Join-Path $programs 'aluno')
 Copy-Licenses (Join-Path $programs 'aluno')
 Write-BuildManifest (Join-Path $programs 'aluno') $when
 Publish-Project 'Midview.Master' (Join-Path $programs 'professor')

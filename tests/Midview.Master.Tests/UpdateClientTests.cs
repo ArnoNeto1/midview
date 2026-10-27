@@ -20,7 +20,7 @@ public class UpdateClientTests : IDisposable
     {
         var folder = _package;
         Directory.CreateDirectory(folder);
-        var files = new[] { "Midview.Agent.exe", "Midview.Session.exe" };
+        var files = new[] { "Midview.Agent.exe", "Midview.Session.exe", "Midview.Desk.exe" };
         foreach (var file in files)
         {
             // Big enough to take several chunks.

@@ -401,12 +401,27 @@ public sealed class SchtasksRecoveryTask : IRecoveryTask
 
 public static class SessionProcesses
 {
-    // Every Midview.Session, in every logon session: a leftover one (from
-    // either build) keeps port 5901 and never exits on its own. Only by that
-    // name: the applier is a Midview.Agent too.
+    internal const string SessionName = "Midview.Session";
+    internal const string HelperName = "Midview.Desk";
+
+    // What KillAll ends, by name only: the applier is a Midview.Agent too.
+    internal static readonly IReadOnlyList<string> Names = new[] { SessionName, HelperName };
+
+    // Every Midview.Session and every Midview.Desk, in every logon session: a
+    // leftover one (from either build) keeps its port -- 5901 the Session, 5902
+    // the helper, which also locks its own exe -- and never exits on its own.
     public static void KillAll()
     {
-        foreach (var process in Process.GetProcessesByName("Midview.Session"))
+        foreach (var name in Names)
+        {
+            KillByName(name);
+        }
+    }
+
+    // Every process with this name, in every logon session.
+    internal static void KillByName(string name)
+    {
+        foreach (var process in Process.GetProcessesByName(name))
         {
             using (process)
             {

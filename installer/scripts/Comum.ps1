@@ -49,15 +49,17 @@ function Write-Erro([string]$Caminho, [string]$Mensagem) {
     }
 }
 
-# Para o serviço e a Session (que roda na sessão do aluno) para os arquivos
-# poderem ser trocados. Parar o serviço já reativa teclado e mouse.
+# Para o serviço, a Session (que roda na sessão do aluno) e o Desk (o ajudante
+# do controle remoto: roda como SYSTEM na sessão do console, segura a porta
+# 5902 e não sai sozinho) para os arquivos poderem ser trocados. Parar o
+# serviço já reativa teclado e mouse.
 function Stop-Midview {
     $servico = Get-Service -Name $NomeServico -ErrorAction SilentlyContinue
     if ($servico -and $servico.Status -ne 'Stopped') {
         Stop-Service -Name $NomeServico -Force
         $servico.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
     }
-    Get-Process -Name 'Midview.Session', 'Midview.Agent' -ErrorAction SilentlyContinue |
+    Get-Process -Name 'Midview.Session', 'Midview.Desk', 'Midview.Agent' -ErrorAction SilentlyContinue |
         Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 }
