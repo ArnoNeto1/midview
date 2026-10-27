@@ -107,7 +107,7 @@ and uninstaller).
   - the output is `dist\MidviewSetup.exe`. The version Windows shows (the
     wizard, Installed apps, the properties of the setup and of the programs)
     is Midview's, set in `Directory.Build.props` (0.0.1 from 2026-10-07,
-    0.0.2 to 0.0.27 from 2026-10-08);
+    0.0.2 to 0.0.28 from 2026-10-08);
     until 2026-10-07 the setup was `Midview-Instalador-<yyyy.MM.dd-HHmm>.exe`
     and its version that date and time;
   - `midview-build.json`'s label stays as today (date and commit): network
