@@ -5,6 +5,16 @@ using System.Runtime.InteropServices;
 using Midview.Desk;
 using Xunit;
 
+// Counting the process's GDI objects is process-wide, so these real-GDI
+// captures must not run beside another test churning bitmaps (DeskServerTests
+// streams through a fake capture): a collection with parallelization off keeps
+// this class off on its own.
+[CollectionDefinition("Desk real GDI", DisableParallelization = true)]
+public sealed class DeskRealGdiCollection
+{
+}
+
+[Collection("Desk real GDI")]
 public class DeskScreenCaptureTests
 {
     [DeskFact]
