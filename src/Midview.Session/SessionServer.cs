@@ -786,6 +786,7 @@ public sealed partial class SessionServer
             // read it, then closes itself (no action waits on it, so it
             // lingers 0 past the count).
             var result = CloseAll(force);
+            CloseTeacherMessages();
             var notice = force ? "O professor encerrou seus programas." : "O professor está fechando seus programas.";
             if (_countdownNotice is not null)
             {
@@ -816,6 +817,7 @@ public sealed partial class SessionServer
         {
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
             var (closed, detail) = CloseAll(force);
+            CloseTeacherMessages();
             Console.WriteLine($"Closing programs after the warning: {(closed ? "" : "failed, ")}{detail}");
         });
         return (true, $"aluno avisado; os programas fecham em {when}");
@@ -851,6 +853,21 @@ public sealed partial class SessionServer
         catch (Exception ex)
         {
             Console.WriteLine($"Showing a countdown failed: {ex.Message}");
+        }
+    }
+
+    // The teacher's messages are this program's own windows, which closing
+    // the programs never touches (AppClosePolicy leaves Midview alone): they
+    // go with the rest.
+    private void CloseTeacherMessages()
+    {
+        try
+        {
+            _messageDisplay?.CloseAll();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Closing the teacher's messages failed: {ex.Message}");
         }
     }
 

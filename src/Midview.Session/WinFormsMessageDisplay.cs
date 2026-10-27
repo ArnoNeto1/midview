@@ -12,22 +12,37 @@ public sealed class WinFormsMessageDisplay : IMessageDisplay
 
     private readonly ScreenLockState _lockState;
 
+    // Raised by CloseAll: a message asked for before then never shows, even
+    // one still waiting for the lock screen to go.
+    private int _closedTimes;
+
     public WinFormsMessageDisplay(ScreenLockState? lockState = null)
     {
         _lockState = lockState ?? ScreenLockState.Default;
     }
 
+    public void CloseAll()
+    {
+        Interlocked.Increment(ref _closedTimes);
+        TeacherMessageForm.CloseAllOpen();
+    }
+
     public void Show(string text)
     {
+        var asked = Volatile.Read(ref _closedTimes);
+        bool Closed() => Volatile.Read(ref _closedTimes) != asked;
         var thread = new Thread(() =>
         {
             // Under the lock screen it would only be hidden: it waits, and
             // shows once the teacher unlocks.
-            while (_lockState.IsLocked)
+            while (_lockState.IsLocked && !Closed())
             {
                 Thread.Sleep(LockCheck);
             }
-            Application.Run(new TeacherMessageForm(text, _lockState));
+            if (!Closed())
+            {
+                Application.Run(new TeacherMessageForm(text, _lockState, Closed));
+            }
         })
         {
             IsBackground = true,
@@ -56,7 +71,30 @@ public sealed class WinFormsMessageDisplay : IMessageDisplay
         private readonly ScreenLockState _lockState;
         private readonly System.Windows.Forms.Timer _keepInFront = new() { Interval = 1000 };
 
-        public TeacherMessageForm(string text, ScreenLockState lockState)
+        // Every message on screen, each closed on its own thread.
+        public static void CloseAllOpen()
+        {
+            List<TeacherMessageForm> open;
+            lock (Open)
+            {
+                open = Open.ToList();
+            }
+            foreach (var form in open)
+            {
+                try
+                {
+                    form.BeginInvoke(form.Close);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Closed meanwhile.
+                }
+            }
+        }
+
+        // closed: CloseAll came after this message was asked for (it may
+        // have been on its way to the screen meanwhile).
+        public TeacherMessageForm(string text, ScreenLockState lockState, Func<bool> closed)
         {
             _lockState = lockState;
             // The text box below wants Windows line breaks; the teacher's
@@ -117,6 +155,12 @@ public sealed class WinFormsMessageDisplay : IMessageDisplay
                 lock (Open)
                 {
                     Open.Add(this);
+                }
+                // CloseAll ran while it was opening, before it was in Open.
+                if (closed())
+                {
+                    BeginInvoke(Close);
+                    return;
                 }
                 KeepInFront();
                 ok.Focus();

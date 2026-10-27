@@ -89,6 +89,7 @@ public class RecordingCountdownNotice : ICountdownNotice
 public class RecordingMessageDisplay : IMessageDisplay
 {
     private readonly List<string> _shown = new();
+    private readonly List<string> _events = new();
 
     public IReadOnlyList<string> Shown
     {
@@ -101,11 +102,32 @@ public class RecordingMessageDisplay : IMessageDisplay
         }
     }
 
+    // Every Show and CloseAll, in order: "show: <text>" or "close all".
+    public IReadOnlyList<string> Events
+    {
+        get
+        {
+            lock (_shown)
+            {
+                return _events.ToList();
+            }
+        }
+    }
+
     public void Show(string text)
     {
         lock (_shown)
         {
             _shown.Add(text);
+            _events.Add("show: " + text);
+        }
+    }
+
+    public void CloseAll()
+    {
+        lock (_shown)
+        {
+            _events.Add("close all");
         }
     }
 }
@@ -1078,6 +1100,39 @@ public partial class SessionServerTests
 
         await WaitUntil(() => closer.ForceFlags.Count == 1);
         Assert.Equal(new[] { false }, closer.ForceFlags);
+    }
+
+    // The teacher's messages are this program's own windows, which closing the
+    // programs never touches (WindowsAppCloser leaves Midview alone): they
+    // close with the programs, before the notice that says so.
+    [Fact]
+    public async Task CloseApps_Now_AlsoClosesTheTeachersMessages_BeforeSayingSo()
+    {
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(
+            new CountingScreenCapture(), messageDisplay: display, appCloser: new FakeAppCloser(asked: 1, forced: 0));
+        using var teacher = harness.ConnectMaster();
+
+        await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask)).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(new[] { "close all", "show: O professor está fechando seus programas." }, display.Events);
+    }
+
+    [Fact]
+    public async Task CloseApps_WithAWarning_ClosesTheTeachersMessages_WhenTheProgramsClose()
+    {
+        var closer = new FakeAppCloser(asked: 1, forced: 0);
+        var display = new RecordingMessageDisplay();
+        using var harness = new ServerHarness(new CountingScreenCapture(), messageDisplay: display, appCloser: closer);
+        using var teacher = harness.ConnectMaster();
+
+        await Task.Run(() => teacher.CloseApps(CloseAppsMode.Ask, delaySeconds: 1)).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.DoesNotContain("close all", display.Events); // not yet: the warning's time is the student's
+
+        await WaitUntil(() => display.Events.Contains("close all"));
+        Assert.Equal(
+            new[] { "show: O professor vai fechar seus programas em 1 segundo. Salve seu trabalho agora.", "close all" },
+            display.Events);
     }
 
     [Fact]

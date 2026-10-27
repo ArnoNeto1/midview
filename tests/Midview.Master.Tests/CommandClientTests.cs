@@ -91,5 +91,9 @@ public class CommandClientTests
                 Shown.Add(text);
             }
         }
+
+        public void CloseAll()
+        {
+        }
     }
 }
