@@ -16,17 +16,17 @@ O Midview gerencia o laboratório de informática da escola. Do próprio computa
 
 ## Veja funcionando
 
-[![Resumo do Midview em 3 minutos, com narração: controle total do seu laboratório, sem complicação](docs/resumo-capa.jpg)](docs/resumo.mp4)
+[![Resumo do Midview em 3 minutos, com narração: controle total do seu laboratório, sem complicação](docs/resumo-capa.jpg)](https://arnoneto1.github.io/midview/midview.mp4)
 
-[Assista ao resumo com narração](docs/resumo.mp4) (MP4, 3 min): pareamento, a sala ao vivo, desligar com aviso, controlar e bloquear telas, recado, enviar e recolher arquivos, pasta da turma, abrir site, bloquear programas e sites e o painel do laboratório. As máquinas e telas que aparecem nele são fictícias.
+[Assista ao resumo com narração](https://arnoneto1.github.io/midview/midview.mp4) (MP4, 3 min): pareamento, a sala ao vivo, desligar com aviso, controlar e bloquear telas, recado, enviar e recolher arquivos, pasta da turma, abrir site, bloquear programas e sites e o painel do laboratório. As máquinas e telas que aparecem nele são fictícias.
 
 ### Tutorial completo
 
 Passo a passo, com narração, de todas as funções: instalação, pareamento, a sala de aula, energia, tela, turma, programas e sites, configurações, o botão direito e a sala com dois professores.
 
-[![Tutorial do Midview: a janela "Midview - Sala de aula" com todas as telas ao vivo](docs/tutorial-capa.jpg)](docs/tutorial.mp4)
+[![Tutorial do Midview: a janela "Midview - Sala de aula" com todas as telas ao vivo](docs/tutorial-capa.jpg)](https://arnoneto1.github.io/midview/tutorial.mp4)
 
-[Assistir ao tutorial](docs/tutorial.mp4) (MP4, 8 min).
+[Assistir ao tutorial](https://arnoneto1.github.io/midview/tutorial.mp4) (MP4, 8 min).
 
 ## O que o professor pode fazer
 
