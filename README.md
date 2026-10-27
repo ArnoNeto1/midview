@@ -142,10 +142,6 @@ powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pac
 
 A versão fica em `Directory.Build.props`. No GitHub, quatro fluxos conferem cada mudança: **Testes (Windows)**, **Instalador**, **Atualização pela rede (Windows de verdade)** e **Bloqueio de programas (Windows de verdade)**.
 
-## Apoie o Midview
-
-O Midview é e continua gratuito. Quem quiser contribuir poderá doar por Pix pela [página do Midview](https://arnoneto1.github.io/midview/#apoie); as doações começam em breve. Para ativá-las, preencha `PIX` (chave, nome e cidade) no fim de `site/index.html`: o QR Code e o "copia e cola" aparecem sozinhos.
-
 ## Licença
 
 Copyright © 2026 MidView. Todos os direitos reservados.
