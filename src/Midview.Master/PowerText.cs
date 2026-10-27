@@ -19,6 +19,6 @@ public static class PowerText
     // installs the updates as invalid (PowerCommand): that says why.
     public static string Detail(bool succeeded, string detail, bool installUpdates) =>
         !succeeded && installUpdates && detail == "pedido inválido"
-            ? "Midview antigo nesta máquina: atualize-a pela rede (Máquinas da sala) para instalar as atualizações ao desligar"
+            ? "Midview antigo nesta máquina: atualize-a pela rede (Máquinas da sala) para instalar as atualizações ao desligar ou reiniciar"
             : detail;
 }

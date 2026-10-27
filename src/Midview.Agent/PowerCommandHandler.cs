@@ -54,13 +54,21 @@ public static class ShutdownCommands
 // runs as SYSTEM, so this works whether or not anyone is logged in.
 public sealed class PowerCommandHandler
 {
-    // shutdown.exe exit codes (Windows system error codes).
+    // shutdown.exe exit codes and InitiateShutdown results (Windows system error codes).
     private const int NoShutdownInProgress = 1116; // ERROR_NO_SHUTDOWN_IN_PROGRESS
     private const int ShutdownAlreadyScheduled = 1190; // ERROR_SHUTDOWN_IS_SCHEDULED
+    private const int ShutdownInProgress = 1115; // ERROR_SHUTDOWN_IN_PROGRESS
+    // InitiateShutdown's answer with fast user switching on and nobody logged on.
+    private const int NotReady = 21; // ERROR_NOT_READY
 
     // A delayed shutdown keeps counting down in Windows after the Agent
     // stops, so a network update started now would be cut short by it.
     private static readonly TimeSpan PendingMargin = TimeSpan.FromMinutes(2);
+
+    // Installing the waiting updates happens before Windows stops the
+    // services, so this Agent keeps answering through it, which can take
+    // half an hour and more on a slow machine.
+    private static readonly TimeSpan PendingMarginInstallingUpdates = TimeSpan.FromMinutes(60);
 
     private readonly Func<string[], int> _runShutdown;
     private readonly Func<UpdatingShutdown, int>? _runUpdatingShutdown;
@@ -128,7 +136,8 @@ public sealed class PowerCommandHandler
             }
             else if (action != PowerAction.Cancel && exitCode == 0)
             {
-                _pendingUntil = _utcNow() + TimeSpan.FromSeconds(delaySeconds) + PendingMargin;
+                _pendingUntil = _utcNow() + TimeSpan.FromSeconds(delaySeconds)
+                    + (installUpdates ? PendingMarginInstallingUpdates : PendingMargin);
                 if (delaySeconds > 0)
                 {
                     _countdown?.Show(action == PowerAction.Restart ? PowerCountdown.Restart : PowerCountdown.Shutdown, delaySeconds);
@@ -145,6 +154,9 @@ public sealed class PowerCommandHandler
             (_, 0) when delaySeconds == 0 => (true, (action == PowerAction.Restart ? "reiniciando agora" : "desligando agora") + updates),
             (_, 0) => (true, $"{verb} em {ShutdownCommands.DescribeDelay(delaySeconds)}{updates}"),
             (_, ShutdownAlreadyScheduled) => (false, "já há um desligamento agendado (cancele antes de pedir outro)"),
+            (_, ShutdownInProgress) => (false, "este computador já está desligando"),
+            (_, NotReady) when installUpdates =>
+                (false, "o Windows não aceitou instalar as atualizações agora (código 21); tente sem instalar as atualizações"),
             _ => (false, $"o Windows recusou (código {exitCode})"),
         };
     }

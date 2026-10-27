@@ -10,9 +10,11 @@ public class PowerCommandTests
     [InlineData(PowerAction.Shutdown, PowerCommand.MaxDelaySeconds)]
     public void EncodeThenDecode_RoundTrips(PowerAction action, int delaySeconds)
     {
-        Assert.True(PowerCommand.TryDecode(PowerCommand.Encode(action, delaySeconds), out var decodedAction, out var decodedDelay));
+        Assert.True(PowerCommand.TryDecode(
+            PowerCommand.Encode(action, delaySeconds), out var decodedAction, out var decodedDelay, out var installUpdates));
         Assert.Equal(action, decodedAction);
         Assert.Equal(delaySeconds, decodedDelay);
+        Assert.False(installUpdates);
     }
 
     [Theory]
@@ -23,7 +25,7 @@ public class PowerCommandTests
     [InlineData(new byte[] { 0, 0xFF, 0xFF })] // past the maximum delay
     public void TryDecode_RejectsAnythingElse(byte[] payload)
     {
-        Assert.False(PowerCommand.TryDecode(payload, out _, out _));
+        Assert.False(PowerCommand.TryDecode(payload, out _, out _, out _));
     }
 
     [Fact]

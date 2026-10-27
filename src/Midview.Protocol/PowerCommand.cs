@@ -46,9 +46,6 @@ public static class PowerCommand
         return payload;
     }
 
-    public static bool TryDecode(byte[] payload, out PowerAction action, out int delaySeconds) =>
-        TryDecode(payload, out action, out delaySeconds, out var installUpdates) && !installUpdates;
-
     public static bool TryDecode(byte[] payload, out PowerAction action, out int delaySeconds, out bool installUpdates)
     {
         action = default;

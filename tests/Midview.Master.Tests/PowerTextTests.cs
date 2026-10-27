@@ -18,15 +18,17 @@ public class PowerTextTests
             "Como \"Atualizar e reiniciar\" no menu Iniciar do Windows: instala só o que o Windows já baixou. " +
             "Pode levar alguns minutos a mais em cada máquina. Máquinas sem atualização esperando só reiniciam.",
             PowerText.UpdatesHint(restart: true));
-        Assert.Contains("\"Atualizar e desligar\"", PowerText.UpdatesHint(restart: false));
-        Assert.EndsWith("só desligam.", PowerText.UpdatesHint(restart: false));
+        Assert.Equal(
+            "Como \"Atualizar e desligar\" no menu Iniciar do Windows: instala só o que o Windows já baixou. " +
+            "Pode levar alguns minutos a mais em cada máquina. Máquinas sem atualização esperando só desligam.",
+            PowerText.UpdatesHint(restart: false));
     }
 
     // An Agent from before refuses the longer request as invalid: say why.
     [Fact]
     public void AnOldAgent_RefusingTheUpdates_IsToldApart() =>
         Assert.Equal(
-            "Midview antigo nesta máquina: atualize-a pela rede (Máquinas da sala) para instalar as atualizações ao desligar",
+            "Midview antigo nesta máquina: atualize-a pela rede (Máquinas da sala) para instalar as atualizações ao desligar ou reiniciar",
             PowerText.Detail(succeeded: false, "pedido inválido", installUpdates: true));
 
     [Theory]

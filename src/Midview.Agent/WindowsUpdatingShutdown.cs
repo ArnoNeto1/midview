@@ -27,6 +27,8 @@ public static class WindowsUpdatingShutdown
 
     // Forced like shutdown.exe's /f: open programs close without saving when
     // the time is up, so an unsaved document can't keep the machine on.
+    // SHUTDOWN_FORCE_SELF is also required for any delay at all: without it
+    // a grace period over zero fails with ERROR_INVALID_PARAMETER.
     public static uint Flags(bool restart) =>
         ShutdownForceOthers | ShutdownForceSelf | ShutdownInstallUpdates | (restart ? ShutdownRestart : ShutdownPowerOff);
 

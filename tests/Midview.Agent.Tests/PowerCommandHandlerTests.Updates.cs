@@ -57,6 +57,9 @@ public class PowerCommandHandlerUpdatesTests
     [InlineData(PowerAction.Shutdown, 0, 0, true, "desligando agora, instalando as atualizações")]
     [InlineData(PowerAction.Restart, 0, 0, true, "reiniciando agora, instalando as atualizações")]
     [InlineData(PowerAction.Shutdown, 60, 1190, false, "já há um desligamento agendado (cancele antes de pedir outro)")]
+    [InlineData(PowerAction.Shutdown, 60, 1115, false, "este computador já está desligando")]
+    [InlineData(PowerAction.Restart, 60, 21,
+        false, "o Windows não aceitou instalar as atualizações agora (código 21); tente sem instalar as atualizações")]
     [InlineData(PowerAction.Restart, 60, 5, false, "o Windows recusou (código 5)")]
     public void Handle_InstallingUpdates_GoesThroughWindowsAndSaysWhatHappened(
         PowerAction action, int delaySeconds, int result, bool succeeded, string detail)
@@ -88,6 +91,10 @@ public class PowerCommandHandlerUpdatesTests
 
         Assert.Equal(new[] { (PowerCountdown.Restart, 60) }, countdown.Shown);
         Assert.True(handler.IsShutdownPending());
+        // Installing can keep the machine (and this Agent) going for half an
+        // hour and more: a network update must not start in the middle of it.
+        now = now.AddMinutes(45);
+        Assert.True(handler.IsShutdownPending());
 
         // "Cancelar reinício" calls it off through shutdown.exe /a, as any other.
         handler.Handle(PowerCommand.Encode(PowerAction.Cancel, 0));
@@ -103,6 +110,7 @@ public class PowerCommandHandlerUpdatesTests
         var (succeeded, detail) = handler.Handle(PowerCommand.Encode(PowerAction.Shutdown, 60, installUpdates: true));
 
         Assert.False(succeeded);
+        Assert.StartsWith("o Windows não aceitou o pedido", detail);
         Assert.Contains("acesso negado", detail);
     }
 
