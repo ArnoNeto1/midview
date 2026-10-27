@@ -89,6 +89,10 @@ var host = Host.CreateDefaultBuilder(args)
         // What the teacher asked to remove, kept for the students who weren't
         // logged on then (PendingUninstallWorker removes their copies at logon).
         services.AddSingleton(_ => new PendingUninstalls(PendingUninstalls.DefaultPath));
+        // Installs what the teacher sends, silently and as SYSTEM, for the
+        // console's "Instalar programa".
+        services.AddSingleton(_ => new ProgramInstaller(
+            ProgramInstaller.DefaultFolder, UpdateReceiver.FreeBytesOn, ProgramInstaller.RunProcess));
         // trusted-masters.json, read again whenever pairing (or anything
         // else) changes it.
         services.AddSingleton(TrustStore.FromFile(AgentServerWorker.TrustedMastersPath));

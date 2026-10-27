@@ -287,6 +287,17 @@ public enum MessageType : byte
     RemoteHandOver = 83,
     RemoteHandOverDone = 84,
     RemoteTakeBack = 85,
+
+    // Installing a program (see ProgramInstall): InstallProgram (an
+    // InstallRequest) is an Agent command answered with InstallAccepted, no
+    // payload, or one CommandAck carrying a CommandResult refusal. After an
+    // accept come FileChunk messages up to the requested size; the Agent
+    // answers InstallStarted, no payload, once it has the whole file, then
+    // one CommandAck carrying a CommandResult when the installer ends. An
+    // Agent from before this answers CommandAck [0] to InstallProgram.
+    InstallProgram = 86,
+    InstallAccepted = 87,
+    InstallStarted = 88,
 }
 
 public enum CloseAppsMode : byte

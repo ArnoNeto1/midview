@@ -1,0 +1,27 @@
+<Window x:Class="Midview.Master.InstallWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Instalar programa" Height="560" Width="540"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="O Midview de cada máquina instala o programa como administrador: não aparece a tela do UAC e ninguém precisa digitar senha. O instalador tem de funcionar sem perguntas (modo silencioso) e instalar para todos os usuários." />
+            <DockPanel Margin="0,0,0,8">
+                <Button x:Name="ChooseButton" DockPanel.Dock="Right" Content="Escolher instalador..." Click="OnChooseFileClicked" Padding="10,4" Margin="8,0,0,0" />
+                <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum instalador escolhido (.exe ou .msi)." />
+            </DockPanel>
+            <TextBlock x:Name="KindTextBlock" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8" Visibility="Collapsed" />
+            <TextBlock Text="Opções do instalador:" Margin="0,0,0,4" />
+            <TextBox x:Name="ArgumentsTextBox" Margin="0,0,0,4" IsEnabled="False" />
+            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+                       Text="Um instalador que fica esperando uma resposta é encerrado depois de 30 minutos. Na dúvida, teste numa máquina antes da turma toda." />
+            <Button x:Name="InstallButton" Content="Instalar" Click="OnInstallClicked" IsEnabled="False" Padding="10,4" />
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

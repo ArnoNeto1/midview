@@ -31,6 +31,7 @@ public sealed class AgentServer
     private readonly PendingUninstalls? _pendingUninstalls;
     private readonly PairingService? _pairing;
     private readonly ClassLessonHandler? _classLesson;
+    private readonly ProgramInstaller? _installer;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -40,9 +41,11 @@ public sealed class AgentServer
         Func<IPAddress, byte[]?>? findWakeAddress = null, ScheduledShutdown? scheduledShutdown = null,
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
         LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
-        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null)
+        PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null,
+        ProgramInstaller? installer = null)
     {
         _classLesson = classLesson;
+        _installer = installer;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -283,6 +286,20 @@ public sealed class AgentServer
                 ? (_masterTrustStore.IsTrusted(thumbprint), "")
                 : (false, "pedido inválido");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(succeeded, detail)));
+            return;
+        }
+
+        // Like UpdateOffer, more than one message each way (see
+        // ProgramInstall); the installer answers everything itself, the last
+        // answer only once the program is installed.
+        if (message.Type == MessageType.InstallProgram)
+        {
+            if (_installer is null)
+            {
+                channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(false, "esta máquina não instala programas")));
+                return;
+            }
+            _installer.Handle(message.Payload, channel.Receive, channel.Send);
             return;
         }
 

@@ -213,6 +213,7 @@
                                             <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
                                             <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
                                             <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
+                                            <MenuItem Header="Instalar programa..." Click="OnInstallMachineClicked" />
                                             <MenuItem Tag="uma" Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
                                             <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
                                             <Separator Tag="uma" />

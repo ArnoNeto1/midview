@@ -810,6 +810,20 @@ public partial class MainWindow : Window
     private void OpenLabConfigWindow(IReadOnlyList<KnownMachine> targets) =>
         ShowOnce("painel", targets, () => new LabConfigWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
 
+    // On the tiles' menu only, for the machines selected (drag over the grid
+    // for the whole room): a toolbar button would wrap the toolbar onto a
+    // second row on a 1366-pixel screen.
+    private void OnInstallMachineClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenInstallWindow(MachinesOf(tile));
+        }
+    }
+
+    private void OpenInstallWindow(IReadOnlyList<KnownMachine> targets) =>
+        ShowOnce("instalar", targets, () => new InstallWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+
     private void OnUninstallMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
