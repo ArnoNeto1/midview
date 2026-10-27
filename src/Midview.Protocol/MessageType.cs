@@ -310,6 +310,14 @@ public enum MessageType : byte
     // keyboard and mouse back with the last hold of any kind (another
     // controlling connection, a screen lock). Never the control slot.
     HoldInputLock = 89,
+
+    // Master -> helper (Midview.Desk) only: the payload is the admin password's
+    // UTF-8 bytes (see CredentialFill). The helper types it into the live UAC
+    // prompt and answers nothing. It is only ever sent over the 5902
+    // Agent-authenticated helper channel, never the Session. An older helper
+    // never receives it, because the Master only offers the fill on the helper
+    // endpoint.
+    FillAdminPassword = 90,
 }
 
 public enum CloseAppsMode : byte
