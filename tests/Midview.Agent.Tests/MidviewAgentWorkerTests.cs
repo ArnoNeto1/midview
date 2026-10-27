@@ -37,16 +37,36 @@ public sealed class MidviewAgentWorkerTests
         var launchesBefore = -1;
         var worker = Worker(session, helper, TimeSpan.FromMilliseconds(10), clearStrayHelper: () =>
         {
-            ended++;
-            launchesBefore = helper.LaunchAttempts;
+            if (ended++ == 0)
+            {
+                launchesBefore = helper.LaunchAttempts;
+            }
         });
 
         await worker.StartAsync(CancellationToken.None);
         await WaitUntil(() => helper.LaunchAttempts >= 3);
+        var endedWhileRunning = ended;
         await worker.StopAsync(CancellationToken.None);
 
-        Assert.Equal(1, ended);
+        Assert.Equal(1, endedWhileRunning);
         Assert.Equal(0, launchesBefore);
+    }
+
+    // The service stopping is the one time a SYSTEM process is sure to be allowed to end
+    // the SYSTEM helper; without this a plain Stop-Service would leave it running.
+    [Fact]
+    public async Task StopAsync_ends_the_helper()
+    {
+        var session = new FakeSessionProcessLauncher(true);
+        var helper = new FakeSessionProcessLauncher(true);
+        var ended = 0;
+        var worker = Worker(session, helper, TimeSpan.FromMinutes(1), clearStrayHelper: () => ended++);
+
+        await worker.StartAsync(CancellationToken.None);
+        Assert.Equal(1, ended); // the leftover one, at start
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.Equal(2, ended);
     }
 
     // Starting is how the Agent listens for the teacher: nothing about a leftover
@@ -61,9 +81,9 @@ public sealed class MidviewAgentWorkerTests
             clearStrayHelper: () => throw new InvalidOperationException("no process list"), log: log.Add);
 
         await worker.StartAsync(CancellationToken.None);
+        Assert.Contains("no process list", Assert.Single(log));
         await worker.StopAsync(CancellationToken.None);
 
-        Assert.Contains("no process list", Assert.Single(log));
         Assert.Equal(1, session.LaunchAttempts);
         Assert.Equal(1, helper.LaunchAttempts);
     }

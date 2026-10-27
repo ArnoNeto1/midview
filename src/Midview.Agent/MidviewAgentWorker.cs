@@ -40,7 +40,7 @@ public sealed class MidviewAgentWorker : BackgroundService
         // know its pid, so a second helper would only fail to bind, every poll. It
         // is ended once, here, and the first pass below starts a fresh one. Only
         // the helper: the Session that is running stays.
-        ClearStrayHelper();
+        EndHelper();
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -54,9 +54,27 @@ public sealed class MidviewAgentWorker : BackgroundService
         }
     }
 
+    // The helper outlives the service (a SYSTEM process in the console session), so
+    // it is ended here, when the service stops gracefully (SCM stop, restart): a
+    // SYSTEM process is always allowed to end it, which an administrator's
+    // Stop-Process in Stop-Midview might not be. After the loop has stopped, so the
+    // supervisor can't launch it again in between. A crash skips this; the clear at
+    // start is the backstop. Only the helper: the Session stays, as it always has.
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await base.StopAsync(cancellationToken);
+        }
+        finally
+        {
+            EndHelper();
+        }
+    }
+
     // Isolated like the steps in Program.cs: nothing here may keep the Agent from
-    // starting, and so from listening for the teacher's commands.
-    private void ClearStrayHelper()
+    // starting or from stopping, and so from listening for the teacher's commands.
+    private void EndHelper()
     {
         try
         {
@@ -64,7 +82,7 @@ public sealed class MidviewAgentWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _log($"Couldn't end a leftover Desk helper: {ex.Message}");
+            _log($"Couldn't end the Desk helper: {ex.Message}");
         }
     }
 }
