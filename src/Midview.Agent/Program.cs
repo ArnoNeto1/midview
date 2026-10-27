@@ -24,6 +24,8 @@ if (args.Length > 0)
 // separate per-component folders), so Session.exe lives right next to
 // this exe rather than in a sibling directory.
 var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "Midview.Session.exe");
+// The Desk helper sits next to this exe too.
+var deskExecutablePath = Path.Combine(AppContext.BaseDirectory, "Midview.Desk.exe");
 
 // Before the host starts, so the directory's permissions and Session's
 // certificate are in place before SessionSupervisor launches the first
@@ -38,6 +40,11 @@ var host = Host.CreateDefaultBuilder(args)
             new UserSessionProcessLauncher(sessionExecutablePath));
         services.AddSingleton(provider => new SessionSupervisor(
             provider.GetRequiredService<ISessionProcessLauncher>(), TimeSpan.FromSeconds(5)));
+        // On the same poll: the Desk helper, which can follow the screen onto
+        // the UAC prompt where Session (the student's own process) can't. A type
+        // of its own, so it isn't mistaken for the SessionSupervisor above.
+        services.AddSingleton(new HelperSupervisor(new SessionSupervisor(
+            new ConsoleSystemProcessLauncher(deskExecutablePath), TimeSpan.FromSeconds(5))));
         // On the same poll: the student's two Desktop folders come back,
         // protected, if someone deletes them.
         services.AddSingleton(new StudentFolderGuard(

@@ -30,7 +30,11 @@ public class UninstallCleanupTests : IDisposable
         Assert.Equal(1, firewall.ApplyUnblockCalls);
         Assert.Equal(0, firewall.ApplyBlockCalls);
         Assert.Equal(
-            new[] { "name=MidviewAgentInbound", "name=MidviewSessionInbound", "name=MidviewAgentDiscovery" },
+            new[]
+            {
+                "name=MidviewAgentInbound", "name=MidviewSessionInbound", "name=MidviewAgentDiscovery",
+                "name=MidviewDeskInbound",
+            },
             _netshCalls.Select(call => call[^1]));
         Assert.All(_netshCalls, call => Assert.Equal(new[] { "advfirewall", "firewall", "delete", "rule" }, call[..4]));
 

@@ -10,13 +10,19 @@ public sealed class AgentServerWorker : BackgroundService
     public const int AgentPort = 28900;
     public const int SessionPort = 5901;
 
+    // Where the Desk helper listens; must match Midview.Desk's listener (its
+    // Program.cs `Port`), which binds it exclusive-address-use so no other
+    // process can share it.
+    public const int DeskPort = 5902;
+
     private const string AgentInboundRuleName = "MidviewAgentInbound";
     private const string SessionInboundRuleName = "MidviewSessionInbound";
     private const string DiscoveryInboundRuleName = "MidviewAgentDiscovery";
+    private const string DeskInboundRuleName = "MidviewDeskInbound";
 
     // The inbound openings added on every start; the uninstaller removes them.
     public static readonly IReadOnlyList<string> InboundRuleNames =
-        new[] { AgentInboundRuleName, SessionInboundRuleName, DiscoveryInboundRuleName };
+        new[] { AgentInboundRuleName, SessionInboundRuleName, DiscoveryInboundRuleName, DeskInboundRuleName };
 
     // The teachers this machine trusts; pairing adds to it (see PairingService).
     public static string TrustedMastersPath => Path.Combine(AgentDataDirectory.DirectoryPath, "trusted-masters.json");
@@ -71,6 +77,9 @@ public sealed class AgentServerWorker : BackgroundService
             // Session can't add its own rule: it runs as a standard user, and
             // Windows' "allow access?" prompt needs an administrator.
             EnsureInboundFirewallRuleExists(SessionInboundRuleName, SessionPort);
+            // The Desk helper listens here: the Master controls through it
+            // while a UAC prompt is up.
+            EnsureInboundFirewallRuleExists(DeskInboundRuleName, DeskPort);
             EnsureInboundFirewallRuleExists(DiscoveryInboundRuleName, Discovery.Port, "UDP");
 
             var statePath = SiteBlockStatePath;
