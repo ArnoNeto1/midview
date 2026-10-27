@@ -7,7 +7,7 @@ namespace Midview.Session;
 // regions, one JPEG each. No regions when nothing changed.
 public sealed record ScreenUpdate(int Width, int Height, IReadOnlyList<ScreenRegion> Regions);
 
-public sealed class FramePipeline
+public sealed class FramePipeline : IDisposable
 {
     private readonly IScreenCapture _capture;
     private Bitmap? _previousFrame;
@@ -116,6 +116,17 @@ public sealed class FramePipeline
             _previousFrame?.Dispose();
         }
         _previousFrame = frame;
+    }
+
+    // Frees the two bitmaps the pipeline keeps between frames (the previous
+    // frame and the spare it captures into) instead of leaving them to be
+    // GC-finalized -- the GDI churn a long-lived SYSTEM process must avoid when
+    // DeskServer drops a pipeline on a desktop switch. Safe to call more than
+    // once: Bitmap.Dispose is idempotent and the fields can be null.
+    public void Dispose()
+    {
+        _previousFrame?.Dispose();
+        _spareFrame?.Dispose();
     }
 
     private static void Log(Changes changes, double encodeMs, string sent) =>

@@ -57,6 +57,7 @@ Portas usadas na rede local:
 | --- | --- |
 | TCP 28900 | Comandos para o serviço do aluno |
 | TCP 5901 | Tela e controle remoto |
+| TCP 5902 | Tela e controle remoto na tela segura (UAC) |
 | UDP 28901 | Busca de máquinas na rede |
 | TCP e UDP 28902 | Acesso de outro professor (convite) |
 | TCP 28903 | Pasta da turma entre dois PCs de professor |

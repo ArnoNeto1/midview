@@ -15,7 +15,7 @@ using Midview.Session;
 System.Windows.Forms.Application.SetHighDpiMode(System.Windows.Forms.HighDpiMode.PerMonitorV2);
 
 // The port the Master's control-via-UAC connection reaches this helper on.
-const int Port = 5902; // must match AgentServerWorker.DeskPort (added in Task 9)
+const int Port = 5902; // must match AgentServerWorker.DeskPort
 
 // The Agent's own identity, created and owned by the Agent (Session, a standard
 // user, can't write there). Must match AgentIdentity.DefaultCertificatePath.

@@ -1029,7 +1029,23 @@ public sealed partial class SessionServer
                     case MessageType.InputEvent:
                         if (isControlling)
                         {
-                            _inputInjector.Inject(InputEventCodec.Decode(message.Payload));
+                            InputEvent inputEvent;
+                            try
+                            {
+                                inputEvent = InputEventCodec.Decode(message.Payload);
+                            }
+                            catch (Exception ex)
+                            {
+                                // InputEventCodec has no length guard, so a short
+                                // or malformed payload throws. Drop the connection
+                                // rather than let it crash the receive loop, the
+                                // same way DeskServer guards the decode; the finally
+                                // ends the input lock this connection held.
+                                Console.WriteLine($"Dropping a control connection after a malformed input event: {ex.Message}");
+                                return;
+                            }
+
+                            _inputInjector.Inject(inputEvent);
                             cadence.Activity(Environment.TickCount64);
                         }
                         break;

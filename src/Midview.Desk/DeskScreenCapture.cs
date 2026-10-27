@@ -7,8 +7,11 @@ using Midview.Session;
 namespace Midview.Desk;
 
 // Captures the screen of whichever desktop the calling thread is attached to.
-// That is why it is raw GDI and keeps nothing between frames: a display DC
-// made by CreateDC belongs to the desktop its thread is on when it is made, so
+// That is why it is raw GDI and keeps nothing between frames: a display DC is
+// made per call, and BitBlt reads whatever desktop the thread is attached to
+// at the moment it runs (a probe showed the binding is at BitBlt time, not
+// CreateDC time). Here that distinction is harmless because CreateDC and BitBlt
+// run on the same thread in one Draw() with no SetThreadDesktop between, so
 // once the helper's capture thread has done SetThreadDesktop to the secure
 // (UAC) desktop, the next frame is that desktop's, and the user's again when
 // the thread moves back. GdiScreenCapture, which goes through WinForms'
@@ -69,8 +72,9 @@ public sealed class DeskScreenCapture : IReusableScreenCapture
     // and copy per frame, which TryCaptureInto exists to avoid.
     private static void Draw(Bitmap bitmap)
     {
-        // Made for each frame, not kept: it belongs to the desktop the thread
-        // is on when it is made.
+        // Made for each frame, not kept. The desktop it reads is bound at the
+        // BitBlt below, not here, but both run on this one thread with no
+        // SetThreadDesktop between, so it reads the thread's current desktop.
         var screen = CreateDC("DISPLAY", null, null, IntPtr.Zero);
         if (screen == IntPtr.Zero)
         {

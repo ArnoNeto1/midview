@@ -43,6 +43,9 @@ var host = Host.CreateDefaultBuilder(args)
         // On the same poll: the Desk helper, which can follow the screen onto
         // the UAC prompt where Session (the student's own process) can't. A type
         // of its own, so it isn't mistaken for the SessionSupervisor above.
+        // The TimeSpan here is unused: MidviewAgentWorker paces its loop on the
+        // Session supervisor's PollInterval and only calls the helper's
+        // EnsureRunning() each pass, never the helper supervisor's own interval.
         services.AddSingleton(new HelperSupervisor(new SessionSupervisor(
             new ConsoleSystemProcessLauncher(deskExecutablePath), TimeSpan.FromSeconds(5))));
         // On the same poll: the student's two Desktop folders come back,

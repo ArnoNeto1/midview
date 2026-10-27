@@ -491,6 +491,28 @@ public partial class SessionServerTests
         Assert.Equal(1, harness.Injector.InjectCount); // watching again: input is dropped
     }
 
+    // A malformed input-event payload must not crash the control loop:
+    // InputEventCodec.Decode has no length guard, so the Session drops the
+    // connection (releasing the input lock the control hold took) instead of
+    // throwing, the same guard DeskServer uses.
+    [Fact]
+    public async Task AMalformedInputEvent_DropsTheConnection_AndReleasesTheLock()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10)); // watching
+
+        master.StartControl();
+        // Too short for InputEventCodec.Decode, which has no length guard.
+        master.Channel.Send(new Message(MessageType.InputEvent, Array.Empty<byte>()));
+
+        // The connection is dropped and the lock the control hold took is
+        // released, rather than the receive loop crashing.
+        await WaitUntil(() => harness.Devices.EnableCalls == 1);
+        Assert.Equal(0, harness.Injector.InjectCount);
+    }
+
     // What ViewControlWindow sends first now: ScreenStream, then a heartbeat
     // to only watch. The screen comes as ScreenFrame updates, with its size.
     [Fact]

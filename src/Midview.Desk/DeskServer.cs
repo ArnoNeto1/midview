@@ -47,6 +47,14 @@ public sealed class DeskServer
     private readonly DesktopFollower _follower;
     private readonly Action<IntPtr> _attachThreadToDesktop;
 
+    // One controlling Master served at a time, the same single-serving-slot
+    // policy SessionServer uses: Program.cs wires one shared desktop-following
+    // state (InputDesktopSource, the attach closure, the follower), which two
+    // concurrent workers would race. A second trusted Master is refused while
+    // one is being served. Wait(0), never a queue -- a controller must not wait
+    // behind another for the UAC desktop.
+    private readonly SemaphoreSlim _servingSlot = new(1, 1);
+
     public DeskServer(
         TcpListener listener,
         X509Certificate2 agentCertificate,
@@ -108,7 +116,24 @@ public sealed class DeskServer
         // certificate is this server's own.
         using var channel = SecureChannel.AuthenticateAsServer(client, _agentCertificate, _masterTrustStore);
 
-        Serve(client, channel, cancellationToken);
+        // Past the trust gate: take the single serving slot before touching the
+        // shared desktop state. A second trusted Master is refused here rather
+        // than queued, so it never starts a second worker over the one shared
+        // InputDesktopSource/follower/attach closure.
+        if (!_servingSlot.Wait(0))
+        {
+            Console.WriteLine("Another Master is already being served by the Desk helper; closing the new connection.");
+            return;
+        }
+
+        try
+        {
+            Serve(client, channel, cancellationToken);
+        }
+        finally
+        {
+            _servingSlot.Release();
+        }
     }
 
     private void Serve(TcpClient tcpClient, SecureChannel channel, CancellationToken cancellationToken)
@@ -218,6 +243,10 @@ public sealed class DeskServer
                 if (_follower.PollChanged(out var desktop) && desktop != IntPtr.Zero)
                 {
                     _attachThreadToDesktop(desktop);
+                    // Free the previous pipeline's bitmaps now rather than leave
+                    // them to be GC-finalized: this SYSTEM process must not churn
+                    // GDI handles on every desktop switch.
+                    pipeline?.Dispose();
                     pipeline = new FramePipeline(_captureForCurrentDesktop());
                 }
 
@@ -275,6 +304,12 @@ public sealed class DeskServer
             // which isn't watching any cancellation token.
             Console.WriteLine($"Desk capture loop stopped: {ex.Message}");
             tcpClient.Close();
+        }
+        finally
+        {
+            // Free the live pipeline's bitmaps when the worker ends, the same
+            // reason the switch above disposes the superseded one.
+            pipeline?.Dispose();
         }
     }
 

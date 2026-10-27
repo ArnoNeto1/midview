@@ -93,6 +93,37 @@ public class DeskServerTests
         Assert.Equal(0, harness.Injector.InjectCount);
     }
 
+    // One controlling Master at a time: while one trusted Master is served and
+    // streaming, a second trusted Master is refused -- its connection is closed
+    // before the worker starts, so its control input never reaches the injector.
+    [Fact]
+    public async Task A_second_concurrent_control_connection_is_refused()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+
+        // The first Master is served and streaming, so it holds the slot.
+        using var first = harness.ConnectMaster();
+        first.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        await Task.Run(() => first.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The second Master's handshake still succeeds, but the helper has given
+        // the one serving slot to the first and refuses this one before the
+        // worker/streaming starts.
+        using var second = harness.ConnectMaster();
+        second.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        second.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+        second.Channel.Send(new Message(MessageType.InputEvent, InputEventCodec.Encode(
+            new InputEvent(InputEventKind.MouseLeftDown, 5, 6, 7))));
+
+        // The refused connection is closed: its Receive gives up rather than
+        // ever returning a frame.
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            Task.Run(() => second.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10)));
+
+        await Task.Delay(200);
+        Assert.Equal(0, harness.Injector.InjectCount);
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
