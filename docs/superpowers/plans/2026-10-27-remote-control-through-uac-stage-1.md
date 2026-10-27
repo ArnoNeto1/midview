@@ -197,22 +197,28 @@
 
 ---
 
-### Task 10: Ship Midview.Desk.exe in the installer and the network update
+### Task 10: Ship Midview.Desk.exe, and stop it wherever the Session is stopped
+
+Packaging plus the helper's stop/restart lifecycle (the Task 9 review surfaced the latter: a SYSTEM helper survives a service stop/restart/crash/update, holds port 5902 and locks `Midview.Desk.exe`, so a new helper loops on the exclusive bind and an update/uninstall can't replace the file).
 
 **Files:**
 - Modify: `installer/Gerar-Instalador.ps1` (publish `Midview.Desk` into the `aluno` folder, after `Midview.Session`)
 - Modify: `src/Midview.Protocol/NetworkUpdate.cs` (add `Midview.Desk.exe` to `RequiredFiles`)
+- Modify: `src/Midview.Agent/ServiceControl.cs` (`SessionProcesses.KillAll` also kills `Midview.Desk`)
+- Modify: `installer/scripts/Comum.ps1` (`Stop-Midview` also stops `Midview.Desk`)
+- Modify: `src/Midview.Agent/MidviewAgentWorker.cs` (kill any stray `Midview.Desk` once before the supervision loop, so a restart/crash doesn't loop on the exclusive bind)
 - Test: `tests/Midview.Protocol.Tests/NetworkUpdateTests.cs`
 
 **Interfaces:**
-- Consumes: the built `Midview.Desk` (Task 7).
-- Produces: the `aluno` program folder contains `Midview.Desk.exe`, so `Write-BuildManifest` lists it in `midview-build.json` automatically and the installer's `{#Programa}\aluno\*` copies it to `{app}` beside `Midview.Agent.exe`; `NetworkUpdate.RequiredFiles` now includes it so a receiving Agent verifies the helper is present.
+- Consumes: the built `Midview.Desk` (Task 7), `SessionProcesses.KillAll` (ServiceControl.cs:402), `Stop-Midview` (Comum.ps1:60), `MidviewAgentWorker` (Task 9 wiring).
+- Produces: the `aluno` folder contains `Midview.Desk.exe` (auto-listed in `midview-build.json`, installed beside `Midview.Agent.exe`); `NetworkUpdate.RequiredFiles` includes it; every place that stops the Session also stops the helper; a restarting Agent clears a stray helper before the supervisor relaunches.
 
 - [ ] **Step 1: Write the failing test** `NetworkUpdateTests.RequiredFiles_includes_the_helper` — `NetworkUpdate.RequiredFiles` contains `"Midview.Desk.exe"`.
 - [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement** — add `"Midview.Desk.exe"` to `NetworkUpdate.RequiredFiles`; in `Gerar-Instalador.ps1`, add `Publish-Project 'Midview.Desk' (Join-Path $programs 'aluno')` right after the `Midview.Session` publish (comment: like the Session it needs the full Windows Desktop runtime, so it publishes after it; the manifest and the installer pick it up from the folder automatically).
-- [ ] **Step 4: Run the new test (PASS) and the suite (green).** Optionally run `installer/Gerar-Instalador.ps1` locally and confirm `dist\programa\aluno\Midview.Desk.exe` exists and is listed in `midview-build.json` (manual).
-- [ ] **Step 5: Commit** — `build: ship the Desk helper in the installer and network update`.
+- [ ] **Step 3: Implement packaging** — add `"Midview.Desk.exe"` to `NetworkUpdate.RequiredFiles`; in `Gerar-Instalador.ps1`, add `Publish-Project 'Midview.Desk' (Join-Path $programs 'aluno')` right after the `Midview.Session` publish (comment: like the Session it needs the full Windows Desktop runtime, so it publishes after it; the manifest and installer pick it up from the folder automatically).
+- [ ] **Step 4: Implement the helper stop** — `SessionProcesses.KillAll` also kills every `Midview.Desk` process (same loop/exception handling as for `Midview.Session`; update its comment); `Stop-Midview` adds `'Midview.Desk'` to its `Get-Process -Name` list; `MidviewAgentWorker` kills any stray `Midview.Desk` ONCE before entering the supervision loop (so a leftover from a previous Agent instance — which the pid-less `SessionSupervisor` can't adopt — is cleared before the first `EnsureRunning`). If `SessionProcesses.KillAll` is the natural place for the Agent-side kill, reuse it.
+- [ ] **Step 5: Run the tests (PASS) and the suite (green).** Keep `UninstallCleanupTests` and any kill/stop tests green; add/extend a test that `SessionProcesses.KillAll`'s target set includes `Midview.Desk` if it can be asserted without launching real processes (e.g. the process-name list is a constant you can check); otherwise note it as live-verified. Optionally run `installer/Gerar-Instalador.ps1` locally and confirm `dist\programa\aluno\Midview.Desk.exe` exists and is in `midview-build.json` (manual).
+- [ ] **Step 6: Commit** — `build: ship the Desk helper and stop it wherever the Session is stopped`.
 
 ---
 
