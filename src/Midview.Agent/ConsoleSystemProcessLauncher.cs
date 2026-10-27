@@ -158,7 +158,8 @@ public sealed class ConsoleSystemProcessLauncher : ISessionProcessLauncher
     private const uint TOKEN_DUPLICATE = 0x0002;
     private const uint TOKEN_QUERY = 0x0008;
 
-    [StructLayout(LayoutKind.Sequential)]
+    // Unicode: lpDesktop is set here (null in UserSessionProcessLauncher); as ANSI the helper dies with 0xC0000142.
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct STARTUPINFO
     {
         public int cb;
