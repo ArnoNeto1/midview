@@ -84,6 +84,12 @@ Source: "{#Programa}\instalador\Parar-Aluno.ps1"; Flags: dontcopy
 Name: "{commondesktop}\Midview - Sala de aula"; Filename: "{app}\Midview.Master.exe"; Check: EhProfessor
 Name: "{commonprograms}\Midview - Sala de aula"; Filename: "{app}\Midview.Master.exe"; Check: EhProfessor
 
+[Run]
+; The last page's "open it now" box, checked by default. The Master runs
+; without administrator rights, so it opens as the user who ran the setup;
+; a silent install opens nothing.
+Filename: "{app}\Midview.Master.exe"; Description: "Executar o Midview - Sala de aula"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: EhProfessor
+
 [InstallDelete]
 ; What Instalar-Professor.cmd (the USB-stick package) installed for one user.
 Type: filesandordirs; Name: "{localappdata}\Programs\Midview Professor"; Check: EhProfessor
