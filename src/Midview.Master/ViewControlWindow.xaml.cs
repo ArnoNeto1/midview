@@ -80,6 +80,18 @@ public partial class ViewControlWindow : Window
     // Session knows HoldInputLock (the Session path locks by itself).
     private void SyncLockKeeper()
     {
+        // The only place a keeper is made, and none may be made once the
+        // window is closing: OnWindowClosed has already disposed it, nothing
+        // would dispose a new one, and the student would stay locked. (A send
+        // that fails inside OnControlClicked closes the window in the middle
+        // of the handler, which then still reaches here.)
+        if (_closing)
+        {
+            _lockKeeper?.Dispose();
+            _lockKeeper = null;
+            return;
+        }
+
         if (_controlling && _endpoint == ControlEndpoint.Helper && _machine is not null && _masterCertificate is not null)
         {
             if (_lockKeeper is null)
