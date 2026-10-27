@@ -16,9 +16,9 @@ O Midview gerencia o laboratório de informática da escola. Do próprio computa
 
 ## Veja funcionando
 
-![Vídeo de 1m30s: a janela "Midview - Sala de aula" mostra a tela de cada aluno; o professor vê e controla uma máquina, bloqueia as telas, manda mensagem, conversa com a turma, envia e recolhe arquivos, abre um site, bloqueia programas e sites, fecha programas, liga e agenda o laboratório, prepara as máquinas e atualiza pela rede](docs/video-promocional.gif)
+[![Resumo do Midview em 3 minutos, com narração: controle total do seu laboratório, sem complicação](docs/resumo-capa.jpg)](docs/resumo.mp4)
 
-Quer ouvir a explicação? [Assista ao vídeo com narração](docs/video-promocional.mp4) (MP4, 1m30s). As máquinas e telas que aparecem nele são fictícias.
+[Assista ao resumo com narração](docs/resumo.mp4) (MP4, 3 min): pareamento, a sala ao vivo, desligar com aviso, controlar e bloquear telas, recado, enviar e recolher arquivos, pasta da turma, abrir site, bloquear programas e sites e o painel do laboratório. As máquinas e telas que aparecem nele são fictícias.
 
 ### Tutorial completo
 
