@@ -14,6 +14,13 @@ export type BottomBarProps = {
   fitPress: number;
   onlineHover: number;
   sliderGrab: number;
+  /** "Visualizar todos" ligado (0→1). */
+  fitOn?: number;
+  /** "Organizar sala" ligado (0→1); com ele aparece "Alinhar". */
+  organize?: number;
+  organizeHover?: number;
+  alignHover?: number;
+  alignPress?: number;
 };
 
 const ButtonBox: React.FC<{ box: Box; hover?: number; press?: number; on?: number; children: React.ReactNode }> = ({
@@ -54,8 +61,21 @@ const ButtonBox: React.FC<{ box: Box; hover?: number; press?: number; on?: numbe
   );
 };
 
-/** A barra de baixo: status à esquerda; "Visualizar todos", "Só online" e o tamanho das telas à direita. */
-export const BottomBar: React.FC<BottomBarProps> = ({ status, onlineOnly, slider, fitHover, fitPress, onlineHover, sliderGrab }) => {
+/** A barra de baixo: status à esquerda; "Organizar sala", "Visualizar todos", "Só online" e o tamanho das telas à direita. */
+export const BottomBar: React.FC<BottomBarProps> = ({
+  status,
+  onlineOnly,
+  slider,
+  fitHover,
+  fitPress,
+  onlineHover,
+  sliderGrab,
+  fitOn = 0,
+  organize = 0,
+  organizeHover = 0,
+  alignHover = 0,
+  alignPress = 0,
+}) => {
   const theme = useAppTheme();
   const knob = sliderKnob(slider);
   const s = BOTTOM.slider;
@@ -77,7 +97,7 @@ export const BottomBar: React.FC<BottomBarProps> = ({ status, onlineOnly, slider
           left: 14,
           top: 0,
           bottom: 0,
-          width: BOTTOM.fitAll.x - 40,
+          width: (organize > 0.01 ? BOTTOM.align.x : BOTTOM.organize.x) - 40,
           display: "flex",
           alignItems: "center",
           fontFamily: theme.font,
@@ -89,7 +109,17 @@ export const BottomBar: React.FC<BottomBarProps> = ({ status, onlineOnly, slider
       >
         {status}
       </div>
-      <ButtonBox box={BOTTOM.fitAll} hover={fitHover} press={fitPress}>
+      {organize > 0.01 ? (
+        <div style={{ opacity: clamp01(organize * 1.5) }}>
+          <ButtonBox box={BOTTOM.align} hover={alignHover} press={alignPress}>
+            Alinhar
+          </ButtonBox>
+        </div>
+      ) : null}
+      <ButtonBox box={BOTTOM.organize} hover={organizeHover} on={organize}>
+        Organizar sala
+      </ButtonBox>
+      <ButtonBox box={BOTTOM.fitAll} hover={fitHover} press={fitPress} on={fitOn}>
         Visualizar todos
       </ButtonBox>
       <ButtonBox box={BOTTOM.onlineOnly} hover={onlineHover} on={onlineOnly}>

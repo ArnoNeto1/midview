@@ -3,7 +3,7 @@
  * em px de tela a 100%: barra de ferramentas em grupos no topo, grade de telas
  * e barra de baixo. Tudo aqui é coordenada interna da janela.
  */
-export const WIN = { w: 1440, h: 820, titleBar: 32, toolbar: 94, bottomBar: 42, radius: 8 } as const;
+export const WIN = { w: 1530, h: 820, titleBar: 32, toolbar: 94, bottomBar: 42, radius: 8 } as const;
 
 export const GRID_TOP = WIN.titleBar + WIN.toolbar;
 export const GRID_BOTTOM = WIN.h - WIN.bottomBar;
@@ -21,6 +21,7 @@ export type ButtonId =
   | "chat"
   | "sendFile"
   | "collect"
+  | "classFolder"
   | "openSite"
   | "openProgram"
   | "closeApps"
@@ -38,8 +39,18 @@ export type GroupId = "tela" | "turma" | "programas" | "energia" | "configurar";
 type ButtonDef = { id: ButtonId; label: string; icon: string; badge?: string; options?: boolean; width?: number };
 type GroupDef = { id: GroupId; caption: string; buttons: ButtonDef[] };
 
-/** Os botões reais, na ordem, com os ícones do Segoe Fluent Icons do XAML. */
+/** Os botões reais, na ordem do XAML (Energia primeiro), com os ícones do Segoe Fluent Icons. */
 export const TOOLBAR_GROUPS: GroupDef[] = [
+  {
+    id: "energia",
+    caption: "Energia",
+    buttons: [
+      { id: "powerOff", label: "Desligar", icon: "", options: true },
+      { id: "restart", label: "Reiniciar", icon: "", options: true },
+      { id: "wake", label: "Ligar", icon: "" },
+      { id: "schedule", label: "Agendar", icon: "", options: true },
+    ],
+  },
   {
     id: "tela",
     caption: "Tela",
@@ -57,6 +68,7 @@ export const TOOLBAR_GROUPS: GroupDef[] = [
       { id: "chat", label: "Bate-papo", icon: "" },
       { id: "sendFile", label: "Enviar arquivo", icon: "", options: true },
       { id: "collect", label: "Recolher arquivos", icon: "", options: true },
+      { id: "classFolder", label: "Pasta da turma", icon: "", options: true, width: 96 },
       { id: "openSite", label: "Abrir site", icon: "", options: true },
       { id: "openProgram", label: "Abrir programa", icon: "", options: true },
     ],
@@ -68,16 +80,6 @@ export const TOOLBAR_GROUPS: GroupDef[] = [
       { id: "closeApps", label: "Fechar programas", icon: "", options: true },
       { id: "blockApps", label: "Bloquear programas", icon: "", badge: "", options: true },
       { id: "blockSites", label: "Bloquear sites", icon: "", badge: "", options: true },
-    ],
-  },
-  {
-    id: "energia",
-    caption: "Energia",
-    buttons: [
-      { id: "powerOff", label: "Desligar", icon: "", options: true },
-      { id: "restart", label: "Reiniciar", icon: "", options: true },
-      { id: "wake", label: "Ligar", icon: "" },
-      { id: "schedule", label: "Agendar", icon: "", options: true },
     ],
   },
   {
@@ -131,12 +133,13 @@ export const BADGE_H = 20;
 
 export const screenHeight = (w: number) => Math.round((w * 9) / 16);
 
-/** Card na grade (WrapPanel com margem 10 e cards com margem 4). */
+/** Card na grade (cards com margem 4), com as colunas centradas na janela. */
 export const tileBox = (index: number, layout: TileLayout): Box => {
   const col = index % layout.cols;
   const row = Math.floor(index / layout.cols);
   const h = screenHeight(layout.w) + BADGE_H;
-  return { x: 14 + col * (layout.w + 8), y: GRID_TOP + 14 + row * (h + 8), w: layout.w, h };
+  const left = Math.max(14, Math.round((WIN.w - (layout.cols * (layout.w + 8) - 8)) / 2));
+  return { x: left + col * (layout.w + 8), y: GRID_TOP + 14 + row * (h + 8), w: layout.w, h };
 };
 
 /** A barra de baixo, alinhada à direita como no XAML. */
@@ -149,7 +152,10 @@ export const BOTTOM = (() => {
   const smaller: Box = { x: slider.x - 6 - 26, y: cy - 12, w: 26, h: 24 };
   const onlineOnly: Box = { x: smaller.x - 12 - 80, y: cy - 12, w: 80, h: 24 };
   const fitAll: Box = { x: onlineOnly.x - 6 - 112, y: cy - 12, w: 112, h: 24 };
-  return { y, cy, larger, slider, smaller, onlineOnly, fitAll };
+  const organize: Box = { x: fitAll.x - 6 - 112, y: cy - 12, w: 112, h: 24 };
+  // "Alinhar" só aparece com "Organizar sala" ligado.
+  const align: Box = { x: organize.x - 6 - 70, y: cy - 12, w: 70, h: 24 };
+  return { y, cy, larger, slider, smaller, onlineOnly, fitAll, organize, align };
 })();
 
 /** O controle de tamanho vai de 160 a 640 px de largura (TileSize). */

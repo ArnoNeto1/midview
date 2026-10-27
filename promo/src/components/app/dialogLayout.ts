@@ -71,12 +71,18 @@ export const LAB_STEPS = [
 ];
 export const LAB_ROW = { top: 140, height: 62 } as const;
 
-/** Itens do menu do botão direito de uma máquina (MainWindow.xaml), "-" = separador. */
+/**
+ * Itens do menu do botão direito de uma máquina (MainWindow.xaml), "-" = separador.
+ * Energia vem primeiro; o item de bloqueio é um só, com o texto pelo estado da tela.
+ */
 export const MENU_ITEMS = [
+  "Desligar...",
+  "Reiniciar...",
+  "Ligar",
+  "-",
   "Ver a tela",
   "Controlar (trava o teclado e o mouse do aluno)",
   "Bloquear a tela",
-  "Desbloquear a tela",
   "-",
   "Enviar mensagem...",
   "Conversar (chat)...",
@@ -90,10 +96,6 @@ export const MENU_ITEMS = [
   "Bloquear sites...",
   "Painel do laboratório...",
   "Desinstalar programa...",
-  "-",
-  "Desligar...",
-  "Reiniciar...",
-  "Ligar",
   "-",
   "Editar a máquina (avançado)...",
   "Remover da lista da sala",

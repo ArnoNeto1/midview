@@ -167,28 +167,29 @@ export const StudentOverlays: React.FC<{ view: StudentView }> = ({ view }) => {
           Este computador está sendo controlado pelo professor
         </div>
       ) : null}
-      <StudentWindow title="Mensagem do professor" box={{ x: 56, y: 48, w: 208, h: 86 }} p={message}>
-        <div style={{ padding: "8px 9px", fontSize: 8.5, lineHeight: 1.3, color: "#111827" }}>
-          A atividade termina em 10 minutos. Salvem seus trabalhos.
-        </div>
+      {message > 0.01 ? (
         <div
           style={{
             position: "absolute",
-            right: 8,
-            bottom: 7,
-            width: 40,
-            height: 14,
-            borderRadius: 3,
-            background: "#2563EB",
+            left: 60,
+            top: 44,
+            width: 200,
+            height: 96,
+            background: "#7A0F14",
             color: "#FFFFFF",
-            fontSize: 7,
-            lineHeight: "14px",
-            textAlign: "center",
+            fontFamily: WIN_FONT,
+            boxShadow: "0 8px 22px rgba(0,0,0,0.55)",
+            padding: "7px 10px",
+            display: "flex",
+            flexDirection: "column",
+            ...pop(message),
           }}
         >
-          OK
+          <div style={{ fontSize: 7, fontWeight: 600, opacity: 0.85 }}>Mensagem do professor</div>
+          <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, lineHeight: 1.25, flex: 1 }}>A atividade termina em 10 minutos. Salvem seus trabalhos.</div>
+          <div style={{ alignSelf: "center", padding: "3px 12px", background: "#FFFFFF", color: "#7A0F14", fontSize: 7, fontWeight: 700 }}>OK, ENTENDI</div>
         </div>
-      </StudentWindow>
+      ) : null}
       <StudentWindow title="Conversa com o professor" box={{ x: 170, y: 44, w: 142, h: 120 }} p={chat}>
         <div
           style={{

@@ -20,6 +20,14 @@ O Midview gerencia o laboratório de informática da escola. Do próprio computa
 
 Quer ouvir a explicação? [Assista ao vídeo com narração](docs/video-promocional.mp4) (MP4, 1m30s). As máquinas e telas que aparecem nele são fictícias.
 
+### Tutorial completo
+
+Passo a passo, com narração, de todas as funções: instalação, pareamento, a sala de aula, energia, tela, turma, programas e sites, configurações, o botão direito e a sala com dois professores.
+
+[![Tutorial do Midview: a janela "Midview - Sala de aula" com todas as telas ao vivo](docs/tutorial-capa.jpg)](docs/tutorial.mp4)
+
+[Assistir ao tutorial](docs/tutorial.mp4) (MP4, 8 min).
+
 ## O que o professor pode fazer
 
 A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os botões da barra de ferramentas agem na turma toda; o botão direito sobre uma máquina age só nas selecionadas.
@@ -113,7 +121,7 @@ Algumas opções do **Painel do laboratório** configuram o Google Chrome, que p
 | `installer/` | Instalador (Inno Setup), scripts das máquinas e seus testes |
 | `docs/superpowers/` | Especificações e planos de cada função |
 | `site/` | Página para os professores, publicada no GitHub Pages pelo fluxo **Site** |
-| `promo/` | Vídeo de divulgação, feito com Remotion (o GIF e o MP4 de `docs/` saem dele) |
+| `promo/` | Vídeos de divulgação e o tutorial, feitos com Remotion (o GIF e os MP4 de `docs/` saem dele) |
 
 Requisitos: Windows, SDK do .NET 8 e, para o instalador, Inno Setup 6.
 

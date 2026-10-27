@@ -10,6 +10,8 @@ import { Scene8Beneficios } from "./scenes/Scene8Beneficios";
 import { Scene9Encerramento } from "./scenes/Scene9Encerramento";
 import { Scene2Sala, Scene3Tela, Scene4Turma, Scene5Programas, Scene6Energia, Scene7Configurar } from "./scenes/TourScenes";
 import { FPS, HEIGHT, SCENES, TOTAL_FRAMES, WIDTH } from "./timing";
+import { COMPLETO, RESUMO } from "./tutorial/engine";
+import { Tutorial } from "./tutorial/Tutorial";
 
 /** Cena isolada sobre o fundo, para ajustar uma cena por vez no Studio. */
 const preview = (Scene: React.FC): React.FC => {
@@ -53,6 +55,44 @@ export const RemotionRoot: React.FC = () => (
       component={MidviewPromo}
       defaultProps={{ theme: "escuro" }}
       durationInFrames={TOTAL_FRAMES}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    {/* O tutorial completo, com todas as funções e narração; dura o que a narração pede. */}
+    <Composition
+      id="MidviewTutorial"
+      component={Tutorial}
+      defaultProps={{ theme: "real" }}
+      durationInFrames={COMPLETO.TOTAL}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    <Composition
+      id="MidviewTutorialEscuro"
+      component={Tutorial}
+      defaultProps={{ theme: "escuro" }}
+      durationInFrames={COMPLETO.TOTAL}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    {/* O resumo de até 3 minutos, só com as funções mais usadas. */}
+    <Composition
+      id="MidviewResumo"
+      component={Tutorial}
+      defaultProps={{ theme: "real", cut: "resumo" }}
+      durationInFrames={RESUMO.TOTAL}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    <Composition
+      id="MidviewResumoEscuro"
+      component={Tutorial}
+      defaultProps={{ theme: "escuro", cut: "resumo" }}
+      durationInFrames={RESUMO.TOTAL}
       fps={FPS}
       width={WIDTH}
       height={HEIGHT}

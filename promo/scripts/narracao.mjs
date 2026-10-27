@@ -2,13 +2,15 @@
  * Prepara as falas da narração para o vídeo: corta o silêncio do começo e do
  * fim, encurta as pausas longas e iguala o volume de todas.
  *
- *   node scripts/narracao.mjs <pasta com os mp3 originais>
+ *   node scripts/narracao.mjs <pasta com os mp3 originais> [pasta em public/]
  *
- * Grava public/narracao/<id>.mp3 e mostra quantos frames cada fala dura, para
- * conferir os inícios em src/narration.ts (uma fala não pode invadir a próxima).
+ * Grava public/<pasta>/<id>.mp3 (padrão: narracao, a do vídeo de 1m30s) e
+ * duracoes.json com quantos frames cada fala dura. No vídeo de 1m30s, confira
+ * os inícios em src/narration.ts (uma fala não pode invadir a próxima); o
+ * tutorial (src/tutorial) lê o duracoes.json e se ajusta sozinho.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,10 +25,10 @@ const MAX_TRUE_PEAK = -1.5;
 
 const source = process.argv[2];
 if (!source) {
-  console.error("Uso: node scripts/narracao.mjs <pasta com os mp3 originais>");
+  console.error("Uso: node scripts/narracao.mjs <pasta com os mp3 originais> [pasta em public/]");
   process.exit(1);
 }
-const target = fileURLToPath(new URL("../public/narracao/", import.meta.url));
+const target = fileURLToPath(new URL(`../public/${process.argv[3] ?? "narracao"}/`, import.meta.url));
 mkdirSync(target, { recursive: true });
 
 const cli = fileURLToPath(new URL("../node_modules/@remotion/cli/remotion-cli.js", import.meta.url));
@@ -77,6 +79,7 @@ const kept = (parts, duration) => {
   return ranges;
 };
 
+const frames = {};
 for (const name of readdirSync(source).filter((n) => n.endsWith(".mp3")).sort()) {
   const id = basename(name, ".mp3");
   const { duration, silences, lufs, peak } = analyze(join(source, name));
@@ -87,5 +90,7 @@ for (const name of readdirSync(source).filter((n) => n.endsWith(".mp3")).sort())
   const filter = `${pieces.join(";")};${joined},atempo=${TEMPO},aformat=channel_layouts=stereo,volume=${gain.toFixed(2)}dB[out]`;
   ffmpeg(["-y", "-i", join(source, name), "-filter_complex", filter, "-map", "[out]", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", join(target, `${id}.mp3`)]);
   const seconds = ranges.reduce((sum, [a, b]) => sum + b - a, 0) / TEMPO;
-  console.log(`${id}  ${duration.toFixed(2)} s -> ${seconds.toFixed(2)} s  ${Math.ceil(seconds * FPS)} frames  ${gain >= 0 ? "+" : ""}${gain.toFixed(1)} dB`);
+  frames[id] = Math.ceil(seconds * FPS);
+  console.log(`${id}  ${duration.toFixed(2)} s -> ${seconds.toFixed(2)} s  ${frames[id]} frames  ${gain >= 0 ? "+" : ""}${gain.toFixed(1)} dB`);
 }
+writeFileSync(join(target, "duracoes.json"), `${JSON.stringify(frames, null, 2)}\n`);
