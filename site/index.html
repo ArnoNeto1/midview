@@ -110,6 +110,7 @@ p { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .facts { display: flex; flex-wrap: wrap; gap: 8px 22px; list-style: none; padding: 0; margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .facts li { display: flex; align-items: center; gap: 8px; }
+.facts li[hidden] { display: none; }
 .facts svg { color: var(--cyan); flex: none; }
 
 /* Vídeo */
@@ -243,6 +244,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Gratuito para escolas</li>
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Funciona só na rede da escola</li>
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Um instalador para professor e alunos</li>
+        <li id="downloads" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg><span></span></li>
       </ul>
     </div>
   </section>
@@ -543,5 +545,19 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
     <span>Software proprietário, de uso gratuito para escolas, nos termos da Licença de Uso do Midview.</span>
   </div>
 </footer>
+<script>
+/* Quantas vezes o instalador foi baixado, somando todas as versões publicadas
+   no GitHub. Sem resposta da API, a linha continua escondida. */
+fetch("https://api.github.com/repos/ArnoNeto1/midview/releases?per_page=100")
+  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  .then((releases) => {
+    const total = releases.reduce((soma, r) => soma + r.assets.reduce((s, a) => s + a.download_count, 0), 0);
+    if (!total) return;
+    const item = document.getElementById("downloads");
+    item.querySelector("span").textContent = `Já baixado ${total.toLocaleString("pt-BR")} ${total === 1 ? "vez" : "vezes"}`;
+    item.hidden = false;
+  })
+  .catch(() => {});
+</script>
 </body>
 </html>
