@@ -31,6 +31,37 @@ public sealed class SendInputInjector : IInputInjector
         SendInput(1, inputs, Marshal.SizeOf<INPUT>());
     }
 
+    public void TypeText(string text, bool pressEnter)
+    {
+        var keystrokes = UnicodeKeystrokes.Build(text, pressEnter);
+        if (keystrokes.Count == 0)
+        {
+            return;
+        }
+
+        var inputs = new INPUT[keystrokes.Count];
+        for (var i = 0; i < inputs.Length; i++)
+        {
+            var keystroke = keystrokes[i];
+            inputs[i] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = keystroke.VirtualKey,
+                        wScan = keystroke.ScanCode,
+                        dwFlags = keystroke.Flags,
+                    },
+                },
+            };
+        }
+
+        // One call so the whole password arrives uninterrupted by other input.
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    }
+
     private static INPUT MouseInput(int x, int y, uint flags) => new()
     {
         type = INPUT_MOUSE,

@@ -25,6 +25,9 @@ public class FakeInputInjector : IInputInjector
 {
     public int InjectCount { get; private set; }
     public void Inject(InputEvent inputEvent) => InjectCount++;
+    public void TypeText(string text, bool pressEnter)
+    {
+    }
 }
 
 // Throws like GdiScreenCapture does while the secure desktop (Win+L, a UAC

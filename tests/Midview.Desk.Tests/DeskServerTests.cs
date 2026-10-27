@@ -189,6 +189,16 @@ public class DeskServerTests
                 _injected.Add(inputEvent);
             }
         }
+
+        public List<(string Text, bool Enter)> TypedText { get; } = new();
+
+        public void TypeText(string text, bool pressEnter)
+        {
+            lock (TypedText)
+            {
+                TypedText.Add((text, pressEnter));
+            }
+        }
     }
 
     private sealed class DeskHarness : IDisposable

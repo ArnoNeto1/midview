@@ -230,6 +230,10 @@ public partial class ThumbnailPollerTests
         public void Inject(InputEvent inputEvent)
         {
         }
+
+        public void TypeText(string text, bool pressEnter)
+        {
+        }
     }
 
     private sealed class NoDevices : IInputDeviceController
