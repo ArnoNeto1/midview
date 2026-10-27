@@ -305,8 +305,10 @@ public enum MessageType : byte
     // can't lock the input itself (see
     // docs/superpowers/specs/2026-10-27-remote-control-through-uac-design.md).
     // The Session answers nothing. The Master's Heartbeats keep the connection
-    // up; closing it unlocks at once, and so does the Session's 15 s receive
-    // timeout if the Master stops answering. Never the control slot.
+    // up; closing it ends the hold at once, and so does the Session's 15 s
+    // receive timeout if the Master stops answering. The student gets the
+    // keyboard and mouse back with the last hold of any kind (another
+    // controlling connection, a screen lock). Never the control slot.
     HoldInputLock = 89,
 }
 

@@ -456,6 +456,8 @@ public sealed partial class SessionServer
     // included) for as long as this connection lasts, however it ends: closed
     // by the Master, broken, or silent for ConnectionTimeoutMs because the
     // teacher's PC stopped answering -- the student is never left locked out.
+    // It is one hold on the lock beside any others (a Master that reconnects
+    // overlaps the connection it replaces), ended once, by this connection.
     // Streams nothing and never takes the control slot: this Master sees and
     // drives the screen through another process, which can't lock the input.
     // Only heartbeats are expected meanwhile, and each tells the lock it is
@@ -997,16 +999,27 @@ public sealed partial class SessionServer
 
                 switch (message.Type)
                 {
+                    // One hold on the lock per connection, however often it
+                    // asks, ended once: a StartControl while controlling holds
+                    // nothing more, and a StopControl while not (the Master's
+                    // window sends it as it closes, controlling or not) ends
+                    // nothing, since it could only end somebody else's hold.
                     case MessageType.StartControl:
-                        isControlling = true;
-                        if (clipboardBridge is not null) clipboardBridge.Controlling = true;
-                        _inputLockManager.StartLock();
+                        if (!isControlling)
+                        {
+                            _inputLockManager.StartLock();
+                            isControlling = true;
+                            if (clipboardBridge is not null) clipboardBridge.Controlling = true;
+                        }
                         break;
 
                     case MessageType.StopControl:
-                        isControlling = false;
-                        if (clipboardBridge is not null) clipboardBridge.Controlling = false;
-                        _inputLockManager.StopLock();
+                        if (isControlling)
+                        {
+                            _inputLockManager.StopLock();
+                            isControlling = false;
+                            if (clipboardBridge is not null) clipboardBridge.Controlling = false;
+                        }
                         break;
 
                     case MessageType.Heartbeat:
@@ -1042,7 +1055,13 @@ public sealed partial class SessionServer
         {
             captureCts.Cancel();
             captureThread.Join(TimeSpan.FromSeconds(2));
-            _inputLockManager.StopLock(); // safety net: connection ended for any reason
+            // Safety net: the connection ended for any reason while it held the
+            // lock. Only then -- a viewer that never controlled has none to
+            // end, and ending it anyway would take another connection's.
+            if (isControlling)
+            {
+                _inputLockManager.StopLock();
+            }
         }
     }
 

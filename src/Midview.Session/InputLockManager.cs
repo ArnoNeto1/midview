@@ -2,13 +2,20 @@ namespace Midview.Session;
 
 // The student's keyboard and mouse are locked while the teacher controls this
 // computer (StartLock/StopLock, kept up by heartbeats) or while its screen is
-// locked (one hold per screen-lock connection); they come back only when
+// locked (HoldForScreenLock/ReleaseScreenLock); they come back only when
 // neither holds them, so stopping control never undoes a screen lock or the
 // other way round.
 //
+// Each of those is counted, one hold per connection: two teachers, or a
+// Master that reconnects while the Session still has the connection it
+// replaces, each have a hold of their own, and the lock ends with the last of
+// them. So a caller pairs each StartLock with one StopLock (and each
+// HoldForScreenLock with one ReleaseScreenLock) and never ends a hold it
+// doesn't have: nothing here can tell whose hold an extra StopLock ends.
+//
 // Called from several threads at once -- the connections' receive loops and
 // the heartbeat-check timer -- so every operation runs under one lock.
-// Without it, a timeout-driven StopLock could interleave with a StartLock and
+// Without it, a timeout-driven release could interleave with a StartLock and
 // leave the devices disabled while IsLocked said otherwise: a stuck lock
 // nothing would ever release.
 public sealed class InputLockManager
@@ -20,6 +27,7 @@ public sealed class InputLockManager
     private readonly object _gate = new();
     private DateTimeOffset? _lastHeartbeat;
     private bool _isLocked;
+    private int _controlHolds;
     private int _screenLocks;
     private bool _devicesDisabled;
 
@@ -35,7 +43,8 @@ public sealed class InputLockManager
         _controlNotice = controlNotice;
     }
 
-    // Whether the teacher is controlling (not whether the devices are off).
+    // Whether the teacher is controlling (not whether the devices are off):
+    // some control hold is on and its heartbeats haven't timed out.
     public bool IsLocked
     {
         get
@@ -51,15 +60,19 @@ public sealed class InputLockManager
     {
         lock (_gate)
         {
-            if (_isLocked)
+            if (!_isLocked)
             {
-                return;
+                DisableDevices();
+                _isLocked = true;
+                TryNotice(notice => notice.Show());
             }
 
-            DisableDevices();
-            _isLocked = true;
+            // Also for a hold that only joins a lock already in place: it is
+            // as alive as a heartbeat. Without this, the timeout of an older
+            // hold whose Master has gone could end the lock just before the
+            // new one's first heartbeat.
             _lastHeartbeat = _clock.UtcNow;
-            TryNotice(notice => notice.Show());
+            _controlHolds++;
         }
     }
 
@@ -67,7 +80,15 @@ public sealed class InputLockManager
     {
         lock (_gate)
         {
-            StopLockLocked();
+            if (_controlHolds > 0)
+            {
+                _controlHolds--;
+            }
+
+            if (_controlHolds == 0)
+            {
+                ReleaseControlLocked();
+            }
         }
     }
 
@@ -82,6 +103,10 @@ public sealed class InputLockManager
         }
     }
 
+    // Ends control's lock for every hold alike, as nobody has answered for too
+    // long. The holds stay counted: each ends with its own connection, and
+    // none of those ends may take with it the lock of a hold that started
+    // after this one.
     public void CheckHeartbeatTimeout()
     {
         lock (_gate)
@@ -93,7 +118,7 @@ public sealed class InputLockManager
 
             if (_clock.UtcNow - lastHeartbeat > _heartbeatTimeout)
             {
-                StopLockLocked();
+                ReleaseControlLocked();
             }
         }
     }
@@ -124,7 +149,7 @@ public sealed class InputLockManager
         }
     }
 
-    private void StopLockLocked()
+    private void ReleaseControlLocked()
     {
         if (!_isLocked)
         {

@@ -50,6 +50,24 @@ public class ControlNoticeTests
         Assert.False(_notice.Showing);
     }
 
+    // Two holds (a reconnect overlapping the connection it replaces) are one
+    // notice, and it goes with the last of them.
+    [Fact]
+    public void TheNotice_StaysUp_UntilTheLastHoldEnds()
+    {
+        var manager = Manager(_notice);
+
+        manager.StartLock();
+        manager.StartLock();
+        Assert.Equal(1, _notice.Shows);
+
+        manager.StopLock();
+        Assert.True(_notice.Showing);
+
+        manager.StopLock();
+        Assert.False(_notice.Showing);
+    }
+
     [Fact]
     public void WhenTheTeacherStopsAnswering_TheNoticeGoesWithTheLock()
     {

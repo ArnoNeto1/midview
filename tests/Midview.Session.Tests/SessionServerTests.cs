@@ -754,6 +754,84 @@ public partial class SessionServerTests
         Assert.Equal(1, harness.Devices.EnableCalls);
     }
 
+    // A window that only watches ends all the time, and it never took the
+    // lock: the student must not get the keyboard back because of it while a
+    // hold (the teacher controlling through another process) still has it.
+    [Fact]
+    public async Task A_hold_stays_locked_when_a_watching_connection_ends()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(200, 100));
+        using var holding = harness.ConnectMaster();
+        holding.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        await WatchAndLeave(harness, stopControlOnTheWayOut: false);
+
+        Assert.True(harness.InputLock.IsLocked);
+        Assert.Equal(0, harness.Devices.EnableCalls);
+    }
+
+    // The Master's window sends StopControl as it closes, controlling or not.
+    [Fact]
+    public async Task A_hold_stays_locked_when_a_Master_that_never_controlled_stops_controlling()
+    {
+        using var harness = new ServerHarness(new FixedSizeScreenCapture(200, 100));
+        using var holding = harness.ConnectMaster();
+        holding.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        await WatchAndLeave(harness, stopControlOnTheWayOut: true);
+
+        Assert.True(harness.InputLock.IsLocked);
+        Assert.Equal(0, harness.Devices.EnableCalls);
+    }
+
+    // A Master that reconnects while the Session still has the connection it
+    // replaces: the old one ends (on its own timeout, or when its closed
+    // socket finally gets here) with the new one in use.
+    [Fact]
+    public async Task Two_overlapping_holds_keep_the_lock_until_both_end()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var first = harness.ConnectMaster();
+        first.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        using var second = harness.ConnectMaster();
+        var readsBefore = harness.Clock.Reads;
+        second.Channel.Send(new Message(MessageType.HoldInputLock, Array.Empty<byte>()));
+        second.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await WaitUntil(() => harness.Clock.Reads > readsBefore); // the Session has taken the second hold
+
+        first.Dispose();
+        await Task.Delay(500); // long enough for the Session to have seen it end
+
+        Assert.True(harness.InputLock.IsLocked);
+        Assert.Equal(0, harness.Devices.EnableCalls);
+
+        second.Dispose();
+
+        await WaitUntil(() => !harness.InputLock.IsLocked);
+        Assert.Equal(1, harness.Devices.EnableCalls);
+    }
+
+    // One lock per connection, however often it asks: it ends with the one
+    // StopControl, not one per StartControl.
+    [Fact]
+    public async Task A_repeated_StartControl_still_ends_with_one_StopControl()
+    {
+        using var harness = new ServerHarness(new CountingScreenCapture());
+        using var master = harness.ConnectMaster();
+        master.StartControl();
+        master.StartControl();
+        await WaitUntil(() => harness.InputLock.IsLocked);
+
+        master.Channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));
+
+        await WaitUntil(() => !harness.InputLock.IsLocked);
+        Assert.Equal(1, harness.Devices.EnableCalls);
+    }
+
     // The 11-byte InputEvent ViewControlWindow sends: kind, x, y, key.
     private static byte[] MouseMoveTo(int x, int y)
     {
@@ -1724,6 +1802,29 @@ public partial class SessionServerTests
             Assert.True(DateTime.UtcNow < deadline, "Timed out waiting for the condition");
             await Task.Delay(20);
         }
+    }
+
+    // A Master that only watches the screen and goes away, as a closed
+    // "Ver a tela" window does (it sends StopControl as it closes, whether it
+    // controlled or not). Returns once the Session has finished with its
+    // connection, its last clean-up included: the serving slot is that
+    // connection's until then, so a frame for the next Master means it is over.
+    private static async Task WatchAndLeave(ServerHarness harness, bool stopControlOnTheWayOut)
+    {
+        var watching = harness.ConnectMaster();
+        watching.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        watching.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Run(() => watching.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(5)); // it is being served
+        if (stopControlOnTheWayOut)
+        {
+            watching.Channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));
+        }
+        watching.Dispose();
+
+        using var next = harness.ConnectMaster();
+        next.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        next.Channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
+        await Task.Run(() => next.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     // Stands still until a test moves it, and counts how often it was read, so
