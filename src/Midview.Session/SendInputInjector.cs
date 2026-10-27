@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Midview.Protocol;
 
 namespace Midview.Session;
 

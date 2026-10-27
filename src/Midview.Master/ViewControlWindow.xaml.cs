@@ -361,11 +361,7 @@ public partial class ViewControlWindow : Window
             return;
         }
 
-        var buffer = new byte[11];
-        buffer[0] = (byte)kind;
-        BitConverter.GetBytes(x).CopyTo(buffer, 1);
-        BitConverter.GetBytes(y).CopyTo(buffer, 5);
-        BitConverter.GetBytes(virtualKeyCode).CopyTo(buffer, 9);
+        var buffer = InputEventCodec.Encode(new InputEvent(kind, x, y, virtualKeyCode));
         RunOrCloseOnFailure(() => _client.SendInputEvent(buffer));
     }
 
@@ -425,13 +421,5 @@ public partial class ViewControlWindow : Window
             // Connection may already be dead; closing should never throw.
         }
         _client.Dispose();
-    }
-
-    // Must stay numerically aligned with Midview.Session.InputEventKind --
-    // the wire format is a raw byte, not the enum name.
-    private enum InputEventKind : byte
-    {
-        MouseMove = 0, MouseLeftDown = 1, MouseLeftUp = 2, KeyDown = 3, KeyUp = 4,
-        MouseRightDown = 5, MouseRightUp = 6, MouseWheel = 7,
     }
 }

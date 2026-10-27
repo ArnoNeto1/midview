@@ -4,28 +4,6 @@ using Midview.Protocol;
 
 namespace Midview.Session;
 
-internal static class InputEventCodec
-{
-    public static InputEvent Decode(byte[] payload)
-    {
-        var kind = (InputEventKind)payload[0];
-        var x = BitConverter.ToInt32(payload, 1);
-        var y = BitConverter.ToInt32(payload, 5);
-        var vk = BitConverter.ToUInt16(payload, 9);
-        return new InputEvent(kind, x, y, vk);
-    }
-
-    public static byte[] Encode(InputEvent inputEvent)
-    {
-        var buffer = new byte[11];
-        buffer[0] = (byte)inputEvent.Kind;
-        BitConverter.GetBytes(inputEvent.X).CopyTo(buffer, 1);
-        BitConverter.GetBytes(inputEvent.Y).CopyTo(buffer, 5);
-        BitConverter.GetBytes(inputEvent.VirtualKeyCode).CopyTo(buffer, 9);
-        return buffer;
-    }
-}
-
 internal static class TileMessageCodec
 {
     public static byte[] Encode(EncodedTile tile)

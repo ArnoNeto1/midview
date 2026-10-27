@@ -298,6 +298,14 @@ public enum MessageType : byte
     InstallProgram = 86,
     InstallAccepted = 87,
     InstallStarted = 88,
+
+    // Master -> Session: lock the student's keyboard and mouse, as StartControl
+    // does, for as long as this connection stays open, and stream nothing. The
+    // Master holds it while it controls the machine through Midview.Desk, which
+    // can't lock the input itself (see
+    // docs/superpowers/specs/2026-10-27-remote-control-through-uac-design.md).
+    // The Master's Heartbeats keep the connection up; closing it unlocks.
+    HoldInputLock = 89,
 }
 
 public enum CloseAppsMode : byte

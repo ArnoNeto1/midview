@@ -1,3 +1,5 @@
+using Midview.Protocol;
+
 namespace Midview.Session;
 
 public interface IInputInjector
