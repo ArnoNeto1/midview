@@ -195,21 +195,6 @@ section.block { padding-block: 72px; border-top: 1px solid var(--line); }
 .panel li strong { color: var(--fg); font-weight: 600; }
 @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
 
-/* Doação */
-.donate { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: center; padding: 28px; border-radius: 20px; border: 1px solid color-mix(in srgb, var(--indigo) 45%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--indigo) 16%, var(--surface)), var(--surface)); }
-.donate-text { display: grid; gap: 12px; min-width: 0; }
-.donate-text h3 { font-size: 24px; font-weight: 800; }
-.donate-text p { color: var(--muted); }
-.pix { display: grid; gap: 12px; justify-items: center; min-width: 0; }
-.pix-qr { background: #fff; padding: 12px; border-radius: 14px; line-height: 0; }
-.pix-qr img, .pix-qr canvas { width: 196px; height: 196px; }
-.pix-code { width: 100%; font: 500 12px/1.4 var(--font-mono); color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-wrap: anywhere; user-select: all; }
-.pix-soon { text-align: center; display: grid; gap: 8px; padding: 24px; border-radius: 16px; border: 1px dashed var(--line); width: 100%; }
-.pix-soon strong { font: 700 18px/1.2 var(--font-display); color: var(--fg); }
-.pix-soon span { color: var(--muted); font-size: 14px; }
-.btn-copy { border: 0; cursor: pointer; }
-@media (max-width: 760px) { .donate { grid-template-columns: 1fr; } }
-
 /* Chamada final */
 .cta { padding-block: 80px; border-top: 1px solid var(--line); text-align: center; }
 .cta .wrap { display: grid; gap: 18px; justify-items: center; }
@@ -236,7 +221,6 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       <a href="#funcoes">Funções</a>
       <a href="#comecar">Como começar</a>
       <a href="#privacidade">Privacidade</a>
-      <a href="#apoie">Apoie</a>
     </nav>
     <a class="btn btn-primary btn-sm" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">Baixar</a>
   </div>
@@ -540,27 +524,6 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
     </div>
   </section>
 
-  <section class="block" id="apoie" aria-labelledby="apoie-titulo">
-    <div class="wrap">
-      <div class="donate">
-        <div class="donate-text">
-          <span class="eyebrow">Apoie o Midview</span>
-          <h3 id="apoie-titulo">Gratuito para todas as escolas, com a ajuda de quem pode</h3>
-          <p>O Midview é e continua gratuito. Se ele facilita o seu dia no laboratório e você ou a sua escola quiser contribuir, a doação ajuda a manter o projeto e a trazer funções novas. Qualquer valor é bem-vindo, e doar não muda nada no uso do programa.</p>
-        </div>
-        <div class="pix" id="pix">
-          <div class="pix-soon" id="pix-soon">
-            <strong>Doações por Pix em breve</strong>
-            <span>Estamos preparando a conta para receber. Volte logo!</span>
-          </div>
-          <div class="pix-qr" id="pix-qr" hidden></div>
-          <code class="pix-code" id="pix-code" hidden></code>
-          <button class="btn btn-primary btn-copy" id="pix-copy" type="button" hidden>Copiar o código Pix</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <section class="cta" aria-labelledby="cta-titulo">
     <div class="wrap">
       <span class="eyebrow">Gratuito para escolas</span>
@@ -580,65 +543,5 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
     <span>Software proprietário, de uso gratuito para escolas, nos termos da Licença de Uso do Midview.</span>
   </div>
 </footer>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous"></script>
-<script>
-/* Doações por Pix. Enquanto a chave estiver vazia, o site mostra "em breve".
-   Preencha os três campos e publique: o QR Code e o "copia e cola" saem sozinhos.
-   nome: até 25 letras; cidade: até 15 letras (sem acento fica mais seguro). */
-const PIX = {
-  chave: "",
-  nome: "",
-  cidade: "",
-};
-
-(function () {
-  const semAcento = (s, max) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9 ]/g, "").trim().slice(0, max).toUpperCase();
-  const campo = (id, valor) => id + String(valor.length).padStart(2, "0") + valor;
-  // CRC16-CCITT (0x1021, início 0xFFFF), como pede o padrão BR Code do Banco Central.
-  const crc16 = (texto) => {
-    let crc = 0xffff;
-    for (const c of new TextEncoder().encode(texto)) {
-      crc ^= c << 8;
-      for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
-    }
-    return crc.toString(16).toUpperCase().padStart(4, "0");
-  };
-  const brCode = ({ chave, nome, cidade }) => {
-    const conta = campo("00", "br.gov.bcb.pix") + campo("01", chave.trim());
-    const corpo = campo("00", "01") + campo("26", conta) + campo("52", "0000") + campo("53", "986") +
-      campo("58", "BR") + campo("59", semAcento(nome, 25)) + campo("60", semAcento(cidade, 15)) +
-      campo("62", campo("05", "***")) + "6304";
-    return corpo + crc16(corpo);
-  };
-
-  if (!PIX.chave.trim() || !PIX.nome.trim() || !PIX.cidade.trim()) return;
-  const codigo = brCode(PIX);
-  document.getElementById("pix-soon").hidden = true;
-  const qr = document.getElementById("pix-qr");
-  const texto = document.getElementById("pix-code");
-  const copiar = document.getElementById("pix-copy");
-  texto.textContent = codigo;
-  texto.hidden = false;
-  copiar.hidden = false;
-  if (window.QRCode) {
-    new QRCode(qr, { text: codigo, width: 196, height: 196, correctLevel: QRCode.CorrectLevel.M });
-    qr.hidden = false;
-  }
-  copiar.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(codigo);
-      copiar.textContent = "Código copiado";
-    } catch {
-      const sel = getSelection();
-      const r = document.createRange();
-      r.selectNodeContents(texto);
-      sel.removeAllRanges();
-      sel.addRange(r);
-      copiar.textContent = "Código selecionado: copie com Ctrl+C";
-    }
-    setTimeout(() => (copiar.textContent = "Copiar o código Pix"), 2500);
-  });
-})();
-</script>
 </body>
 </html>
