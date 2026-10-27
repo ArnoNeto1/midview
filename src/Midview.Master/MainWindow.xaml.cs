@@ -474,11 +474,10 @@ public partial class MainWindow : Window
         StatusTextBlock.Text = $"Conectando a {machine.Name}...";
         try
         {
-            var client = await Task.Run(() => ConnectionClient.Connect(
-                machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate));
+            var (client, endpoint) = await Task.Run(() => ConnectForScreen(machine, control));
 
             StatusTextBlock.Text = string.Empty;
-            var window = new ViewControlWindow(client, machine.Name, control);
+            var window = new ViewControlWindow(client, machine.Name, control, endpoint, machine, _masterCertificate);
             _openWindows.Add(key, window);
             window.Closed += (_, _) => _openWindows.Remove(key, window);
             window.Show();
@@ -488,6 +487,38 @@ public partial class MainWindow : Window
             _openWindows.StopOpening(key);
             StatusTextBlock.Text = $"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}";
         }
+    }
+
+    // How long the helper gets to answer before control falls back to the
+    // Session: a machine with no helper (or one its firewall hides) must not
+    // make the teacher wait.
+    private static readonly TimeSpan HelperConnectTimeout = TimeSpan.FromSeconds(2);
+
+    // Watching always uses the Session. Controlling tries the helper first,
+    // which can follow the screen onto the UAC prompt, and on any failure --
+    // refused, timed out, a handshake that doesn't trust it -- connects the
+    // Session as it always has, so the helper never stands between the
+    // teacher and a working connection. Runs off the window's thread.
+    private (ConnectionClient Client, ControlEndpoint Endpoint) ConnectForScreen(KnownMachine machine, bool control)
+    {
+        if (control && !string.IsNullOrEmpty(machine.AgentThumbprint))
+        {
+            try
+            {
+                var (_, helperPort, helperThumbprint) = ControlChoice.Choose(machine, helperReachable: true);
+                var helper = ConnectionClient.Connect(
+                    machine.HostAddress, helperPort, helperThumbprint, _masterCertificate, HelperConnectTimeout);
+                return (helper, ControlEndpoint.Helper);
+            }
+            catch (Exception)
+            {
+                // Falls through to the Session.
+            }
+        }
+
+        var (endpoint, port, thumbprint) = ControlChoice.Choose(machine, helperReachable: false);
+        var session = ConnectionClient.Connect(machine.HostAddress, port, thumbprint, _masterCertificate);
+        return (session, endpoint);
     }
 
     // The window for this action and these machines: the one already open,

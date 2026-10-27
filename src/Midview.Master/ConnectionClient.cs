@@ -7,6 +7,7 @@ namespace Midview.Master;
 public sealed class ConnectionClient : IDisposable
 {
     public const int SessionPort = 5901; // must match Midview.Session's listener
+    public const int DeskPort = 5902; // must match Midview.Agent.AgentServerWorker.DeskPort
     public const int AgentPort = 28900; // must match Midview.Agent.AgentServerWorker.AgentPort
 
     private readonly SecureChannel _channel;
@@ -29,6 +30,34 @@ public sealed class ConnectionClient : IDisposable
         var channel = SecureChannel.AuthenticateAsClient(
             tcpClient, hostAddress, masterCertificate, new TrustStore(new[] { targetThumbprint }));
         return new ConnectionClient(channel);
+    }
+
+    // For a listener that may not be there (the Desk helper on a machine that
+    // doesn't have it, or whose firewall drops the port): the connection and
+    // the handshake each get at most this long, so the caller can fall back
+    // in seconds instead of waiting out Windows' own ~21 s connect timeout.
+    public static ConnectionClient Connect(
+        string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate, TimeSpan timeout)
+    {
+        var tcpClient = TcpConnect.WithTimeout(hostAddress, port, timeout);
+        try
+        {
+            tcpClient.NoDelay = true; // as in the overload above
+            // Only the handshake is bounded: once it is done the receive loop
+            // blocks on purpose, for as long as the screen stays quiet.
+            tcpClient.ReceiveTimeout = (int)timeout.TotalMilliseconds;
+            tcpClient.SendTimeout = (int)timeout.TotalMilliseconds;
+            var channel = SecureChannel.AuthenticateAsClient(
+                tcpClient, hostAddress, masterCertificate, new TrustStore(new[] { targetThumbprint }));
+            tcpClient.ReceiveTimeout = 0;
+            tcpClient.SendTimeout = 0;
+            return new ConnectionClient(channel);
+        }
+        catch
+        {
+            tcpClient.Dispose();
+            throw;
+        }
     }
 
     // Must be the first message: asks for the screen as ScreenFrame updates

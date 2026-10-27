@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -20,15 +21,29 @@ public partial class ViewControlWindow : Window
     private WriteableBitmap? _screenBitmap;
     private bool _closing;
     private bool _controlling;
+    private readonly ControlEndpoint _endpoint;
+    private readonly KnownMachine? _machine;
+    private readonly X509Certificate2? _masterCertificate;
+    private ControlLockKeeper? _lockKeeper;
 
     // 1 while a DrawChanges is waiting to run on the window's thread.
     private int _drawScheduled;
 
-    public ViewControlWindow(ConnectionClient client, string machineName, bool control)
+    // endpoint: what client is connected to. Through the helper (Desk) the
+    // student's input can't be locked by it, so while controlling this window
+    // keeps a ControlLockKeeper on the Session -- which needs the machine and
+    // the certificate; a Session connection locks the input itself.
+    public ViewControlWindow(
+        ConnectionClient client, string machineName, bool control,
+        ControlEndpoint endpoint = ControlEndpoint.Session,
+        KnownMachine? machine = null, X509Certificate2? masterCertificate = null)
     {
         InitializeComponent();
         _client = client;
         _machineName = machineName;
+        _endpoint = endpoint;
+        _machine = machine;
+        _masterCertificate = masterCertificate;
 
         // Asks for the screen as ScreenFrame updates, which starts it; a
         // Session from before that ignores the type and sends FrameTile,
@@ -55,6 +70,29 @@ public partial class ViewControlWindow : Window
         _heartbeatTimer.Start();
 
         Task.Run(ReceiveLoop);
+
+        // Last, so a constructor that fails above leaves no connection behind.
+        SyncLockKeeper();
+    }
+
+    // The input lock is held only while controlling through the helper: a
+    // reachable helper means the machine runs the current build, whose
+    // Session knows HoldInputLock (the Session path locks by itself).
+    private void SyncLockKeeper()
+    {
+        if (_controlling && _endpoint == ControlEndpoint.Helper && _machine is not null && _masterCertificate is not null)
+        {
+            if (_lockKeeper is null)
+            {
+                _lockKeeper = new ControlLockKeeper(_machine, _masterCertificate);
+                _lockKeeper.Start();
+            }
+        }
+        else
+        {
+            _lockKeeper?.Dispose();
+            _lockKeeper = null;
+        }
     }
 
     // ScreenImage doesn't receive keyboard focus just by being Focusable and
@@ -380,6 +418,7 @@ public partial class ViewControlWindow : Window
             _controlling = !_controlling;
         });
         ShowMode();
+        SyncLockKeeper();
         ScreenImage.Focus();
     }
 
@@ -390,6 +429,9 @@ public partial class ViewControlWindow : Window
         ModeTextBlock.Text = _controlling
             ? "Controlando: o teclado e o mouse do aluno estão travados."
             : "Só vendo: o aluno continua usando o computador normalmente.";
+        CompatibilityNote.Visibility = _controlling && _endpoint == ControlEndpoint.Session
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void OnDisconnectClicked(object sender, RoutedEventArgs e) => Close();
@@ -412,6 +454,8 @@ public partial class ViewControlWindow : Window
     {
         _closing = true;
         _heartbeatTimer.Stop();
+        _lockKeeper?.Dispose(); // gives the student the keyboard and mouse back
+        _lockKeeper = null;
         try
         {
             _client.SendStopControl();
