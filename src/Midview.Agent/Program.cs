@@ -49,7 +49,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new ScheduledShutdown(
             ScheduledShutdown.DefaultStatePath, PowerCommandHandler.RunShutdownExe, provider.GetRequiredService<ICountdownDisplay>()));
         services.AddSingleton(provider => new PowerCommandHandler(
-            PowerCommandHandler.RunShutdownExe, countdown: provider.GetRequiredService<ICountdownDisplay>()));
+            PowerCommandHandler.RunShutdownExe, countdown: provider.GetRequiredService<ICountdownDisplay>(),
+            runUpdatingShutdown: WindowsUpdatingShutdown.Initiate));
         services.AddSingleton(provider =>
         {
             var runningExe = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, UpdatePaths.AgentExeName);

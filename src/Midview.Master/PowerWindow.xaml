@@ -1,7 +1,7 @@
 <Window x:Class="Midview.Master.PowerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Desligar" Height="480" Width="500"
+        Title="Desligar" Height="560" Width="500"
         WindowStartupLocation="CenterOwner">
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top">
@@ -14,7 +14,15 @@
             </StackPanel>
             <RadioButton x:Name="OneMinuteRadioButton" GroupName="Delay" IsChecked="True" Content="Avisar o aluno e esperar 1 minuto" Margin="0,0,0,4" />
             <RadioButton x:Name="FiveMinutesRadioButton" GroupName="Delay" Content="Avisar o aluno e esperar 5 minutos" Margin="0,0,0,4" />
-            <RadioButton x:Name="NowRadioButton" GroupName="Delay" Content="Agora, sem esperar" Margin="0,0,0,8" />
+            <RadioButton x:Name="NowRadioButton" GroupName="Delay" Content="Agora, sem esperar" Margin="0,0,0,10" />
+            <!-- Off each time the window opens: installing can keep a machine busy for minutes. -->
+            <Border BorderBrush="#E3E3E3" BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,10" Background="#FAFAFA">
+                <StackPanel>
+                    <CheckBox x:Name="InstallUpdatesCheckBox" FontWeight="SemiBold" Checked="OnActionChanged" Unchecked="OnActionChanged"
+                              Content="Instalar as atualizações do Windows que estiverem esperando" />
+                    <TextBlock x:Name="UpdatesHintTextBlock" TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="20,4,0,0" />
+                </StackPanel>
+            </Border>
             <DockPanel>
                 <Button x:Name="CancelShutdownButton" DockPanel.Dock="Right" Content="Cancelar desligamento" Click="OnCancelShutdownClicked"
                         Padding="10,4" Margin="8,0,0,0"

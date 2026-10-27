@@ -27,7 +27,10 @@ public partial class PowerWindow : Window
         {
             RestartRadioButton.IsChecked = true;
         }
+        OnActionChanged(this, new RoutedEventArgs());
     }
+
+    private bool InstallUpdates => InstallUpdatesCheckBox.IsChecked == true;
 
     private PowerAction SelectedAction => RestartRadioButton.IsChecked == true ? PowerAction.Restart : PowerAction.Shutdown;
 
@@ -37,32 +40,33 @@ public partial class PowerWindow : Window
     private void OnActionChanged(object sender, RoutedEventArgs e)
     {
         // The XAML's first Checked comes before the buttons exist.
-        if (RunButton is null || CancelShutdownButton is null)
+        if (RunButton is null || CancelShutdownButton is null || InstallUpdatesCheckBox is null)
         {
             return;
         }
         var restart = SelectedAction == PowerAction.Restart;
         Title = restart ? "Reiniciar" : "Desligar";
-        RunButton.Content = restart ? "Reiniciar" : "Desligar";
+        RunButton.Content = PowerText.RunButton(restart, InstallUpdates);
         CancelShutdownButton.Content = restart ? "Cancelar reinício" : "Cancelar desligamento";
+        UpdatesHintTextBlock.Text = PowerText.UpdatesHint(restart);
     }
 
     // No "are you sure": the window itself says what happens, and a
     // countdown can still be called off with "Cancelar".
     private async void OnRunClicked(object sender, RoutedEventArgs e) =>
-        await SendToAll(SelectedAction, SelectedDelaySeconds);
+        await SendToAll(SelectedAction, SelectedDelaySeconds, InstallUpdates);
 
     private async void OnCancelShutdownClicked(object sender, RoutedEventArgs e) =>
-        await SendToAll(PowerAction.Cancel, 0);
+        await SendToAll(PowerAction.Cancel, 0, installUpdates: false);
 
     // Every machine at once: an offline one must not hold up the rest.
-    private async Task SendToAll(PowerAction action, int delaySeconds)
+    private async Task SendToAll(PowerAction action, int delaySeconds, bool installUpdates)
     {
         RunButton.IsEnabled = CancelShutdownButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
         ProgressTextBlock.Text = action == PowerAction.Cancel ? "Cancelando..." : "Enviando...";
 
-        var payload = PowerCommand.Encode(action, delaySeconds);
+        var payload = PowerCommand.Encode(action, delaySeconds, installUpdates);
         var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => SendTo(machine, payload))));
 
         var failures = results.Count(result => !result.Succeeded);
@@ -70,7 +74,7 @@ public partial class PowerWindow : Window
             ? results.Length == 1 ? "Concluído." : $"Concluído nas {results.Length} máquinas."
             : $"Concluído em {results.Length - failures} de {results.Length}.";
         ResultTextBlock.Text = string.Join("\n", results.Select(result =>
-            $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
+            $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {PowerText.Detail(result.Succeeded, result.Detail, installUpdates)}"));
         RunButton.IsEnabled = CancelShutdownButton.IsEnabled = true;
     }
 

@@ -27,6 +27,17 @@ public static class ShutdownCommands
             "Salve seu trabalho agora: o que não estiver salvo será perdido.",
         };
 
+    // Installing the Windows updates waiting for a restart on the way
+    // (WindowsUpdatingShutdown), with a warning that says so.
+    public static UpdatingShutdown BuildWithUpdates(PowerAction action, int delaySeconds)
+    {
+        var restart = action == PowerAction.Restart;
+        return new UpdatingShutdown(restart, delaySeconds, delaySeconds > 0
+            ? $"O professor vai instalar as atualizações do Windows e {(restart ? "reiniciar" : "desligar")} este computador em " +
+              $"{DescribeDelay(delaySeconds)}. Salve seu trabalho agora: o que não estiver salvo será perdido."
+            : null);
+    }
+
     public static string DescribeDelay(int delaySeconds) =>
         delaySeconds % 60 == 0
             ? delaySeconds == 60 ? "1 minuto" : $"{delaySeconds / 60} minutos"
@@ -38,8 +49,9 @@ public static class ShutdownCommands
 }
 
 // Runs the teacher's shutdown, restart or cancel through shutdown.exe and
-// says what happened. The Agent runs as SYSTEM, so this works whether or not
-// anyone is logged in.
+// says what happened; one that installs the waiting Windows updates goes
+// through Windows' own call for it instead (runUpdatingShutdown). The Agent
+// runs as SYSTEM, so this works whether or not anyone is logged in.
 public sealed class PowerCommandHandler
 {
     // shutdown.exe exit codes (Windows system error codes).
@@ -51,14 +63,20 @@ public sealed class PowerCommandHandler
     private static readonly TimeSpan PendingMargin = TimeSpan.FromMinutes(2);
 
     private readonly Func<string[], int> _runShutdown;
+    private readonly Func<UpdatingShutdown, int>? _runUpdatingShutdown;
     private readonly Func<DateTime> _utcNow;
     private readonly ICountdownDisplay? _countdown;
     private readonly object _gate = new();
     private DateTime? _pendingUntil;
 
-    public PowerCommandHandler(Func<string[], int> runShutdown, Func<DateTime>? utcNow = null, ICountdownDisplay? countdown = null)
+    // runUpdatingShutdown: WindowsUpdatingShutdown.Initiate; without it a
+    // request to install the updates is refused, never run without them.
+    public PowerCommandHandler(
+        Func<string[], int> runShutdown, Func<DateTime>? utcNow = null, ICountdownDisplay? countdown = null,
+        Func<UpdatingShutdown, int>? runUpdatingShutdown = null)
     {
         _runShutdown = runShutdown;
+        _runUpdatingShutdown = runUpdatingShutdown;
         _utcNow = utcNow ?? (() => DateTime.UtcNow);
         _countdown = countdown;
     }
@@ -74,15 +92,26 @@ public sealed class PowerCommandHandler
 
     public (bool Succeeded, string Detail) Handle(byte[] payload)
     {
-        if (!PowerCommand.TryDecode(payload, out var action, out var delaySeconds))
+        if (!PowerCommand.TryDecode(payload, out var action, out var delaySeconds, out var installUpdates))
         {
             return (false, "pedido inválido");
+        }
+        if (installUpdates && _runUpdatingShutdown is null)
+        {
+            return (false, "este Midview não instala atualizações ao desligar");
         }
 
         int exitCode;
         try
         {
-            exitCode = _runShutdown(ShutdownCommands.Build(action, delaySeconds));
+            exitCode = installUpdates
+                ? _runUpdatingShutdown!(ShutdownCommands.BuildWithUpdates(action, delaySeconds))
+                : _runShutdown(ShutdownCommands.Build(action, delaySeconds));
+        }
+        catch (Exception ex) when (installUpdates)
+        {
+            AgentLog.Warn($"Asking Windows to shut down installing updates failed: {ex.Message}");
+            return (false, $"o Windows não aceitou o pedido: {ErrorText.Describe(ex)}");
         }
         catch (Exception ex)
         {
@@ -108,12 +137,13 @@ public sealed class PowerCommandHandler
         }
 
         var verb = action == PowerAction.Restart ? "reinicia" : "desliga";
+        var updates = installUpdates ? ", instalando as atualizações" : string.Empty;
         return (action, exitCode) switch
         {
             (PowerAction.Cancel, 0) => (true, "desligamento cancelado"),
             (PowerAction.Cancel, NoShutdownInProgress) => (true, "nenhum desligamento estava agendado"),
-            (_, 0) when delaySeconds == 0 => (true, action == PowerAction.Restart ? "reiniciando agora" : "desligando agora"),
-            (_, 0) => (true, $"{verb} em {ShutdownCommands.DescribeDelay(delaySeconds)}"),
+            (_, 0) when delaySeconds == 0 => (true, (action == PowerAction.Restart ? "reiniciando agora" : "desligando agora") + updates),
+            (_, 0) => (true, $"{verb} em {ShutdownCommands.DescribeDelay(delaySeconds)}{updates}"),
             (_, ShutdownAlreadyScheduled) => (false, "já há um desligamento agendado (cancele antes de pedir outro)"),
             _ => (false, $"o Windows recusou (código {exitCode})"),
         };
