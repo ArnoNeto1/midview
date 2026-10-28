@@ -29,6 +29,7 @@ public partial class MachinesWindow : Window
     private readonly Action _openJoinClass;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
+    private readonly AdminPasswordStore _adminPasswords = new(MasterData.Folder);
     private bool _closed;
 
     // addPaired and refreshAddresses change the classroom list (MainWindow);
@@ -48,9 +49,65 @@ public partial class MachinesWindow : Window
         _refreshAddresses = refreshAddresses;
         FoundItemsControl.ItemsSource = _rows;
         ShowStudentProgramVersion();
+        RefreshAdminPasswordStatus();
     }
 
     private void OnAdvancedClicked(object sender, RoutedEventArgs e) => _openAdvanced();
+
+    // The lab admin password lives only on this teacher PC (DPAPI CurrentUser);
+    // it is never sent to a student machine. With one saved, "Preencher a senha
+    // de administrador" in a control session types it into the student's UAC.
+    private void RefreshAdminPasswordStatus()
+    {
+        var has = _adminPasswords.HasPassword;
+        AdminPasswordButton.Content = has ? "Trocar a senha..." : "Definir a senha...";
+        RemoveAdminPasswordButton.IsEnabled = has;
+        AdminPasswordStatusTextBlock.Text = has
+            ? "Uma senha está salva neste computador."
+            : "Nenhuma senha salva ainda.";
+    }
+
+    private void OnSetAdminPasswordClicked(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SetAdminPasswordWindow { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.PasswordUtf8 is not { } bytes)
+        {
+            return;
+        }
+        try
+        {
+            _adminPasswords.Save(bytes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            MessageBox.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
+                "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            Array.Clear(bytes);
+        }
+        RefreshAdminPasswordStatus();
+    }
+
+    private void OnRemoveAdminPasswordClicked(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, "Remover a senha de administrador guardada neste computador?",
+                "Senha de administrador", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        try
+        {
+            _adminPasswords.Clear();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Não foi possível remover a senha: {ErrorText.Describe(ex)}",
+                "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        RefreshAdminPasswordStatus();
+    }
 
     private void OnGiveAccessClicked(object sender, RoutedEventArgs e) => _openGiveAccess();
 

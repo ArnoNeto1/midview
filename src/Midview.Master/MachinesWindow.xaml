@@ -63,6 +63,18 @@
                     <Button Content="Ajustes avançados..." Click="OnAdvancedClicked" HorizontalAlignment="Left" />
                 </StackPanel>
             </Border>
+            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,14,0,0">
+                <StackPanel>
+                    <TextBlock Text="Senha de administrador" Style="{StaticResource SectionTitle}" />
+                    <TextBlock Style="{StaticResource SectionHint}"
+                               Text="A senha de administrador do laboratório, guardada só neste computador e protegida pelo Windows (não vai para as máquinas dos alunos). Com ela salva, o &quot;Preencher a senha de administrador&quot; digita no UAC do aluno com um clique." />
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="AdminPasswordButton" Content="Definir a senha..." Click="OnSetAdminPasswordClicked" />
+                        <Button x:Name="RemoveAdminPasswordButton" Content="Remover" Click="OnRemoveAdminPasswordClicked" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock x:Name="AdminPasswordStatusTextBlock" Style="{StaticResource SectionHint}" Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
