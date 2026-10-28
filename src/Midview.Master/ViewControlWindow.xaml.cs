@@ -444,6 +444,91 @@ public partial class ViewControlWindow : Window
         CompatibilityNote.Visibility = _controlling && _endpoint == ControlEndpoint.Session
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+        // The password buttons exist only on the helper connection, and the
+        // fill one works only while controlling: the Session never gets it.
+        var viaHelper = _endpoint == ControlEndpoint.Helper;
+        FillPasswordButton.Visibility = viaHelper ? Visibility.Visible : Visibility.Collapsed;
+        FillPasswordButton.IsEnabled = viaHelper && _controlling;
+        ChangePasswordButton.Visibility = viaHelper ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // Has the saved lab admin password typed into the student's UAC prompt.
+    // Sent on the helper connection only. The password lives as bytes just
+    // for this send and is cleared after; it is never logged or shown.
+    private void OnFillPasswordClicked(object sender, RoutedEventArgs e)
+    {
+        // Same condition as the button's visibility, checked again so a
+        // password can never be sent on the Session endpoint.
+        if (_endpoint != ControlEndpoint.Helper || !_controlling)
+        {
+            return;
+        }
+
+        var store = new AdminPasswordStore(MasterData.Folder);
+        if (!store.HasPassword && !AskAndSavePassword(store))
+        {
+            return;
+        }
+
+        var password = store.Load();
+        if (password is null)
+        {
+            MessageBox.Show(this,
+                "Não foi possível ler a senha guardada. Use \"Trocar senha de administrador...\" para digitá-la de novo.",
+                "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        byte[]? payload = null;
+        try
+        {
+            payload = CredentialFill.Encode(password);
+            var toSend = payload;
+            RunOrCloseOnFailure(() => _client.SendFillAdminPassword(toSend));
+        }
+        finally
+        {
+            Array.Clear(password);
+            if (payload is not null)
+            {
+                Array.Clear(payload);
+            }
+        }
+        ScreenImage.Focus();
+    }
+
+    private void OnChangePasswordClicked(object sender, RoutedEventArgs e)
+    {
+        AskAndSavePassword(new AdminPasswordStore(MasterData.Folder));
+        ScreenImage.Focus();
+    }
+
+    // Asks for the password and saves it; false when the teacher cancels or
+    // the file can't be written.
+    private bool AskAndSavePassword(AdminPasswordStore store)
+    {
+        var dialog = new SetAdminPasswordWindow { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.PasswordUtf8 is not { } bytes)
+        {
+            return false;
+        }
+
+        try
+        {
+            store.Save(bytes);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            MessageBox.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
+                "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+        finally
+        {
+            Array.Clear(bytes);
+        }
     }
 
     private void OnDisconnectClicked(object sender, RoutedEventArgs e) => Close();

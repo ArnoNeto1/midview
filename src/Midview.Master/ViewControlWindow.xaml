@@ -8,6 +8,11 @@
             <Button x:Name="ControlButton" Click="OnControlClicked" Padding="10,4" Margin="4" />
             <Button x:Name="FullscreenButton" Content="Tela Cheia" Click="OnFullscreenClicked" Padding="10,4" Margin="4" />
             <Button Content="Desconectar" Click="OnDisconnectClicked" Padding="10,4" Margin="4" />
+            <!-- Only on the helper connection (ShowMode): the password never goes over the Session. -->
+            <Button x:Name="FillPasswordButton" Content="Preencher a senha de administrador" Click="OnFillPasswordClicked"
+                    Padding="10,4" Margin="4" Visibility="Collapsed" />
+            <Button x:Name="ChangePasswordButton" Content="Trocar senha de administrador..." Click="OnChangePasswordClicked"
+                    Padding="10,4" Margin="4" Visibility="Collapsed" />
             <TextBlock x:Name="ModeTextBlock" Foreground="White" VerticalAlignment="Center" Margin="12,0,8,0" />
         </StackPanel>
         <Border x:Name="CompatibilityNote" DockPanel.Dock="Top" Background="#FF5A4A1E" Visibility="Collapsed">

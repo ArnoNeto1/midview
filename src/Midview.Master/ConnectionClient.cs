@@ -64,6 +64,10 @@ public sealed class ConnectionClient : IDisposable
     // (see MessageType.ScreenStream).
     public void SendScreenStream() => _channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
 
+    // Only ever sent on the helper connection (the 5902 channel), so the admin
+    // password never travels on the Session. The payload is CredentialFill.Encode.
+    public void SendFillAdminPassword(byte[] payload) => _channel.Send(new Message(MessageType.FillAdminPassword, payload));
+
     public void SendFrameAck(int frameId) => _channel.Send(new Message(MessageType.FrameAck, ScreenFrame.EncodeAck(frameId)));
 
     public void SendStartControl() => _channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
