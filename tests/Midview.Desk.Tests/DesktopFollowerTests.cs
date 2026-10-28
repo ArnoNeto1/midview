@@ -29,4 +29,21 @@ public class DesktopFollowerTests
         Assert.True(follower.PollChanged(out desktop));
         Assert.Equal(a, desktop);
     }
+
+    [Fact]
+    public void Reports_a_change_again_after_Reset()
+    {
+        var a = new IntPtr(0xA);
+        var follower = new DesktopFollower(() => a);
+
+        Assert.True(follower.PollChanged(out _));   // first poll: a change
+        Assert.False(follower.PollChanged(out _));  // same desktop: no change
+
+        follower.Reset();
+
+        // After a reset the next poll reports a change again, though the desktop
+        // is unchanged -- a fresh control session must re-attach and capture.
+        Assert.True(follower.PollChanged(out var desktop));
+        Assert.Equal(a, desktop);
+    }
 }

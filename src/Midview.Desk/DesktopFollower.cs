@@ -34,4 +34,11 @@ public sealed class DesktopFollower
         _lastReported = desktop;
         return true;
     }
+
+    // Forget the last desktop reported, so the next poll reports a change even
+    // if the desktop has not moved. A new control connection calls this, so its
+    // worker attaches and makes its capture at once instead of waiting for a
+    // desktop switch that may never come -- the follower is shared across
+    // connections, and without this a second control session got a black screen.
+    public void Reset() => _lastReported = null;
 }

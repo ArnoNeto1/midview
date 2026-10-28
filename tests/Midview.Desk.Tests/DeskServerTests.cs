@@ -196,6 +196,29 @@ public class DeskServerTests
 
     // A fixed-size screen that is never a real desktop: a frame the diff and
     // JPEG encoder accept, so the streaming path runs without a real screen.
+    [Fact]
+    public async Task A_second_control_after_the_first_closes_streams_again()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+
+        using (var first = harness.ConnectMaster())
+        {
+            first.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+            await Task.Run(() => first.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        // Let the server notice the first connection closed and free the slot.
+        await Task.Delay(300);
+
+        // On the same desktop, a second control session must stream again rather
+        // than hang on a black screen -- the regression where the worker never
+        // made its capture because the shared follower reported no change.
+        using var second = harness.ConnectMaster();
+        second.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        var frame = await Task.Run(() => second.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(MessageType.ScreenFrame, frame.Type);
+    }
+
     private sealed class FakeScreenCapture : IScreenCapture
     {
         private readonly int _width;

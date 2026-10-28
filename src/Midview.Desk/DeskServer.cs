@@ -254,6 +254,13 @@ public sealed class DeskServer
         FrameCredit credit, CaptureCadence cadence, ConcurrentQueue<InputEvent> pendingInput,
         ConcurrentQueue<byte[]> pendingFills)
     {
+        // Each control connection starts its own capture: forget any desktop a
+        // previous connection's worker reported, so the first poll below reports
+        // the current desktop and makes the capture even when the desktop has not
+        // changed since the last session. The serving slot means only this worker
+        // uses the shared follower now.
+        _follower.Reset();
+
         FramePipeline? pipeline = null;
         try
         {
