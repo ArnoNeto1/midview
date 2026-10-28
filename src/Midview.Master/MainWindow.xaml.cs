@@ -844,6 +844,16 @@ public partial class MainWindow : Window
     // On the tiles' menu only, for the machines selected (drag over the grid
     // for the whole room): a toolbar button would wrap the toolbar onto a
     // second row on a 1366-pixel screen.
+    private void OnInstallClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para instalar o programa.";
+            return;
+        }
+        OpenInstallWindow(_tiles.Select(tile => tile.Machine).ToList());
+    }
+
     private void OnInstallMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
@@ -854,6 +864,19 @@ public partial class MainWindow : Window
 
     private void OpenInstallWindow(IReadOnlyList<KnownMachine> targets) =>
         ShowOnce("instalar", targets, () => new InstallWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+
+    private void OnUninstallClassClicked(object sender, RoutedEventArgs e)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para desinstalar programas.";
+            return;
+        }
+        var classTargets = _tiles.Select(t => t.Machine).ToList();
+        var listFrom = classTargets[0];
+        ShowOnce("desinstalar", new[] { listFrom },
+            () => new UninstallWindow(listFrom, classTargets, _masterCertificate) { Owner = this });
+    }
 
     private void OnUninstallMachineClicked(object sender, RoutedEventArgs e)
     {

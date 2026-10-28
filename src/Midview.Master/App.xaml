@@ -30,10 +30,11 @@
         <Style TargetType="local:ToolbarButton">
             <Setter Property="Foreground" Value="{StaticResource ChalkTextBrush}" />
             <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
-            <!-- 64 with 2px sides leaves the label 58px: "Mensagem" and "laboratório", the widest
-                 words, take 57px at 11.5. Narrow enough for the toolbar to fit one row on a
-                 1366px screen. -->
-            <Setter Property="Width" Value="64" />
+            <!-- 58 with 2px sides leaves the label 54px; at 10.5 the widest words
+                 ("Desinstalar", "laboratório", "Mensagem") still fit on one line. Narrow
+                 enough for the toolbar to keep one row on a 1366px screen with the
+                 "Instalar programa"/"Desinstalar programa" buttons added. -->
+            <Setter Property="Width" Value="58" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
@@ -63,7 +64,7 @@
                                 <!-- Two lines of label. The caption pill (Caption) takes the second one,
                                      so a captioned button keeps the others' height. -->
                                 <StackPanel Margin="0,5,0,0" Height="28">
-                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="11.5"
+                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}" FontSize="10.5"
                                                TextWrapping="Wrap" TextAlignment="Center"
                                                LineHeight="14" LineStackingStrategy="BlockLineHeight" />
                                     <Border x:Name="CaptionPill" CornerRadius="6" Padding="6,0" Margin="0,1,0,0" HorizontalAlignment="Center"

@@ -61,10 +61,6 @@
                         <local:ToolbarButton x:Name="ClassFolderButton" Content="Pasta da turma" Icon="&#xE8F7;" Width="84"
                                              Click="OnClassFolderClicked" OpensOptions="True"
                                              ToolTip="Escolhe a turma da aula: o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
-                        <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
-                                             ToolTip="Abre um site no navegador da turma toda." />
-                        <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" Click="OnOpenProgramClassClicked" OpensOptions="True"
-                                             ToolTip="Abre um programa na turma toda, como o Executar do Windows (ex.: powershell)." />
                     </StackPanel>
                     <TextBlock Text="Turma" Style="{StaticResource ToolbarGroupCaption}" />
                 </StackPanel>
@@ -72,6 +68,14 @@
 
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
+                        <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
+                                             ToolTip="Abre um site no navegador da turma toda." />
+                        <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" Click="OnOpenProgramClassClicked" OpensOptions="True"
+                                             ToolTip="Abre um programa na turma toda, como o Executar do Windows (ex.: powershell)." />
+                        <local:ToolbarButton Content="Instalar programa" Icon="&#xE7B8;" Click="OnInstallClassClicked" OpensOptions="True"
+                                             ToolTip="Instala um programa na turma toda, como administrador, sem a tela do UAC e sem digitar senha." />
+                        <local:ToolbarButton Content="Desinstalar programa" Icon="&#xE74D;" Click="OnUninstallClassClicked" OpensOptions="True"
+                                             ToolTip="Desinstala programas das máquinas da turma (lista a partir de uma máquina)." />
                         <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" Click="OnCloseAppsClassClicked" OpensOptions="True"
                                              ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
                         <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" Click="OnBlockAppsClassClicked" OpensOptions="True"
