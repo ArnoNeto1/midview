@@ -11,7 +11,8 @@ namespace Midview.Desk;
 // the secure (UAC) desktop while a prompt is up, then back -- and injects the
 // teacher's input onto it. It serves one trusted Master, over the same wire
 // protocol SessionServer uses (ScreenStream/ScreenFrame + FrameCredit for the
-// screen, StartControl/StopControl/InputEvent for control), trimmed to screen
+// screen, StartControl/StopControl/InputEvent for control, and
+// FillAdminPassword to type the admin password into a UAC prompt), trimmed to screen
 // and input only: no chat, files, class folder, input lock, thumbnails or
 // screen lock (the Session, in its own process, holds the input lock through a
 // separate HoldInputLock connection; the helper only sees and drives).
@@ -146,10 +147,14 @@ public sealed class DeskServer
         // thread, so it lands on the desktop the worker is attached to.
         var pendingInput = new ConcurrentQueue<InputEvent>();
 
+        // Admin passwords (UTF-8) for the UAC prompt, queued here and typed on
+        // the worker thread for the same reason as the input above.
+        var pendingFills = new ConcurrentQueue<byte[]>();
+
         // The worker only sends (ScreenFrame), this loop only receives -- the
         // one reader / one writer pattern SslStream supports without locking.
         using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var worker = new Thread(() => DesktopWorker(channel, tcpClient, captureCts, credit, cadence, pendingInput))
+        var worker = new Thread(() => DesktopWorker(channel, tcpClient, captureCts, credit, cadence, pendingInput, pendingFills))
         {
             IsBackground = true,
         };
@@ -201,6 +206,26 @@ public sealed class DeskServer
                         }
                         break;
 
+                    // The one-click UAC password fill, only while controlling
+                    // (ignored otherwise). The helper answers nothing; the
+                    // worker types it onto whichever desktop it is attached to.
+                    case MessageType.FillAdminPassword:
+                        if (isControlling)
+                        {
+                            if (!CredentialFill.TryDecode(message.Payload, out var passwordUtf8))
+                            {
+                                // Malformed (empty or over the cap): drop the
+                                // connection as a malformed input event does;
+                                // returning closes the socket below.
+                                Console.WriteLine("Dropping a Desk connection after a malformed password fill.");
+                                return;
+                            }
+
+                            pendingFills.Enqueue(passwordUtf8);
+                            cadence.Activity(Environment.TickCount64);
+                        }
+                        break;
+
                     case MessageType.FrameAck:
                         if (ScreenFrame.DecodeAck(message.Payload) is { } frameId)
                         {
@@ -226,7 +251,8 @@ public sealed class DeskServer
     // SessionServer.StreamScreenFrames.
     private void DesktopWorker(
         SecureChannel channel, TcpClient tcpClient, CancellationTokenSource captureCts,
-        FrameCredit credit, CaptureCadence cadence, ConcurrentQueue<InputEvent> pendingInput)
+        FrameCredit credit, CaptureCadence cadence, ConcurrentQueue<InputEvent> pendingInput,
+        ConcurrentQueue<byte[]> pendingFills)
     {
         FramePipeline? pipeline = null;
         try
@@ -253,6 +279,7 @@ public sealed class DeskServer
                 // Inject here, on the desktop-bound thread, never on the receive
                 // thread, which isn't attached to the desktop now showing.
                 InjectPending(pendingInput);
+                TypePendingFills(pendingFills);
 
                 // No desktop to capture yet (the first poll gave a zero handle):
                 // wait and look again rather than spin.
@@ -310,6 +337,30 @@ public sealed class DeskServer
             // Free the live pipeline's bitmaps when the worker ends, the same
             // reason the switch above disposes the superseded one.
             pipeline?.Dispose();
+        }
+    }
+
+    // Types each queued admin password and Enter, on the worker thread. The
+    // decoded bytes are cleared once typed (the transient string made for the
+    // injector can't be zeroed; that residual is accepted in the spec).
+    private void TypePendingFills(ConcurrentQueue<byte[]> pendingFills)
+    {
+        while (pendingFills.TryDequeue(out var passwordUtf8))
+        {
+            try
+            {
+                _inputInjector.TypeText(System.Text.Encoding.UTF8.GetString(passwordUtf8), pressEnter: true);
+            }
+            catch (Exception ex)
+            {
+                // Never log the password; one failed fill must not kill the
+                // worker or the screen stream.
+                Console.WriteLine($"Typing a Desk password fill failed: {ex.Message}");
+            }
+            finally
+            {
+                Array.Clear(passwordUtf8);
+            }
         }
     }
 

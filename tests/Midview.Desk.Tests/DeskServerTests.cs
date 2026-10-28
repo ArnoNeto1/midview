@@ -67,6 +67,64 @@ public class DeskServerTests
         Assert.Equal(0, harness.Injector.InjectCount);
     }
 
+    // The one-click UAC password fill: the helper types the password (and
+    // Enter) through the injector, which only the desktop-bound worker uses.
+    [Fact]
+    public async Task Fills_the_password_on_the_worker_after_StartControl()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+        master.Channel.Send(new Message(
+            MessageType.FillAdminPassword,
+            CredentialFill.Encode(System.Text.Encoding.UTF8.GetBytes("Senhã#2024!"))));
+
+        await WaitUntil(() => harness.Injector.TypedTextSnapshot().Count >= 1);
+        Assert.Equal(new[] { ("Senhã#2024!", true) }, harness.Injector.TypedTextSnapshot());
+    }
+
+    [Fact]
+    public async Task A_fill_before_StartControl_types_nothing()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(
+            MessageType.FillAdminPassword,
+            CredentialFill.Encode(System.Text.Encoding.UTF8.GetBytes("Senhã#2024!"))));
+
+        // A frame means the server is up; the delay lets it read past the fill.
+        await Task.Run(() => master.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Delay(300);
+
+        Assert.Empty(harness.Injector.TypedTextSnapshot());
+    }
+
+    [Fact]
+    public async Task A_malformed_fill_drops_the_connection()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+        // An empty payload is not a valid fill (TryDecode refuses it).
+        master.Channel.Send(new Message(MessageType.FillAdminPassword, Array.Empty<byte>()));
+
+        // Frames may still be in flight, but the connection is then closed: a
+        // Receive loop ends in an exception rather than carrying on forever.
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(() => Task.Run(() =>
+        {
+            while (true)
+            {
+                master.Channel.Receive();
+            }
+        }).WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.False(thrown is TimeoutException, "The connection was not dropped.");
+
+        Assert.Empty(harness.Injector.TypedTextSnapshot());
+    }
+
     [Fact]
     public async Task A_server_cert_that_isnt_the_agent_thumbprint_is_rejected()
     {
@@ -191,6 +249,14 @@ public class DeskServerTests
         }
 
         public List<(string Text, bool Enter)> TypedText { get; } = new();
+
+        public IReadOnlyList<(string Text, bool Enter)> TypedTextSnapshot()
+        {
+            lock (TypedText)
+            {
+                return TypedText.ToList();
+            }
+        }
 
         public void TypeText(string text, bool pressEnter)
         {
