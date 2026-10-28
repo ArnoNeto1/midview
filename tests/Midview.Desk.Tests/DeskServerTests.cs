@@ -165,18 +165,20 @@ public class DeskServerTests
         await Task.Run(() => first.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10));
 
         // The second Master's handshake still succeeds, but the helper has given
-        // the one serving slot to the first and refuses this one before the
-        // worker/streaming starts.
+        // the one serving slot to the first and closes this connection right
+        // after the handshake, before reading anything. The refusal can surface
+        // on a send (the socket is already aborted) or on the receive that never
+        // returns a frame -- either throws, so drive the sends and the receive
+        // inside one assertion rather than racing the server's close.
         using var second = harness.ConnectMaster();
-        second.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
-        second.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
-        second.Channel.Send(new Message(MessageType.InputEvent, InputEventCodec.Encode(
-            new InputEvent(InputEventKind.MouseLeftDown, 5, 6, 7))));
-
-        // The refused connection is closed: its Receive gives up rather than
-        // ever returning a frame.
-        await Assert.ThrowsAnyAsync<Exception>(() =>
-            Task.Run(() => second.Channel.Receive()).WaitAsync(TimeSpan.FromSeconds(10)));
+        await Assert.ThrowsAnyAsync<Exception>(() => Task.Run(() =>
+        {
+            second.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+            second.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+            second.Channel.Send(new Message(MessageType.InputEvent, InputEventCodec.Encode(
+                new InputEvent(InputEventKind.MouseLeftDown, 5, 6, 7))));
+            return second.Channel.Receive();
+        }).WaitAsync(TimeSpan.FromSeconds(10)));
 
         await Task.Delay(200);
         Assert.Equal(0, harness.Injector.InjectCount);
