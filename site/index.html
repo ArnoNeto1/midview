@@ -207,9 +207,9 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
 /* Scroll Reveal (Fade in Up) */
 .reveal {
   opacity: 0;
-  transform: translateY(30px);
-  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: translateY(36px);
+  transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
 .reveal.is-visible {
@@ -220,13 +220,6 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
 .reveal-delay-2 { transition-delay: 200ms; }
 .reveal-delay-3 { transition-delay: 300ms; }
 .reveal-delay-4 { transition-delay: 400ms; }
-@media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-}
 </style>
 
 </head>
@@ -298,27 +291,27 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           <div class="cell label" role="columnheader">Antes</div>
           <div class="cell label after" role="columnheader">Com o Midview</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Passar atrás de cada aluno para ver se está na atividade.</div>
           <div class="cell after-text" role="cell">Todas as telas ao vivo numa grade, no seu computador.</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Pedir silêncio e esperar todos tirarem a mão do mouse.</div>
           <div class="cell after-text" role="cell">Bloquear telas: um cadeado em todas as máquinas, na hora.</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Passar material por pendrive ou e-mail, máquina por máquina.</div>
           <div class="cell after-text" role="cell">Enviar arquivo: chega na Área de Trabalho de todos de uma vez.</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Recolher os trabalhos no fim da aula, um a um.</div>
           <div class="cell after-text" role="cell">Recolher arquivos: tudo o que os alunos entregaram vem para a sua pasta.</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Ditar o endereço do site e conferir quem digitou errado.</div>
           <div class="cell after-text" role="cell">Abrir site: o mesmo endereço abre em todas as máquinas.</div>
         </div>
-        <div class="row" role="row">
+        <div class="row reveal" role="row">
           <div class="cell before-text" role="cell">Ligar e desligar o laboratório inteiro à mão.</div>
           <div class="cell after-text" role="cell">Ligar, Desligar e Agendar: o laboratório liga e desliga sozinho.</div>
         </div>
