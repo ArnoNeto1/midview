@@ -329,6 +329,31 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
 
       <div class="group">
         <div class="group-head reveal">
+          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9" /><path d="M6.3 7.3a8 8 0 1 0 11.4 0" /></svg></div>
+          <h3>Energia</h3>
+          <p>Ligue e desligue o laboratório de longe.</p>
+        </div>
+        <div class="features">
+          <article class="feature reveal">
+            <h4>Desligar e Reiniciar</h4>
+            <p class="does">Desliga ou reinicia as máquinas na hora ou com aviso de 1 ou 5 minutos, e dá para cancelar. Se quiser, as atualizações do Windows que estiverem esperando são instaladas junto.</p>
+            <p class="eases"><strong>Simplifica:</strong> no fim do dia, ninguém precisa passar de máquina em máquina.</p>
+          </article>
+          <article class="feature reveal">
+            <h4>Ligar</h4>
+            <p class="does">Liga as máquinas pela rede (Wake-on-LAN).</p>
+            <p class="eases"><strong>Simplifica:</strong> o laboratório já está ligando enquanto a turma entra.</p>
+          </article>
+          <article class="feature reveal">
+            <h4>Agendar</h4>
+            <p class="does">Escolha os dias da semana e os horários de ligar e de desligar.</p>
+            <p class="eases"><strong>Simplifica:</strong> o laboratório liga antes da primeira aula e desliga sozinho depois da última.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-head reveal">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg></div>
           <h3>Tela</h3>
           <p>Veja e assuma a tela de qualquer aluno.</p>
@@ -429,31 +454,6 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
 
       <div class="group">
         <div class="group-head reveal">
-          <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9" /><path d="M6.3 7.3a8 8 0 1 0 11.4 0" /></svg></div>
-          <h3>Energia</h3>
-          <p>Ligue e desligue o laboratório de longe.</p>
-        </div>
-        <div class="features">
-          <article class="feature reveal">
-            <h4>Ligar</h4>
-            <p class="does">Liga as máquinas pela rede (Wake-on-LAN).</p>
-            <p class="eases"><strong>Simplifica:</strong> o laboratório já está ligando enquanto a turma entra.</p>
-          </article>
-          <article class="feature reveal">
-            <h4>Desligar e Reiniciar</h4>
-            <p class="does">Desliga ou reinicia as máquinas na hora ou com aviso de 1 ou 5 minutos, e dá para cancelar. Se quiser, as atualizações do Windows que estiverem esperando são instaladas junto.</p>
-            <p class="eases"><strong>Simplifica:</strong> no fim do dia, ninguém precisa passar de máquina em máquina.</p>
-          </article>
-          <article class="feature reveal">
-            <h4>Agendar</h4>
-            <p class="does">Escolha os dias da semana e os horários de ligar e de desligar.</p>
-            <p class="eases"><strong>Simplifica:</strong> o laboratório liga antes da primeira aula e desliga sozinho depois da última.</p>
-          </article>
-        </div>
-      </div>
-
-      <div class="group">
-        <div class="group-head reveal">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" /></svg></div>
           <h3>Configurar</h3>
           <p>Prepare as máquinas uma vez, para todas.</p>
@@ -466,7 +466,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           </article>
           <article class="feature reveal">
             <h4>Máquinas da sala</h4>
-            <p class="does">Procura as máquinas na rede, pareia cada uma com você, atualiza o Midview delas pela rede e guarda a senha de administrador do laboratório (só neste computador, protegida pelo Windows) para o "Preencher a senha de administrador" do controle.</p>
+            <p class="does">Procura as máquinas na rede, pareia cada uma com você (conferindo em até 5 minutos o código na tela do aluno) ou entra na sala de um colega, atualiza o Midview delas pela rede e guarda a senha de administrador do laboratório (só neste computador, protegida pelo Windows) para o "Preencher a senha de administrador" do controle.</p>
             <p class="eases"><strong>Simplifica:</strong> atualizar o laboratório não pede pendrive: uma máquina testa a versão nova primeiro e, se algo falhar, ela volta sozinha à anterior.</p>
           </article>
         </div>
@@ -491,7 +491,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         </div>
         <div class="extra reveal reveal-delay-3">
           <h3>Mais de um professor</h3>
-          <p>"Dar acesso a um colega..." gera um código que vale por 10 minutos. O colega digita o código e passa a ver as mesmas máquinas. Ou use "Permitir novo professor": por 10 minutos, as máquinas aceitam o pareamento de outro professor. Com dois computadores de professor, a pasta da turma funciona nos dois.</p>
+          <p>"Dar acesso a um colega..." gera um código que vale por 10 minutos. O colega digita o código em "Entrar na sala de um colega..." e passa a ver as mesmas máquinas. Ou use "Permitir novo professor": por 10 minutos, as máquinas aceitam o pareamento de outro professor. Com dois computadores de professor, a pasta da turma funciona nos dois.</p>
         </div>
       </div>
     </div>
@@ -518,7 +518,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         </li>
         <li class="reveal reveal-delay-4">
           <h3>Traga as máquinas</h3>
-          <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno.</p>
+          <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno (você tem 5 minutos para isso).</p>
         </li>
       </ol>
       <p class="note reveal">Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las. Quem cuida da informática pode instalar várias máquinas de uma vez com <code>MidviewSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /TIPO=aluno</code>.</p>

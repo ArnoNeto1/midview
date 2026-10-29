@@ -34,11 +34,11 @@ A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os 
 
 | Grupo | Funções |
 | --- | --- |
+| **Energia** | **Desligar** e **Reiniciar**, com aviso de 1 ou 5 minutos e, se quiser, instalando as atualizações do Windows que estiverem esperando; **Ligar** pela rede (Wake-on-LAN); **Agendar** os dias e horários para ligar e desligar. |
 | **Tela** | **Ver a tela** de um aluno; **Controlar** a máquina (o teclado e o mouse do aluno ficam travados e ele vê o aviso "Este computador está sendo controlado pelo professor"). O controle continua mesmo quando aparece a tela do UAC (o pedido de senha de administrador): com a senha do laboratório guardada, **Preencher a senha de administrador** digita no UAC com um clique. **Bloquear telas** com um cadeado. |
 | **Turma** | **Mensagem** na tela de todos; **Bate-papo** com a turma (as respostas chegam só ao professor); **Enviar arquivo** para a pasta "Arquivos do professor"; **Recolher arquivos** da pasta "Entregar ao professor"; **Pasta da turma**, uma pasta na Área de Trabalho dos alunos em que o que cada um baixa ou salva aparece em todos os computadores (com turmas, aulas e até dois PCs de professor). |
 | **Programas e sites** | **Abrir site** e **Abrir programa** nas máquinas; **Instalar programa** na turma toda, como administrador, sem a tela do UAC e sem digitar senha; **Desinstalar programa**; **Fechar programas**, com aviso e prazo para o aluno salvar; **Bloquear programas** (lista proibida ou só os permitidos); **Bloquear sites** (a internet inteira ou só alguns sites, valendo mesmo depois de reiniciar). |
-| **Energia** | **Desligar** e **Reiniciar**, com aviso de 1 ou 5 minutos e, se quiser, instalando as atualizações do Windows que estiverem esperando; **Ligar** pela rede (Wake-on-LAN); **Agendar** os dias e horários para ligar e desligar. |
-| **Configurar** | **Painel do laboratório** (políticas do Chrome e do Windows, como bloqueador de anúncios, bloquear downloads e modo visitante); **Máquinas da sala** (procurar na rede, parear, atualizar pela rede, dar acesso a outro professor e guardar a senha de administrador do laboratório). |
+| **Configurar** | **Painel do laboratório** (políticas do Chrome e do Windows, como bloqueador de anúncios, bloquear downloads e modo visitante); **Máquinas da sala** (procurar na rede, parear conferindo o código em até 5 minutos, entrar na sala de um colega, atualizar pela rede, dar acesso a outro professor e guardar a senha de administrador do laboratório). |
 
 No botão direito há também **Conversar** com um aluno só, **Desinstalar programa**, **Editar a máquina** e **Remover da lista da sala**. Na barra de baixo, **Visualizar todos** encaixa todas as telas, **Só online** esconde as máquinas desligadas e o controle deslizante muda o tamanho das telas (também com Ctrl + roda do mouse). **Organizar sala** deixa arrastar as telas até ficarem como as máquinas estão na sala, e **Alinhar** acerta a grade.
 
@@ -49,7 +49,7 @@ O mesmo instalador tem dois tipos:
 - **Professor**: instala o programa "Midview - Sala de aula", que roda sem direitos de administrador.
 - **Aluno**: instala o serviço **Midview Agent**, que roda como sistema em cada máquina do laboratório, e o programa que mostra as mensagens, o bloqueio de tela e os avisos para o aluno.
 
-O professor acha as máquinas pela rede e pareia cada uma conferindo um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria e não acessa a internet.
+O professor acha as máquinas pela rede e pareia cada uma conferindo, em até 5 minutos, um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria e não acessa a internet.
 
 Portas usadas na rede local:
 
@@ -75,7 +75,7 @@ Portas usadas na rede local:
 1. Clique em **⬇ Baixar Instalador (.exe)**, lá em cima. Não precisa instalar o .NET nem mais nada.
 2. No computador do professor, abra o instalador e escolha **Professor**. Ele cria o atalho "Midview - Sala de aula" na Área de Trabalho.
 3. Em cada máquina do laboratório, abra o instalador e escolha **Aluno**.
-4. No Midview, clique em **Máquinas da sala** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código que aparece na tela de cada aluno.
+4. No Midview, clique em **Máquinas da sala** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código de 6 dígitos que aparece na tela de cada aluno (você tem 5 minutos para isso).
 
 Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las.
 
@@ -120,6 +120,7 @@ Algumas opções do **Painel do laboratório** configuram o Google Chrome, que p
 | `src/Midview.Master` | Programa do professor (WPF) |
 | `src/Midview.Agent` | Serviço do Windows nas máquinas dos alunos |
 | `src/Midview.Session` | Programa que roda na sessão do aluno: tela, controle, mensagens e bloqueio |
+| `src/Midview.Desk` | Auxiliar que mostra e controla a tela segura (UAC) e preenche a senha de administrador |
 | `src/Midview.Protocol` | Biblioteca comum: mensagens, TLS, pareamento, busca e atualização |
 | `tests/` | Testes com xUnit e o teste de ponta a ponta (`Midview.E2E`) |
 | `installer/` | Instalador (Inno Setup), scripts das máquinas e seus testes |
