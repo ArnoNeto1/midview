@@ -73,7 +73,7 @@ Portas usadas na rede local:
 ## Instalação
 
 1. Clique em **⬇ Baixar Instalador (.exe)**, lá em cima. Não precisa instalar o .NET nem mais nada.
-2. No computador do professor, abra o instalador e escolha **Professor**. Ele cria o atalho "Midview - Sala de aula" na Área de Trabalho.
+2. No computador do professor, abra o instalador e escolha **Professor** (se aparecer a tela "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**). Ele cria o atalho "Midview - Sala de aula" na Área de Trabalho.
 3. Em cada máquina do laboratório, abra o instalador e escolha **Aluno**.
 4. No Midview, clique em **Máquinas da sala** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código de 6 dígitos que aparece na tela de cada aluno (você tem 5 minutos para isso).
 
