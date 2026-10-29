@@ -209,7 +209,7 @@ public partial class MachinesWindow : Window
             row.Session = session;
             row.CodeText = session.CodeText;
             row.AwaitingConfirmation = true;
-            row.Outcome = "Confira se a tela da máquina mostra este mesmo código. Você tem 5 minutos.";
+            row.Outcome = string.Empty;
         }
         catch (PairingRefusedException ex)
         {
