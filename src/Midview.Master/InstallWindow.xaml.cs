@@ -37,8 +37,8 @@ public partial class InstallWindow : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Escolher o instalador",
-            Filter = "Instaladores (*.exe; *.msi)|*.exe;*.msi",
+            Title = "Escolher o instalador ou script",
+            Filter = "Instaladores e scripts (*.exe; *.msi; *.bat; *.cmd)|*.exe;*.msi;*.bat;*.cmd",
             CheckFileExists = true,
         };
         if (dialog.ShowDialog(this) != true)
@@ -55,7 +55,7 @@ public partial class InstallWindow : Window
             var size = new FileInfo(dialog.FileName).Length;
             if (!ProgramInstall.IsInstallerName(name))
             {
-                FileTextBlock.Text = $"{name} não é um instalador (.exe ou .msi).";
+                FileTextBlock.Text = $"{name} não é um instalador ou script (.exe, .msi, .bat ou .cmd).";
             }
             else if (size > ProgramInstall.MaxFileSize)
             {

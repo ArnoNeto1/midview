@@ -8,8 +8,7 @@ public enum AfterSend : byte
     // The "Arquivos do professor" folder, in File Explorer.
     OpenFolder = 1,
 
-    // The file, with the program Windows opens it with -- never a program
-    // itself (FileOpenPolicy).
+    // The file, opened or executed on the student's machine.
     OpenFile = 2,
 }
 
@@ -20,16 +19,9 @@ public sealed record SendFileOptions(bool Overwrite, AfterSend AfterSend)
     public static readonly SendFileOptions Default = new(false, AfterSend.Nothing);
 }
 
-// Which files "Abrir o arquivo" may open: anything but what would run as a
-// program, so a wrong click can't run something on the whole class at once.
+// Which files "Abrir ou executar o arquivo" may open: any file sent by the
+// teacher, including scripts (.bat, .cmd) and programs (.exe).
 public static class FileOpenPolicy
 {
-    private static readonly HashSet<string> Programs = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".exe", ".com", ".scr", ".pif", ".cpl", ".msi", ".msp", ".msc",
-        ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
-        ".lnk", ".url", ".reg", ".inf", ".jar", ".appref-ms", ".application",
-    };
-
-    public static bool MayOpen(string fileName) => !Programs.Contains(Path.GetExtension(fileName));
+    public static bool MayOpen(string fileName) => !string.IsNullOrWhiteSpace(fileName);
 }

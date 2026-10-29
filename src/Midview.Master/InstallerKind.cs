@@ -6,6 +6,7 @@ namespace Midview.Master;
 public enum InstallerKind
 {
     Msi,
+    BatchScript,
     InnoSetup,
     Nsis,
     WixBurn,
@@ -37,6 +38,11 @@ public static class InstallerDetection
         if (Midview.Protocol.ProgramInstall.IsMsi(path))
         {
             return InstallerKind.Msi;
+        }
+
+        if (Midview.Protocol.ProgramInstall.IsBatchScript(path))
+        {
+            return InstallerKind.BatchScript;
         }
 
         using var file = File.OpenRead(path);
@@ -77,6 +83,7 @@ public static class InstallerDetection
     public static string DefaultArguments(InstallerKind kind) => kind switch
     {
         InstallerKind.Msi => "ALLUSERS=1",
+        InstallerKind.BatchScript => string.Empty,
         InstallerKind.InnoSetup => "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /ALLUSERS",
         InstallerKind.Nsis => "/S",
         InstallerKind.WixBurn => "/quiet /norestart",
@@ -86,6 +93,7 @@ public static class InstallerDetection
     public static string Describe(InstallerKind kind) => kind switch
     {
         InstallerKind.Msi => "Pacote do Windows Installer (MSI): instala sem perguntas.",
+        InstallerKind.BatchScript => "Script (.bat ou .cmd): executa como administrador, sem janela.",
         InstallerKind.InnoSetup => "Instalador Inno Setup: as opções abaixo instalam sem perguntas.",
         InstallerKind.Nsis => "Instalador NSIS: as opções abaixo instalam sem perguntas.",
         InstallerKind.WixBurn => "Instalador WiX: as opções abaixo instalam sem perguntas.",

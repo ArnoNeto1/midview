@@ -197,6 +197,15 @@ public class InstallClientTests : IDisposable
         Assert.Equal(InstallerKind.Msi, InstallerDetection.Detect(Installer("pacote.MSI", Encoding.ASCII.GetBytes("NullsoftInst"))));
     }
 
+    [Theory]
+    [InlineData("script.bat")]
+    [InlineData("CONFIG.CMD")]
+    public void ABatchScript_IsDetectedWithEmptyDefaultArguments(string name)
+    {
+        Assert.Equal(InstallerKind.BatchScript, InstallerDetection.Detect(Installer(name, Encoding.ASCII.GetBytes("@echo off\r\n"))));
+        Assert.Equal(string.Empty, InstallerDetection.DefaultArguments(InstallerKind.BatchScript));
+    }
+
     private sealed class FakeFirewall : IFirewallController
     {
         public bool ApplyBlock() => true;

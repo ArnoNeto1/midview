@@ -28,13 +28,11 @@ public class SendFileOptionsTests
     [InlineData("trabalho.docx", true)]
     [InlineData("foto.PNG", true)]
     [InlineData("aula.pdf", true)]
-    [InlineData("instalador.exe", false)]
-    [InlineData("script.BAT", false)]
-    [InlineData("setup.msi", false)]
-    [InlineData("atalho.lnk", false)]
-    [InlineData("macro.ps1", false)]
-    [InlineData("pagina.hta", false)]
+    [InlineData("instalador.exe", true)]
+    [InlineData("script.BAT", true)]
+    [InlineData("setup.msi", true)]
     [InlineData("sem-extensao", true)]
-    public void Programs_AreNeverOpenedAutomatically(string fileName, bool mayOpen) =>
+    [InlineData("", false)]
+    public void AnyNamedFile_MayBeOpenedOrExecuted(string fileName, bool mayOpen) =>
         Assert.Equal(mayOpen, FileOpenPolicy.MayOpen(fileName));
 }

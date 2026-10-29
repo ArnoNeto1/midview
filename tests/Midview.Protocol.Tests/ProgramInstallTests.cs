@@ -30,7 +30,6 @@ public class ProgramInstallTests
     [InlineData("C:\\Windows\\setup.exe")]
     [InlineData("setup.exe:stream")]
     [InlineData("notas.pdf")]
-    [InlineData("setup.bat")]
     [InlineData("setup")]
     [InlineData("CON.exe")]
     public void ANameThatIsntAPlainInstaller_IsRefused(string name)
@@ -72,6 +71,8 @@ public class ProgramInstallTests
     [InlineData("setup.exe", true)]
     [InlineData("SETUP.EXE", true)]
     [InlineData("pacote.msi", true)]
+    [InlineData("script.bat", true)]
+    [InlineData("SCRIPT.CMD", true)]
     [InlineData("pacote.zip", false)]
     [InlineData("setup.exe.txt", false)]
     public void WhatCanBeInstalled(string name, bool installer)

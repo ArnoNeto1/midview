@@ -14,11 +14,9 @@
             </DockPanel>
             <CheckBox x:Name="OverwriteCheckBox" Content="Substituir arquivo com o mesmo nome" Margin="0,0,0,8" />
             <TextBlock Text="Depois de enviar:" Margin="0,0,0,4" />
-            <RadioButton x:Name="NothingRadioButton" GroupName="After" IsChecked="True" Content="Não fazer nada" Margin="0,0,0,2" Checked="OnAfterSendChanged" />
-            <RadioButton x:Name="OpenFolderRadioButton" GroupName="After" Content="Abrir a pasta &quot;Arquivos do professor&quot; no aluno" Margin="0,0,0,2" Checked="OnAfterSendChanged" />
-            <RadioButton x:Name="OpenFileRadioButton" GroupName="After" Content="Abrir o arquivo no aluno, com o programa padrão" Margin="0,0,0,2" Checked="OnAfterSendChanged" />
-            <TextBlock x:Name="ProgramHintTextBlock" TextWrapping="Wrap" Foreground="#B00020" FontSize="11" Margin="0,0,0,8"
-                       Visibility="Collapsed" Text="Este arquivo é um programa: ele é só salvo. Programas não são abertos automaticamente." />
+            <RadioButton x:Name="NothingRadioButton" GroupName="After" IsChecked="True" Content="Não fazer nada" Margin="0,0,0,2" />
+            <RadioButton x:Name="OpenFolderRadioButton" GroupName="After" Content="Abrir a pasta &quot;Arquivos do professor&quot; no aluno" Margin="0,0,0,2" />
+            <RadioButton x:Name="OpenFileRadioButton" GroupName="After" Content="Abrir ou executar o arquivo no aluno" Margin="0,0,0,8" />
             <Button x:Name="SendButton" Content="Enviar" Click="OnSendClicked" IsEnabled="False" Padding="10,4" />
             <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" />
         </StackPanel>

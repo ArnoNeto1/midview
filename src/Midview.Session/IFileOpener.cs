@@ -2,8 +2,9 @@ using System.Diagnostics;
 
 namespace Midview.Session;
 
-// Opens a file with the program Windows opens it with, or a folder in File
-// Explorer, on the student's screen ("Depois de enviar" in "Enviar arquivo").
+// Opens a file with the program Windows opens it with (or runs it if it's a
+// script/program), or opens a folder in File Explorer, on the student's screen
+// ("Depois de enviar" in "Enviar arquivo").
 public interface IFileOpener
 {
     // Throws if Windows couldn't open it (no program for that kind of file).
@@ -14,7 +15,11 @@ public interface IFileOpener
 // need one, and Session's own threads aren't.
 public sealed class WindowsFileOpener : IFileOpener
 {
-    public void Open(string path) => ShellStart(new ProcessStartInfo(path) { UseShellExecute = true });
+    public void Open(string path) => ShellStart(new ProcessStartInfo(path)
+    {
+        UseShellExecute = true,
+        WorkingDirectory = Path.IsPathRooted(path) ? Path.GetDirectoryName(path) ?? string.Empty : string.Empty,
+    });
 
     // Starts it through the shell on that thread. False when Windows is
     // still at it after 15 s (a program asking for an administrator's

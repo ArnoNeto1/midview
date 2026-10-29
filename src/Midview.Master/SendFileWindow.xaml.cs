@@ -49,20 +49,6 @@ public partial class SendFileWindow : Window
         }
         ResultTextBlock.Text = string.Empty;
         SendButton.IsEnabled = _filePath is not null;
-        ShowProgramHint();
-    }
-
-    private void OnAfterSendChanged(object sender, RoutedEventArgs e) => ShowProgramHint();
-
-    private void ShowProgramHint()
-    {
-        // Checked events can fire while the window is still being built.
-        if (ProgramHintTextBlock is null || OpenFileRadioButton is null)
-        {
-            return;
-        }
-        var program = OpenFileRadioButton.IsChecked == true && _filePath is { } path && !FileOpenPolicy.MayOpen(path);
-        ProgramHintTextBlock.Visibility = program ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private SendFileOptions ChosenOptions() => new(

@@ -1161,8 +1161,10 @@ public partial class SessionServerTests
         Assert.Empty(display.Shown);
     }
 
-    [Fact]
-    public async Task SendFile_ThenOpenAProgram_OnlySavesIt()
+    [Theory]
+    [InlineData("script.bat")]
+    [InlineData("instalador.exe")]
+    public async Task SendFile_ThenOpenAScriptOrProgram_ExecutesIt(string fileName)
     {
         using var inbox = new TempInbox();
         var display = new RecordingMessageDisplay();
@@ -1170,12 +1172,12 @@ public partial class SessionServerTests
         using var harness = new ServerHarness(new CountingScreenCapture(), display, fileInbox: inbox.Inbox, fileOpener: opener);
         using var teacher = harness.ConnectMaster();
 
-        var (_, result) = await Task.Run(() => teacher.SendFile("instalador.exe", new byte[] { 1 }, new SendFileOptions(false, AfterSend.OpenFile)))
+        var (_, result) = await Task.Run(() => teacher.SendFile(fileName, new byte[] { 1 }, new SendFileOptions(false, AfterSend.OpenFile)))
             .WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal((true, "instalador.exe; programas não são abertos automaticamente"), result);
-        Assert.Empty(opener.Opened);
-        Assert.Single(display.Shown);
+        Assert.Equal((true, $"{fileName}; aberto no aluno"), result);
+        Assert.Equal(new[] { Path.Combine(inbox.Directory, fileName) }, opener.Opened);
+        Assert.Empty(display.Shown);
     }
 
     [Fact]

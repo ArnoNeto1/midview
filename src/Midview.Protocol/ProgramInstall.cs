@@ -30,12 +30,15 @@ public static class ProgramInstall
     public static readonly TimeSpan MasterWait = InstallTimeout + TimeSpan.FromMinutes(2);
 
     // What the Agent knows how to run: a Windows Installer package goes
-    // through msiexec, anything else must be a program.
+    // through msiexec, anything else must be a program or batch script.
     public static bool IsInstallerName(string fileName) =>
-        Path.GetExtension(fileName).ToLowerInvariant() is ".exe" or ".msi";
+        Path.GetExtension(fileName).ToLowerInvariant() is ".exe" or ".msi" or ".bat" or ".cmd";
 
     public static bool IsMsi(string fileName) =>
         string.Equals(Path.GetExtension(fileName), ".msi", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsBatchScript(string fileName) =>
+        Path.GetExtension(fileName).ToLowerInvariant() is ".bat" or ".cmd";
 
     // InstallProgram payload: the file's size (int64, big-endian), the
     // arguments' length in bytes (uint16, big-endian), the arguments (UTF-8),

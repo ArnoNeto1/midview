@@ -10,7 +10,7 @@
                        Text="O Midview de cada máquina instala o programa como administrador: não aparece a tela do UAC e ninguém precisa digitar senha. O instalador tem de funcionar sem perguntas (modo silencioso) e instalar para todos os usuários." />
             <DockPanel Margin="0,0,0,8">
                 <Button x:Name="ChooseButton" DockPanel.Dock="Right" Content="Escolher instalador..." Click="OnChooseFileClicked" Padding="10,4" Margin="8,0,0,0" />
-                <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum instalador escolhido (.exe ou .msi)." />
+                <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum instalador ou script escolhido (.exe, .msi, .bat ou .cmd)." />
             </DockPanel>
             <TextBlock x:Name="KindTextBlock" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,8" Visibility="Collapsed" />
             <TextBlock Text="Opções do instalador:" Margin="0,0,0,4" />
