@@ -113,6 +113,7 @@ const
   PortaConvite = '28902';
   RegraConviteTcp = 'MidviewProfessorConvite';
   RegraConviteUdp = 'MidviewProfessorConviteBusca';
+  RegraBuscaRede = 'MidviewProfessorBuscaRede';
   { "Pasta da turma" with two teacher PCs in one lab: the teacher's program
     that keeps the class folders listens here for the other teacher PCs
     (ClassFolderRemote.Port). }
@@ -228,6 +229,7 @@ begin
   RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteTcp + '"');
   RodarNetsh('advfirewall firewall delete rule name="' + RegraConviteUdp + '"');
   RodarNetsh('advfirewall firewall delete rule name="' + RegraPastaDaTurma + '"');
+  RodarNetsh('advfirewall firewall delete rule name="' + RegraBuscaRede + '"');
 end;
 
 { Coming in to this program only, from the local network only, on that port. }
@@ -246,7 +248,8 @@ begin
   ApagarRegrasDoConvite;
   Result := RodarNetsh('advfirewall firewall add rule name="' + RegraConviteTcp + '" protocol=TCP' + RestricaoDaPorta(PortaConvite)) and
     RodarNetsh('advfirewall firewall add rule name="' + RegraConviteUdp + '" protocol=UDP' + RestricaoDaPorta(PortaConvite)) and
-    RodarNetsh('advfirewall firewall add rule name="' + RegraPastaDaTurma + '" protocol=TCP' + RestricaoDaPorta(PortaPastaDaTurma));
+    RodarNetsh('advfirewall firewall add rule name="' + RegraPastaDaTurma + '" protocol=TCP' + RestricaoDaPorta(PortaPastaDaTurma)) and
+    RodarNetsh('advfirewall firewall add rule name="' + RegraBuscaRede + '" protocol=UDP dir=in action=allow program="' + ExpandConstant('{app}\Midview.Master.exe') + '" remoteip=localsubnet profile=any');
 end;
 
 function DescreverFalha(const ArquivoDeErro: String; Codigo: Integer): String;

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -17,7 +18,12 @@ public static class WakeOnLanSender
     private const int Repeats = 3;
     private static readonly TimeSpan RepeatGap = TimeSpan.FromMilliseconds(100);
 
-    // Also where "Procurar na rede" sends its probe (with Discovery.Port).
+    // Maximum subnet size scanned host-by-host (a /22 = 1022 hosts). Wider
+    // masks (like /16) scan the teacher's own /24 block.
+    private const uint MaxDirectScanHostMask = 0x0000_03FFu;
+    private const uint Slash24Mask = 0xFFFF_FF00u;
+
+    // Broadcast addresses for Wake-on-LAN (and the first targets of network discovery).
     public static IReadOnlyList<IPEndPoint> BroadcastTargets(
         IEnumerable<(IPAddress Address, IPAddress Mask)> networks, int port = WakeOnLan.Port)
     {
@@ -44,6 +50,61 @@ public static class WakeOnLanSender
                 targets.Add(target);
             }
         }
+        return targets;
+    }
+
+    // Where "Procurar na rede" and "Entrar na sala de um colega" send their
+    // UDP probes: the broadcast addresses first, followed by every unicast host
+    // address on each local subnet (so discovery works even when a school Wi-Fi
+    // access point drops broadcast traffic or Windows Firewall is on a Public
+    // profile that blocks broadcast replies).
+    public static IReadOnlyList<IPEndPoint> DiscoveryTargets(
+        IEnumerable<(IPAddress Address, IPAddress Mask)> networks, int port = Discovery.Port)
+    {
+        var networkList = networks.ToList();
+        var targets = new List<IPEndPoint>(BroadcastTargets(networkList, port));
+        var seen = new HashSet<IPEndPoint>(targets);
+        Span<byte> hostBytes = stackalloc byte[4];
+
+        foreach (var (address, mask) in networkList)
+        {
+            if (address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(address))
+            {
+                continue;
+            }
+
+            var ip = BinaryPrimitives.ReadUInt32BigEndian(address.GetAddressBytes());
+            var netmask = BinaryPrimitives.ReadUInt32BigEndian(mask.GetAddressBytes());
+            var hostMask = ~netmask;
+            if (hostMask <= 1)
+            {
+                continue;
+            }
+
+            if (hostMask > MaxDirectScanHostMask)
+            {
+                netmask = Slash24Mask;
+                hostMask = ~netmask;
+            }
+
+            var network = ip & netmask;
+            var broadcast = network | hostMask;
+            for (var host = network + 1; host < broadcast; host++)
+            {
+                if (host == ip)
+                {
+                    continue;
+                }
+
+                BinaryPrimitives.WriteUInt32BigEndian(hostBytes, host);
+                var endpoint = new IPEndPoint(new IPAddress(hostBytes), port);
+                if (seen.Add(endpoint))
+                {
+                    targets.Add(endpoint);
+                }
+            }
+        }
+
         return targets;
     }
 

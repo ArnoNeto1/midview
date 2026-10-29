@@ -45,7 +45,7 @@ public partial class JoinClassWindow : Window
             // shouldn't wait for it.
             var (_, result) = await Task.Run(() => InviteJoin.Join(
                 code, _masterCertificate, teacherName,
-                WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks(), TeacherInvite.Port),
+                WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), TeacherInvite.Port),
                 TeacherInvite.ListenTime, progress.Report));
             try
             {

@@ -123,7 +123,7 @@ public partial class MachinesWindow : Window
         {
             var thumbprint = _masterCertificate.Thumbprint;
             var found = await Task.Run(() => DiscoveryClient.Search(
-                thumbprint, WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime));
+                thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime));
             if (_closed)
             {
                 return;

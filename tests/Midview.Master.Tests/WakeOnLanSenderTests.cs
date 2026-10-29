@@ -24,6 +24,23 @@ public class WakeOnLanSenderTests
     }
 
     [Fact]
+    public void DiscoveryTargets_IncludeBroadcastsAndUnicastSubnetHosts_SkippingSelf()
+    {
+        var targets = WakeOnLanSender.DiscoveryTargets(new[]
+        {
+            (IPAddress.Parse("10.103.217.105"), IPAddress.Parse("255.255.255.0")),
+        }, Discovery.Port);
+
+        Assert.Equal("255.255.255.255:28901", targets[0].ToString());
+        Assert.Equal("10.103.217.255:28901", targets[1].ToString());
+        Assert.Contains(new IPEndPoint(IPAddress.Parse("10.103.217.1"), Discovery.Port), targets);
+        Assert.Contains(new IPEndPoint(IPAddress.Parse("10.103.217.215"), Discovery.Port), targets);
+        Assert.Contains(new IPEndPoint(IPAddress.Parse("10.103.217.254"), Discovery.Port), targets);
+        Assert.DoesNotContain(new IPEndPoint(IPAddress.Parse("10.103.217.105"), Discovery.Port), targets);
+        Assert.Equal(2 + 253, targets.Count);
+    }
+
+    [Fact]
     public async Task Send_EveryMachinesMagicPacketReachesTheTarget()
     {
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));

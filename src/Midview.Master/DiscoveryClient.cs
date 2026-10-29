@@ -8,9 +8,9 @@ namespace Midview.Master;
 // came from.
 public sealed record FoundMachine(string Name, string Address, string AgentThumbprint, string Teachers, bool NewTeacherOpen);
 
-// The Master's side of Discovery: one probe to every target (the
-// broadcasts, see WakeOnLanSender.BroadcastTargets), then the answers that
-// arrive within listenTime.
+// The Master's side of Discovery: one probe to every target (broadcasts and
+// local subnet hosts, see WakeOnLanSender.DiscoveryTargets), then the answers
+// that arrive within listenTime.
 public static class DiscoveryClient
 {
     // Keeps an unreachable target from ending the listening early: without
@@ -25,6 +25,7 @@ public static class DiscoveryClient
     public static IReadOnlyList<FoundMachine> Search(string masterThumbprint, IReadOnlyList<IPEndPoint> targets, TimeSpan listenTime)
     {
         using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, 0)) { EnableBroadcast = true };
+        udp.Client.ReceiveBufferSize = 1 << 20;
         udp.Client.IOControl(SioUdpConnReset, new byte[] { 0, 0, 0, 0 }, null);
         return Search(udp, new DiscoveryProbe(Guid.NewGuid(), masterThumbprint), targets, listenTime);
     }
