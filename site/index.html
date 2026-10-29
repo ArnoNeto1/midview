@@ -205,7 +205,7 @@ section.block { padding-block: 72px; border-top: 1px solid var(--line); }
 footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
 
-/* Scroll Reveal (Fade in Up) */
+/* Scroll Reveal (Fade in Up + Efeito Cascata) */
 .reveal {
   opacity: 0;
   transform: translateY(36px);
@@ -217,10 +217,12 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
   opacity: 1;
   transform: translateY(0);
 }
-.reveal-delay-1 { transition-delay: 100ms; }
-.reveal-delay-2 { transition-delay: 200ms; }
-.reveal-delay-3 { transition-delay: 300ms; }
-.reveal-delay-4 { transition-delay: 400ms; }
+.reveal-delay-1 { transition-delay: 90ms; }
+.reveal-delay-2 { transition-delay: 180ms; }
+.reveal-delay-3 { transition-delay: 270ms; }
+.reveal-delay-4 { transition-delay: 360ms; }
+.reveal-delay-5 { transition-delay: 450ms; }
+.reveal-delay-6 { transition-delay: 540ms; }
 </style>
 
 </head>
@@ -248,18 +250,18 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
 
 <main id="inicio">
   <section class="hero">
-    <div class="wrap reveal">
-      <span class="eyebrow">Para o laboratório de informática</span>
-      <h1>Controle total do seu laboratório<i class="dot">.</i> <span>Sem complicação<i class="dot">.</i></span></h1>
-      <p class="lead">O Midview coloca a tela de cada aluno no seu computador. Daí você acompanha a aula, ajuda quem travou, manda e recolhe arquivos, bloqueia o que tira o foco e liga ou desliga o laboratório, tudo sem sair da sua mesa.</p>
-      <div class="actions">
+    <div class="wrap">
+      <span class="eyebrow reveal">Para o laboratório de informática</span>
+      <h1 class="reveal reveal-delay-1">Controle total do seu laboratório<i class="dot">.</i> <span>Sem complicação<i class="dot">.</i></span></h1>
+      <p class="lead reveal reveal-delay-2">O Midview coloca a tela de cada aluno no seu computador. Daí você acompanha a aula, ajuda quem travou, manda e recolhe arquivos, bloqueia o que tira o foco e liga ou desliga o laboratório, tudo sem sair da sua mesa.</p>
+      <div class="actions reveal reveal-delay-3">
         <a class="btn btn-primary" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
           Baixar o instalador
         </a>
         <a class="btn btn-ghost" href="#video">Ver o Midview funcionando</a>
       </div>
-      <ul class="facts">
+      <ul class="facts reveal reveal-delay-4">
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Gratuito para escolas</li>
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Funciona só na rede da escola</li>
         <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>Um instalador para professor e alunos</li>
@@ -269,7 +271,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
   </section>
 
   <section class="video" id="video" aria-label="Vídeo do Midview">
-    <div class="wrap reveal">
+    <div class="wrap reveal reveal-delay-4">
       <div class="frame">
         <video controls preload="none" poster="capa.jpg" playsinline>
           <source src="midview.mp4" type="video/mp4">
@@ -293,27 +295,27 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           <div class="cell label" role="columnheader">Antes</div>
           <div class="cell label after" role="columnheader">Com o Midview</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-1" role="row">
           <div class="cell before-text" role="cell">Passar atrás de cada aluno para ver se está na atividade.</div>
           <div class="cell after-text" role="cell">Todas as telas ao vivo numa grade, no seu computador.</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-2" role="row">
           <div class="cell before-text" role="cell">Pedir silêncio e esperar todos tirarem a mão do mouse.</div>
           <div class="cell after-text" role="cell">Bloquear telas: um cadeado em todas as máquinas, na hora.</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-3" role="row">
           <div class="cell before-text" role="cell">Passar material por pendrive ou e-mail, máquina por máquina.</div>
           <div class="cell after-text" role="cell">Enviar arquivo: chega na Área de Trabalho de todos de uma vez.</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-4" role="row">
           <div class="cell before-text" role="cell">Recolher os trabalhos no fim da aula, um a um.</div>
           <div class="cell after-text" role="cell">Recolher arquivos: tudo o que os alunos entregaram vem para a sua pasta.</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-5" role="row">
           <div class="cell before-text" role="cell">Ditar o endereço do site e conferir quem digitou errado.</div>
           <div class="cell after-text" role="cell">Abrir site: o mesmo endereço abre em todas as máquinas.</div>
         </div>
-        <div class="row reveal" role="row">
+        <div class="row reveal reveal-delay-6" role="row">
           <div class="cell before-text" role="cell">Ligar e desligar o laboratório inteiro à mão.</div>
           <div class="cell after-text" role="cell">Ligar, Desligar e Agendar: o laboratório liga e desliga sozinho.</div>
         </div>
@@ -330,23 +332,23 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       </div>
 
       <div class="group">
-        <div class="group-head reveal">
+        <div class="group-head reveal reveal-delay-1">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9" /><path d="M6.3 7.3a8 8 0 1 0 11.4 0" /></svg></div>
           <h3>Energia</h3>
           <p>Ligue e desligue o laboratório de longe.</p>
         </div>
         <div class="features">
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-1">
             <h4>Desligar e Reiniciar</h4>
             <p class="does">Desliga ou reinicia as máquinas na hora ou com aviso de 1 ou 5 minutos, e dá para cancelar. Se quiser, as atualizações do Windows que estiverem esperando são instaladas junto.</p>
             <p class="eases"><strong>Simplifica:</strong> no fim do dia, ninguém precisa passar de máquina em máquina.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-2">
             <h4>Ligar</h4>
             <p class="does">Liga as máquinas pela rede (Wake-on-LAN).</p>
             <p class="eases"><strong>Simplifica:</strong> o laboratório já está ligando enquanto a turma entra.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-3">
             <h4>Agendar</h4>
             <p class="does">Escolha os dias da semana e os horários de ligar e de desligar.</p>
             <p class="eases"><strong>Simplifica:</strong> o laboratório liga antes da primeira aula e desliga sozinho depois da última.</p>
@@ -355,23 +357,23 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       </div>
 
       <div class="group">
-        <div class="group-head reveal">
+        <div class="group-head reveal reveal-delay-1">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg></div>
           <h3>Tela</h3>
           <p>Veja e assuma a tela de qualquer aluno.</p>
         </div>
         <div class="features">
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-1">
             <h4>Ver a tela</h4>
             <p class="does">Abre a tela de um aluno em tamanho grande, ao vivo.</p>
             <p class="eases"><strong>Simplifica:</strong> você acompanha a atividade sem sair da mesa nem ficar atrás do aluno.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-2">
             <h4>Controlar</h4>
             <p class="does">Você usa o teclado e o mouse da máquina do aluno; o dele fica travado e a tela avisa que o professor está no controle. O controle continua mesmo quando aparece o pedido de senha de administrador (UAC) e, com a senha do laboratório guardada, você a preenche no UAC com um clique.</p>
             <p class="eases"><strong>Simplifica:</strong> resolve a dúvida, o programa travado ou a instalação que pede senha de longe, sem ir até a máquina do aluno.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-3">
             <h4>Bloquear telas</h4>
             <p class="does">Cobre todas as telas com um cadeado e trava teclado e mouse até você desbloquear.</p>
             <p class="eases"><strong>Simplifica:</strong> a atenção da turma volta para você num clique, na hora de explicar.</p>
@@ -380,33 +382,33 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       </div>
 
       <div class="group">
-        <div class="group-head reveal">
+        <div class="group-head reveal reveal-delay-1">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1" /><circle cx="10" cy="8" r="3.5" /><path d="M21 20v-1a4 4 0 0 0-3-3.9M16 4.3a3.5 3.5 0 0 1 0 6.9" /></svg></div>
           <h3>Turma</h3>
           <p>Fale com a turma e troque arquivos.</p>
         </div>
         <div class="features">
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-1">
             <h4>Mensagem</h4>
             <p class="does">Mostra um recado na tela de todos os alunos.</p>
             <p class="eases"><strong>Simplifica:</strong> avisos como "faltam 5 minutos" chegam a todos, sem levantar a voz.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-2">
             <h4>Bate-papo</h4>
             <p class="does">Conversa com a turma; a resposta de cada aluno chega só para você.</p>
             <p class="eases"><strong>Simplifica:</strong> o aluno tímido pergunta sem expor a dúvida para a sala.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-3">
             <h4>Enviar arquivo</h4>
             <p class="does">Coloca o arquivo na pasta "Arquivos do professor", na Área de Trabalho de cada aluno.</p>
             <p class="eases"><strong>Simplifica:</strong> sem pendrive e sem e-mail: todos recebem o mesmo material ao mesmo tempo.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-4">
             <h4>Recolher arquivos</h4>
             <p class="does">Copia o que cada aluno pôs na pasta "Entregar ao professor" para a sua pasta Documentos\Midview\Recolhidos.</p>
             <p class="eases"><strong>Simplifica:</strong> os trabalhos da aula chegam todos num lugar só, prontos para corrigir.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-5">
             <h4>Pasta da turma</h4>
             <p class="does">Cria, na Área de Trabalho de cada aluno, a pasta da turma da aula. O que um aluno baixa ou salva nela aparece em todos os computadores. Ao encerrar a aula, escolha manter os arquivos, apagar só os de hoje ou apagar tudo.</p>
             <p class="eases"><strong>Simplifica:</strong> o aluno não precisa sentar sempre na mesma máquina para achar o trabalho da aula passada.</p>
@@ -415,38 +417,38 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       </div>
 
       <div class="group">
-        <div class="group-head reveal">
+        <div class="group-head reveal reveal-delay-1">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></svg></div>
           <h3>Programas e sites</h3>
           <p>Abra, instale e tire da frente programas e sites.</p>
         </div>
         <div class="features">
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-1">
             <h4>Abrir site e Abrir programa</h4>
             <p class="does">Abre o mesmo site ou programa em todas as máquinas. Os que você mais usa ficam salvos no menu.</p>
             <p class="eases"><strong>Simplifica:</strong> ninguém erra o endereço e a atividade começa junto para todos.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-2">
             <h4>Instalar programa</h4>
             <p class="does">Instala um programa na turma toda, como administrador, sem a tela do UAC e sem digitar senha em cada máquina.</p>
             <p class="eases"><strong>Simplifica:</strong> um programa novo chega a todo o laboratório de uma vez, sem ir de máquina em máquina.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-3">
             <h4>Desinstalar programa</h4>
             <p class="does">Lista os programas instalados a partir de uma máquina e desinstala os que você escolher na turma.</p>
             <p class="eases"><strong>Simplifica:</strong> tira do laboratório o que não é mais usado, em todas as máquinas juntas.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-4">
             <h4>Fechar programas</h4>
             <p class="does">Fecha os programas abertos, com aviso e prazo de 30 segundos ou 1 minuto para o aluno salvar, ou na hora.</p>
             <p class="eases"><strong>Simplifica:</strong> o fim da aula fica organizado e as máquinas ficam prontas para a próxima turma.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-5">
             <h4>Bloquear programas</h4>
             <p class="does">Proíbe os programas de uma lista, ou deixa abrir só os que você permitir.</p>
             <p class="eases"><strong>Simplifica:</strong> jogos e programas fora da aula ficam fechados sem você vigiar tela por tela.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-6">
             <h4>Bloquear sites</h4>
             <p class="does">Bloqueia a internet inteira ou só os sites que você escolher. O bloqueio continua mesmo se a máquina reiniciar.</p>
             <p class="eases"><strong>Simplifica:</strong> a turma fica na atividade, inclusive em dia de prova.</p>
@@ -455,18 +457,18 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       </div>
 
       <div class="group">
-        <div class="group-head reveal">
+        <div class="group-head reveal reveal-delay-1">
           <div class="group-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" /></svg></div>
           <h3>Configurar</h3>
           <p>Prepare as máquinas uma vez, para todas.</p>
         </div>
         <div class="features">
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-1">
             <h4>Painel do laboratório</h4>
             <p class="does">Aplica ajustes do Chrome e do Windows em todas as máquinas: bloqueador de anúncios, bloquear downloads, modo visitante, travar a barra de tarefas e outros. "RESET geral" desfaz tudo.</p>
             <p class="eases"><strong>Simplifica:</strong> todas as máquinas ficam configuradas iguais, sem você ir em cada uma.</p>
           </article>
-          <article class="feature reveal">
+          <article class="feature reveal reveal-delay-2">
             <h4>Máquinas da sala</h4>
             <p class="does">Procura as máquinas na rede, pareia cada uma com você (conferindo em até 5 minutos o código na tela do aluno) ou entra na sala de um colega, atualiza o Midview delas pela rede e guarda a senha de administrador do laboratório (só neste computador, protegida pelo Windows) para o "Preencher a senha de administrador" do controle.</p>
             <p class="eases"><strong>Simplifica:</strong> atualizar o laboratório não pede pendrive: uma máquina testa a versão nova primeiro e, se algo falhar, ela volta sozinha à anterior.</p>
@@ -523,7 +525,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno (você tem 5 minutos para isso).</p>
         </li>
       </ol>
-      <p class="note reveal">Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las. Quem cuida da informática pode instalar várias máquinas de uma vez com <code>MidviewSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /TIPO=aluno</code>.</p>
+      <p class="note reveal reveal-delay-5">Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las. Quem cuida da informática pode instalar várias máquinas de uma vez com <code>MidviewSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /TIPO=aluno</code>.</p>
     </div>
   </section>
 
@@ -591,6 +593,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }, { root: null, rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
   revealElements.forEach((el) => revealObserver.observe(el));
+
+  /* Ao clicar em Início, Funções, Como começar ou Privacidade no menu,
+     repete o efeito cascata na seção de destino. */
+  document.querySelectorAll('a[href^="#"]').forEach((link) => {
+    link.addEventListener("click", () => {
+      const hash = link.getAttribute("href");
+      if (!hash || hash === "#") return;
+      const scope = hash === "#inicio"
+        ? document.querySelector(".hero")
+        : document.querySelector(hash);
+      if (!scope) return;
+      const targets = scope.querySelectorAll(".reveal");
+      targets.forEach((el) => {
+        revealObserver.unobserve(el);
+        el.style.transition = "none";
+        el.classList.remove("is-visible");
+      });
+      void scope.offsetWidth;
+      targets.forEach((el) => {
+        el.style.transition = "";
+        revealObserver.observe(el);
+      });
+    });
+  });
 });
 
 /* Quantas vezes o instalador foi baixado, somando todas as versões publicadas
