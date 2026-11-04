@@ -67,6 +67,7 @@ public sealed partial class SessionServer
     private readonly IOpenProgramsLister? _openPrograms;
     private readonly DeliveryFolder? _deliveryFolder;
     private readonly IScreenLockDisplay? _screenLock;
+    private readonly IScreenLockPolicy? _screenLockPolicy;
     private readonly IFileOpener? _fileOpener;
     private readonly IRecycleBin? _recycleBin;
     private readonly ICountdownNotice? _countdownNotice;
@@ -98,7 +99,7 @@ public sealed partial class SessionServer
         IScreenLockDisplay? screenLock = null, IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null,
         ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
         IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, IClipboard? clipboard = null,
-        ClassFolder? classFolder = null)
+        ClassFolder? classFolder = null, IScreenLockPolicy? screenLockPolicy = null)
     {
         _frameAckTimeout = frameAckTimeout ?? DefaultFrameAckTimeout;
         _classFolder = classFolder;
@@ -107,6 +108,7 @@ public sealed partial class SessionServer
         _programStarter = programStarter;
         _clipboard = clipboard;
         _screenLock = screenLock;
+        _screenLockPolicy = screenLockPolicy;
         _fileOpener = fileOpener;
         _recycleBin = recycleBin;
         _listener = listener;
@@ -436,6 +438,9 @@ public sealed partial class SessionServer
             if (_screenLocks == 0)
             {
                 _screenLock!.Show();
+                // Shut the Ctrl+Alt+Del escapes (Task Manager, sign out) while
+                // the screen is locked, so the student can't get past the lock.
+                _screenLockPolicy?.Block();
             }
             _screenLocks++;
         }
@@ -448,6 +453,7 @@ public sealed partial class SessionServer
             if (--_screenLocks == 0)
             {
                 _screenLock!.Hide();
+                _screenLockPolicy?.Unblock();
             }
         }
     }

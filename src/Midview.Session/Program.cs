@@ -89,6 +89,12 @@ var lessonNotice = new WinFormsCornerNotice();
 using var classFolderTimer = new System.Threading.Timer(
     _ => classFolder.Follow(lessonNotice), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
+// Any Ctrl+Alt+Del lockdown left behind by a Session that crashed while the
+// screen was locked is cleared here, before serving, so the student is never
+// stuck without the Task Manager or sign-out outside a lock.
+var screenLockPolicy = new RegistryScreenLockPolicy();
+screenLockPolicy.Unblock();
+
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
     serverCertificate,
@@ -114,6 +120,7 @@ var server = new SessionServer(
     new WindowsWebsiteOpener(),
     new WindowsProgramStarter(),
     clipboard: new WindowsClipboard(),
-    classFolder: classFolder);
+    classFolder: classFolder,
+    screenLockPolicy: screenLockPolicy);
 
 server.Run(CancellationToken.None);
