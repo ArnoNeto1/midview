@@ -10,9 +10,18 @@ public partial class App : Application
     // closed before it is replaced. Kept for the process's lifetime.
     private static readonly List<Mutex> RunningMutexes = new();
 
+    // How "Atualizar professor" ended, when its script opened this Midview
+    // again (TeacherUpdate.FinishedArgument), shown once the classroom is up.
+    private string? _updateNotice;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (e.Args is [TeacherUpdate.FinishedArgument, var exitCode, var version])
+        {
+            _updateNotice = TeacherUpdate.FinishedNotice(exitCode, version, TeacherUpdate.CurrentVersion, TeacherUpdate.Folder);
+        }
 
         // Run by the Windows scheduled task that wakes the class (WakeTask):
         // no window, just the packets, then exit.
@@ -56,6 +65,11 @@ public partial class App : Application
     {
         var window = new MainWindow();
         MainWindow = window;
+        if (_updateNotice is { } notice)
+        {
+            window.ContentRendered += (_, _) =>
+                MessageBox.Show(window, notice, "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
         window.Show();
     }
 

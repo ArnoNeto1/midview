@@ -40,11 +40,25 @@
 
         <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
             <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0">
-                <StackPanel>
-                    <TextBlock Text="Atualizar as máquinas" Style="{StaticResource SectionTitle}" />
-                    <TextBlock x:Name="StudentVersionTextBlock" Style="{StaticResource SectionHint}" />
-                    <Button x:Name="UpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnUpdateClicked" HorizontalAlignment="Left" Padding="10,4" />
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="Atualizar as máquinas" Style="{StaticResource SectionTitle}" />
+                        <TextBlock x:Name="StudentVersionTextBlock" Style="{StaticResource SectionHint}" />
+                        <Button x:Name="UpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnUpdateClicked" HorizontalAlignment="Left" Padding="10,4" />
+                    </StackPanel>
+                    <Border Grid.Column="1" BorderBrush="{StaticResource CardLineBrush}" BorderThickness="1,0,0,0" Padding="12,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Atualizar professor" Style="{StaticResource SectionTitle}" />
+                            <TextBlock x:Name="TeacherVersionTextBlock" Style="{StaticResource SectionHint}" />
+                            <Button x:Name="TeacherUpdateButton" Content="Procurar de novo" Click="OnTeacherUpdateClicked"
+                                    HorizontalAlignment="Left" Padding="10,4" IsEnabled="False" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Border>
             <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,7,0,0">
                 <StackPanel>

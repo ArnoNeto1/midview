@@ -49,6 +49,7 @@ public partial class MachinesWindow : Window
         _refreshAddresses = refreshAddresses;
         FoundItemsControl.ItemsSource = _rows;
         ShowStudentProgramVersion();
+        CheckTeacherVersion();
         RefreshAdminPasswordStatus();
     }
 
@@ -359,6 +360,7 @@ public partial class MachinesWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         _closed = true;
+        _teacherUpdateCancel.Cancel();
         foreach (var row in _rows.Where(row => row.Session is not null))
         {
             row.Session!.Cancel();
