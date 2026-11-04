@@ -25,6 +25,7 @@ public class LabConfigChangeTests
     [InlineData("adblock")]
     [InlineData("edge")]
     [InlineData("taskbar")]
+    [InlineData("desktop")]
     public void With_EveryButtonTag_TogglesSomething(string flag)
     {
         var off = LabConfig.Off(1);
@@ -32,6 +33,12 @@ public class LabConfigChangeTests
         var on = LabConfigChange.With(off, flag, on: true);
         Assert.True(on.IsAnyOn);
         Assert.False(LabConfigChange.With(on, flag, on: false).IsAnyOn);
+    }
+
+    [Fact]
+    public void With_Desktop_TurnsOnTheDesktopLock()
+    {
+        Assert.True(LabConfigChange.With(LabConfig.Off(1), "desktop", on: true).LockDesktop);
     }
 
     [Fact]

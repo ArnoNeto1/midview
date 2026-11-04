@@ -32,12 +32,28 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
 
     private AppBlockEnforcer _enforcer = null!;
 
-    private LabConfigCommandHandler Create()
+    private LabConfigCommandHandler Create(StudentDesktopLockGuard? desktopLock = null)
     {
         _enforcer = new AppBlockEnforcer(_inspector);
         var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath);
-        return new LabConfigCommandHandler(_statePath, writer, _enforcer, _usersRoot);
+        return new LabConfigCommandHandler(_statePath, writer, _enforcer, _usersRoot, desktopLock);
     }
+
+    private static readonly System.Security.Principal.SecurityIdentifier Me =
+        System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+
+    // A student Desktop under %TEMP% the guard locks as the test's own
+    // account (without guarding the permissions, so the test can clean up).
+    private string StudentDesktop()
+    {
+        var desktop = Path.Combine(_usersRoot, "aluno", "Desktop");
+        Directory.CreateDirectory(desktop);
+        File.WriteAllText(Path.Combine(desktop, "trabalho.txt"), "x");
+        return desktop;
+    }
+
+    private static StudentDesktopLockGuard GuardOn(string desktop) =>
+        new(() => (desktop, Me), _ => { }, guardPermissions: false);
 
     private object? Read(string subPath, string name)
     {
@@ -288,6 +304,86 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
         afterRestart.ReconcileAtStartup();
 
         Assert.Equal(1, Read(ChromePath, "IncognitoModeAvailability"));
+    }
+
+    [Fact]
+    public void LockDesktop_LocksTheStudentsDesktopRightAway_AndOffGivesItBack()
+    {
+        var desktop = StudentDesktop();
+        var handler = Create(GuardOn(desktop));
+        try
+        {
+            var (ok, detail) = handler.Handle((LabConfig.Off(100) with { LockDesktop = true }).Encode());
+
+            Assert.True(ok);
+            Assert.Equal("travar Área de Trabalho", detail);
+            Assert.True(handler.Current.LockDesktop);
+            Assert.True(StudentDesktopLock.IsAnyLocked(desktop, Me));
+
+            Assert.True(handler.Handle(LabConfig.Off(200).Encode()).Succeeded);
+            Assert.False(StudentDesktopLock.IsAnyLocked(desktop, Me));
+        }
+        finally
+        {
+            StudentDesktopLock.Unlock(desktop, Me);
+        }
+    }
+
+    [Fact]
+    public void Reset_GivesTheDesktopBack()
+    {
+        var desktop = StudentDesktop();
+        var handler = Create(GuardOn(desktop));
+        try
+        {
+            handler.Handle((LabConfig.Off(100) with { LockDesktop = true }).Encode());
+
+            Assert.True(handler.Reset().Succeeded);
+
+            Assert.False(StudentDesktopLock.IsAnyLocked(desktop, Me));
+        }
+        finally
+        {
+            StudentDesktopLock.Unlock(desktop, Me);
+        }
+    }
+
+    // What the poll does (MidviewAgentWorker): the saved state kept on whoever
+    // is logged on, the lock included, after a restart too.
+    [Fact]
+    public void KeepDesktopLock_LocksTheDesktopOfWhoeverIsLoggedOn()
+    {
+        Create().Handle((LabConfig.Off(100) with { LockDesktop = true }).Encode());
+        var desktop = StudentDesktop();
+        var afterRestart = Create(GuardOn(desktop));
+        try
+        {
+            Assert.True(afterRestart.Current.LockDesktop);
+            Assert.False(StudentDesktopLock.IsAnyLocked(desktop, Me));
+
+            afterRestart.KeepDesktopLock();
+
+            Assert.True(StudentDesktopLock.IsAnyLocked(desktop, Me));
+        }
+        finally
+        {
+            StudentDesktopLock.Unlock(desktop, Me);
+        }
+    }
+
+    // The state an Agent from before the Desktop lock saved has no such field.
+    [Fact]
+    public void ASavedStateFromBefore_LoadsWithTheDesktopUnlocked()
+    {
+        File.WriteAllText(_statePath,
+            """{"SavedAt":5,"CleanOnExit":true,"Lockdown":false,"BlockDownloads":false,"ForceGuest":false,"Adblock":false,"BlockEdge":false,"LockTaskbar":true}""");
+
+        var handler = Create();
+
+        Assert.Equal(5, handler.Current.SavedAt);
+        Assert.True(handler.Current.CleanOnExit);
+        Assert.True(handler.Current.LockTaskbar);
+        Assert.False(handler.Current.LockDesktop);
     }
 
     private sealed class FakeInspector : IProcessInspector

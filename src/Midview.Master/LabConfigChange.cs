@@ -19,6 +19,7 @@ public static class LabConfigChange
         "adblock" => config with { Adblock = on },
         "edge" => config with { BlockEdge = on },
         "taskbar" => config with { LockTaskbar = on },
+        "desktop" => config with { LockDesktop = on },
         _ => throw new ArgumentOutOfRangeException(nameof(flag), flag, "unknown lab-config function"),
     };
 

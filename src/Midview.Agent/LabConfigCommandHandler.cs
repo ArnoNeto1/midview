@@ -26,17 +26,28 @@ public sealed class LabConfigCommandHandler
     private readonly LabPolicyWriter _writer;
     private readonly AppBlockEnforcer _enforcer;
     private readonly string _usersRoot;
+    private readonly StudentDesktopLockGuard? _desktopLock;
     private readonly object _gate = new();
     private LabConfig _config;
 
-    public LabConfigCommandHandler(string statePath, LabPolicyWriter writer, AppBlockEnforcer enforcer, string? usersRoot = null)
+    // desktopLock: keeps "Travar a Área de Trabalho" on whoever is logged on
+    // (null: not kept, as in tests of the other functions).
+    public LabConfigCommandHandler(
+        string statePath, LabPolicyWriter writer, AppBlockEnforcer enforcer, string? usersRoot = null,
+        StudentDesktopLockGuard? desktopLock = null)
     {
         _statePath = statePath;
         _writer = writer;
         _enforcer = enforcer;
         _usersRoot = usersRoot ?? Environment.ExpandEnvironmentVariables(@"%SystemDrive%\Users");
+        _desktopLock = desktopLock;
         _config = Load(statePath) ?? LabConfig.Off(0);
     }
+
+    // On every poll of the Agent's loop (MidviewAgentWorker): the Desktop of
+    // whoever is logged on locked or given back as the saved state says,
+    // what appeared on it since locked too. Never throws.
+    public void KeepDesktopLock() => _desktopLock?.Check(Current.LockDesktop);
 
     public static string DefaultStatePath => Path.Combine(AgentDataDirectory.DirectoryPath, "lab-config.json");
 
@@ -335,7 +346,13 @@ public sealed class LabConfigCommandHandler
         Volatile.Write(ref _config, config);
         ApplyEdge(config);
         _enforcer.EndNow("chrome.exe", ChromeClosedNotice);
-        return (true, Describe(config));
+
+        // Right away, so the teacher sees what couldn't be locked; with
+        // nobody logged on, the poll does it at the next logon.
+        var desktopProblems = _desktopLock?.Check(config.LockDesktop) ?? Array.Empty<string>();
+        return (true, desktopProblems.Count == 0
+            ? Describe(config)
+            : $"{Describe(config)} (Área de Trabalho: {string.Join("; ", desktopProblems)})");
     }
 
     private void ApplyEdge(LabConfig config) =>
@@ -358,6 +375,7 @@ public sealed class LabConfigCommandHandler
         if (config.Adblock) on.Add("bloqueador de anúncios");
         if (config.BlockEdge) on.Add("bloquear Edge");
         if (config.LockTaskbar) on.Add("travar barra de tarefas");
+        if (config.LockDesktop) on.Add("travar Área de Trabalho");
         return string.Join(", ", on);
     }
 
@@ -379,7 +397,7 @@ public sealed class LabConfigCommandHandler
             return stored is null
                 ? null
                 : new LabConfig(stored.SavedAt, stored.CleanOnExit, stored.Lockdown, stored.BlockDownloads,
-                    stored.ForceGuest, stored.Adblock, stored.BlockEdge, stored.LockTaskbar);
+                    stored.ForceGuest, stored.Adblock, stored.BlockEdge, stored.LockTaskbar, stored.LockDesktop);
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException)
         {
@@ -414,13 +432,14 @@ public sealed class LabConfigCommandHandler
         {
             JsonSerializer.Serialize(stream, new StoredConfig(
                 config.SavedAt, config.CleanOnExit, config.Lockdown, config.BlockDownloads,
-                config.ForceGuest, config.Adblock, config.BlockEdge, config.LockTaskbar));
+                config.ForceGuest, config.Adblock, config.BlockEdge, config.LockTaskbar, config.LockDesktop));
             stream.Flush(flushToDisk: true);
         }
         File.Move(tempPath, path, overwrite: true);
     }
 
+    // LockDesktop is missing from what an Agent from before it saved: off.
     private sealed record StoredConfig(
         long SavedAt, bool CleanOnExit, bool Lockdown, bool BlockDownloads, bool ForceGuest, bool Adblock, bool BlockEdge,
-        bool LockTaskbar);
+        bool LockTaskbar, bool LockDesktop = false);
 }

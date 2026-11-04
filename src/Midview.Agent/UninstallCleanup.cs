@@ -28,6 +28,12 @@ public static class UninstallCleanup
         // logged on keeps the value in their own hive.
         foreach (var (desktop, student) in studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>())
         {
+            // "Travar a Área de Trabalho" first: the Desktop's Deny below is
+            // only given back once the lock's own Denies are off it.
+            foreach (var problem in StudentDesktopLock.Unlock(desktop, student).Problems)
+            {
+                failures.Add($"Não foi possível destravar a Área de Trabalho em {desktop}: {problem}");
+            }
             Step(failures, $"devolver a pasta da turma ao aluno em {desktop}", () =>
             {
                 var problems = ProtectedStudentFolders.Release(desktop, student, ClassFolderNames(desktop));

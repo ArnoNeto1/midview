@@ -69,6 +69,34 @@ public class UninstallCleanupTests : IDisposable
         }
     }
 
+    // "Travar a Área de Trabalho" is undone too: the student can create,
+    // rename and delete on their Desktop again.
+    [Fact]
+    public void ALockedDesktop_IsUnlocked()
+    {
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var desktop = Path.Combine(Path.GetTempPath(), $"midview-desktop-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(desktop);
+        File.WriteAllText(Path.Combine(desktop, "trabalho.txt"), "x");
+        try
+        {
+            StudentDesktopLock.Lock(desktop, me, guardPermissions: false);
+            File.WriteAllText(_hostsPath, "127.0.0.1 localhost\n");
+
+            var failures = UninstallCleanup.Run(_statePath, _hostsPath, new FakeFirewallController(),
+                new FakeInputDeviceController(), _netshCalls.Add, studentDesktops: new[] { (desktop, me) });
+
+            Assert.Empty(failures);
+            Assert.False(StudentDesktopLock.IsAnyLocked(desktop, me));
+            File.Move(Path.Combine(desktop, "trabalho.txt"), Path.Combine(desktop, "renomeado.txt"));
+        }
+        finally
+        {
+            StudentDesktopLock.Unlock(desktop, me);
+            Directory.Delete(desktop, recursive: true);
+        }
+    }
+
     // A lesson's class folder is given back too, and Chrome and Edge stop
     // saving into it where the student's registry is loaded. Against a
     // throwaway HKCU subtree, never the real policy keys.

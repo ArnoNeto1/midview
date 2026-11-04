@@ -298,7 +298,7 @@ public static class ProtectedStudentFolders
     // The Desktop as itself (OpenAsItself), and only where desktopPath says it is:
     // a link put on the way since the path was checked leads somewhere else, and
     // is refused. finalPath: where it is, for its folders to be checked against.
-    private static SafeFileHandle OpenDesktop(string desktopPath, uint access, out string finalPath)
+    internal static SafeFileHandle OpenDesktop(string desktopPath, uint access, out string finalPath)
     {
         var handle = OpenAsItself(desktopPath, access);
         try
@@ -319,7 +319,7 @@ public static class ProtectedStudentFolders
 
     // An open folder is the one at path (in the Desktop OpenDesktop checked), not one a
     // link swapped in on the way since.
-    private static void CheckIsIn(SafeFileHandle folder, string path)
+    internal static void CheckIsIn(SafeFileHandle folder, string path)
     {
         if (!StudentDesktopCheck.SamePath(StudentDesktopCheck.FinalPath(folder), path))
         {
@@ -353,11 +353,47 @@ public static class ProtectedStudentFolders
         return handle;
     }
 
+    // A file or folder as itself: a link (junction, symbolic link) is opened
+    // as the link, never as what it points at. isDirectory: a folder (or a
+    // link to one); links: how many names a file has on the disk (a hard link
+    // is one more).
+    internal static SafeFileHandle OpenEntryAsItself(string path, uint access, out bool isDirectory, out uint links)
+    {
+        var handle = CreateFile(path, access, FileShareAll, IntPtr.Zero, OpenExisting,
+            FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            var error = Marshal.GetLastWin32Error();
+            handle.Dispose();
+            throw error == 5
+                ? new UnauthorizedAccessException($"acesso negado a {path}")
+                : new IOException($"{path} não pôde ser aberto (erro {error})", unchecked((int)0x80070000) | error);
+        }
+        if (!GetFileInformationByHandle(handle, out var information))
+        {
+            var error = Marshal.GetLastWin32Error();
+            handle.Dispose();
+            throw new IOException($"{path} não pôde ser lido (erro {error})", unchecked((int)0x80070000) | error);
+        }
+        isDirectory = (information.FileAttributes & FileAttributeDirectory) != 0;
+        links = information.NumberOfLinks;
+        return handle;
+    }
+
     // The owner of an open folder (opened with ReadControl).
     internal static SecurityIdentifier? OwnerOf(SafeFileHandle handle) =>
         ReadSecurity(handle).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
 
     private static DirectorySecurity ReadSecurity(SafeFileHandle handle)
+    {
+        var security = new DirectorySecurity();
+        ReadSecurityInto(handle, security);
+        return security;
+    }
+
+    // The owner and permissions of an open file or folder (opened with
+    // ReadControl), into security (a FileSecurity or a DirectorySecurity).
+    internal static void ReadSecurityInto(SafeFileHandle handle, FileSystemSecurity security)
     {
         GetKernelObjectSecurity(handle, OwnerSecurityInformation | DaclSecurityInformation, null, 0, out var needed);
         var descriptor = new byte[needed];
@@ -365,12 +401,10 @@ public static class ProtectedStudentFolders
         {
             throw new IOException($"as permissões não puderam ser lidas (erro {Marshal.GetLastWin32Error()})");
         }
-        var security = new DirectorySecurity();
         security.SetSecurityDescriptorBinaryForm(descriptor);
-        return security;
     }
 
-    private static void WriteSecurity(SafeFileHandle handle, DirectorySecurity security, uint information)
+    internal static void WriteSecurity(SafeFileHandle handle, FileSystemSecurity security, uint information)
     {
         if (!SetKernelObjectSecurity(handle, information, security.GetSecurityDescriptorBinaryForm()))
         {
@@ -382,7 +416,7 @@ public static class ProtectedStudentFolders
     }
 
     internal const uint ReadControl = 0x00020000;
-    private const uint WriteDac = 0x00040000;
+    internal const uint WriteDac = 0x00040000;
     private const uint WriteOwner = 0x00080000;
     private const uint FileShareAll = 0x7;
     private const uint OpenExisting = 3;
@@ -391,9 +425,9 @@ public static class ProtectedStudentFolders
     private const uint FileAttributeDirectory = 0x10;
     private const uint FileAttributeReparsePoint = 0x400;
     private const uint OwnerSecurityInformation = 0x1;
-    private const uint DaclSecurityInformation = 0x4;
-    private const uint ProtectedDaclSecurityInformation = 0x80000000;
-    private const uint UnprotectedDaclSecurityInformation = 0x20000000;
+    internal const uint DaclSecurityInformation = 0x4;
+    internal const uint ProtectedDaclSecurityInformation = 0x80000000;
+    internal const uint UnprotectedDaclSecurityInformation = 0x20000000;
 
     [StructLayout(LayoutKind.Sequential, Pack = 4)] // FILETIMEs are two DWORDs, 4-byte aligned
     private struct ByHandleFileInformation

@@ -53,14 +53,27 @@ public class LabConfigTests
     }
 
     [Fact]
-    public void Decode_AnUnknownFlagBit_IsFalse()
+    public void EncodeThenDecode_AllOnWithTheDesktopLock_RoundTrips()
     {
-        // A newer Master against this version must not apply a flag this
-        // version doesn't understand.
-        var payload = (LabConfig.Off(1) with { Lockdown = true }).Encode();
-        payload[9] |= 0b1000_0000; // a bit beyond LockTaskbar (64)
+        var config = new LabConfig(1739000000, true, true, true, true, true, true, true, LockDesktop: true);
 
-        Assert.False(LabConfig.TryDecode(payload, out _));
+        Assert.True(LabConfig.TryDecode(config.Encode(), out var decoded));
+        Assert.Equal(config, decoded);
+        Assert.Equal(0xFF, config.Encode()[9]);
+    }
+
+    // The last bit of the flags byte (128): an Agent from before refuses it as
+    // a bit it doesn't know, rather than applying the rest without it.
+    [Fact]
+    public void TheDesktopLock_IsTheLastFlagBit()
+    {
+        var config = LabConfig.Off(1) with { LockDesktop = true };
+
+        Assert.Equal(0b1000_0000, config.Encode()[9]);
+        Assert.True(config.IsAnyOn);
+        Assert.True(LabConfig.TryDecode(config.Encode(), out var decoded));
+        Assert.True(decoded.LockDesktop);
+        Assert.False(decoded.LockTaskbar);
     }
 
     [Fact]
@@ -72,5 +85,6 @@ public class LabConfigTests
 
         Assert.True(a.SameLockdownsAs(b));
         Assert.False(a.SameLockdownsAs(c));
+        Assert.False(a.SameLockdownsAs(b with { LockDesktop = true }));
     }
 }

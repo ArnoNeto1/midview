@@ -11,6 +11,8 @@ namespace Midview.Protocol;
 //
 // Also the payload of MessageType.SetLabConfig and LabConfigStatus
 // (big-endian): format version (1 byte), SavedAt (int64), flags (1 byte).
+// LockDesktop takes the flags byte's last bit: a lockdown after it needs a
+// new format version.
 public sealed record LabConfig(
     long SavedAt,
     bool CleanOnExit,
@@ -19,7 +21,8 @@ public sealed record LabConfig(
     bool ForceGuest,
     bool Adblock,
     bool BlockEdge,
-    bool LockTaskbar)
+    bool LockTaskbar,
+    bool LockDesktop = false)
 {
     public const byte FormatVersion = 1;
     private const int PayloadLength = 10;
@@ -35,16 +38,18 @@ public sealed record LabConfig(
         Adblock = 16,
         BlockEdge = 32,
         LockTaskbar = 64,
+        LockDesktop = 128,
     }
 
     private const Flag KnownFlags =
         Flag.CleanOnExit | Flag.Lockdown | Flag.BlockDownloads | Flag.ForceGuest
-        | Flag.Adblock | Flag.BlockEdge | Flag.LockTaskbar;
+        | Flag.Adblock | Flag.BlockEdge | Flag.LockTaskbar | Flag.LockDesktop;
 
     // Nothing on: the default, and what a reset leaves.
     public static LabConfig Off(long savedAt) => new(savedAt, false, false, false, false, false, false, false);
 
-    public bool IsAnyOn => CleanOnExit || Lockdown || BlockDownloads || ForceGuest || Adblock || BlockEdge || LockTaskbar;
+    public bool IsAnyOn =>
+        CleanOnExit || Lockdown || BlockDownloads || ForceGuest || Adblock || BlockEdge || LockTaskbar || LockDesktop;
 
     public byte[] Encode()
     {
@@ -80,7 +85,8 @@ public sealed record LabConfig(
             flags.HasFlag(Flag.ForceGuest),
             flags.HasFlag(Flag.Adblock),
             flags.HasFlag(Flag.BlockEdge),
-            flags.HasFlag(Flag.LockTaskbar));
+            flags.HasFlag(Flag.LockTaskbar),
+            flags.HasFlag(Flag.LockDesktop));
         return true;
     }
 
@@ -97,6 +103,7 @@ public sealed record LabConfig(
         if (Adblock) flags |= Flag.Adblock;
         if (BlockEdge) flags |= Flag.BlockEdge;
         if (LockTaskbar) flags |= Flag.LockTaskbar;
+        if (LockDesktop) flags |= Flag.LockDesktop;
         return flags;
     }
 }

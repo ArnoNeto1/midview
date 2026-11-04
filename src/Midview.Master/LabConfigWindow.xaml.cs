@@ -48,7 +48,12 @@ public partial class LabConfigWindow : Window
             }
             var updated = LabConfigChange.With(status.Config!, flag, on)
                 with { SavedAt = LabConfigChange.NextSavedAt(now, status.Config!.SavedAt) };
-            return LabConfigClient.Apply(machine, _masterCertificate, updated);
+            var (succeeded, detail) = LabConfigClient.Apply(machine, _masterCertificate, updated);
+            // An Agent from before a function refuses the flag it doesn't
+            // know as an invalid request (LabConfig.TryDecode).
+            return !succeeded && detail == "pedido inválido"
+                ? (false, "Midview antigo nesta máquina: atualize-a para usar esta função")
+                : (succeeded, detail);
         });
     }
 
@@ -159,6 +164,7 @@ public partial class LabConfigWindow : Window
         if (config.Adblock) on.Add("bloqueador de anúncios");
         if (config.BlockEdge) on.Add("bloquear Edge");
         if (config.LockTaskbar) on.Add("barra de tarefas travada");
+        if (config.LockDesktop) on.Add("Área de Trabalho travada");
         return string.Join(", ", on);
     }
 }
