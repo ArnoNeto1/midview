@@ -318,6 +318,17 @@ public enum MessageType : byte
     // never receives it, because the Master only offers the fill on the helper
     // endpoint.
     FillAdminPassword = 90,
+
+    // Master -> Agent: hide "Switch user" on the Ctrl+Alt+Del screen (the HKLM
+    // policy HideFastUserSwitching) for as long as this connection stays open,
+    // so a locked student can't switch to another account to get past the
+    // lock. The Session blocks the Task Manager and sign-out itself (HKCU),
+    // but switching user is an HKLM policy only the Agent's SYSTEM rights can
+    // set, so the Master holds this alongside the screen lock. The Agent
+    // answers one CommandAck; closing the connection (or its 10 s receive
+    // timeout) frees the block, ref-counted across teachers. Switching user
+    // needs no reboot to take effect on the next Ctrl+Alt+Del.
+    HoldSwitchUserBlock = 91,
 }
 
 public enum CloseAppsMode : byte

@@ -126,6 +126,19 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile the class lesson at startup: {ex.Message}");
             }
 
+            // Hides "Switch user" while the Master holds the screen lock. Built
+            // once (its stale-clear runs now); a registry failure here must not
+            // keep the service from starting, so it falls back to no block.
+            SwitchUserBlockHandler? switchUserBlock = null;
+            try
+            {
+                switchUserBlock = new SwitchUserBlockHandler(RegistrySwitchUserPolicy.OpenMachine());
+            }
+            catch (Exception ex)
+            {
+                AgentLog.Warn($"Switch-user block unavailable: {ex.Message}");
+            }
+
             return Task.Run(async () =>
             {
                 var failing = false;
@@ -137,7 +150,8 @@ public sealed class AgentServerWorker : BackgroundService
                             new TcpListener(IPAddress.Any, AgentPort), certificate, _masterTrustStore, commandHandler,
                             _powerHandler, scheduledShutdown: _scheduledShutdown, updateReceiver: _updateReceiver,
                             appBlock: _appBlock, labConfig: _labConfig, uninstaller: _uninstaller, pairing: _pairing,
-                            pendingUninstalls: _pendingUninstalls, classLesson: _classLesson, installer: _installer);
+                            pendingUninstalls: _pendingUninstalls, classLesson: _classLesson, installer: _installer,
+                            switchUserBlock: switchUserBlock);
                         if (failing)
                         {
                             AgentLog.Warn("AgentServer: listening again.");

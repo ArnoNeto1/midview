@@ -62,6 +62,9 @@ public partial class MainWindow : Window
     // The machines whose screen is locked, each kept so by its own
     // connection; how each one last answered, for the status line.
     private readonly Dictionary<MachineTile, ScreenLockKeeper> _screenLocks = new();
+    // Alongside each screen lock, hides "Switch user" on that machine while it
+    // is locked (only where the machine's Agent thumbprint is known).
+    private readonly Dictionary<MachineTile, SwitchUserBlockKeeper> _switchUserBlocks = new();
     private readonly Dictionary<MachineTile, (bool Locked, string Detail)> _screenLockStatus = new();
 
     // Machines locked at least once since the teacher locked them: one that
@@ -652,6 +655,17 @@ public partial class MainWindow : Window
         _screenLocks[tile] = keeper;
         tile.ShowScreenLock(ScreenLockText.Locking, alert: false);
         keeper.Start();
+
+        // Also hide "Switch user" on the Ctrl+Alt+Del screen while it's locked,
+        // so the student can't switch accounts to get past the lock. Only when
+        // the Agent thumbprint is known (machines paired before it simply keep
+        // the screen lock without this).
+        if (tile.Machine.AgentThumbprint is { } agentThumbprint)
+        {
+            var block = new SwitchUserBlockKeeper(tile.Machine, agentThumbprint, _masterCertificate);
+            _switchUserBlocks[tile] = block;
+            block.Start();
+        }
         UpdateScreenLockButton();
     }
 
@@ -660,6 +674,10 @@ public partial class MainWindow : Window
         if (_screenLocks.Remove(tile, out var keeper))
         {
             keeper.Dispose();
+        }
+        if (_switchUserBlocks.Remove(tile, out var block))
+        {
+            block.Dispose();
         }
         _screenLockStatus.Remove(tile);
         _wereLocked.Remove(tile);
@@ -1406,6 +1424,11 @@ public partial class MainWindow : Window
             keeper.Dispose();
         }
         _screenLocks.Clear();
+        foreach (var block in _switchUserBlocks.Values)
+        {
+            block.Dispose();
+        }
+        _switchUserBlocks.Clear();
 
         foreach (var poller in _pollers.Values)
         {

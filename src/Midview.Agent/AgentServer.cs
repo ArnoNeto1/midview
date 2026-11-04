@@ -32,6 +32,7 @@ public sealed class AgentServer
     private readonly PairingService? _pairing;
     private readonly ClassLessonHandler? _classLesson;
     private readonly ProgramInstaller? _installer;
+    private readonly SwitchUserBlockHandler? _switchUserBlock;
 
     // findWakeAddress is for tests: the MAC address of the card holding a
     // local address (WakeAddressLookup.Find everywhere else).
@@ -42,10 +43,11 @@ public sealed class AgentServer
         UpdateReceiver? updateReceiver = null, AppBlockCommandHandler? appBlock = null,
         LabConfigCommandHandler? labConfig = null, ProgramUninstaller? uninstaller = null, PairingService? pairing = null,
         PendingUninstalls? pendingUninstalls = null, ClassLessonHandler? classLesson = null,
-        ProgramInstaller? installer = null)
+        ProgramInstaller? installer = null, SwitchUserBlockHandler? switchUserBlock = null)
     {
         _classLesson = classLesson;
         _installer = installer;
+        _switchUserBlock = switchUserBlock;
         _listener = listener;
         _serverCertificate = serverCertificate;
         _masterTrustStore = masterTrustStore;
@@ -131,6 +133,15 @@ public sealed class AgentServer
         if (!_masterTrustStore.IsTrusted(channel.RemoteThumbprint))
         {
             AgentLog.Warn($"Refused {message.Type} from a teacher this machine doesn't trust ({channel.RemoteThumbprint}).");
+            return;
+        }
+
+        // Held open by the Master while it keeps the screen locked: hides
+        // "Switch user" on the Ctrl+Alt+Del screen until the connection drops.
+        if (message.Type == MessageType.HoldSwitchUserBlock && _switchUserBlock is not null)
+        {
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, "trocar usuário bloqueado")));
+            _switchUserBlock.Hold(channel.Receive);
             return;
         }
 
