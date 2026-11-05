@@ -5,6 +5,8 @@ import { AbsoluteFill, Composition, Folder } from "remotion";
 import { AppThemeProvider } from "./components/app/appTheme";
 import { Background } from "./components/Background";
 import { MidviewPromo } from "./MidviewPromo";
+import { MidviewPromoPainel, PAINEL_PROMO } from "./painel/MidviewPromoPainel";
+import { MidviewReels, REELS_H, REELS_TOTAL, REELS_W } from "./reels/Reels";
 import { Scene1Hook } from "./scenes/Scene1Hook";
 import { Scene8Beneficios } from "./scenes/Scene8Beneficios";
 import { Scene9Encerramento } from "./scenes/Scene9Encerramento";
@@ -59,6 +61,17 @@ export const RemotionRoot: React.FC = () => (
       width={WIDTH}
       height={HEIGHT}
     />
+    {/* O mesmo app no visual Painel (0.0.41), com todos os botões da barra. */}
+    <Composition
+      id="MidviewPromoPainel"
+      component={MidviewPromoPainel}
+      durationInFrames={PAINEL_PROMO.total}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    {/* Reels do Instagram (vertical), no visual Painel, sem narração. */}
+    <Composition id="MidviewReels" component={MidviewReels} durationInFrames={REELS_TOTAL} fps={FPS} width={REELS_W} height={REELS_H} />
     {/* O tutorial completo, com todas as funções e narração; dura o que a narração pede. */}
     <Composition
       id="MidviewTutorial"

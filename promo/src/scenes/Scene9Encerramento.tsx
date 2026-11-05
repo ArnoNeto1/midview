@@ -1,7 +1,10 @@
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import { AppWindow } from "../components/app/AppWindow";
+import { AppWindow, type TileItem } from "../components/app/AppWindow";
+import type { BottomBarProps } from "../components/app/BottomBar";
+import type { PainelTitle } from "../components/app/painel/TitleBar";
+import type { ToolbarProps } from "../components/app/Toolbar";
 import { WIN } from "../components/app/geometry";
 import { idleApp } from "../components/app/tour";
 import { KineticText } from "../components/KineticText";
@@ -24,11 +27,21 @@ const T = {
   cta: 88,
 } as const;
 
+type ClosingApp = { tiles: TileItem[]; toolbar: ToolbarProps; bottom: BottomBarProps; title?: PainelTitle };
+
+type Scene9Props = {
+  /** A janela que recua (padrão: a do tour, parada). */
+  app?: (abs: number) => ClosingApp;
+  /** Frame do vídeo em que a cena começa (as telas dos alunos seguem ao vivo). */
+  startsAt?: number;
+};
+
 /** Cena 9 (82–90 s): a janela do midview recua em perspectiva 3D e a logo volta ao centro com o CTA. */
-export const Scene9Encerramento: React.FC = () => {
+export const Scene9Encerramento: React.FC<Scene9Props> = ({ app, startsAt = SCENES.cta.from }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const abs = SCENES.cta.from + frame;
+  const abs = startsAt + frame;
+  const shown: ClosingApp = app ? app(abs) : IDLE;
 
   const recede = springAt(frame, fps, T.recede, SPRING.smooth, 64);
   const logoIn = springAt(frame, fps, T.logo, SPRING.soft);
@@ -55,7 +68,7 @@ export const Scene9Encerramento: React.FC = () => {
             transform: `perspective(1600px) translateY(${mix(0, 330, recede)}px) rotateX(${mix(0, 34, recede)}deg) scale(${mix(0.86, 0.72, recede)})`,
           }}
         >
-          <AppWindow frame={abs} tiles={IDLE.tiles} toolbar={IDLE.toolbar} bottom={IDLE.bottom} />
+          <AppWindow frame={abs} tiles={shown.tiles} toolbar={shown.toolbar} bottom={shown.bottom} title={shown.title} />
         </div>
       </AbsoluteFill>
 

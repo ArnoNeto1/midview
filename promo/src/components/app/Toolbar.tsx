@@ -3,8 +3,19 @@ import { clamp01 } from "../../lib/motion";
 import { useAppTheme } from "./appTheme";
 import { TOOLBAR_GROUPS, TOOLBAR_LAYOUT, WIN, type ButtonId, type GroupId } from "./geometry";
 import { GLYPH, Glyph } from "./Glyph";
+import { PainelToolbar } from "./painel/Toolbar";
 
-export type ButtonVisual = { hover?: number; press?: number; disabled?: boolean; label?: string };
+export type ButtonVisual = {
+  hover?: number;
+  press?: number;
+  disabled?: boolean;
+  label?: string;
+  /** Painel: outro selo sobre o ícone (o cadeado aberto de "Desbloquear telas"). */
+  badge?: string;
+  /** Painel: a pílula com a turma embaixo de "Pasta da turma" ("7º A"), e a entrada dela (0→1). */
+  caption?: string;
+  captionIn?: number;
+};
 
 export type ToolbarProps = {
   buttons: Partial<Record<ButtonId, ButtonVisual>>;
@@ -13,7 +24,13 @@ export type ToolbarProps = {
 };
 
 /** A barra de ferramentas real: grupos de botões com ícone sobre o texto e o nome do grupo embaixo. */
-export const Toolbar: React.FC<ToolbarProps> = ({ buttons, spotlight }) => {
+export const Toolbar: React.FC<ToolbarProps> = (props) => {
+  const theme = useAppTheme();
+  if (theme.name === "painel") return <PainelToolbar {...props} />;
+  return <ClassicToolbar {...props} />;
+};
+
+const ClassicToolbar: React.FC<ToolbarProps> = ({ buttons, spotlight }) => {
   const theme = useAppTheme();
   const t = theme.toolbar;
   return (

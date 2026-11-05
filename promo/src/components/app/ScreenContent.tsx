@@ -455,16 +455,20 @@ type ScreenContentProps = {
   apps?: number;
   /** Realce da pasta "Arquivos do professor" (arquivo recém-chegado). */
   inbox?: number;
+  /** A "Pasta da turma" na Área de Trabalho: 0→1 chega brilhando, 1→2 o brilho apaga; 0 = não aparece. */
+  classFolder?: number;
 };
 
 /** As duas pastas que o Midview cria na Área de Trabalho do aluno. */
-const DesktopFolders: React.FC<{ inbox: number }> = ({ inbox }) => (
+const DesktopFolders: React.FC<{ inbox: number; classFolder?: number }> = ({ inbox, classFolder = 0 }) => (
   <>
     {[
-      { label: "Arquivos do professor", y: 18, glow: inbox },
-      { label: "Entregar ao professor", y: 66, glow: 0 },
-    ].map(({ label, y, glow }) => (
-      <div key={label} style={{ position: "absolute", left: 10, top: y, width: 54, textAlign: "center" }}>
+      { label: "Arquivos do professor", y: 18, glow: inbox, show: 1 },
+      { label: "Entregar ao professor", y: 66, glow: 0, show: 1 },
+      // A pasta da turma (Pasta da turma ligada), com o brilho de quando chega.
+      { label: "Pasta da turma", y: 114, glow: classFolder <= 1 ? classFolder : Math.max(0, 2 - classFolder), show: Math.min(1, classFolder) },
+    ].filter((f) => f.show > 0.01).map(({ label, y, glow, show }) => (
+      <div key={label} style={{ position: "absolute", left: 10, top: y, width: 54, textAlign: "center", opacity: show }}>
         <div
           style={{
             margin: "0 auto",
@@ -482,11 +486,11 @@ const DesktopFolders: React.FC<{ inbox: number }> = ({ inbox }) => (
 );
 
 /** Área de trabalho do aluno: papel de parede, pastas e o programa aberto, animados pelo frame absoluto. */
-export const ScreenContent: React.FC<ScreenContentProps> = ({ kind, frame, variant, wallpaper, apps = 1, inbox = 0 }) => {
+export const ScreenContent: React.FC<ScreenContentProps> = ({ kind, frame, variant, wallpaper, apps = 1, inbox = 0, classFolder = 0 }) => {
   const Screen = SCREENS[kind];
   return (
     <div style={{ position: "absolute", inset: 0, background: WALLPAPERS[wallpaper % WALLPAPERS.length] }}>
-      <DesktopFolders inbox={inbox} />
+      <DesktopFolders inbox={inbox} classFolder={classFolder} />
       {apps > 0.01 ? (
         <div style={{ position: "absolute", inset: 0, opacity: apps }}>
           <Screen frame={frame} variant={variant} />

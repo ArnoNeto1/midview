@@ -3,6 +3,7 @@ import { clamp01, mix } from "../../lib/motion";
 import { useAppTheme } from "./appTheme";
 import { BADGE_H, screenHeight, type Box } from "./geometry";
 import { GLYPH, Glyph } from "./Glyph";
+import { PainelTile } from "./painel/Tile";
 import type { Pc } from "./pcs";
 import { ScreenContent } from "./ScreenContent";
 import { StudentOverlays, type StudentView } from "./StudentOverlays";
@@ -19,6 +20,10 @@ export type TileState = StudentView & {
   /** Programa aberto pelo aluno; 0 = programas fechados. */
   apps: number;
   inbox: number;
+  /** Painel: a "Pasta da turma" aparecendo na Área de Trabalho do aluno (0→1). */
+  classFolder?: number;
+  /** Painel: o texto do aviso de bloqueio de programas embaixo do cartão. */
+  blockText?: string;
 };
 
 export const IDLE_TILE: TileState = {
@@ -49,7 +54,13 @@ type MachineTileProps = { pc: Pc; index: number; box: Box; state: TileState; fra
  * Um card da grade como em MainWindow.xaml: a tela do aluno ocupa o card, o nome
  * fica numa faixa clara sobre a borda de baixo e os avisos ficam embaixo do card.
  */
-export const MachineTile: React.FC<MachineTileProps> = ({ pc, index, box, state, frame }) => {
+export const MachineTile: React.FC<MachineTileProps> = (props) => {
+  const theme = useAppTheme();
+  if (theme.name === "painel") return <PainelTile {...props} />;
+  return <ClassicTile {...props} />;
+};
+
+const ClassicTile: React.FC<MachineTileProps> = ({ pc, index, box, state, frame }) => {
   const theme = useAppTheme();
   const screenH = screenHeight(box.w);
   const badge = clamp01(Math.max(state.lockBadge, state.blockBadge));

@@ -1,7 +1,9 @@
 import React, { createContext, useContext } from "react";
 import { FONTS } from "../../fonts";
+import { P, PFONT } from "./painel/palette";
 
-export type AppThemeName = "real" | "escuro";
+/** "painel": o visual escuro do programa a partir da versão 0.0.41 (componentes em ./painel). */
+export type AppThemeName = "real" | "escuro" | "painel";
 
 /** Cores e fontes da janela do Midview no vídeo. */
 export type AppTheme = {
@@ -121,6 +123,40 @@ export const APP_THEMES: Record<AppThemeName, AppTheme> = {
     },
     menu: { bg: "#111827", line: "rgba(255,255,255,0.1)", text: "#E2E8F0", hover: "rgba(255,255,255,0.07)", muted: "#64748B" },
     spotlight: "#22D3EE",
+  },
+  // O visual "Painel" do app (src/Midview.Master/Themes/Painel.*.xaml). A janela,
+  // a barra, os cartões e as janelas de diálogo têm desenho próprio em ./painel;
+  // estas cores servem às peças comuns.
+  painel: {
+    name: "painel",
+    font: PFONT,
+    iconFont: ICONS,
+    window: { bg: P.bg, line: "rgba(255,255,255,0.08)", shadow: "0 50px 120px -30px rgba(0,0,0,0.9)" },
+    titleBar: { bg: P.bg, text: P.text, muted: P.muted },
+    toolbar: {
+      bg: P.bg,
+      hover: P.toolbarHover,
+      pressed: P.toolbarPressed,
+      line: P.line,
+      text: P.text,
+      muted: P.muted,
+      disabled: P.disabled,
+      badge: P.text,
+    },
+    canvas: P.bg,
+    card: { bg: P.card, line: P.line, hover: P.lineHover, screen: P.bg },
+    ink: P.text,
+    inkMuted: P.muted,
+    selected: { line: P.accent, fill: P.tileSelected },
+    alert: P.error,
+    chalk: P.text,
+    bar: { bg: P.surface, line: P.line },
+    button: { bg: P.card, line: P.line, text: P.text, hover: P.line, pressed: P.lineHover },
+    toggleOn: { bg: P.accentSoft, line: P.accent },
+    slider: { track: P.line, thumb: P.text, thumbLine: P.accent },
+    dialog: { bg: P.surface, panel: P.card, title: P.surface, text: P.text, muted: P.muted, line: P.line, input: P.bg, check: P.accent },
+    menu: { bg: P.surface, line: P.line, text: P.text, hover: P.toolbarHover, muted: P.muted },
+    spotlight: P.accent,
   },
 };
 

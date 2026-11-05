@@ -24,6 +24,9 @@ export type ButtonId =
   | "classFolder"
   | "openSite"
   | "openProgram"
+  // Só no visual Painel (painel/geometry.ts): na barra antiga ficavam no menu do botão direito.
+  | "install"
+  | "uninstall"
   | "closeApps"
   | "blockApps"
   | "blockSites"

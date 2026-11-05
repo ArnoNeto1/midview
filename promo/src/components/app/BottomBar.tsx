@@ -3,6 +3,7 @@ import { clamp01, mix } from "../../lib/motion";
 import { useAppTheme } from "./appTheme";
 import { BOTTOM, WIN, sliderKnob, type Box } from "./geometry";
 import { GLYPH, Glyph } from "./Glyph";
+import { PainelBottomBar } from "./painel/BottomBar";
 
 export type BottomBarProps = {
   status: string;
@@ -62,7 +63,13 @@ const ButtonBox: React.FC<{ box: Box; hover?: number; press?: number; on?: numbe
 };
 
 /** A barra de baixo: status à esquerda; "Organizar sala", "Visualizar todos", "Só online" e o tamanho das telas à direita. */
-export const BottomBar: React.FC<BottomBarProps> = ({
+export const BottomBar: React.FC<BottomBarProps> = (props) => {
+  const theme = useAppTheme();
+  if (theme.name === "painel") return <PainelBottomBar {...props} />;
+  return <ClassicBottomBar {...props} />;
+};
+
+const ClassicBottomBar: React.FC<BottomBarProps> = ({
   status,
   onlineOnly,
   slider,
