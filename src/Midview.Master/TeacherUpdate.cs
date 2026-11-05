@@ -301,6 +301,24 @@ public static class TeacherUpdate
         };
     }
 
+    // Did the script's run (FinishedArgument code version) put that version
+    // on this PC? Only then is the teacher asked about the students' machines,
+    // which get what this PC now carries.
+    public static bool FinishedWell(string code, string versionText, Version current) =>
+        int.TryParse(code, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var exitCode)
+        && exitCode == 0
+        && ParseVersion(versionText) is { } version
+        && current >= version;
+
+    // What the teacher is asked when the Midview opens and GitHub has a newer
+    // version: the same warnings as the button in Máquinas da sala, since
+    // answering yes goes straight to the download.
+    public static string NewVersionQuestion(Version current, Version available) =>
+        $"Chegou uma versão nova do Midview: {available} (este PC está na {current}).\n\n" +
+        "Para instalar, o Midview fecha e abre de novo sozinho, o que leva 1 ou 2 minutos. " +
+        "Enquanto isso, as telas bloqueadas dos alunos são liberadas. O Windows vai pedir permissão de administrador.\n\n" +
+        "Deseja atualizar agora?";
+
     // "v0.0.38", "0.0.38" or "0.0.38+abc" as a version; null for anything else.
     private static Version? ParseVersion(string? text)
     {

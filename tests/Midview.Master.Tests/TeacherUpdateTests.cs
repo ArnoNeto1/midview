@@ -260,6 +260,33 @@ public sealed class TeacherUpdateTests : IDisposable
         Assert.Null(TeacherUpdate.FinishedNotice("0", "não", new Version(0, 0, 37), _folder));
     }
 
+    // Only an update that really put the new version on this PC goes on to
+    // ask about the students' machines.
+    [Theory]
+    [InlineData("0", "0.0.40", 40, true)]
+    [InlineData("0", "0.0.40", 41, true)]
+    [InlineData("0", "0.0.40", 39, false)]
+    [InlineData("-1", "0.0.40", 39, false)]
+    [InlineData("5", "0.0.40", 40, false)]
+    [InlineData("x", "0.0.40", 40, false)]
+    [InlineData("0", "não", 40, false)]
+    public void FinishedWell_OnlyForTheNewVersionInstalled(string code, string version, int currentBuild, bool expected)
+    {
+        Assert.Equal(expected, TeacherUpdate.FinishedWell(code, version, new Version(0, 0, currentBuild)));
+    }
+
+    [Fact]
+    public void NewVersionQuestion_SaysBothVersionsAndWhatHappens()
+    {
+        var question = TeacherUpdate.NewVersionQuestion(new Version(0, 0, 39), new Version(0, 0, 40));
+
+        Assert.StartsWith("Chegou uma versão nova do Midview: 0.0.40 (este PC está na 0.0.39).", question);
+        Assert.Contains("1 ou 2 minutos", question);
+        Assert.Contains("telas bloqueadas dos alunos são liberadas", question);
+        Assert.Contains("permissão de administrador", question);
+        Assert.EndsWith("Deseja atualizar agora?", question);
+    }
+
     [Fact]
     public void ApplyStartInfo_RunsTheScriptHidden_WithEverythingItNeeds()
     {

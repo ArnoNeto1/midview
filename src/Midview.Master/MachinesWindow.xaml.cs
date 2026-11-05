@@ -309,6 +309,17 @@ public partial class MachinesWindow : Window
         }
     }
 
+    // After "Atualizar professor" put a new version on this PC and the
+    // teacher said yes to updating the students too: the same window as the
+    // button, when this copy carries the students' program.
+    public void OpenStudentUpdate()
+    {
+        if (UpdateButton.IsEnabled)
+        {
+            OnUpdateClicked(this, new RoutedEventArgs());
+        }
+    }
+
     // One at a time: asking again brings it back.
     private void OnUpdateClicked(object sender, RoutedEventArgs e)
     {

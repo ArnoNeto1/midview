@@ -11,8 +11,10 @@ public partial class App : Application
     private static readonly List<Mutex> RunningMutexes = new();
 
     // How "Atualizar professor" ended, when its script opened this Midview
-    // again (TeacherUpdate.FinishedArgument), shown once the classroom is up.
+    // again (TeacherUpdate.FinishedArgument), shown once the classroom is up;
+    // and whether it put the new version here, so the students are next.
     private string? _updateNotice;
+    private bool _updatedWell;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -21,6 +23,7 @@ public partial class App : Application
         if (e.Args is [TeacherUpdate.FinishedArgument, var exitCode, var version])
         {
             _updateNotice = TeacherUpdate.FinishedNotice(exitCode, version, TeacherUpdate.CurrentVersion, TeacherUpdate.Folder);
+            _updatedWell = TeacherUpdate.FinishedWell(exitCode, version, TeacherUpdate.CurrentVersion);
         }
 
         // Run by the Windows scheduled task that wakes the class (WakeTask):
@@ -65,11 +68,26 @@ public partial class App : Application
     {
         var window = new MainWindow();
         MainWindow = window;
-        if (_updateNotice is { } notice)
+        // Once the classroom is drawn, and only once: how the update just
+        // made ended (then the students), or else whether GitHub has a newer
+        // version. Never both, so a Midview just updated doesn't ask again.
+        void OnShown(object? sender, EventArgs e)
         {
-            window.ContentRendered += (_, _) =>
+            window.ContentRendered -= OnShown;
+            if (_updateNotice is { } notice)
+            {
                 MessageBox.Show(window, notice, "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (_updatedWell)
+                {
+                    window.OfferStudentUpdate();
+                }
+            }
+            else
+            {
+                window.OfferTeacherUpdate();
+            }
         }
+        window.ContentRendered += OnShown;
         window.Show();
     }
 

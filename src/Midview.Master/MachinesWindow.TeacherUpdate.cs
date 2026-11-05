@@ -35,9 +35,9 @@ public partial class MachinesWindow
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_teacherUpdateCancel.Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));
             var release = await TeacherUpdate.FetchLatestAsync(client, timeout.Token);
-            if (_closed)
+            if (_closed || _teacherUpdating)
             {
-                return;
+                return; // an update started meanwhile (StartTeacherUpdate) owns the text
             }
             switch (TeacherUpdate.Compare(current, release.Version))
             {
@@ -58,7 +58,7 @@ public partial class MachinesWindow
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or IOException or OperationCanceledException)
         {
-            if (_closed)
+            if (_closed || _teacherUpdating)
             {
                 return;
             }
@@ -94,7 +94,29 @@ public partial class MachinesWindow
         {
             return;
         }
+        await RunTeacherUpdateAsync(release, program);
+    }
 
+    // "Atualizar agora" in the notice the Midview shows as it opens: the
+    // teacher said yes there already, so the download starts at once, here,
+    // where its progress shows.
+    public async void StartTeacherUpdate(TeacherUpdate.Release release)
+    {
+        if (_teacherUpdating || _closed)
+        {
+            return;
+        }
+        if (TeacherUpdate.InstalledProgram(out var problem) is not { } program)
+        {
+            TeacherVersionTextBlock.Text = problem;
+            return;
+        }
+        _teacherRelease = release;
+        await RunTeacherUpdateAsync(release, program);
+    }
+
+    private async Task RunTeacherUpdateAsync(TeacherUpdate.Release release, string program)
+    {
         _teacherUpdating = true;
         TeacherUpdateButton.IsEnabled = false;
         TeacherVersionTextBlock.Text = $"Baixando a versão {release.Version}...";
