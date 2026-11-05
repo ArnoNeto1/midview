@@ -7,6 +7,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Themes/Painel.Colors.xaml" />
                 <ResourceDictionary Source="Themes/Painel.Controls.xaml" />
+                <ResourceDictionary Source="Themes/Painel.Choices.xaml" />
+                <ResourceDictionary Source="Themes/Painel.Surfaces.xaml" />
                 <ResourceDictionary Source="Themes/Painel.Main.xaml" />
                 <ResourceDictionary Source="Themes/Painel.Dialogs.xaml" />
             </ResourceDictionary.MergedDictionaries>
