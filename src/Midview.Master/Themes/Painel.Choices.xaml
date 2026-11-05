@@ -50,7 +50,7 @@
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal" Background="Transparent">
                         <Border x:Name="Box" Width="16" Height="16" CornerRadius="3" BorderThickness="1"
-                                Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource LineHoverBrush}"
+                                Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource TextMutedBrush}"
                                 VerticalAlignment="Center">
                             <Path x:Name="Mark" Data="M3,8 L6.5,11.5 L13,4.5" Stroke="{StaticResource OnAccentBrush}" StrokeThickness="2"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
@@ -63,7 +63,7 @@
                             <Setter TargetName="Label" Property="Margin" Value="0" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextMutedBrush}" />
+                            <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource TextBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Box" Property="Background" Value="{StaticResource AccentBrush}" />
@@ -101,7 +101,7 @@
                 <ControlTemplate TargetType="RadioButton">
                     <StackPanel Orientation="Horizontal" Background="Transparent">
                         <Border x:Name="Ring" Width="16" Height="16" CornerRadius="8" BorderThickness="1"
-                                Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource LineHoverBrush}"
+                                Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource TextMutedBrush}"
                                 VerticalAlignment="Center">
                             <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource AccentBrush}" Visibility="Collapsed" />
                         </Border>
@@ -112,7 +112,7 @@
                             <Setter TargetName="Label" Property="Margin" Value="0" />
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource TextMutedBrush}" />
+                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource TextBrush}" />
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
