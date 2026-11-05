@@ -6,235 +6,14 @@
 <meta name="description" content="O Midview coloca a tela de cada aluno no computador do professor: acompanhe a aula, ajude quem travou, envie e recolha arquivos, bloqueie o que tira o foco e ligue ou desligue o laboratório. Gratuito para escolas.">
 <meta property="og:title" content="Midview para professores">
 <meta property="og:description" content="Controle total do seu laboratório de informática. Sem complicação. Gratuito para escolas.">
-<meta property="og:image" content="capa.jpg">
+<meta property="og:image" content="https://arnoneto1.github.io/midview/capa.jpg">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#0A111E">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='%232DD4BF'/%3E%3Crect x='9' y='10' width='14' height='10' rx='2.5' fill='none' stroke='%2304221D' stroke-width='2'/%3E%3Cpath d='M13 24h6M16 20v4' stroke='%2304221D' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <title>Midview para professores</title>
-<style>
-/* Layout: uma coluna larga sobre o fundo escuro do vídeo; cada grupo da barra de ferramentas vira uma faixa com as funções em linhas "o que faz / como simplifica". */
-:root {
-  --bg: #0A111E;
-  --surface: #0F1828;
-  --surface-2: #141F33;
-  --line: #22314D;
-  --fg: #DCE6F5;
-  --muted: #8394AE;
-  --accent: #2DD4BF;
-  --accent-text: #7FF0DF;
-  --on-accent: #04221D;
-  --energia: #FF6B6B;
-  --tela: #4DA3FF;
-  --turma: #FFC53D;
-  --programas: #3DDC97;
-  --configurar: #A78BFA;
-  --font-display: Bahnschrift, "Segoe UI", system-ui, sans-serif;
-  --font-body: Bahnschrift, "Segoe UI", system-ui, sans-serif;
-  --font-mono: Bahnschrift, "Segoe UI", system-ui, sans-serif;
-  color-scheme: dark;
-}
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { scroll-behavior: smooth; scroll-padding-top: 64px; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-html, body { margin: 0; }
-body {
-  background: var(--bg);
-  color: var(--fg);
-  font: 400 16px/1.6 var(--font-body);
-  -webkit-font-smoothing: antialiased;
-}
-.wrap {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-}
-a { color: var(--accent-text); }
-a:focus-visible, button:focus-visible, video:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; border-radius: 6px; }
-h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
-p { margin: 0; }
-/* Legenda de grupo do Painel: pontinho colorido + caixa alta espaçada. */
-.eyebrow {
-  --gc: var(--accent);
-  font: 600 12px/1 var(--font-mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-.eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--gc); }
-
-/* Topo */
-.top {
-  position: sticky;
-  top: env(safe-area-inset-top, 0px);
-  z-index: 10;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
-}
-.top .wrap { display: flex; align-items: center; gap: 24px; padding-block: 12px; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font: 700 20px/1 var(--font-display); letter-spacing: -0.01em; }
-.brand em { font-style: normal; color: var(--accent-text); }
-.nav { display: flex; gap: 20px; margin-left: auto; }
-.nav a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
-.nav a:hover { color: var(--fg); }
-@media (max-width: 760px) { .nav { display: none; } .top .btn { margin-left: auto; } }
-
-.btn {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 12px 20px; border-radius: 10px;
-  font: 600 15px/1 var(--font-body); text-decoration: none; white-space: nowrap;
-}
-.btn-primary { background: var(--accent); color: var(--on-accent); }
-.btn-primary:hover { filter: brightness(1.08); }
-.btn-ghost { color: var(--accent-text); border: 1px solid var(--accent-text); background: transparent; }
-.btn-ghost:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.btn-sm { padding: 9px 16px; font-size: 14px; }
-
-/* Abertura */
-.hero { position: relative; overflow: hidden; }
-.hero::before {
-  content: ""; position: absolute; inset: -40% -10% auto;
-  height: 720px;
-  background: radial-gradient(closest-side at 30% 50%, color-mix(in srgb, var(--accent) 10%, transparent), transparent);
-  pointer-events: none;
-}
-.hero .wrap { position: relative; padding-block: 72px 40px; display: grid; gap: 22px; justify-items: start; }
-.hero h1 { font-size: clamp(36px, 6vw, 68px); font-weight: 700; line-height: 1.04; max-width: 15ch; }
-.hero h1 span { color: var(--accent-text); }
-.hero h1 .dot { font-style: normal; }
-.hero .lead { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 60ch; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; list-style: none; padding: 0; margin: 4px 0 0; color: var(--muted); font-size: 14px; }
-.facts li { display: flex; align-items: center; gap: 8px; }
-.facts li[hidden] { display: none; }
-.facts svg { color: var(--accent); flex: none; }
-.hero .shot-wrap { position: relative; padding-top: 0; padding-bottom: 56px; }
-.shot { margin: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-2); }
-.shot img { display: block; width: 100%; height: auto; }
-.shot figcaption { padding: 10px 16px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); background: var(--surface); }
-.hero .shot { width: 100%; max-width: 1000px; }
-
-/* Vídeo */
-.video { padding-block: 8px 72px; }
-.frame {
-  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-  background: var(--surface);
-}
-.frame video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #000; }
-.caption { color: var(--muted); font-size: 14px; margin-top: 12px; }
-
-section.block { padding-block: 72px; border-top: 1px solid var(--line); }
-.head { display: grid; gap: 14px; margin-bottom: 36px; max-width: 70ch; }
-.head h2 { font-size: clamp(28px, 4vw, 42px); font-weight: 700; line-height: 1.1; }
-.head p { color: var(--muted); font-size: 17px; }
-
-/* Antes e depois */
-.compare { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.compare .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
-.compare .cell { background: var(--surface); padding: 18px 22px; min-width: 0; }
-.compare .label { font: 500 11px/1 var(--font-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); padding-block: 14px; background: var(--surface-2); }
-.compare .label.after { color: var(--accent-text); }
-.compare .after-text { color: var(--fg); }
-.compare .before-text { color: var(--muted); }
-@media (max-width: 640px) {
-  .compare .row { grid-template-columns: 1fr; }
-  .compare .row.titles { display: none; }
-  .compare .cell.before-text::before { content: "Antes: "; font-weight: 600; }
-  .compare .cell.after-text::before { content: "Com o Midview: "; font-weight: 600; color: var(--accent-text); }
-}
-
-/* Grupos de funções */
-.group { --gc: var(--accent); display: grid; grid-template-columns: 260px 1fr; gap: 32px; padding-block: 36px; border-top: 1px solid var(--line); }
-.group:first-of-type { border-top: 0; padding-top: 0; }
-.group-head { display: grid; gap: 12px; align-content: start; min-width: 0; }
-.group-icon {
-  width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
-  color: var(--gc);
-  background: color-mix(in srgb, var(--gc) 14%, var(--surface-2));
-  border: 1px solid color-mix(in srgb, var(--gc) 40%, var(--line));
-}
-.group-head h3 { font-size: 26px; font-weight: 700; }
-.g-energia { --gc: var(--energia); }
-.g-tela { --gc: var(--tela); }
-.g-turma { --gc: var(--turma); }
-.g-programas { --gc: var(--programas); }
-.g-configurar { --gc: var(--configurar); }
-.group .shot { max-width: 560px; }
-.group .shot.tall { max-width: 360px; }
-.group-head p { color: var(--muted); font-size: 15px; }
-.features { display: grid; gap: 12px; min-width: 0; }
-.feature {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px;
-  padding: 18px 20px; border-radius: 12px;
-  background: var(--surface); border: 1px solid var(--line);
-}
-.feature h4 { margin: 0; font: 700 17px/1.3 var(--font-display); letter-spacing: -0.01em; grid-column: 1 / -1; }
-.feature .does { color: var(--muted); font-size: 15px; min-width: 0; }
-.feature .eases { font-size: 15px; min-width: 0; padding-left: 14px; border-left: 2px solid var(--gc); }
-.feature .eases strong { color: var(--gc); font-weight: 600; }
-@media (max-width: 860px) {
-  .group { grid-template-columns: 1fr; gap: 20px; }
-  .feature { grid-template-columns: 1fr; }
-}
-
-/* Mais */
-.extras { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.extra { padding: 22px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; min-width: 0; }
-.extra h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
-.extra p { color: var(--muted); font-size: 15px; }
-@media (max-width: 860px) { .extras { grid-template-columns: 1fr; } }
-
-/* Como começar */
-.steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: passo; }
-.steps li { counter-increment: passo; padding: 22px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; align-content: start; min-width: 0; }
-.steps li::before { content: counter(passo); font: 800 15px/1 var(--font-display); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); background: var(--accent); }
-.steps h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
-.steps p { color: var(--muted); font-size: 15px; }
-.steps code, .note code { font: 500 13px/1.4 var(--font-mono); color: var(--fg); background: var(--surface-2); padding: 2px 6px; border-radius: 6px; overflow-wrap: anywhere; }
-@media (max-width: 960px) { .steps { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
-.note { margin-top: 20px; color: var(--muted); font-size: 15px; max-width: 75ch; }
-
-/* Privacidade e requisitos */
-.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.panel { padding: 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
-.panel h3 { font-size: 20px; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.01em; }
-.panel ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--muted); font-size: 15px; }
-.panel li strong { color: var(--fg); font-weight: 600; }
-@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
-
-/* Chamada final */
-.cta { padding-block: 80px; border-top: 1px solid var(--line); text-align: center; }
-.cta .wrap { display: grid; gap: 18px; justify-items: center; }
-.cta h2 { font-size: clamp(30px, 5vw, 50px); font-weight: 700; line-height: 1.08; max-width: 18ch; }
-.cta p { color: var(--muted); max-width: 58ch; }
-footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
-footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
-
-/* Scroll Reveal (Fade in Up + Efeito Cascata) */
-.reveal {
-  opacity: 0;
-  transform: translateY(36px);
-  transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1),
-              transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
-}
-.reveal.is-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-.reveal-delay-1 { transition-delay: 90ms; }
-.reveal-delay-2 { transition-delay: 180ms; }
-.reveal-delay-3 { transition-delay: 270ms; }
-.reveal-delay-4 { transition-delay: 360ms; }
-.reveal-delay-5 { transition-delay: 450ms; }
-.reveal-delay-6 { transition-delay: 540ms; }
-</style>
+<link rel="alternate" hreflang="pt-BR" href="https://arnoneto1.github.io/midview/">
+<link rel="alternate" hreflang="en" href="https://arnoneto1.github.io/midview/en/">
+<link rel="stylesheet" href="site.css">
 
 </head>
 <body>
@@ -254,6 +33,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
       <a href="#comecar">Como começar</a>
       <a href="#privacidade">Privacidade</a>
     </nav>
+    <a class="lang" href="en/" hreflang="en" lang="en">English</a>
     <a class="btn btn-primary btn-sm" href="https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe">Baixar</a>
   </div>
 </header>
@@ -387,7 +167,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           </article>
           <article class="feature reveal reveal-delay-3">
             <h4>Bloquear telas</h4>
-            <p class="does">Cobre todas as telas com um cadeado e trava teclado e mouse até você desbloquear.</p>
+            <p class="does">Cobre todas as telas com um cadeado e trava teclado e mouse até você desbloquear. Enquanto isso, o Ctrl+Alt+Del não abre o Gerenciador de Tarefas, o Sair nem o Trocar usuário.</p>
             <p class="eases"><strong>Simplifica:</strong> a atenção da turma volta para você num clique, na hora de explicar.</p>
           </article>
         </div>
@@ -422,7 +202,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
           </article>
           <article class="feature reveal reveal-delay-5">
             <h4>Pasta da turma</h4>
-            <p class="does">Cria, na Área de Trabalho de cada aluno, a pasta da turma da aula. O que um aluno baixa ou salva nela aparece em todos os computadores. Ao encerrar a aula, escolha manter os arquivos, apagar só os de hoje ou apagar tudo.</p>
+            <p class="does">Cria, na Área de Trabalho de cada aluno, a pasta da turma da aula. O que um aluno baixa ou salva nela aparece em todos os computadores. Durante a aula, os downloads de qualquer programa caem nela, e o Word, o Excel, o PowerPoint, o Bloco de Notas e o Paint já abrem o "Salvar como" ali. Ao encerrar a aula, escolha manter os arquivos, apagar só os de hoje ou apagar tudo.</p>
             <p class="eases"><strong>Simplifica:</strong> o aluno não precisa sentar sempre na mesma máquina para achar o trabalho da aula passada.</p>
           </article>
           <figure class="shot tall reveal reveal-delay-1"><img src="img/pasta-turma.webp" alt="Janela Pasta da turma, com a aula em andamento neste computador" loading="lazy"><figcaption>Pasta da turma durante a aula</figcaption></figure>
@@ -479,13 +259,13 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         <div class="features">
           <article class="feature reveal reveal-delay-1">
             <h4>Painel do laboratório</h4>
-            <p class="does">Aplica ajustes do Chrome e do Windows em todas as máquinas: bloqueador de anúncios, bloquear downloads, modo visitante, travar a barra de tarefas e outros. "RESET geral" desfaz tudo.</p>
+            <p class="does">Aplica ajustes do Chrome e do Windows em todas as máquinas: bloqueador de anúncios, bloquear downloads, modo visitante, travar a barra de tarefas, travar a Área de Trabalho e outros. "RESET geral" desfaz tudo.</p>
             <p class="eases"><strong>Simplifica:</strong> todas as máquinas ficam configuradas iguais, sem você ir em cada uma.</p>
           </article>
           <article class="feature reveal reveal-delay-2">
             <h4>Máquinas da sala</h4>
-            <p class="does">Procura as máquinas na rede, pareia cada uma com você (conferindo em até 5 minutos o código na tela do aluno) ou entra na sala de um colega, atualiza o Midview delas pela rede e guarda a senha de administrador do laboratório (só neste computador, protegida pelo Windows) para o "Preencher a senha de administrador" do controle.</p>
-            <p class="eases"><strong>Simplifica:</strong> atualizar o laboratório não pede pendrive: uma máquina testa a versão nova primeiro e, se algo falhar, ela volta sozinha à anterior.</p>
+            <p class="does">Procura as máquinas na rede e pareia cada uma com você (conferindo em até 5 minutos o código na tela do aluno), dá acesso a um colega ou entra na sala dele, atualiza o Midview do seu computador e o das máquinas, e guarda a senha de administrador do laboratório (só neste computador, protegida pelo Windows) para o "Preencher a senha de administrador" do controle.</p>
+            <p class="eases"><strong>Simplifica:</strong> quando sai uma versão nova, o Midview avisa ao abrir e se atualiza sozinho. Nas máquinas, a atualização vai pela rede, sem pendrive: uma testa a versão nova primeiro e, se algo falhar, volta sozinha à anterior.</p>
           </article>
           <figure class="shot  reveal reveal-delay-1"><img src="img/maquinas.webp" alt="Janela Máquinas da sala, procurando máquinas na rede" loading="lazy"><figcaption>Máquinas da sala: procurar na rede</figcaption></figure>
         </div>
@@ -537,7 +317,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         </li>
         <li class="reveal reveal-delay-4">
           <h3>Traga as máquinas</h3>
-          <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno (você tem 5 minutos para isso).</p>
+          <p>No Midview, clique em <strong>Máquinas da sala</strong> &gt; <strong>Procurar e parear</strong> &gt; <strong>Procurar na rede</strong> e pareie, conferindo o código de 6 dígitos que aparece na tela do aluno (você tem 5 minutos para isso).</p>
         </li>
       </ol>
       <p class="note reveal reveal-delay-5">Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las. Quem cuida da informática pode instalar várias máquinas de uma vez com <code>MidviewSetup.exe /VERYSILENT /SUPPRESSMSGBOXES /TIPO=aluno</code>.</p>
@@ -554,7 +334,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
         <div class="panel reveal reveal-delay-1">
           <h3>Privacidade</h3>
           <ul>
-            <li><strong>Nada sai da rede da escola.</strong> O Midview não envia dados ao desenvolvedor nem à internet.</li>
+            <li><strong>Os dados da aula não saem da escola.</strong> O Midview não envia nada ao desenvolvedor. Só o seu computador acessa a internet, para buscar as atualizações do Midview no GitHub.</li>
             <li><strong>Comunicação protegida.</strong> Telas, comandos e arquivos passam criptografados, e cada máquina só aceita os professores pareados com ela.</li>
             <li><strong>Avise a turma.</strong> A tela do aluno pode ser vista sem aviso na máquina dele; só o controle mostra um aviso. A escola deve informar alunos e responsáveis, como pede a LGPD.</li>
             <li><strong>Senha de administrador só no seu PC.</strong> Se guardada, fica apenas no computador do professor, protegida pelo Windows, e nunca é enviada às máquinas dos alunos.</li>
@@ -566,6 +346,7 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
             <li><strong>Windows 10 ou 11 de 64 bits</strong> no seu computador e nas máquinas.</li>
             <li><strong>Mesma rede local</strong> para o professor e o laboratório.</li>
             <li><strong>Administrador do Windows</strong> só na hora de instalar.</li>
+            <li><strong>Internet só no seu computador,</strong> para receber as atualizações do Midview.</li>
             <li><strong>Para Ligar pela rede,</strong> o Wake-on-LAN ativo na BIOS e na placa de rede das máquinas.</li>
           </ul>
         </div>
@@ -592,60 +373,6 @@ footer .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 8px 24p
     <span>Software proprietário, de uso gratuito para escolas, nos termos da Licença de Uso do Midview.</span>
   </div>
 </footer>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const revealElements = document.querySelectorAll(".reveal");
-  if (!("IntersectionObserver" in window)) {
-    revealElements.forEach((el) => el.classList.add("is-visible"));
-    return;
-  }
-  const revealObserver = new IntersectionObserver((entries, observer) => {
-    entries.forEach((entry) => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add("is-visible");
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { root: null, rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
-  revealElements.forEach((el) => revealObserver.observe(el));
-
-  /* Ao clicar em Início, Funções, Como começar ou Privacidade no menu,
-     repete o efeito cascata na seção de destino. */
-  document.querySelectorAll('a[href^="#"]').forEach((link) => {
-    link.addEventListener("click", () => {
-      const hash = link.getAttribute("href");
-      if (!hash || hash === "#") return;
-      const scope = hash === "#inicio"
-        ? document.querySelector(".hero")
-        : document.querySelector(hash);
-      if (!scope) return;
-      const targets = scope.querySelectorAll(".reveal");
-      targets.forEach((el) => {
-        revealObserver.unobserve(el);
-        el.style.transition = "none";
-        el.classList.remove("is-visible");
-      });
-      void scope.offsetWidth;
-      targets.forEach((el) => {
-        el.style.transition = "";
-        revealObserver.observe(el);
-      });
-    });
-  });
-});
-
-/* Quantas vezes o instalador foi baixado, somando todas as versões publicadas
-   no GitHub. Sem resposta da API, a linha continua escondida. */
-fetch("https://api.github.com/repos/ArnoNeto1/midview/releases?per_page=100")
-  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-  .then((releases) => {
-    const total = releases.reduce((soma, r) => soma + r.assets.reduce((s, a) => s + a.download_count, 0), 0);
-    if (!total) return;
-    const item = document.getElementById("downloads");
-    item.querySelector("span").textContent = `Já baixado ${total.toLocaleString("pt-BR")} ${total === 1 ? "vez" : "vezes"}`;
-    item.hidden = false;
-  })
-  .catch(() => {});
-</script>
+<script src="site.js"></script>
 </body>
 </html>

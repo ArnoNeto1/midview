@@ -4,6 +4,8 @@
 
 # Midview
 
+**Português** · [English](README.en.md)
+
 [![Versão mais recente](https://img.shields.io/github/v/release/ArnoNeto1/midview?label=vers%C3%A3o&color=0e7490)](https://github.com/ArnoNeto1/midview/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/ArnoNeto1/midview/total?label=downloads&color=6b7684)](https://github.com/ArnoNeto1/midview/releases)
 [![Baixar o instalador](https://img.shields.io/badge/⬇%20Baixar-Instalador%20(.exe)-0e7490?style=for-the-badge)](https://github.com/ArnoNeto1/midview/releases/latest/download/MidviewSetup.exe)
@@ -12,7 +14,7 @@
 > para o computador do professor e para as máquinas dos alunos.
 > Página para os professores: https://arnoneto1.github.io/midview/
 
-O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem internet e sem servidor externo.
+O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem servidor externo. A internet só é usada pelo computador do professor, para buscar as atualizações do Midview no GitHub.
 
 ## Veja funcionando
 
@@ -35,10 +37,10 @@ A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os 
 | Grupo | Funções |
 | --- | --- |
 | **Energia** | **Desligar** e **Reiniciar**, com aviso de 1 ou 5 minutos e, se quiser, instalando as atualizações do Windows que estiverem esperando; **Ligar** pela rede (Wake-on-LAN); **Agendar** os dias e horários para ligar e desligar. |
-| **Tela** | **Ver a tela** de um aluno; **Controlar** a máquina (o teclado e o mouse do aluno ficam travados e ele vê o aviso "Este computador está sendo controlado pelo professor"). O controle continua mesmo quando aparece a tela do UAC (o pedido de senha de administrador): com a senha do laboratório guardada, **Preencher a senha de administrador** digita no UAC com um clique. **Bloquear telas** com um cadeado. |
-| **Turma** | **Mensagem** na tela de todos; **Bate-papo** com a turma (as respostas chegam só ao professor); **Enviar arquivo** para a pasta "Arquivos do professor"; **Recolher arquivos** da pasta "Entregar ao professor"; **Pasta da turma**, uma pasta na Área de Trabalho dos alunos em que o que cada um baixa ou salva aparece em todos os computadores (com turmas, aulas e até dois PCs de professor). |
+| **Tela** | **Ver a tela** de um aluno; **Controlar** a máquina (o teclado e o mouse do aluno ficam travados e ele vê o aviso "Este computador está sendo controlado pelo professor"). O controle continua mesmo quando aparece a tela do UAC (o pedido de senha de administrador): com a senha do laboratório guardada, **Preencher a senha de administrador** digita no UAC com um clique. **Bloquear telas** com um cadeado; enquanto as telas estão bloqueadas, o Ctrl+Alt+Del não abre o Gerenciador de Tarefas, o Sair nem o Trocar usuário. |
+| **Turma** | **Mensagem** na tela de todos; **Bate-papo** com a turma (as respostas chegam só ao professor); **Enviar arquivo** para a pasta "Arquivos do professor"; **Recolher arquivos** da pasta "Entregar ao professor"; **Pasta da turma**, uma pasta na Área de Trabalho dos alunos em que o que cada um baixa ou salva aparece em todos os computadores (com turmas, aulas e até dois PCs de professor). Durante a aula, os downloads de qualquer programa vão para a pasta da turma, e o Word, o Excel, o PowerPoint (2016 ou mais novo), o Bloco de Notas e o Paint abrem o "Salvar como" nela. |
 | **Programas e sites** | **Abrir site** e **Abrir programa** nas máquinas; **Instalar programa** na turma toda, como administrador, sem a tela do UAC e sem digitar senha; **Desinstalar programa**; **Fechar programas**, com aviso e prazo para o aluno salvar; **Bloquear programas** (lista proibida ou só os permitidos); **Bloquear sites** (a internet inteira ou só alguns sites, valendo mesmo depois de reiniciar). |
-| **Configurar** | **Painel do laboratório** (políticas do Chrome e do Windows, como bloqueador de anúncios, bloquear downloads e modo visitante); **Máquinas da sala** (procurar na rede, parear conferindo o código em até 5 minutos, entrar na sala de um colega, atualizar pela rede, dar acesso a outro professor e guardar a senha de administrador do laboratório). |
+| **Configurar** | **Painel do laboratório** (políticas do Chrome e do Windows, como bloqueador de anúncios, bloquear downloads, modo visitante e travar a Área de Trabalho do aluno); **Máquinas da sala**, com as páginas Procurar e parear (procurar na rede e parear conferindo o código em até 5 minutos), Atualizações (atualizar este computador e as máquinas), Outro professor (dar acesso a um colega ou entrar na sala dele), Senha de administrador (guardar a senha do laboratório) e Avançado. |
 
 No botão direito há também **Conversar** com um aluno só, **Desinstalar programa**, **Editar a máquina** e **Remover da lista da sala**. Na barra de baixo, **Visualizar todos** encaixa todas as telas, **Só online** esconde as máquinas desligadas e o controle deslizante muda o tamanho das telas (também com Ctrl + roda do mouse). **Organizar sala** deixa arrastar as telas até ficarem como as máquinas estão na sala, e **Alinhar** acerta a grade.
 
@@ -49,7 +51,7 @@ O mesmo instalador tem dois tipos:
 - **Professor**: instala o programa "Midview - Sala de aula", que roda sem direitos de administrador.
 - **Aluno**: instala o serviço **Midview Agent**, que roda como sistema em cada máquina do laboratório, e o programa que mostra as mensagens, o bloqueio de tela e os avisos para o aluno.
 
-O professor acha as máquinas pela rede e pareia cada uma conferindo, em até 5 minutos, um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria e não acessa a internet.
+O professor acha as máquinas pela rede e pareia cada uma conferindo, em até 5 minutos, um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria. A única conexão com a internet é a do computador do professor com o GitHub, para ver se saiu uma versão nova e baixá-la; as máquinas dos alunos recebem as atualizações pela rede local.
 
 Portas usadas na rede local:
 
@@ -68,6 +70,7 @@ Portas usadas na rede local:
 - Windows 10 ou 11 de 64 bits, no computador do professor e nas máquinas.
 - Direitos de administrador para instalar.
 - Professor e máquinas na mesma rede local. Para **Ligar**, o Wake-on-LAN precisa estar ativo na BIOS e na placa de rede das máquinas.
+- Internet só no computador do professor, e só para receber as atualizações do Midview.
 - Não é preciso instalar o .NET: ele vem dentro do Midview.
 
 ## Instalação
@@ -75,7 +78,7 @@ Portas usadas na rede local:
 1. Clique em **⬇ Baixar Instalador (.exe)**, lá em cima. Não precisa instalar o .NET nem mais nada.
 2. No computador do professor, abra o instalador e escolha **Professor** (se aparecer a tela "O Windows protegeu o computador", clique em **Mais informações** e depois em **Executar assim mesmo**). Ele cria o atalho "Midview - Sala de aula" na Área de Trabalho.
 3. Em cada máquina do laboratório, abra o instalador e escolha **Aluno**.
-4. No Midview, clique em **Máquinas da sala** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código de 6 dígitos que aparece na tela de cada aluno (você tem 5 minutos para isso).
+4. No Midview, clique em **Máquinas da sala** > **Procurar e parear** > **Procurar na rede**, selecione as máquinas e clique em **Parear as selecionadas**. Confira o código de 6 dígitos que aparece na tela de cada aluno (você tem 5 minutos para isso).
 
 Pareie as máquinas logo depois de instalar: até o primeiro pareamento, qualquer professor da rede pode pareá-las.
 
@@ -89,23 +92,27 @@ Use `/TIPO=professor` no computador do professor. Sem `/TIPO`, a instalação si
 
 ## Atualização
 
-- **Computador do professor**: rode o instalador da versão nova.
-- **Máquinas do laboratório**: em **Máquinas da sala** > **Atualizar as máquinas pela rede...**. Uma máquina é atualizada primeiro e as outras só depois que ela confirma; se algo falhar, a máquina volta sozinha para a versão anterior. Cada máquina fica fora da grade por 1 a 3 minutos.
+- **Computador do professor**: quando sai uma versão nova no GitHub, o Midview avisa ao abrir. **Atualizar agora** baixa o instalador, confere se ele veio inteiro, fecha o Midview, instala e abre de novo sozinho; **Agora não** deixa para a próxima vez que o Midview abrir. O mesmo pode ser feito a qualquer hora em **Máquinas da sala** > **Atualizações** > **Atualizar professor**. O Windows pede a permissão de administrador uma vez, e enquanto o Midview fecha para instalar (1 ou 2 minutos), as telas bloqueadas dos alunos são liberadas. Também dá para rodar o instalador da versão nova por cima da anterior.
+- **Máquinas do laboratório**: depois que o professor é atualizado, o Midview pergunta se quer atualizar os alunos. Ou use **Máquinas da sala** > **Atualizações** > **Atualizar as máquinas pela rede...**. Uma máquina é atualizada primeiro e as outras só depois que ela confirma; se algo falhar, a máquina volta sozinha para a versão anterior. Cada máquina fica fora da grade por 1 a 3 minutos.
 
 ## Mais de um professor
+
+Em **Máquinas da sala** > **Outro professor**:
 
 - **Dar acesso a um colega...** mostra um código de 9 caracteres, válido por 10 minutos. O colega digita o código em **Entrar na sala de um colega...** e passa a ver as mesmas máquinas.
 - **Permitir novo professor (10 minutos)** deixa as máquinas aceitarem o pareamento de outro professor por 10 minutos.
 
 ## Desinstalação
 
-Em **Configurações** > **Aplicativos**, desinstale "Midview Professor" ou "Midview Aluno". Na máquina do aluno, o desinstalador libera o que estava bloqueado e pergunta se deve apagar também os professores pareados.
+Em **Configurações** > **Aplicativos**, desinstale "Midview Professor" ou "Midview Aluno". Na máquina do aluno, o desinstalador libera o que estava bloqueado, destrava a Área de Trabalho, devolve as pastas de downloads e de salvar se uma aula estiver em andamento e pergunta se deve apagar também os professores pareados.
 
-As políticas do **Painel do laboratório** continuam aplicadas depois da desinstalação. Para tirá-las, use **RESET geral** no painel antes de desinstalar.
+As demais políticas do **Painel do laboratório** continuam aplicadas depois da desinstalação. Para tirá-las, use **RESET geral** no painel antes de desinstalar.
 
 ## Privacidade
 
-O Midview não envia nada ao desenvolvedor nem à internet. Entre o professor e as máquinas passam as imagens de tela, o texto copiado durante o controle, as mensagens, o bate-papo, os arquivos enviados e recolhidos, os nomes e os endereços MAC das máquinas e os nomes dos programas abertos ou instalados.
+O Midview não envia nada ao desenvolvedor. Entre o professor e as máquinas passam as imagens de tela, o texto copiado durante o controle, as mensagens, o bate-papo, os arquivos enviados e recolhidos, os nomes e os endereços MAC das máquinas e os nomes dos programas abertos ou instalados.
+
+Para as atualizações, o computador do professor consulta o GitHub (`api.github.com`), informando a versão do Midview instalada, e baixa o instalador de lá. Nenhum dado da sala vai junto. As máquinas dos alunos não acessam a internet pelo Midview.
 
 A tela do aluno pode ser vista sem aviso na máquina dele; só o controle remoto mostra um aviso. Por isso, a escola deve informar alunos e responsáveis sobre o uso do Midview, como pede a cláusula 6 da [licença](LICENSE).
 
@@ -125,7 +132,7 @@ Algumas opções do **Painel do laboratório** configuram o Google Chrome, que p
 | `tests/` | Testes com xUnit e o teste de ponta a ponta (`Midview.E2E`) |
 | `installer/` | Instalador (Inno Setup), scripts das máquinas e seus testes |
 | `docs/superpowers/` | Especificações e planos de cada função |
-| `site/` | Página para os professores, publicada no GitHub Pages pelo fluxo **Site** |
+| `site/` | Página para os professores, em português e em inglês (`site/en/`), publicada no GitHub Pages pelo fluxo **Site** |
 | `promo/` | Vídeos de divulgação e o tutorial, feitos com Remotion (o GIF e os MP4 de `docs/` saem dele) |
 
 Requisitos: Windows, SDK do .NET 8 e, para o instalador, Inno Setup 6.
@@ -144,7 +151,7 @@ powershell -ExecutionPolicy Bypass -File installer\Gerar-Instalador.ps1
 powershell -ExecutionPolicy Bypass -File installer\tests\Testar-Scripts.ps1 -Pacote dist
 ```
 
-A versão fica em `Directory.Build.props`. No GitHub, quatro fluxos conferem cada mudança: **Testes (Windows)**, **Instalador**, **Atualização pela rede (Windows de verdade)** e **Bloqueio de programas (Windows de verdade)**.
+A versão fica em `Directory.Build.props`. No GitHub, quatro fluxos conferem cada mudança: **Testes (Windows)**, **Instalador**, **Atualização pela rede (Windows de verdade)** e **Bloqueio de programas (Windows de verdade)**. Uma tag `vX.Y.Z` faz o fluxo **Instalador** publicar o `MidviewSetup.exe` na versão do GitHub, que é de onde o Midview do professor se atualiza.
 
 ## Licença
 
