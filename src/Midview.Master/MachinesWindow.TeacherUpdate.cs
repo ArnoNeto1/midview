@@ -166,10 +166,16 @@ public partial class MachinesWindow
         // refused (a class folder still being handed over): then nothing else
         // happens, and the setup that was downloaded waits for another try.
         TeacherVersionTextBlock.Text = "Fechando o Midview para instalar...";
+        // With the default shutdown mode the app starts ending as the last window
+        // closes, and the error message below would have no window life left to
+        // show in: the explicit Shutdown() at the end ends it instead.
+        var shutdownMode = Application.Current.ShutdownMode;
+        Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var main = Application.Current.MainWindow;
         main?.Close();
         if (main is { IsVisible: true })
         {
+            Application.Current.ShutdownMode = shutdownMode;
             _teacherUpdating = false;
             TeacherVersionTextBlock.Text = "A atualização ficou para depois: o Midview não fechou.";
             TeacherUpdateButton.Content = $"Atualizar para a {release.Version}...";
