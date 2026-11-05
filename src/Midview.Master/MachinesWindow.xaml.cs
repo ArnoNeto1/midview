@@ -51,6 +51,25 @@ public partial class MachinesWindow : MidviewWindow
         ShowStudentProgramVersion();
         CheckTeacherVersion();
         RefreshAdminPasswordStatus();
+        ShowPage(MachinesPage.Search);
+    }
+
+    // Marks the entry in the side menu and shows that page's panel.
+    public void ShowPage(MachinesPage page)
+    {
+        var navs = new[] { SearchNav, UpdatesNav, OtherTeacherNav, AdminPasswordNav, AdvancedNav };
+        var panels = new[] { SearchPanel, UpdatesPanel, OtherTeacherPanel, AdminPasswordPanel, AdvancedPanel };
+        for (var i = 0; i < panels.Length; i++)
+        {
+            panels[i].Visibility = i == (int)page ? Visibility.Visible : Visibility.Collapsed;
+        }
+        navs[(int)page].IsChecked = true;
+    }
+
+    private void OnNavChecked(object sender, RoutedEventArgs e)
+    {
+        var navs = new[] { SearchNav, UpdatesNav, OtherTeacherNav, AdminPasswordNav, AdvancedNav };
+        ShowPage((MachinesPage)Array.IndexOf(navs, sender));
     }
 
     private void OnAdvancedClicked(object sender, RoutedEventArgs e) => _openAdvanced();
@@ -314,6 +333,7 @@ public partial class MachinesWindow : MidviewWindow
     // button, when this copy carries the students' program.
     public void OpenStudentUpdate()
     {
+        ShowPage(MachinesPage.Updates);
         if (UpdateButton.IsEnabled)
         {
             OnUpdateClicked(this, new RoutedEventArgs());

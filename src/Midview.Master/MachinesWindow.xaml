@@ -2,160 +2,205 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Máquinas da sala" Height="740" Width="780"
+        Title="Máquinas da sala" Height="600" Width="820" MinHeight="480" MinWidth="700"
         WindowStartupLocation="CenterOwner"
         Closed="OnClosed">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="VisibleWhenTrue" />
-        <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-        </Style>
-        <Style x:Key="SectionHint" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="Margin" Value="0,1,0,4" />
+        <Style x:Key="PagePanel" TargetType="Grid">
+            <Setter Property="Margin" Value="28,24,28,20" />
+            <Setter Property="Visibility" Value="Collapsed" />
         </Style>
     </Window.Resources>
-    <DockPanel Margin="16,12">
-        <StackPanel DockPanel.Dock="Top">
-            <TextBlock Text="Procurar e parear" Style="{StaticResource SectionTitle}" />
-            <TextBlock Style="{StaticResource SectionHint}"
-                       Text="Procura as máquinas nesta rede. Ao parear, confira se o código na tela do aluno é o mesmo daqui. Você tem 5 minutos para isso." />
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource InkMutedBrush}" FontSize="12">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="196" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- The side menu: one entry per page. -->
+        <Border Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+            <StackPanel Margin="6,16,6,10">
+                <RadioButton x:Name="SearchNav" Style="{StaticResource NavRadioButton}" Tag="&#xE721;" Content="Procurar e parear"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="UpdatesNav" Style="{StaticResource NavRadioButton}" Tag="&#xE895;" Content="Atualizações"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="OtherTeacherNav" Style="{StaticResource NavRadioButton}" Tag="&#xE716;" Content="Outro professor"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="AdminPasswordNav" Style="{StaticResource NavRadioButton}" Tag="&#xE72E;" Content="Senha de administrador"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="AdvancedNav" Style="{StaticResource NavRadioButton}" Tag="&#xE713;" Content="Avançado"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <!-- Procurar e parear -->
+            <Grid x:Name="SearchPanel" Style="{StaticResource PagePanel}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <local:DialogHeader Icon="&#xE721;" Heading="Procurar e parear" Accent="{StaticResource ConfigurarBrush}"
+                        Content="Procura as máquinas nesta rede. Ao parear, confira se o código na tela do aluno é o mesmo daqui. Você tem 5 minutos para isso." />
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,16,0,10">
+                    <Button x:Name="SearchButton" Content="Procurar na rede" Click="OnSearchClicked"
+                            Style="{StaticResource PrimaryButton}" Padding="14,6" />
+                    <Button x:Name="PairButton" Content="Parear as selecionadas" Click="OnPairClicked" IsEnabled="False"
+                            Margin="8,0,0,0" Padding="14,6" />
+                    <TextBlock x:Name="SearchStatusTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center"
+                               Margin="14,0,0,0" MaxWidth="260" />
+                </StackPanel>
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="FoundItemsControl" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                        <TextBlock Grid.Column="1" Text="&#xE7F4;" FontFamily="{StaticResource IconFont}" FontSize="20"
+                                                   Foreground="{StaticResource ConfigurarBrush}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Address, Mode=OneWay}" Style="{StaticResource Hint}" />
+                                        </StackPanel>
+                                        <Label Grid.Column="3" Content="{Binding Status, Mode=OneWay}" Style="{StaticResource StatusChip}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0" />
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Text="{Binding Outcome}" Margin="0,8,0,0"
+                                                   TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding OutcomeIsError}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Outcome}" Value="">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0"
+                                                    Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}">
+                                            <TextBlock Text="Na tela do aluno aparece:" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                            <ItemsControl ItemsSource="{Binding CodeText}" Focusable="False" VerticalAlignment="Center" Margin="0,0,14,0">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Label Content="{Binding}" Style="{StaticResource CodeDigit}" Margin="0,0,5,0" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <Button Content="Confere" Click="OnConfirmClicked" Style="{StaticResource PrimaryButton}" Padding="12,5" Margin="0,0,6,0" />
+                                            <Button Content="Não confere" Click="OnMismatchClicked" Padding="12,5" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Grid.Row="3" Style="{StaticResource Hint}" Margin="0,10,0,0">
                     <Run Text="Um colega já tem?" />
                     <Hyperlink Click="OnJoinClassClicked">Entrar na sala de um colega...</Hyperlink>
                 </TextBlock>
-                <StackPanel Orientation="Horizontal">
-                    <Button x:Name="SearchButton" Content="Procurar na rede" Click="OnSearchClicked" Padding="10,4" />
-                    <Button x:Name="PairButton" Content="Parear as selecionadas" Click="OnPairClicked" IsEnabled="False" Margin="8,0,0,0" Padding="10,4" />
-                    <TextBlock x:Name="SearchStatusTextBlock" VerticalAlignment="Center" Margin="12,0,12,0"
-                               TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}" FontSize="12" />
-                </StackPanel>
-            </DockPanel>
-        </StackPanel>
+            </Grid>
 
-        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                        <TextBlock Text="Atualizar as máquinas" Style="{StaticResource SectionTitle}" />
-                        <TextBlock x:Name="StudentVersionTextBlock" Style="{StaticResource SectionHint}" />
-                        <Button x:Name="UpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnUpdateClicked" HorizontalAlignment="Left" Padding="10,4" />
-                    </StackPanel>
-                    <Border Grid.Column="1" BorderBrush="{StaticResource CardLineBrush}" BorderThickness="1,0,0,0" Padding="12,0,0,0">
+            <!-- Atualizações -->
+            <Grid x:Name="UpdatesPanel" Style="{StaticResource PagePanel}">
+                <StackPanel>
+                    <local:DialogHeader Icon="&#xE895;" Heading="Atualizações" Accent="{StaticResource ConfigurarBrush}" />
+                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                         <StackPanel>
-                            <TextBlock Text="Atualizar professor" Style="{StaticResource SectionTitle}" />
-                            <TextBlock x:Name="TeacherVersionTextBlock" Style="{StaticResource SectionHint}" />
-                            <Button x:Name="TeacherUpdateButton" Content="Procurar de novo" Click="OnTeacherUpdateClicked"
-                                    HorizontalAlignment="Left" Padding="10,4" IsEnabled="False" />
+                            <TextBlock Text="Atualizar as máquinas" Style="{StaticResource CardTitle}" />
+                            <TextBlock x:Name="StudentVersionTextBlock" Style="{StaticResource Hint}" Margin="0,3,0,10" />
+                            <Button x:Name="UpdateButton" Content="Atualizar as máquinas pela rede..." Click="OnUpdateClicked"
+                                    HorizontalAlignment="Left" Padding="14,6" />
                         </StackPanel>
                     </Border>
-                </Grid>
-            </Border>
-            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,7,0,0">
-                <StackPanel>
-                    <TextBlock Text="Outro professor" Style="{StaticResource SectionTitle}" />
-                    <TextBlock Style="{StaticResource SectionHint}"
-                               Text="Dê um código a um colega (nada aparece na tela dos alunos) ou deixe as máquinas aceitarem o pareamento dele por 10 minutos." />
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Dar acesso a um colega..." Click="OnGiveAccessClicked" Padding="10,4" />
-                        <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked" Margin="8,0,0,0" Padding="10,4" />
-                    </StackPanel>
-                    <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Style.Triggers>
-                                    <Trigger Property="Text" Value="">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Atualizar professor" Style="{StaticResource CardTitle}" />
+                            <TextBlock x:Name="TeacherVersionTextBlock" Style="{StaticResource Hint}" Margin="0,3,0,10" />
+                            <Button x:Name="TeacherUpdateButton" Content="Procurar de novo" Click="OnTeacherUpdateClicked"
+                                    HorizontalAlignment="Left" Padding="14,6" IsEnabled="False" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
-            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,7,0,0">
-                <StackPanel>
-                    <TextBlock Text="Avançado" Style="{StaticResource SectionTitle}" />
-                    <TextBlock Style="{StaticResource SectionHint}"
-                               Text="Identidade deste computador e adição manual de máquina (em outra rede, ou para corrigir o endereço)." />
-                    <Button Content="Ajustes avançados..." Click="OnAdvancedClicked" HorizontalAlignment="Left" Padding="10,4" />
-                </StackPanel>
-            </Border>
-            <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="0,1,0,0" Padding="0,7,0,0" Margin="0,7,0,0">
-                <StackPanel>
-                    <TextBlock Text="Senha de administrador" Style="{StaticResource SectionTitle}" />
-                    <TextBlock Style="{StaticResource SectionHint}"
-                               Text="Guardada só neste PC (protegida pelo Windows) para preencher o UAC do aluno com um clique." />
-                    <StackPanel Orientation="Horizontal">
-                        <Button x:Name="AdminPasswordButton" Content="Definir a senha..." Click="OnSetAdminPasswordClicked" Padding="10,4" />
-                        <Button x:Name="RemoveAdminPasswordButton" Content="Remover" Click="OnRemoveAdminPasswordClicked" Margin="8,0,0,0" Padding="10,4" />
-                        <TextBlock x:Name="AdminPasswordStatusTextBlock" VerticalAlignment="Center" Margin="12,0,0,0"
-                                   Foreground="{StaticResource InkMutedBrush}" FontSize="12" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </StackPanel>
+            </Grid>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-            <ItemsControl x:Name="FoundItemsControl">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardLineBrush}"
-                                BorderThickness="1" CornerRadius="5" Padding="10,5" Margin="0,0,0,4">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                <WrapPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock FontSize="12" Margin="0,0,10,0">
-                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
-                                        <Run Text="  " />
-                                        <Run Text="{Binding Address, Mode=OneWay}" Foreground="{StaticResource InkMutedBrush}" />
-                                        <Run Text="  •  " Foreground="{StaticResource CardLineHoverBrush}" />
-                                        <Run Text="{Binding Status, Mode=OneWay}" Foreground="{StaticResource InkMutedBrush}" />
-                                    </TextBlock>
-                                    <TextBlock Text="{Binding Outcome}" FontSize="12" TextWrapping="Wrap">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding OutcomeIsError}" Value="True">
-                                                        <Setter Property="Foreground" Value="#B3261E" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Outcome}" Value="">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </WrapPanel>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CodeText}" FontFamily="Consolas" FontSize="17" FontWeight="Bold"
-                                               Foreground="{StaticResource InkBrush}" VerticalAlignment="Center" Margin="8,0,10,0"
-                                               Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}" />
-                                    <Button Content="Confere" Click="OnConfirmClicked" Padding="8,2" Margin="0,0,4,0"
-                                            Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}" />
-                                    <Button Content="Não confere" Click="OnMismatchClicked" Padding="8,2"
-                                            Visibility="{Binding AwaitingConfirmation, Converter={StaticResource VisibleWhenTrue}}" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-    </DockPanel>
+            <!-- Outro professor -->
+            <Grid x:Name="OtherTeacherPanel" Style="{StaticResource PagePanel}">
+                <StackPanel>
+                    <local:DialogHeader Icon="&#xE716;" Heading="Outro professor" Accent="{StaticResource ConfigurarBrush}"
+                        Content="Dê um código a um colega (nada aparece na tela dos alunos) ou deixe as máquinas aceitarem o pareamento dele por 10 minutos." />
+                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Dar acesso a um colega..." Click="OnGiveAccessClicked" Padding="14,6" />
+                                <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked"
+                                        Margin="8,0,0,0" Padding="14,6" />
+                            </StackPanel>
+                            <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,10,0,0" FontSize="12">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- Senha de administrador -->
+            <Grid x:Name="AdminPasswordPanel" Style="{StaticResource PagePanel}">
+                <StackPanel>
+                    <local:DialogHeader Icon="&#xE72E;" Heading="Senha de administrador" Accent="{StaticResource ConfigurarBrush}"
+                        Content="Guardada só neste PC (protegida pelo Windows) para preencher o UAC do aluno com um clique." />
+                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="AdminPasswordButton" Content="Definir a senha..." Click="OnSetAdminPasswordClicked" Padding="14,6" />
+                            <Button x:Name="RemoveAdminPasswordButton" Content="Remover" Click="OnRemoveAdminPasswordClicked"
+                                    Style="{StaticResource DangerButton}" Margin="8,0,0,0" Padding="14,6" />
+                            <TextBlock x:Name="AdminPasswordStatusTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- Avançado -->
+            <Grid x:Name="AdvancedPanel" Style="{StaticResource PagePanel}">
+                <StackPanel>
+                    <local:DialogHeader Icon="&#xE713;" Heading="Avançado" Accent="{StaticResource ConfigurarBrush}"
+                        Content="Identidade deste computador e adição manual de máquina (em outra rede, ou para corrigir o endereço)." />
+                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                        <Button Content="Ajustes avançados..." Click="OnAdvancedClicked" HorizontalAlignment="Left" Padding="14,6" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
 </local:MidviewWindow>

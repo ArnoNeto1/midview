@@ -102,6 +102,7 @@ public partial class MachinesWindow
     // where its progress shows.
     public async void StartTeacherUpdate(TeacherUpdate.Release release)
     {
+        ShowPage(MachinesPage.Updates);
         if (_teacherUpdating || _closed)
         {
             return;
