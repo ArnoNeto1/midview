@@ -2,27 +2,42 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Enviar arquivo" Height="500" Width="500"
+        Title="Enviar arquivo" Height="640" Width="520" MinHeight="520"
         WindowStartupLocation="CenterOwner">
-    <DockPanel Margin="16">
+    <DockPanel Margin="24,22,24,20">
         <StackPanel DockPanel.Dock="Top">
-            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
-            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
-                       Text="O arquivo é salvo na pasta &quot;Arquivos do professor&quot; na Área de Trabalho do aluno, que recebe um aviso." />
-            <DockPanel Margin="0,0,0,8">
-                <Button DockPanel.Dock="Right" Content="Escolher arquivo..." Click="OnChooseFileClicked" Padding="10,4" Margin="8,0,0,0" />
-                <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum arquivo escolhido." />
-            </DockPanel>
-            <CheckBox x:Name="OverwriteCheckBox" Content="Substituir arquivo com o mesmo nome" Margin="0,0,0,8" />
-            <TextBlock Text="Depois de enviar:" Margin="0,0,0,4" />
-            <RadioButton x:Name="NothingRadioButton" GroupName="After" IsChecked="True" Content="Não fazer nada" Margin="0,0,0,2" />
-            <RadioButton x:Name="OpenFolderRadioButton" GroupName="After" Content="Abrir a pasta &quot;Arquivos do professor&quot; no aluno" Margin="0,0,0,2" />
-            <RadioButton x:Name="OpenFileRadioButton" GroupName="After" Content="Abrir ou executar o arquivo no aluno" Margin="0,0,0,8" />
-            <Button x:Name="SendButton" Content="Enviar" Click="OnSendClicked" IsEnabled="False" Padding="10,4" />
-            <TextBlock x:Name="ProgressTextBlock" Margin="0,8,0,0" />
+            <local:DialogHeader Icon="&#xE898;" Heading="Enviar arquivo" Accent="{StaticResource TurmaBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <Border Style="{StaticResource Card}" Margin="0,16,0,10">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button DockPanel.Dock="Right" Content="Escolher arquivo..." Click="OnChooseFileClicked" Padding="14,6" Margin="8,0,0,0" />
+                        <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum arquivo escolhido." />
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Hint}"
+                               Text="O arquivo é salvo na pasta &quot;Arquivos do professor&quot; na Área de Trabalho do aluno, que recebe um aviso." />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                <StackPanel>
+                    <CheckBox x:Name="OverwriteCheckBox" Content="Substituir arquivo com o mesmo nome" Margin="0,0,0,10" />
+                    <TextBlock Text="Depois de enviar:" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
+                    <RadioButton x:Name="NothingRadioButton" GroupName="After" IsChecked="True" Content="Não fazer nada" Margin="0,0,0,2" />
+                    <RadioButton x:Name="OpenFolderRadioButton" GroupName="After" Content="Abrir a pasta &quot;Arquivos do professor&quot; no aluno" Margin="0,0,0,2" />
+                    <RadioButton x:Name="OpenFileRadioButton" GroupName="After" Content="Abrir ou executar o arquivo no aluno" />
+                </StackPanel>
+            </Border>
+            <Button x:Name="SendButton" Content="Enviar" Click="OnSendClicked" IsEnabled="False"
+                    Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" Padding="14,6" Margin="0,0,0,10" />
         </StackPanel>
-        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-            <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
-        </ScrollViewer>
+        <Border Style="{StaticResource ResultCard}">
+            <DockPanel>
+                <TextBlock x:Name="ProgressTextBlock" DockPanel.Dock="Top" TextWrapping="Wrap" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
     </DockPanel>
 </local:MidviewWindow>

@@ -2,16 +2,20 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Conversa" Height="440" Width="440"
+        Title="Conversa" Height="520" Width="480" MinHeight="360" MinWidth="360"
         Loaded="OnWindowLoaded" Closed="OnWindowClosed">
-    <DockPanel Margin="8">
-        <TextBlock x:Name="StatusTextBlock" DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="Gray" Margin="0,0,0,6" />
-        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+    <DockPanel Margin="20,18,20,16">
+        <local:DialogHeader DockPanel.Dock="Top" Icon="&#xE8F2;" Heading="Conversa" Accent="{StaticResource TurmaBrush}">
+            <TextBlock x:Name="StatusTextBlock" Style="{StaticResource Hint}" />
+        </local:DialogHeader>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
             <Button x:Name="SendButton" DockPanel.Dock="Right" Content="Enviar" Click="OnSendClicked"
-                    IsEnabled="False" Padding="12,4" Margin="8,0,0,0" />
-            <TextBox x:Name="InputTextBox" FontSize="13" KeyDown="OnInputKeyDown" TextChanged="OnInputChanged" />
+                    Style="{StaticResource PrimaryButton}" IsEnabled="False" Padding="16,6" Margin="8,0,0,0" />
+            <TextBox x:Name="InputTextBox" FontSize="13" VerticalContentAlignment="Center" KeyDown="OnInputKeyDown" TextChanged="OnInputChanged" />
         </DockPanel>
-        <TextBox x:Name="TranscriptTextBox" IsReadOnly="True" TextWrapping="Wrap" FontSize="13"
-                 VerticalScrollBarVisibility="Auto" />
+        <Border Style="{StaticResource Card}" Padding="4" Margin="0,14,0,0">
+            <TextBox x:Name="TranscriptTextBox" IsReadOnly="True" TextWrapping="Wrap" FontSize="13"
+                     BorderThickness="0" BorderBrush="Transparent" Background="Transparent" VerticalScrollBarVisibility="Auto" />
+        </Border>
     </DockPanel>
 </local:MidviewWindow>

@@ -46,6 +46,8 @@ public partial class PowerWindow : MidviewWindow
         }
         var restart = SelectedAction == PowerAction.Restart;
         Title = restart ? "Reiniciar" : "Desligar";
+        Header.Heading = Title;
+        Header.Icon = restart ? "" : "";
         RunButton.Content = PowerText.RunButton(restart, InstallUpdates);
         CancelShutdownButton.Content = restart ? "Cancelar reinício" : "Cancelar desligamento";
         UpdatesHintTextBlock.Text = PowerText.UpdatesHint(restart);
