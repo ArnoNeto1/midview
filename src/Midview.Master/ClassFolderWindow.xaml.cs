@@ -10,8 +10,12 @@ internal sealed record ClassRow(ClassSummary Class, string Summary)
     public string Turma => Class.Turma;
 }
 
-// One PC in the window's compact list during a lesson.
-internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOffline);
+// One PC in the window's compact list during a lesson. Mark is the state's
+// symbol that starts Text (ClassFolderText.State: ✓ ⟳ ○ ✗), for its color.
+internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOffline)
+{
+    public string Mark => Text.Length > 0 ? Text[..1] : "";
+}
 
 // "Pasta da turma" (docs/superpowers/specs/2026-10-20-class-folder-design.md:
 // "What the teacher sees (Master)"). Before a lesson: the classes, to create,

@@ -43,11 +43,13 @@
         <Button x:Name="TakeOverButton" DockPanel.Dock="Top" HorizontalAlignment="Right" Visibility="Collapsed" Margin="0,0,0,10"
                 ToolTipService.ShowOnDisabled="True" Click="OnTakeOverClicked" />
 
-        <!-- Shown in both views when the teacher's disk is filling (ClassFolderText.LowSpaceWarning). -->
+        <!-- Shown in both views when the teacher's disk is filling (ClassFolderText.LowSpaceWarning), in the warning colors. -->
         <Border x:Name="LowSpaceBorder" DockPanel.Dock="Top" Visibility="Collapsed" Style="{StaticResource Card}"
-                Background="{StaticResource DangerSoftBrush}" BorderBrush="{StaticResource ErrorBrush}"
-                Padding="12,8" Margin="0,0,0,10">
-            <TextBlock x:Name="LowSpaceText" Style="{StaticResource ErrorText}" FontSize="12" />
+                BorderBrush="{StaticResource WarningBrush}" Padding="12,8" Margin="0,0,0,10">
+            <Border.Background>
+                <SolidColorBrush Color="#FFC53D" Opacity="0.16" />
+            </Border.Background>
+            <TextBlock x:Name="LowSpaceText" Style="{StaticResource WarningText}" FontSize="12" />
         </Border>
 
         <!-- What a start, an end or a change to the list did: a line for the whole, then one per PC. -->
@@ -120,7 +122,19 @@
                                 <DataTemplate>
                                     <StackPanel>
                                         <TextBlock Text="{Binding Turma}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                                        <!-- Muted, but full text on the selected row's lighter fill (AA). -->
+                                        <TextBlock Text="{Binding Summary}" FontSize="12">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -185,12 +199,20 @@
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
+                                    <!-- The state colors: ✓ online green, ⟳ accent, ○ muted, ✗ error.
+                                         ✓ and ⟳ are told apart by the row's mark (PcRow.Mark, the Text's first character). -->
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Text}" ToolTip="{Binding Hint}" FontSize="12" Margin="0,2,18,2">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                                                     <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Mark}" Value="✓">
+                                                            <Setter Property="Foreground" Value="{StaticResource OnlineBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Mark}" Value="⟳">
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentTextBrush}" />
+                                                        </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsFailed}" Value="True">
                                                             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
                                                         </DataTrigger>

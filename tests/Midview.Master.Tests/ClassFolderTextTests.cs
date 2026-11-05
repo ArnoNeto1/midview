@@ -113,6 +113,22 @@ public partial class ClassFolderTextTests
     public void State_IsAMarkAndTheName_WithTheReasonOfAFailure(string name, PcSyncState state, string detail, string expected) =>
         Assert.Equal(expected, ClassFolderText.State(Status(name, state, detail)));
 
+    // The window colors a PC's line by its mark (ClassFolderWindow.xaml).
+    [Theory]
+    [InlineData(PcSyncState.InSync, "", "✓")]
+    [InlineData(PcSyncState.Copying, "copiando 12 arquivos", "⟳")]
+    [InlineData(PcSyncState.Offline, "", "○")]
+    [InlineData(PcSyncState.Failed, "Midview antigo", "✗")]
+    public void PcRowMark_IsTheStateSymbol(PcSyncState state, string detail, string mark)
+    {
+        var status = Status("LAB-01", state, detail);
+        Assert.Equal(mark, new PcRow(ClassFolderText.State(status), ClassFolderText.StateHint(status), false, false).Mark);
+    }
+
+    [Fact]
+    public void PcRowMark_OfAnEmptyText_IsEmpty() =>
+        Assert.Equal("", new PcRow("", "", false, false).Mark);
+
     [Theory]
     [InlineData(PcSyncState.InSync, "", "Em dia")]
     [InlineData(PcSyncState.Copying, "copiando 12 arquivos", "Copiando: copiando 12 arquivos")]
