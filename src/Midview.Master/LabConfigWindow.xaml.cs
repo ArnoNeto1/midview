@@ -13,7 +13,7 @@ namespace Midview.Master;
 // Agent already has. Each lockdown button reads the machine's current
 // configuration, changes the one function, and sends it back, so the other
 // functions are left as they were.
-public partial class LabConfigWindow : Window
+public partial class LabConfigWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

@@ -5,7 +5,7 @@ namespace Midview.Master;
 // A yes/no question whose buttons say what they do ("Atualizar agora",
 // "Agora não"), which a MessageBox can't: its buttons are only Sim/Não.
 // Closing the window or pressing Esc is the no.
-public partial class QuestionWindow : Window
+public partial class QuestionWindow : MidviewWindow
 {
     public QuestionWindow(string title, string question, string yes, string no)
     {

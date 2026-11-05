@@ -8,7 +8,7 @@ namespace Midview.Master;
 
 // Sends one text to one machine or to the whole class; each student sees it
 // in a window on their screen (the Session's WinFormsMessageDisplay).
-public partial class SendMessageWindow : Window
+public partial class SendMessageWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

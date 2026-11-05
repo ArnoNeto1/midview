@@ -38,7 +38,7 @@ internal sealed record PcRow(string Text, string Hint, bool IsFailed, bool IsOff
 // ClassFolderWindow.Classes.cs (the class list), ClassFolderWindow.Lesson.cs
 // (starting, ending, and what each PC answered) and ClassFolderWindow.TakeOver.cs
 // ("Guardar as pastas das turmas neste computador", on a colleague's PC).
-public partial class ClassFolderWindow : Window
+public partial class ClassFolderWindow : MidviewWindow
 {
     // How often the views read the disk again (the files, the free space).
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);

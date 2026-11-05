@@ -9,7 +9,7 @@ namespace Midview.Master;
 // box, one per line. What was typed is checked here first (TypedText, then
 // ProgramCommand), and again on each machine. It can also go into the
 // "Abrir programa" menu (SavedMenu), to start with a click.
-public partial class OpenProgramWindow : Window
+public partial class OpenProgramWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

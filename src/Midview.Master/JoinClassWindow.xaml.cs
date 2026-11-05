@@ -9,7 +9,7 @@ namespace Midview.Master;
 
 // "Entrar na sala de um colega" (InviteJoin): type the code a colleague
 // reads out, and that colleague's class comes into this one.
-public partial class JoinClassWindow : Window
+public partial class JoinClassWindow : MidviewWindow
 {
     private static readonly Brush ErrorBrush = new SolidColorBrush(Color.FromRgb(0xB3, 0x26, 0x1E));
 

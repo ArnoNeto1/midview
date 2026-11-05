@@ -9,7 +9,7 @@ namespace Midview.Master;
 // Session's WindowsWebsiteOpener). Only a website: what the teacher typed
 // is checked here first (WebsiteAddress), and again on each machine. It can
 // also go into the "Abrir site" menu (SavedMenu), to open with a click.
-public partial class OpenWebsiteWindow : Window
+public partial class OpenWebsiteWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

@@ -9,7 +9,7 @@ namespace Midview.Master;
 // Session's WindowsAppCloser), after warning the student for the time the
 // teacher picks. Forcing goes ahead without asking the teacher: the choice
 // itself says that unsaved work is lost.
-public partial class CloseAppsWindow : Window
+public partial class CloseAppsWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

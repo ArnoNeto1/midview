@@ -11,7 +11,7 @@ namespace Midview.Master;
 // The teacher's side of a private chat with one machine. Opening this window
 // opens the chat window on the student's screen; closing it ends the
 // conversation there.
-public partial class ChatWindow : Window
+public partial class ChatWindow : MidviewWindow
 {
     private readonly KnownMachine _machine;
     private readonly X509Certificate2 _masterCertificate;

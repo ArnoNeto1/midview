@@ -10,7 +10,7 @@ namespace Midview.Master;
 // The teacher's side of the class chat (ClassChat). Opening this window opens
 // the chat window on every student's screen; closing it ends the
 // conversation on all of them.
-public partial class ClassChatWindow : Window
+public partial class ClassChatWindow : MidviewWindow
 {
     private readonly ClassChat _chat;
     private bool _closing;

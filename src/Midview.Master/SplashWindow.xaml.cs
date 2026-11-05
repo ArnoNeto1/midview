@@ -11,7 +11,7 @@ namespace Midview.Master;
 // signal goes out, the word rises in (the timings of
 // assets\gerar-animacao.py) -- then Finished, for the classroom to open. A
 // click skips it.
-public partial class SplashWindow : Window
+public partial class SplashWindow : MidviewWindow
 {
     private static readonly TimeSpan Length = TimeSpan.FromSeconds(3.1);
 

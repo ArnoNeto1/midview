@@ -1,0 +1,52 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- The "Painel" palette: a deep navy dashboard, teal for what is selected or
+         in focus, and one color per group of toolbar buttons. -->
+    <SolidColorBrush x:Key="BackgroundBrush" Color="#0A111E" />
+    <SolidColorBrush x:Key="SurfaceBrush" Color="#0F1828" />
+    <SolidColorBrush x:Key="CardBrush" Color="#141F33" />
+    <SolidColorBrush x:Key="LineBrush" Color="#22314D" />
+    <SolidColorBrush x:Key="LineHoverBrush" Color="#3A4D70" />
+    <SolidColorBrush x:Key="TextBrush" Color="#DCE6F5" />
+    <SolidColorBrush x:Key="TextMutedBrush" Color="#8394AE" />
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="#4A5872" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#2DD4BF" />
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#04221D" />
+    <SolidColorBrush x:Key="AccentTextBrush" Color="#7FF0DF" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#2DD4BF" Opacity="0.14" />
+
+    <!-- One color per group of the toolbar. -->
+    <SolidColorBrush x:Key="EnergiaBrush" Color="#FF6B6B" />
+    <SolidColorBrush x:Key="TelaBrush" Color="#4DA3FF" />
+    <SolidColorBrush x:Key="TurmaBrush" Color="#FFC53D" />
+    <SolidColorBrush x:Key="ProgramasBrush" Color="#3DDC97" />
+    <SolidColorBrush x:Key="ConfigurarBrush" Color="#A78BFA" />
+
+    <SolidColorBrush x:Key="ErrorBrush" Color="#FF8A80" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#FFC53D" />
+    <SolidColorBrush x:Key="OnlineBrush" Color="#3DDC97" />
+    <SolidColorBrush x:Key="OfflineBrush" Color="#4A5872" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#FF6B6B" Opacity="0.16" />
+
+    <FontFamily x:Key="UiFont">Bahnschrift, Segoe UI</FontFamily>
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- The old light-theme names, kept with dark values until the last task of the
+         redesign moves every use to the names above and deletes these. -->
+    <SolidColorBrush x:Key="SlateBrush" Color="#0A111E" />
+    <SolidColorBrush x:Key="SlateHoverBrush" Color="#17233A" />
+    <SolidColorBrush x:Key="SlatePressedBrush" Color="#1F2C45" />
+    <SolidColorBrush x:Key="SlateLineBrush" Color="#22314D" />
+    <SolidColorBrush x:Key="ChalkTextBrush" Color="#DCE6F5" />
+    <SolidColorBrush x:Key="ChalkMutedBrush" Color="#8394AE" />
+    <SolidColorBrush x:Key="ChalkDisabledBrush" Color="#4A5872" />
+    <SolidColorBrush x:Key="ChalkYellowBrush" Color="#2DD4BF" />
+    <SolidColorBrush x:Key="CanvasBrush" Color="#0A111E" />
+    <SolidColorBrush x:Key="CardLineBrush" Color="#22314D" />
+    <SolidColorBrush x:Key="CardLineHoverBrush" Color="#3A4D70" />
+    <SolidColorBrush x:Key="InkBrush" Color="#DCE6F5" />
+    <SolidColorBrush x:Key="InkMutedBrush" Color="#8394AE" />
+    <SolidColorBrush x:Key="SelectedLineBrush" Color="#2DD4BF" />
+    <SolidColorBrush x:Key="SelectedFillBrush" Color="#132A33" />
+    <SolidColorBrush x:Key="SelectionBandFillBrush" Color="#2DD4BF" Opacity="0.15" />
+</ResourceDictionary>

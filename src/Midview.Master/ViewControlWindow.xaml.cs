@@ -12,7 +12,7 @@ namespace Midview.Master;
 // Watching only leaves the student's keyboard and mouse alone; controlling
 // locks them and sends the teacher's input instead. The toolbar button
 // switches between the two on the same connection.
-public partial class ViewControlWindow : Window
+public partial class ViewControlWindow : MidviewWindow
 {
     private readonly ConnectionClient _client;
     private readonly string _machineName;

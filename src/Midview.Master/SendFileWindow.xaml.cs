@@ -9,7 +9,7 @@ namespace Midview.Master;
 
 // Sends one file to one machine or to the whole class (FileSender, one
 // connection per machine).
-public partial class SendFileWindow : Window
+public partial class SendFileWindow : MidviewWindow
 {
     // Enough to keep the lab network busy without the teacher's PC uploading
     // 25 copies of a large file at once.

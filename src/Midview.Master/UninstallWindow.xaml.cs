@@ -10,7 +10,7 @@ namespace Midview.Master;
 // (GetInstalledPrograms / UninstallPrograms on port 28900). The list is read
 // from one machine; the uninstall goes by display name, so each machine
 // removes the ones it actually has.
-public partial class UninstallWindow : Window
+public partial class UninstallWindow : MidviewWindow
 {
     private readonly KnownMachine _listFrom;
     private readonly IReadOnlyList<KnownMachine> _classTargets;

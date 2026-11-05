@@ -20,7 +20,7 @@ namespace Midview.Master;
 // site-blocking commands live in AddMachineWindow. Several machines can be
 // selected (Ctrl/Shift+click, or a rectangle dragged over the grid's empty
 // space), and a tile's menu then acts on all of them.
-public partial class MainWindow : Window
+public partial class MainWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
     private readonly ObservableCollection<MachineTile> _tiles = new();

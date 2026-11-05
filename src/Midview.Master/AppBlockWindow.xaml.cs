@@ -14,7 +14,7 @@ namespace Midview.Master;
 // or typed) and applies it; "Liberar tudo" lifts it. The block lasts until
 // lifted; the Agent keeps it and enforces it, the Session only lists what's
 // open.
-public partial class AppBlockWindow : Window
+public partial class AppBlockWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

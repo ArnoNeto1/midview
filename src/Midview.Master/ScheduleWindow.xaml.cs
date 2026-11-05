@@ -11,7 +11,7 @@ namespace Midview.Master;
 // off. Saving it keeps it in PowerScheduleFile, sets up this PC's wake task
 // (WakeTask) and hands the shutdown part to every machine's Agent; a
 // machine that's offline gets it later from its tile's poller.
-public partial class ScheduleWindow : Window
+public partial class ScheduleWindow : MidviewWindow
 {
     private readonly Func<IReadOnlyList<KnownMachine>> _targets;
     private readonly X509Certificate2 _masterCertificate;

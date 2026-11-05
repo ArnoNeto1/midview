@@ -1,6 +1,7 @@
-<Window x:Class="Midview.Master.LabConfigWindow"
+<local:MidviewWindow x:Class="Midview.Master.LabConfigWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
         Title="Painel do laboratório" Height="700" Width="620"
         WindowStartupLocation="CenterOwner">
     <DockPanel Margin="16">
@@ -244,4 +245,4 @@
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
-</Window>
+</local:MidviewWindow>

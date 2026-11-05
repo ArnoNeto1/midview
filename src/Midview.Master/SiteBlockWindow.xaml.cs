@@ -10,7 +10,7 @@ namespace Midview.Master;
 // class, through each machine's Agent (hosts file and firewall; see the
 // site-blocking design). Takes the Agent's thumbprint from the classroom
 // list, filled in by "Importar máquinas instaladas".
-public partial class SiteBlockWindow : Window
+public partial class SiteBlockWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

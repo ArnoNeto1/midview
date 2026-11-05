@@ -12,7 +12,7 @@ namespace Midview.Master;
 // machine goes first, and the others only after it confirms: a build that
 // doesn't work stops at one machine (which rolls itself back) instead of
 // reaching the whole lab.
-public partial class UpdateWindow : Window
+public partial class UpdateWindow : MidviewWindow
 {
     private const int MaxConcurrentTransfers = 4;
 

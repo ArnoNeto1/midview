@@ -10,7 +10,7 @@ namespace Midview.Master;
 // Collects the "Entregar ao professor" folder of one machine or of the whole
 // class (FileCollector, one connection per machine) into
 // Documents\Midview\Recolhidos\<date time>\<machine>.
-public partial class CollectFilesWindow : Window
+public partial class CollectFilesWindow : MidviewWindow
 {
     // Like SendFileWindow: keeps the network busy without 25 machines
     // uploading to the teacher's PC at once.

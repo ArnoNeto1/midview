@@ -8,7 +8,7 @@ namespace Midview.Master;
 // "Dar acesso a um colega", for the teacher who has the class (InviteHost):
 // shows the code while the invite lasts, then who got the class. Closing it
 // cancels the invite.
-public partial class GiveAccessWindow : Window
+public partial class GiveAccessWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
     private readonly Func<IReadOnlyList<KnownMachine>> _roster;

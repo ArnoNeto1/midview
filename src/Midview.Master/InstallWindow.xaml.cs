@@ -12,7 +12,7 @@ namespace Midview.Master;
 // connection per machine to its Agent, which runs the installer as SYSTEM:
 // no UAC prompt, no password). Each machine's line shows where it is: queued,
 // sending, installing, then how it went.
-public partial class InstallWindow : Window
+public partial class InstallWindow : MidviewWindow
 {
     // As many uploads at once as "Enviar arquivo" (an installer is as big as
     // the files a teacher sends); a machine that has the whole file frees its

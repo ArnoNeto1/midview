@@ -7,7 +7,7 @@ namespace Midview.Master;
 
 // Asks for the lab's admin password. On OK, PasswordUtf8 holds it as bytes
 // (never a string kept around); the caller saves it and clears the buffer.
-public partial class SetAdminPasswordWindow : Window
+public partial class SetAdminPasswordWindow : MidviewWindow
 {
     public byte[]? PasswordUtf8 { get; private set; }
 

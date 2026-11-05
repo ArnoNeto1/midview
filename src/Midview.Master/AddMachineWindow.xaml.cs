@@ -11,7 +11,7 @@ namespace Midview.Master;
 // added or edited by hand -- tested, then saved to the classroom list --
 // for the exceptions "Máquinas da sala" doesn't cover. Site blocking,
 // which used to live here, has its own window (SiteBlockWindow).
-public partial class AddMachineWindow : Window
+public partial class AddMachineWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
     private readonly Action<KnownMachine?, KnownMachine> _saveToRoster;

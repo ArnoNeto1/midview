@@ -10,7 +10,7 @@ namespace Midview.Master;
 // nobody logged in), so it needs each machine's Agent thumbprint. The
 // toolbar's "Desligar" and "Reiniciar" both open it, each already set to
 // its own action.
-public partial class PowerWindow : Window
+public partial class PowerWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;

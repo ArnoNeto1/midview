@@ -15,7 +15,7 @@ namespace Midview.Master;
 // with a code or take a colleague's (GiveAccessWindow, JoinClassWindow), let
 // another teacher pair for 10 minutes, and open the advanced settings
 // (AddMachineWindow).
-public partial class MachinesWindow : Window
+public partial class MachinesWindow : MidviewWindow
 {
     private const string MismatchText =
         "O código não conferiu. Pode haver outro computador no meio da conexão. Tente de novo e, se repetir, avise o responsável pela rede.";
