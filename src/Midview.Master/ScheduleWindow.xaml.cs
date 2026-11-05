@@ -182,6 +182,17 @@ public partial class ScheduleWindow : MidviewWindow
         LastRunTextBlock.Text = lastRun is null ? string.Empty : $"Última vez que a tarefa para ligar rodou: {lastRun}";
     }
 
+    // The title beside a switch ("Ligar às") flips it, as a check box's own label does.
+    private void OnSwitchTitleClicked(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: CheckBox { IsEnabled: true } box })
+        {
+            box.Focus();
+            box.IsChecked = box.IsChecked != true;
+            e.Handled = true;
+        }
+    }
+
     private void OnTimelineSizeChanged(object sender, SizeChangedEventArgs e)
     {
         TimelineClip.Rect = new Rect(0, 0, TimelineTrack.ActualWidth, TimelineTrack.ActualHeight);
