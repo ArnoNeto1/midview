@@ -48,16 +48,20 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <Border x:Name="Box" Width="16" Height="16" CornerRadius="3" BorderThickness="1"
                                 Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource TextMutedBrush}"
-                                VerticalAlignment="Center">
+                                VerticalAlignment="Top" Margin="0,1,0,0">
                             <Path x:Name="Mark" Data="M3,8 L6.5,11.5 L13,4.5" Stroke="{StaticResource OnAccentBrush}" StrokeThickness="2"
                                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                   Stretch="None" Visibility="Collapsed" />
                         </Border>
-                        <ContentPresenter x:Name="Label" Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
-                    </StackPanel>
+                        <ContentPresenter x:Name="Label" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top" RecognizesAccessKey="True" />
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="HasContent" Value="False">
                             <Setter TargetName="Label" Property="Margin" Value="0" />
@@ -99,14 +103,18 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <Border x:Name="Ring" Width="16" Height="16" CornerRadius="8" BorderThickness="1"
                                 Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource TextMutedBrush}"
-                                VerticalAlignment="Center">
+                                VerticalAlignment="Top" Margin="0,1,0,0">
                             <Ellipse x:Name="Dot" Width="8" Height="8" Fill="{StaticResource AccentBrush}" Visibility="Collapsed" />
                         </Border>
-                        <ContentPresenter x:Name="Label" Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
-                    </StackPanel>
+                        <ContentPresenter x:Name="Label" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Top" RecognizesAccessKey="True" />
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="HasContent" Value="False">
                             <Setter TargetName="Label" Property="Margin" Value="0" />
