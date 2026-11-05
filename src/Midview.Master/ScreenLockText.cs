@@ -8,8 +8,12 @@ public static class ScreenLockText
 {
     public const string Locking = "🔒 Bloqueando...";
 
+    // The machine answered that its screen is locked (the classroom tile's
+    // red dot goes by this one, not by Locking).
+    public const string Locked = "🔒 Tela bloqueada";
+
     public static (string Text, bool Alert) Badge(bool locked, bool wasLocked, string detail) =>
-        locked ? ("🔒 Tela bloqueada", false)
+        locked ? (Locked, false)
         : wasLocked ? ($"⚠ Saiu do bloqueio ({detail})", true)
         : ($"⚠ Não bloqueou ({detail})", true);
 

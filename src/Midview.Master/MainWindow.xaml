@@ -6,10 +6,12 @@
         Background="{StaticResource BackgroundBrush}"
         Closing="OnWindowClosing" Closed="OnWindowClosed" KeyDown="OnWindowKeyDown" PreviewMouseWheel="OnWindowPreviewMouseWheel">
     <!-- The window draws its own title bar (MainWindow.TitleBar.cs); Windows still
-         drags it by its top 32 px, maximizes it on a double click there and snaps it
-         to the screen's edges, and resizes it from its edges. -->
+         drags it by the 32 px bar, maximizes it on a double click there and snaps it
+         to the screen's edges, and resizes it from its edges. The caption starts below
+         the 6 px top resize band, so 26 of it reach the bar's bottom and not the
+         toolbar (ShowWindowState adds the maximized margin). -->
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+        <WindowChrome CaptionHeight="26" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
     </WindowChrome.WindowChrome>
     <DockPanel x:Name="WindowRoot">
         <!-- The title bar: the Midview mark, the lesson on and how many machines answer
@@ -220,6 +222,13 @@
                  dotted line around the whole grid would read as a selection. -->
             <ScrollViewer x:Name="MachinesScrollViewer" VerticalScrollBarVisibility="Auto" ScrollChanged="OnMachinesScrolled"
                           SizeChanged="OnMachinesScrollViewerSizeChanged" FocusVisualStyle="{x:Null}">
+                <!-- The scroll bar lies along the window's right edge: inside the 6 px
+                     resize band it would otherwise resize the window instead of scrolling. -->
+                <ScrollViewer.Resources>
+                    <Style TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+                        <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+                    </Style>
+                </ScrollViewer.Resources>
                 <!-- Transparent rather than no background, so a press on the space
                      between and around the tiles reaches it and can start a selection
                      rectangle; the tiles, being buttons, take their own presses. It is
@@ -303,18 +312,39 @@
                                                 <TextBlock Text="{Binding Status}" Foreground="{StaticResource TextBrush}" Margin="10" FontSize="13"
                                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            TextAlignment="Center" TextWrapping="Wrap" />
-                                                <!-- The screen is locked (or being locked): a pill over its corner,
-                                                     dark enough to read over any screen. A lock that failed or
-                                                     that the student got out of is a warning under the card. -->
+                                                <!-- The screen is locked: a red pill over its corner, dark enough to
+                                                     read over any screen; a muted "Bloqueando..." one while the lock
+                                                     is still being put on. A lock that failed or that the student got
+                                                     out of is a warning under the card instead. -->
                                                 <Border x:Name="LockPill" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6"
-                                                        Padding="8,2" CornerRadius="10" BorderThickness="1" Background="#E6341C26">
-                                                    <Border.BorderBrush>
-                                                        <SolidColorBrush Color="#FF6B6B" Opacity="0.6" />
-                                                    </Border.BorderBrush>
-                                                    <TextBlock Text="🔒 Bloqueada" FontSize="10.5" FontWeight="SemiBold" Foreground="#FFB4B4" />
+                                                        Padding="8,2" CornerRadius="10" BorderThickness="1">
+                                                    <TextBlock FontSize="10.5" FontWeight="SemiBold">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="🔒 Bloqueada" />
+                                                                <Setter Property="Foreground" Value="#FFB4B4" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding ScreenLockBadge}" Value="{x:Static local:ScreenLockText.Locking}">
+                                                                        <Setter Property="Text" Value="{x:Static local:ScreenLockText.Locking}" />
+                                                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
                                                     <Border.Style>
                                                         <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#E6341C26" />
+                                                            <Setter Property="BorderBrush">
+                                                                <Setter.Value>
+                                                                    <SolidColorBrush Color="#FF6B6B" Opacity="0.6" />
+                                                                </Setter.Value>
+                                                            </Setter>
                                                             <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding ScreenLockBadge}" Value="{x:Static local:ScreenLockText.Locking}">
+                                                                    <Setter Property="Background" Value="{StaticResource CardBrush}" />
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+                                                                </DataTrigger>
                                                                 <DataTrigger Binding="{Binding ScreenLockBadge}" Value="">
                                                                     <Setter Property="Visibility" Value="Collapsed" />
                                                                 </DataTrigger>
@@ -328,7 +358,8 @@
                                             </Grid>
                                         </Border>
                                         <!-- The machine's line: a dot for its state (answering, not, or its
-                                             screen locked), its name, and its short status at the right. -->
+                                             screen locked, once the machine says so), its name, and its
+                                             short status at the right. -->
                                         <DockPanel Margin="4,5,4,1">
                                             <Ellipse Width="8" Height="8" Margin="0,0,6,0" VerticalAlignment="Center">
                                                 <Ellipse.Style>
@@ -338,7 +369,7 @@
                                                             <DataTrigger Binding="{Binding Presence}" Value="Online">
                                                                 <Setter Property="Fill" Value="{StaticResource OnlineBrush}" />
                                                             </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Visibility, ElementName=LockPill}" Value="Visible">
+                                                            <DataTrigger Binding="{Binding ScreenLockBadge}" Value="{x:Static local:ScreenLockText.Locked}">
                                                                 <Setter Property="Fill" Value="{StaticResource EnergiaBrush}" />
                                                             </DataTrigger>
                                                         </Style.Triggers>

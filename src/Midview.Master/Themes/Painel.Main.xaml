@@ -201,8 +201,15 @@
                             <ContentPresenter />
                         </Border>
                         <!-- Selection is drawn over the card's edge, inside its padding,
-                             so the screen never moves. Only a selected card's ring
-                             glows: an effect on all 31 at once would weigh. -->
+                             so the screen never moves. Its glow is two faint rings just
+                             outside, in the tile's margin, rather than an effect: the whole
+                             room can be selected at once, and 31 live effects would weigh.
+                             Their negative margins add nothing to the tile's size
+                             (TileChromeWidth). -->
+                        <Border x:Name="SelectionGlowFar" Margin="-4" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2"
+                                CornerRadius="16" Opacity="0.10" IsHitTestVisible="False" Visibility="Collapsed" />
+                        <Border x:Name="SelectionGlowNear" Margin="-2" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2"
+                                CornerRadius="14" Opacity="0.22" IsHitTestVisible="False" Visibility="Collapsed" />
                         <Border x:Name="SelectionRing" BorderBrush="{StaticResource AccentBrush}" BorderThickness="3"
                                 CornerRadius="12" IsHitTestVisible="False" Visibility="Collapsed" />
                     </Grid>
@@ -220,11 +227,8 @@
                             <Setter TargetName="Card" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
                             <Setter TargetName="Card" Property="Background" Value="{StaticResource TileSelectedBrush}" />
                             <Setter TargetName="SelectionRing" Property="Visibility" Value="Visible" />
-                            <Setter TargetName="SelectionRing" Property="Effect">
-                                <Setter.Value>
-                                    <DropShadowEffect Color="#2DD4BF" BlurRadius="18" ShadowDepth="0" Opacity="0.35" />
-                                </Setter.Value>
-                            </Setter>
+                            <Setter TargetName="SelectionGlowNear" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="SelectionGlowFar" Property="Visibility" Value="Visible" />
                         </DataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

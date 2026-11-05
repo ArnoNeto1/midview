@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shell;
 
 namespace Midview.Master;
 
@@ -24,6 +25,9 @@ public partial class MainWindow
     private const int WmNcLButtonDblClk = 0x00A3;
     private const int WmNcMouseLeave = 0x02A2;
     private const int HtMaxButton = 9;
+    private const int HtTop = 12;
+    private const int HtTopLeft = 13;
+    private const int HtTopRight = 14;
     private const uint TmeLeave = 0x02;
     private const uint TmeNonClient = 0x10;
 
@@ -58,11 +62,21 @@ public partial class MainWindow
         ShowWindowState();
     }
 
+    // The caption below the 6 px top resize band, down to the bar's bottom
+    // (32): not over the toolbar under it.
+    private const double RestoredCaptionHeight = 26;
+
     private void ShowWindowState()
     {
         var maximized = WindowState == WindowState.Maximized;
         WindowRoot.Margin = maximized ? MaximizedOverhang() : new Thickness(0);
-        MaximizeButton.Content = maximized ? "" : "";
+        // Maximized, the bar moves down by the margin, past the resize band
+        // (which is off the screen then): the caption follows it.
+        if (WindowChrome.GetWindowChrome(this) is { } chrome)
+        {
+            chrome.CaptionHeight = RestoredCaptionHeight + (maximized ? WindowRoot.Margin.Top : 0);
+        }
+        MaximizeButton.Content = maximized ? "\uE923" : "\uE922";
         AutomationProperties.SetName(MaximizeButton, maximized ? "Restaurar" : "Maximizar");
     }
 
@@ -113,9 +127,18 @@ public partial class MainWindow
     {
         switch (message)
         {
-            case WmNcHitTest when IsOverMaximizeButton(lParam):
-                handled = true;
-                return new IntPtr(HtMaxButton);
+            case WmNcHitTest:
+                var hit = TopEdgeHit(lParam);
+                if (hit == 0 && IsOverMaximizeButton(lParam))
+                {
+                    hit = HtMaxButton;
+                }
+                if (hit != 0)
+                {
+                    handled = true;
+                    return new IntPtr(hit);
+                }
+                break;
             case WmNcMouseMove:
                 // Not handled: Windows goes on to show the snap layouts.
                 var over = wParam.ToInt32() == HtMaxButton;
@@ -149,16 +172,44 @@ public partial class MainWindow
         return IntPtr.Zero;
     }
 
+    // Restored, the top resize band still resizes over the bar's buttons,
+    // which WindowChrome would give to the buttons themselves (they take
+    // their clicks in its caption) and this hook to the snap layouts. 0
+    // anywhere else, left to WindowChrome and to the maximize button.
+    private int TopEdgeHit(IntPtr lParam)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (WindowState != WindowState.Normal || WindowChrome.GetWindowChrome(this) is not { } chrome
+            || hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var window))
+        {
+            return 0;
+        }
+        var (x, y) = ScreenPoint(lParam);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var band = chrome.ResizeBorderThickness;
+        if (y < window.Top || y >= window.Top + band.Top * dpi.DpiScaleY)
+        {
+            return 0;
+        }
+        if (x >= window.Right - band.Right * dpi.DpiScaleX)
+        {
+            return HtTopRight;
+        }
+        return x < window.Left + band.Left * dpi.DpiScaleX ? HtTopLeft : HtTop;
+    }
+
     // lParam holds the mouse's screen position in pixels, as two signed
     // 16-bit numbers (negative on a monitor left of or above the main one).
+    private static (int X, int Y) ScreenPoint(IntPtr lParam) =>
+        ((short)(lParam.ToInt64() & 0xFFFF), (short)((lParam.ToInt64() >> 16) & 0xFFFF));
+
     private bool IsOverMaximizeButton(IntPtr lParam)
     {
         if (!MaximizeButton.IsVisible)
         {
             return false;
         }
-        var x = (short)(lParam.ToInt64() & 0xFFFF);
-        var y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+        var (x, y) = ScreenPoint(lParam);
         var topLeft = MaximizeButton.PointToScreen(new Point(0, 0));
         var bottomRight = MaximizeButton.PointToScreen(new Point(MaximizeButton.ActualWidth, MaximizeButton.ActualHeight));
         return x >= topLeft.X && x < bottomRight.X && y >= topLeft.Y && y < bottomRight.Y;
