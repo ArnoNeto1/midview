@@ -1297,12 +1297,14 @@ public partial class MainWindow : MidviewWindow
             if (e.PropertyName == nameof(MachineTile.Presence))
             {
                 PublishPresence(tile);
+                UpdateTitleChips();
                 UpdateEmptyHint();
             }
         };
         _tiles.Insert(index, tile);
         PublishPresence(tile);
         PublishRoster();
+        UpdateTitleChips();
         // A machine new to a room the teacher organized: the first free cell.
         if (_arranged && RowWidth() > 0)
         {
@@ -1348,6 +1350,7 @@ public partial class MainWindow : MidviewWindow
         UnlockScreen(tile);
         _tiles.RemoveAt(index);
         PublishRoster();
+        UpdateTitleChips();
         // Another entry for the same machine (a hand-edited list) keeps it known.
         if (_tiles.FirstOrDefault(other => string.Equals(
                 other.Machine.SessionThumbprint, tile.Machine.SessionThumbprint, StringComparison.OrdinalIgnoreCase)) is { } same)

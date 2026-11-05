@@ -23,9 +23,10 @@ public partial class MainWindow
     private int _drawnTileWidth = TileSize.Default;
     private double _dpiScale = 1.0;
 
-    // What a tile adds across a row around its screen: the card's border (1
-    // on each side) and the tile's margin (4), App.xaml's MachineTileButton.
-    private const double TileChromeWidth = 10;
+    // What a tile adds across a row around its screen, on each side: the
+    // tile's margin (4), the card's border (1) and its padding (4),
+    // Themes/Painel.Main.xaml's MachineTileButton.
+    private const double TileChromeWidth = 18;
 
     // "Visualizar todos" switched on: every machine shown stays in view, the
     // tiles resized again (FitSoon) whenever that could change -- the window,

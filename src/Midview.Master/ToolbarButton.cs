@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace Midview.Master;
 
@@ -7,14 +8,29 @@ namespace Midview.Master;
 // label, and optionally a small badge on the icon (a lock for locking the
 // screens, a "no" sign for blocking programs and sites). Icon and Badge are
 // glyphs of the Segoe Fluent Icons font (Segoe MDL2 Assets on Windows 10);
-// the look is in App.xaml. OpensOptions puts a small down arrow by the
-// icon, for the buttons that open a window of choices instead of acting
-// right away. Caption is a short text in a small pill under the label
-// ("3º A" on "Pasta da turma" while a lesson is on), shown only when not
-// empty; it takes the label's second line, so it goes on a button whose
-// label fits on one.
+// the look is in Themes/Painel.Main.xaml. OpensOptions puts a small down
+// arrow by the icon, for the buttons that open a window of choices instead
+// of acting right away. Caption is a short text in a small pill under the
+// label ("3º A" on "Pasta da turma" while a lesson is on), shown only when
+// not empty; it takes the label's second line, so it goes on a button whose
+// label fits on one. IconBrush is the color of the button's group, set once
+// on the group's panel and inherited by its buttons and its caption's dot.
 public sealed class ToolbarButton : Button
 {
+    public static readonly DependencyProperty IconBrushProperty =
+        DependencyProperty.RegisterAttached(nameof(IconBrush), typeof(Brush), typeof(ToolbarButton),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
+
+    public static Brush? GetIconBrush(DependencyObject element) => (Brush?)element.GetValue(IconBrushProperty);
+
+    public static void SetIconBrush(DependencyObject element, Brush? value) => element.SetValue(IconBrushProperty, value);
+
+    public Brush? IconBrush
+    {
+        get => (Brush?)GetValue(IconBrushProperty);
+        set => SetValue(IconBrushProperty, value);
+    }
+
     public static readonly DependencyProperty IconProperty =
         DependencyProperty.Register(nameof(Icon), typeof(string), typeof(ToolbarButton), new PropertyMetadata(string.Empty));
 

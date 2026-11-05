@@ -59,6 +59,7 @@ public partial class MainWindow
     {
         var lesson = _classRole.ShownLesson;
         ClassFolderButton.Caption = lesson.IsOn ? lesson.Turma : string.Empty;
+        UpdateTitleChips();
     }
 
     // After every change to _tiles.
