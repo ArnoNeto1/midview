@@ -299,6 +299,11 @@
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                 <Setter Property="TextDecorations" Value="Underline" />
             </Trigger>
+            <!-- Keyboard focus: underlined on a soft accent wash, readable on the dark surface. -->
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                <Setter Property="TextDecorations" Value="Underline" />
+            </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Foreground" Value="{StaticResource TextDisabledBrush}" />
             </Trigger>

@@ -281,16 +281,21 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
                     <Grid Background="Transparent">
-                        <Border Height="4" CornerRadius="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" />
+                        <Border x:Name="Rail" Height="4" CornerRadius="2" Background="{StaticResource LineBrush}" VerticalAlignment="Center" />
                         <Track x:Name="PART_Track">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" IsTabStop="False">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
                                             <Grid Background="Transparent">
-                                                <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                                <Border x:Name="Fill" Height="4" CornerRadius="2" VerticalAlignment="Center"
                                                         Background="{StaticResource AccentBrush}" />
                                             </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Slider}}" Value="False">
+                                                    <Setter TargetName="Fill" Property="Background" Value="{StaticResource TextDisabledBrush}" />
+                                                </DataTrigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
@@ -314,6 +319,10 @@
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter TargetName="Knob" Property="Fill" Value="{StaticResource AccentTextBrush}" />
                                                 </Trigger>
+                                                <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Slider}}" Value="False">
+                                                    <Setter TargetName="Knob" Property="Fill" Value="{StaticResource TextDisabledBrush}" />
+                                                    <Setter TargetName="Knob" Property="Stroke" Value="{StaticResource LineBrush}" />
+                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource AncestorType=Slider}}" Value="True">
                                                     <Setter TargetName="Knob" Property="StrokeThickness" Value="5" />
                                                 </DataTrigger>
@@ -327,6 +336,11 @@
                             </Track.Thumb>
                         </Track>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Rail" Property="Background" Value="{StaticResource LineBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
