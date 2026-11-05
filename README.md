@@ -16,9 +16,9 @@ O Midview gerencia o laboratório de informática da escola. Do próprio computa
 
 ## Veja funcionando
 
-[![Resumo do Midview em 3 minutos, com narração: controle total do seu laboratório, sem complicação](docs/resumo-capa.jpg)](https://arnoneto1.github.io/midview/midview.mp4)
+[![Todas as funções do Midview em menos de 2 minutos, com narração: a sala de aula com todas as telas ao vivo, no visual escuro](docs/resumo-capa.jpg)](https://arnoneto1.github.io/midview/midview.mp4)
 
-[Assista ao resumo com narração](https://arnoneto1.github.io/midview/midview.mp4) (MP4, 3 min): pareamento, a sala ao vivo, desligar com aviso, controlar e bloquear telas, recado, enviar e recolher arquivos, pasta da turma, abrir site, bloquear programas e sites e o painel do laboratório. As máquinas e telas que aparecem nele são fictícias.
+[Assista ao vídeo com narração](https://arnoneto1.github.io/midview/midview.mp4) (MP4, 1min36): todas as funções da barra, no visual escuro da versão 0.0.41. Energia (desligar, reiniciar, ligar e agendar), Tela (ver, controlar e bloquear telas), Turma (mensagem, bate-papo, enviar e recolher arquivos, pasta da turma), Programas e sites (abrir site e programa, instalar, desinstalar, fechar e bloquear programas, bloquear sites) e Configurar (painel do laboratório e máquinas da sala). As máquinas e telas que aparecem nele são fictícias.
 
 ### Tutorial completo
 
