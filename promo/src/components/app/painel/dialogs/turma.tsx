@@ -32,7 +32,16 @@ export const CHAT = pDialog(520, 520);
 export const CHAT_LINES = ["Você: Dúvidas no exercício 3?", "ALUNO-05: Na parte 2, professor!", "ALUNO-02: Eu também."];
 export const CHAT_CTRL = { close: { x: 474, y: -32, w: 46, h: 32 } };
 
-export type ChatState = { appear: number; lines: number[]; closeHover?: number };
+export type ChatState = {
+  appear: number;
+  lines: number[];
+  closeHover?: number;
+  /** Outra conversa (texto de cada linha e a entrada 0→1), no lugar de CHAT_LINES. */
+  transcript?: { text: string; p: number }[];
+  /** Texto sendo digitado no campo e realce do "Enviar". */
+  input?: string;
+  sendHover?: number;
+};
 
 export const ChatDialog: React.FC<{ s: ChatState }> = ({ s }) => (
   <PDialog
@@ -47,17 +56,17 @@ export const ChatDialog: React.FC<{ s: ChatState }> = ({ s }) => (
   >
     <Card box={{ x: 24, y: 94, w: 472, h: 368 }} />
     <div style={{ position: "absolute", left: 37, top: 106, fontSize: 12.5, lineHeight: "17px", color: P.text }}>
-      {CHAT_LINES.map((line, i) => {
-        const p = clamp01(s.lines[i] ?? 0);
+      {(s.transcript ?? CHAT_LINES.map((text, i) => ({ text, p: s.lines[i] ?? 0 }))).map((line) => {
+        const p = clamp01(line.p);
         return p > 0.01 ? (
-          <div key={line} style={{ opacity: p, transform: `translateY(${(1 - p) * 6}px)` }}>
-            {line}
+          <div key={line.text} style={{ opacity: p, transform: `translateY(${(1 - p) * 6}px)` }}>
+            {line.text}
           </div>
         ) : null;
       })}
     </div>
-    <PField box={{ x: 24, y: 474, w: 401, h: 30 }} text="" />
-    <PBtn box={{ x: 433, y: 474, w: 63, h: 30 }} disabled>
+    <PField box={{ x: 24, y: 474, w: 401, h: 30 }} text={s.input ?? ""} caret={Boolean(s.input)} focus={Boolean(s.input)} />
+    <PBtn box={{ x: 433, y: 474, w: 63, h: 30 }} kind={s.input ? "primary" : "normal"} hover={s.sendHover} disabled={!s.input}>
       Enviar
     </PBtn>
   </PDialog>
@@ -112,9 +121,18 @@ export const SendFileDialog: React.FC<{ s: SendFileState }> = ({ s }) => (
 /* ---------- Recolher arquivos (CollectFilesWindow.xaml, foto 41) ---------- */
 
 export const COLLECT = pDialog(566, 643);
-export const COLLECT_CTRL = { run: { x: 37, y: 185, w: 393, h: 28 } };
+export const COLLECT_CTRL = { run: { x: 37, y: 185, w: 393, h: 28 }, emptyStudents: { x: 37, y: 310, w: 288, h: 27 } };
 
-export type CollectState = { appear: number; runHover?: number; runPress?: number; progress: number };
+export type CollectState = {
+  appear: number;
+  runHover?: number;
+  runPress?: number;
+  progress: number;
+  emptyHover?: number;
+  emptyPress?: number;
+  /** "Apagar as pastas dos alunos" (0→1): a lista de resultado troca para o esvaziamento. */
+  emptied?: number;
+};
 
 export const CollectDialog: React.FC<{ s: CollectState }> = ({ s }) => (
   <PDialog title="Recolher arquivos" box={COLLECT} appear={s.appear} icon={PG.download} group="turma" heading="Recolher arquivos" hint={`Da turma toda (${P_TOTAL} máquinas)`}>
@@ -139,19 +157,23 @@ export const CollectDialog: React.FC<{ s: CollectState }> = ({ s }) => (
     <T x={37} y={270} w={496} muted>
       Para começar a próxima aula com tudo vazio. Os arquivos vão para a Lixeira, de onde ainda podem ser recuperados.
     </T>
-    <PBtn box={{ x: 37, y: 310, w: 288, h: 27 }} kind="danger">
+    <PBtn box={COLLECT_CTRL.emptyStudents} kind="danger" hover={s.emptyHover} press={s.emptyPress}>
       Apagar as pastas dos alunos
     </PBtn>
     <PBtn box={{ x: 333, y: 310, w: 196, h: 27 }} kind="danger">
       Apagar os recolhidos neste PC
     </PBtn>
-    <ResultCard
-      box={{ x: 24, y: 361, w: 518, h: 261 }}
-      progress={s.progress}
-      head={`Recolhendo de ${ONLINE.length} máquinas...`}
-      machines={ONLINE}
-      line={(n, i) => ({ text: `${n}: ${2 + (i % 2)} arquivo(s), ${180 + ((i * 37) % 300)} KB`, ok: true })}
-    />
+    {(s.emptied ?? 0) > 0.01 ? (
+      <ResultCard box={{ x: 24, y: 361, w: 518, h: 261 }} progress={s.emptied ?? 0} head="Pastas dos alunos esvaziadas." machines={ONLINE} />
+    ) : (
+      <ResultCard
+        box={{ x: 24, y: 361, w: 518, h: 261 }}
+        progress={s.progress}
+        head={`Recolhendo de ${ONLINE.length} máquinas...`}
+        machines={ONLINE}
+        line={(n, i) => ({ text: `${n}: ${2 + (i % 2)} arquivo(s), ${180 + ((i * 37) % 300)} KB`, ok: true })}
+      />
+    )}
   </PDialog>
 );
 

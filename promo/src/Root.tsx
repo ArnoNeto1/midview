@@ -13,6 +13,7 @@ import { Scene9Encerramento } from "./scenes/Scene9Encerramento";
 import { Scene2Sala, Scene3Tela, Scene4Turma, Scene5Programas, Scene6Energia, Scene7Configurar } from "./scenes/TourScenes";
 import { FPS, HEIGHT, SCENES, TOTAL_FRAMES, WIDTH } from "./timing";
 import { COMPLETO, RESUMO } from "./tutorial/engine";
+import { PAINEL_TUTORIAL } from "./tutorial/painel";
 import { Tutorial } from "./tutorial/Tutorial";
 
 /** Cena isolada sobre o fundo, para ajustar uma cena por vez no Studio. */
@@ -87,6 +88,16 @@ export const RemotionRoot: React.FC = () => (
       component={Tutorial}
       defaultProps={{ theme: "escuro" }}
       durationInFrames={COMPLETO.TOTAL}
+      fps={FPS}
+      width={WIDTH}
+      height={HEIGHT}
+    />
+    {/* O tutorial completo no visual Painel (0.0.41): as mesmas falas, a janela e as janelas novas. */}
+    <Composition
+      id="MidviewTutorialPainel"
+      component={Tutorial}
+      defaultProps={{ theme: "painel" }}
+      durationInFrames={PAINEL_TUTORIAL.TOTAL}
       fps={FPS}
       width={WIDTH}
       height={HEIGHT}

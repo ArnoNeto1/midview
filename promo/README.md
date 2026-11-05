@@ -18,6 +18,7 @@ E dois vídeos no visual **Painel**, o tema escuro do programa do professor a pa
 | Composição | O que é |
 | --- | --- |
 | `MidviewPromoPainel` | 1920×1080, cerca de 1m36s: abertura, tour por todos os botões da barra (Energia, Tela, Turma, Programas e sites, Configurar), cada um com a sua janela, e encerramento. Narração só com falas já gravadas (`public/narracao` e trechos de `public/narracao-tutorial`); "Instalar" e "Desinstalar" não têm fala. |
+| `MidviewTutorialPainel` | 1920×1080, 8m11s: o tutorial completo (as mesmas falas de `MidviewTutorial`) com a janela e as janelas do Painel: Máquinas da sala com o menu de páginas, Agendar com os dias, as chaves e a régua, a caixa de mensagem do próprio Midview e o menu do botão direito escuro. "Instalar programa", que ganhou botão na barra, entra num trecho sem fala. As cenas ficam em `src/tutorial/painel/`. |
 | `MidviewReels` | 1080×1920, 35 s, para o Instagram: as funções principais com legendas grandes dentro da área segura (sem texto nos 250 px de cima nem nos 350 px de baixo) e a logo com o convite no fim. Sem narração. |
 
 ## Comandos
@@ -29,6 +30,7 @@ npx remotion render MidviewPromo out/midview-promo.mp4
 npx remotion render MidviewPromoEscuro out/midview-promo-escuro.mp4
 npx remotion render MidviewPromoPainel out/midview-promo-painel.mp4
 npx remotion render MidviewReels out/midview-reels.mp4
+npx remotion render MidviewTutorialPainel out/midview-tutorial-painel.mp4
 ```
 
 Renderize no Windows: a janela usa as fontes do sistema Segoe UI e Segoe Fluent Icons, como o app (e Bahnschrift, no visual Painel).

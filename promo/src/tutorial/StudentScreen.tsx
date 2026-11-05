@@ -1,6 +1,6 @@
 import React from "react";
 import { useAppTheme } from "../components/app/appTheme";
-import { PCS } from "../components/app/pcs";
+import { PCS, type Pc } from "../components/app/pcs";
 import { Box as Shape, ScreenContent } from "../components/app/ScreenContent";
 import { clamp01, mix } from "../lib/motion";
 
@@ -268,9 +268,9 @@ const Padlock: React.FC<{ p: number }> = ({ p }) => (
 );
 
 /** O monitor do aluno, com a etiqueta "Tela do aluno · PC-03" acima. */
-export const StudentScreen: React.FC<{ s: StudentScreenState; frame: number; width: number }> = ({ s, frame, width }) => {
+export const StudentScreen: React.FC<{ s: StudentScreenState; frame: number; width: number; pcs?: Pc[] }> = ({ s, frame, width, pcs = PCS }) => {
   const theme = useAppTheme();
-  const pc = PCS[s.pc];
+  const pc = pcs[s.pc];
   const k = width / 320;
   const height = Math.round(190 * k);
   return (

@@ -3,6 +3,7 @@ import { spring } from "remotion";
 import type { CursorMove } from "../components/Cursor";
 import type { TileItem } from "../components/app/AppWindow";
 import type { BottomBarProps } from "../components/app/BottomBar";
+import type { PainelTitle } from "../components/app/painel/TitleBar";
 import {
   LAYOUT_FIT,
   TOOLBAR_LAYOUT,
@@ -115,6 +116,8 @@ export type AppFrame = {
   overlay?: React.ReactNode;
   /** A grade some (sala vazia) e este conteúdo fica no lugar. */
   grid?: React.ReactNode;
+  /** Painel: os selos da barra de título. */
+  title?: PainelTitle;
 };
 
 export type BeatFrame = {

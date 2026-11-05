@@ -68,6 +68,8 @@ export const PG = {
   laptop: "",
   sync: "",
   chevronDown: "",
+  chevronRight: "",
+  warning: "",
   minimize: "",
   maximize: "",
   close: "",

@@ -3,7 +3,7 @@ import { IDLE_TILE } from "../../MachineTile";
 import type { Pc } from "../../pcs";
 import { ScreenContent } from "../../ScreenContent";
 import { StudentOverlays } from "../../StudentOverlays";
-import type { Point } from "../../geometry";
+import type { Box, Point } from "../../geometry";
 import { pDialog } from "../geometry";
 import { PBtn, PDialog } from "../kit";
 import { P } from "../palette";
@@ -32,20 +32,35 @@ export type ViewState = {
   disconnectPress?: number;
   /** Cursor do professor dentro da tela do aluno (coordenadas da tela). */
   remote?: Point | null;
+  togglePress?: number;
+  fullHover?: number;
+  fullPress?: number;
+  /** Outra caixa para a janela ("Tela Cheia" ocupa a janela toda). */
+  box?: Box;
+};
+
+/** A tela do aluno (16:9) centrada na área preta de uma janela `w`×`h` (conteúdo). */
+export const viewScreen = (w: number, h: number) => {
+  const sh = Math.min(h - BAR, Math.round((w * 9) / 16));
+  const sw = Math.round((sh * 16) / 9);
+  return { x: Math.round((w - sw) / 2), y: BAR + Math.round((h - BAR - sh) / 2), w: sw, h: sh };
 };
 
 /** A janela de ver e controlar: a barra escura de cima e a tela do aluno em preto. */
 export const ViewWindow: React.FC<{ s: ViewState; pc: Pc; index: number; frame: number }> = ({ s, pc, index, frame }) => {
-  const scr = VIEW_CTRL.screen;
+  const box = s.box ?? VIEW;
+  const scr = s.box ? viewScreen(box.w, box.h - 32) : VIEW_CTRL.screen;
   const k = scr.w / 320;
   const c = s.controlling;
   return (
-    <PDialog title={`Midview - ${c ? "controlando" : "vendo"} ${pc.name}`} box={VIEW} appear={s.appear}>
-      <div style={{ position: "absolute", left: 0, top: 0, width: VIEW.w, height: BAR, background: P.surface, borderBottom: `1px solid ${P.line}` }} />
-      <PBtn box={c ? VIEW_CTRL.toggleOn : VIEW_CTRL.toggle} hover={s.toggleHover}>
+    <PDialog title={`Midview - ${c ? "controlando" : "vendo"} ${pc.name}`} box={box} appear={s.appear}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: box.w, height: BAR, background: P.surface, borderBottom: `1px solid ${P.line}` }} />
+      <PBtn box={c ? VIEW_CTRL.toggleOn : VIEW_CTRL.toggle} hover={s.toggleHover} press={s.togglePress}>
         {c ? "Parar de controlar (só ver)" : "Controlar"}
       </PBtn>
-      <PBtn box={{ x: c ? 182 : 89, y: 6, w: 77, h: 24 }}>Tela Cheia</PBtn>
+      <PBtn box={{ x: c ? 182 : 89, y: 6, w: 77, h: 24 }} hover={s.fullHover} press={s.fullPress}>
+        Tela Cheia
+      </PBtn>
       <PBtn box={VIEW_CTRL.disconnect(c)} hover={s.disconnectHover} press={s.disconnectPress}>
         Desconectar
       </PBtn>
@@ -69,7 +84,7 @@ export const ViewWindow: React.FC<{ s: ViewState; pc: Pc; index: number; frame: 
       >
         {c ? "Controlando: o teclado e o mouse do aluno estão travados." : "Só vendo: o aluno continua usando o computador normalmente."}
       </div>
-      <div style={{ position: "absolute", left: 0, top: BAR, width: VIEW.w, height: VIEW.h - BAR, background: "#000" }} />
+      <div style={{ position: "absolute", left: 0, top: BAR, width: box.w, height: box.h - BAR, background: "#000" }} />
       <div style={{ position: "absolute", left: scr.x, top: scr.y, width: scr.w, height: scr.h, overflow: "hidden", background: "#000" }}>
         <div style={{ position: "absolute", left: 0, top: 0, width: 320, height: 200, transformOrigin: "0 0", transform: `scale(${k}) translateY(-10px)` }}>
           <ScreenContent kind={pc.kind} frame={frame} variant={pc.variant} wallpaper={index} />

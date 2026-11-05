@@ -55,6 +55,8 @@ export const PainelBottomBar: React.FC<BottomBarProps> = ({
   fitOn = 0,
   organize = 0,
   organizeHover = 0,
+  alignHover = 0,
+  alignPress = 0,
 }) => {
   const knob = pSliderKnob(slider);
   const s = P_BOTTOM.slider;
@@ -78,7 +80,7 @@ export const PainelBottomBar: React.FC<BottomBarProps> = ({
           left: 14,
           top: 0,
           bottom: 0,
-          width: P_BOTTOM.organize.x - 40,
+          width: (organize > 0.01 ? P_BOTTOM.align.x : P_BOTTOM.organize.x) - 40,
           display: "flex",
           alignItems: "center",
           fontSize: 13,
@@ -89,6 +91,13 @@ export const PainelBottomBar: React.FC<BottomBarProps> = ({
       >
         {status}
       </div>
+      {organize > 0.01 ? (
+        <div style={{ opacity: clamp01(organize * 1.5) }}>
+          <ToggleBox box={P_BOTTOM.align} hover={alignHover} press={alignPress}>
+            Alinhar
+          </ToggleBox>
+        </div>
+      ) : null}
       <ToggleBox box={P_BOTTOM.organize} hover={organizeHover} on={organize}>
         Organizar sala
       </ToggleBox>

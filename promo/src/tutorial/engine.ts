@@ -17,14 +17,14 @@ export type Slot = { fala: Fala; index: number; from: number; dur: number; speec
 /** Trecho ainda sem cena: a janela parada. */
 const IDLE_BEAT: Beat = { draw: () => ({ app: { tiles: tiles(), toolbar: toolbar(), bottom: bottom() } }) };
 
-/** A linha do tempo de uma lista de falas, com cursor, cliques e câmera em frames absolutos. */
-export const makeTimeline = (falas: Fala[]) => {
+/** A linha do tempo de uma lista de falas (cenas em `beats`), com cursor, cliques e câmera em frames absolutos. */
+export const makeTimeline = (falas: Fala[], beats: Record<string, Beat> = BEATS) => {
   const frames = duracoes as Record<string, number>;
   let from = 0;
   // Cada fala abre um trecho do tamanho dela (ou maior, se a cena pedir).
   const SLOTS: Slot[] = falas.map((fala, index) => {
-    const speech = frames[fala.id] ?? 120;
-    const beat = BEATS[fala.beat ?? fala.id] ?? IDLE_BEAT;
+    const speech = fala.silent ? 0 : (frames[fala.id] ?? 120);
+    const beat = beats[fala.beat ?? fala.id] ?? IDLE_BEAT;
     const dur = Math.max(beat.min ?? 0, LEAD + speech + GAP);
     const slot = { fala, index, from, dur, speech, beat };
     from += dur;

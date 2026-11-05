@@ -11,7 +11,8 @@ const sending = `Enviando para ${ONLINE_PCS.length} máquinas...`;
 export const CLOSE_APPS = pDialog(526, 643);
 export const CLOSE_APPS_CTRL = { run: { x: 24, y: 324, w: 129, h: 28 } };
 
-export type CloseAppsState = { appear: number; runHover?: number; runPress?: number; sent: number };
+export type CloseAppsState = { appear: number; runHover?: number; runPress?: number; sent: number; mode?: 0 | 1; modeHover?: 0 | 1 | null };
+export const CLOSE_APPS_MODE = (m: 0 | 1) => ({ x: 37, y: m === 0 ? 150 : 188, w: 16, h: 16 });
 
 export const CloseAppsDialog: React.FC<{ s: CloseAppsState }> = ({ s }) => (
   <PDialog title="Fechar programas" box={CLOSE_APPS} appear={s.appear} icon={PG.cancel} group="programas" heading="Fechar programas" hint={TURMA_TODA}>
@@ -19,10 +20,10 @@ export const CloseAppsDialog: React.FC<{ s: CloseAppsState }> = ({ s }) => (
       Fecha os programas abertos pelo aluno. A área de trabalho, a barra de tarefas e o Midview nunca são fechados.
     </T>
     <Card box={{ x: 24, y: 135, w: 478, h: 80 }} />
-    <PRadio x={37} y={150} w={452} on={1}>
+    <PRadio x={37} y={150} w={452} on={(s.mode ?? 0) === 0 ? 1 : 0}>
       Pedir para fechar: como clicar no X de cada janela. Programas com trabalho não salvo perguntam ao aluno antes.
     </PRadio>
-    <PRadio x={37} y={188} w={452} on={0}>
+    <PRadio x={37} y={188} w={452} on={s.mode === 1 ? 1 : 0} color={s.mode === 1 ? P.warning : undefined}>
       Forçar: encerra os programas sem perguntar. Trabalho não salvo é perdido.
     </PRadio>
     <Card box={{ x: 24, y: 225, w: 478, h: 86 }} />

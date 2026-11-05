@@ -72,10 +72,13 @@ export const PainelTitleBar: React.FC<{ title: PainelTitle }> = ({ title }) => {
             Aula: {title.lesson}
           </Chip>
         ) : null}
-        <Chip>
-          <span style={{ width: 7, height: 7, borderRadius: 4, background: P.online, marginRight: 5 }} />
-          {title.online} de {title.total} {title.online === 1 ? "ligada" : "ligadas"}
-        </Chip>
+        {/* Some com a sala vazia, como no app (MachineCountText). */}
+        {title.total > 0 ? (
+          <Chip>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: P.online, marginRight: 5 }} />
+            {title.online} de {title.total} {title.online === 1 ? "ligada" : "ligadas"}
+          </Chip>
+        ) : null}
       </div>
       <div style={{ position: "absolute", right: 0, top: 0, height: PAINEL.titleBar, display: "flex" }}>
         {[PG.minimize, PG.maximize, PG.close].map((code) => (

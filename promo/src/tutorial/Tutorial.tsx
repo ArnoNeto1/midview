@@ -13,6 +13,8 @@ import { COLORS } from "../theme";
 import { interpolate } from "remotion";
 import { CHAPTERS, type ChapterId } from "./falas";
 import { COMPLETO, LEAD, RESUMO, type Timeline } from "./engine";
+import { PAINEL_PCS } from "../components/app/painel/geometry";
+import { PAINEL_TUTORIAL } from "./painel";
 import { StudentScreen } from "./StudentScreen";
 import type { BeatFrame } from "./kit";
 
@@ -83,6 +85,7 @@ const chapterSpans = (tl: Timeline) =>
 const SPANS = new Map<Timeline, ReturnType<typeof chapterSpans>>([
   [COMPLETO, chapterSpans(COMPLETO)],
   [RESUMO, chapterSpans(RESUMO)],
+  [PAINEL_TUTORIAL, chapterSpans(PAINEL_TUTORIAL)],
 ]);
 const ChapterBar: React.FC<{ frame: number; tl: Timeline }> = ({ frame, tl }) => {
   const CHAPTER_SPANS = SPANS.get(tl) ?? chapterSpans(tl);
@@ -107,7 +110,14 @@ const ChapterBar: React.FC<{ frame: number; tl: Timeline }> = ({ frame, tl }) =>
 };
 
 /** A janela do app com câmera, cursor e cliques, e a tela do aluno ao lado quando o trecho pede. */
-const AppLayer: React.FC<{ frame: number; f: BeatFrame; hideCursor: boolean; t: number; tl: Timeline }> = ({ frame, f, hideCursor, t, tl }) => {
+const AppLayer: React.FC<{ frame: number; f: BeatFrame; hideCursor: boolean; t: number; tl: Timeline; painel: boolean }> = ({
+  frame,
+  f,
+  hideCursor,
+  t,
+  tl,
+  painel,
+}) => {
   const { CLICKS, cameraAt, cursorAt, pressAt } = tl;
   if (!f.app) return null;
   const split = clamp01(f.split ?? 0);
@@ -129,7 +139,7 @@ const AppLayer: React.FC<{ frame: number; f: BeatFrame; hideCursor: boolean; t: 
     <>
       <div style={{ position: "absolute", left: 0, top: 0, width: clipRight, height: 1080, overflow: "hidden" }}>
       <div style={{ position: "absolute", left: 0, top: 0, width: WIN.w, height: WIN.h, transformOrigin: "0 0", transform: `translate(${tx}px, ${ty}px) scale(${scale})` }}>
-        <AppWindow frame={frame} tiles={f.app.tiles} toolbar={f.app.toolbar} bottom={f.app.bottom}>
+        <AppWindow frame={frame} tiles={f.app.tiles} toolbar={f.app.toolbar} bottom={f.app.bottom} title={f.app.title}>
           {f.app.grid ? (
             <div style={{ position: "absolute", left: 0, top: GRID_TOP, width: WIN.w, height: GRID_BOTTOM - GRID_TOP }}>{f.app.grid}</div>
           ) : null}
@@ -152,19 +162,21 @@ const AppLayer: React.FC<{ frame: number; f: BeatFrame; hideCursor: boolean; t: 
             opacity: clamp01(split * 1.4),
           }}
         >
-          <StudentScreen s={f.student} frame={frame} width={MONITOR.w} />
+          <StudentScreen s={f.student} frame={frame} width={MONITOR.w} pcs={painel ? PAINEL_PCS : undefined} />
         </div>
       ) : null}
     </>
   );
 };
 
+/** `theme: "painel"` usa as cenas do visual Painel (./painel), com a janela e as janelas novas. */
 export type TutorialProps = { theme: AppThemeName; cut?: "completo" | "resumo" };
 
 /** Tutorial do Midview (completo ou resumo): cada fala da narração é um trecho, e a cena se ajusta ao tempo dela. */
 export const Tutorial: React.FC<TutorialProps> = ({ theme, cut = "completo" }) => {
   const frame = useCurrentFrame();
-  const tl = cut === "resumo" ? RESUMO : COMPLETO;
+  const painel = theme === "painel";
+  const tl = painel ? PAINEL_TUTORIAL : cut === "resumo" ? RESUMO : COMPLETO;
   const { SLOTS } = tl;
   const slot = tl.slotAt(frame);
   const t = frame - slot.from;
@@ -183,14 +195,16 @@ export const Tutorial: React.FC<TutorialProps> = ({ theme, cut = "completo" }) =
               {f.custom}
             </Sequence>
           ) : (
-            <AppLayer frame={frame} f={f} hideCursor={Boolean(slot.beat.hideCursor)} t={t} tl={tl} />
+            <AppLayer frame={frame} f={f} hideCursor={Boolean(slot.beat.hideCursor)} t={t} tl={tl} painel={painel} />
           )}
         </AbsoluteFill>
         <Caption frame={frame} tl={tl} />
         <ChapterBar frame={frame} tl={tl} />
-        {SLOTS.map((s) => (
-          <Audio key={s.fala.id} src={staticFile(`narracao-tutorial/${s.fala.id}.mp3`)} from={s.from + LEAD} name={`Fala ${s.fala.id}`} />
-        ))}
+        {SLOTS.map((s) =>
+          s.fala.silent ? null : (
+            <Audio key={s.fala.id} src={staticFile(`narracao-tutorial/${s.fala.id}.mp3`)} from={s.from + LEAD} name={`Fala ${s.fala.id}`} />
+          ),
+        )}
       </AbsoluteFill>
     </AppThemeProvider>
   );

@@ -28,7 +28,7 @@ const confere = () => {
 const SLIDER_SMALL = sliderValue(LAYOUT_SMALL.w);
 
 /** Retângulo de seleção arrastado na grade. */
-const SelectionRect: React.FC<{ box: Box; o: number }> = ({ box, o }) => {
+export const SelectionRect: React.FC<{ box: Box; o: number }> = ({ box, o }) => {
   const theme = useAppTheme();
   return o > 0.01 ? (
     <div
@@ -47,7 +47,7 @@ const SelectionRect: React.FC<{ box: Box; o: number }> = ({ box, o }) => {
 };
 
 /** Plaquinha "Ctrl" perto do cursor. */
-const KeyChip: React.FC<{ at: { x: number; y: number }; o: number }> = ({ at, o }) =>
+export const KeyChip: React.FC<{ at: { x: number; y: number }; o: number }> = ({ at, o }) =>
   o > 0.01 ? (
     <div
       style={{

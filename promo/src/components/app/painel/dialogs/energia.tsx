@@ -1,6 +1,6 @@
 import React from "react";
 import { clamp01 } from "../../../../lib/motion";
-import { pDialog } from "../geometry";
+import { P_TOTAL, pDialog } from "../geometry";
 import { Card, DayPill, PBtn, PCheck, PDialog, PRadio, PSwitch, ResultCard, T, TURMA_TODA, icon } from "../kit";
 import { GROUP_COLOR, P, PG } from "../palette";
 
@@ -25,6 +25,11 @@ export type PowerState = {
   closeHover?: number;
   runHover?: number;
   hover?: number;
+  runPress?: number;
+  cancelHover?: number;
+  cancelPress?: number;
+  /** Envio para as máquinas (0→1) na lista de resultado. */
+  sent?: number;
 };
 
 export const PowerDialog: React.FC<{ s: PowerState }> = ({ s }) => {
@@ -70,11 +75,13 @@ export const PowerDialog: React.FC<{ s: PowerState }> = ({ s }) => {
         Como &quot;Atualizar e {restart ? "reiniciar" : "desligar"}&quot; no menu Iniciar do Windows: instala só o que o Windows já baixou. Pode
         levar alguns minutos a mais em cada máquina. Máquinas sem atualização esperando só {restart ? "reiniciam" : "desligam"}.
       </T>
-      <PBtn box={POWER_CTRL.run} kind="danger" hover={s.runHover}>
+      <PBtn box={POWER_CTRL.run} kind="danger" hover={s.runHover} press={s.runPress}>
         {verb}
       </PBtn>
-      <PBtn box={POWER_CTRL.cancel}>{restart ? "Cancelar reinício" : "Cancelar desligamento"}</PBtn>
-      <ResultCard box={{ x: 24, y: 440, w: 458, h: 182 }} progress={0} />
+      <PBtn box={POWER_CTRL.cancel} hover={s.cancelHover} press={s.cancelPress}>
+        {restart ? "Cancelar reinício" : "Cancelar desligamento"}
+      </PBtn>
+      <ResultCard box={{ x: 24, y: 440, w: 458, h: 182 }} progress={s.sent ?? 0} head={`Enviando para ${P_TOTAL} máquinas...`} />
     </PDialog>
   );
 };
@@ -85,6 +92,8 @@ export const SCHEDULE = pDialog(586, 663);
 const DAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 export const SCHEDULE_CTRL = {
   day: (i: number) => ({ x: 24 + i * 52, y: 121, w: 46, h: 24 }),
+  wakeSwitch: { x: 233, y: 182, w: 36, h: 20 },
+  offSwitch: { x: 508, y: 182, w: 36, h: 20 },
   onTime: { x: 38, y: 216, w: 233, h: 40 },
   save: { x: 417, y: 612, w: 145, h: 30 },
 };
@@ -101,6 +110,9 @@ export type ScheduleState = {
   saveHover?: number;
   savePress?: number;
   saved?: number;
+  /** As chaves "Ligar às" e "Desligar às" (padrão: ligadas). */
+  wakeOn?: number;
+  offOn?: number;
 };
 
 const minutes = (hhmm: string) => {
@@ -108,14 +120,21 @@ const minutes = (hhmm: string) => {
   return h * 60 + m;
 };
 
-const TimeCard: React.FC<{ x: number; glyph: string; label: string; time: string; children: React.ReactNode }> = ({ x, glyph, label, time, children }) => (
+const TimeCard: React.FC<{ x: number; glyph: string; label: string; time: string; on?: number; children: React.ReactNode }> = ({
+  x,
+  glyph,
+  label,
+  time,
+  on = 1,
+  children,
+}) => (
   <>
     <Card box={{ x, y: 163, w: 263, h: 221 }} />
     <span style={{ ...icon(17, GROUP_COLOR.energia), position: "absolute", left: x + 14, top: 183 }}>{glyph}</span>
     <T x={x + 42} y={184} size={13.5} weight={600}>
       {label}
     </T>
-    <PSwitch x={x + 209} y={182} on={1} />
+    <PSwitch x={x + 209} y={182} on={on} />
     <div
       style={{
         position: "absolute",
@@ -124,7 +143,7 @@ const TimeCard: React.FC<{ x: number; glyph: string; label: string; time: string
         width: 233,
         height: 40,
         borderRadius: 6,
-        border: `1px solid ${P.accent}`,
+        border: `1px solid ${on > 0.5 ? P.accent : P.line}`,
         background: P.bg,
         boxSizing: "border-box",
         display: "flex",
@@ -132,7 +151,7 @@ const TimeCard: React.FC<{ x: number; glyph: string; label: string; time: string
         justifyContent: "center",
         fontFamily: 'Consolas, "Cascadia Mono", monospace',
         fontSize: 26,
-        color: P.accentText,
+        color: on > 0.5 ? P.accentText : P.disabled,
         letterSpacing: "0.04em",
       }}
     >
@@ -162,11 +181,11 @@ export const ScheduleDialog: React.FC<{ s: ScheduleState }> = ({ s }) => {
           </DayPill>
         );
       })}
-      <TimeCard x={24} glyph={PG.wake} label="Ligar às" time={s.on}>
+      <TimeCard x={24} glyph={PG.wake} label="Ligar às" time={s.on} on={s.wakeOn ?? 1}>
         Este computador manda o pedido para ligar (Wake-on-LAN) no horário: ele precisa estar ligado ou em suspensão, com você conectado no Windows.
         As máquinas precisam do Wake-on-LAN ativado na BIOS (veja o LEIA-ME do pacote de instalação).
       </TimeCard>
-      <TimeCard x={299} glyph={PG.power} label="Desligar às" time={s.off}>
+      <TimeCard x={299} glyph={PG.power} label="Desligar às" time={s.off} on={s.offOn ?? 1}>
         Cada máquina desliga sozinha, mesmo com este computador desligado. O aluno é avisado 5 minutos antes, e o que não estiver salvo é perdido.
         Durante o aviso, &quot;Desligar a turma...&quot; &gt; &quot;Cancelar desligamento&quot; cancela.
       </TimeCard>

@@ -170,7 +170,9 @@ export const P_BOTTOM = (() => {
   const onlineOnly = box(smaller.x - 12 - 71, 71);
   const fitAll = box(onlineOnly.x - 6 - 104, 104);
   const organize = box(fitAll.x - 12 - 98, 98);
-  return { y, cy, larger, slider, smaller, onlineOnly, fitAll, organize };
+  // "Alinhar" só aparece com "Organizar sala" ligado.
+  const align = box(organize.x - 6 - 60, 60);
+  return { y, cy, larger, slider, smaller, onlineOnly, fitAll, organize, align };
 })();
 
 /** O controle de tamanho vai de 160 a 640 px de largura. */

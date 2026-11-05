@@ -13,7 +13,17 @@ export const OPEN_SITE = pDialog(506, 543);
 export const SITE_TEXT = "escola.edu.br/atividade";
 export const OPEN_SITE_CTRL = { run: { x: 24, y: 302, w: 135, h: 27 } };
 
-export type OpenSiteState = { appear: number; typed: number; runHover?: number; runPress?: number; sent: number };
+export type OpenSiteState = {
+  appear: number;
+  typed: number;
+  runHover?: number;
+  runPress?: number;
+  sent: number;
+  /** "Salvar no menu" (padrão: marcado) e o nome digitado no menu (padrão: "Atividade" quando o endereço está pronto). */
+  save?: number;
+  name?: string;
+};
+export const OPEN_SITE_SAVE = { x: 37, y: 228, w: 120, h: 16 };
 
 export const OpenSiteDialog: React.FC<{ s: OpenSiteState }> = ({ s }) => (
   <PDialog title="Abrir site" box={OPEN_SITE} appear={s.appear} icon={PG.globe} group="programas" heading="Abrir site" hint={TURMA_TODA}>
@@ -26,13 +36,13 @@ export const OpenSiteDialog: React.FC<{ s: OpenSiteState }> = ({ s }) => (
     </T>
     <PField box={{ x: 37, y: 168, w: 432, h: 23 }} text={typed(SITE_TEXT, s.typed)} caret={s.typed < 1} focus />
     <Card box={{ x: 24, y: 214, w: 458, h: 74 }} />
-    <PCheck x={37} y={228} on={1}>
+    <PCheck x={37} y={228} on={s.save ?? 1}>
       Salvar no menu
     </PCheck>
     <T x={61} y={257}>
       Nome no menu:
     </T>
-    <PField box={{ x: 153, y: 252, w: 220, h: 23 }} text={s.typed > 0.99 ? "Atividade" : ""} />
+    <PField box={{ x: 153, y: 252, w: 220, h: 23 }} text={s.name ?? (s.typed > 0.99 ? "Atividade" : "")} caret={s.name !== undefined && s.name.length > 0} />
     <PBtn box={OPEN_SITE_CTRL.run} kind="primary" hover={s.runHover} press={s.runPress}>
       Abrir nas máquinas
     </PBtn>
@@ -137,7 +147,7 @@ export const UNINSTALL_CTRL = {
   run: { x: 24, y: 542, w: 158, h: 29 },
 };
 
-export type UninstallState = { appear: number; checks: number[]; all: number; runHover?: number; runPress?: number; sent: number };
+export type UninstallState = { appear: number; checks: number[]; all: number; runHover?: number; runPress?: number; sent: number; pc?: string };
 
 export const UninstallDialog: React.FC<{ s: UninstallState }> = ({ s }) => (
   <PDialog
@@ -147,7 +157,7 @@ export const UninstallDialog: React.FC<{ s: UninstallState }> = ({ s }) => (
     icon={PG.trash}
     group="programas"
     heading="Desinstalar programa"
-    hint={`Programas instalados em ${PAINEL_PCS[0].name}`}
+    hint={`Programas instalados em ${s.pc ?? PAINEL_PCS[0].name}`}
   >
     <T x={24} y={96} w={592} size={12}>
       A lista é lida de uma máquina. Marque os programas e desinstale nela ou na turma toda; cada máquina acha o programa pelo nome, mesmo numa versão

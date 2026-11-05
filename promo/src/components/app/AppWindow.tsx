@@ -103,7 +103,9 @@ export const AppWindow: React.FC<AppWindowProps> = ({ frame, tiles, toolbar, bot
 /** A janela da sala de aula no visual Painel (0.0.41): barra de título própria, grupos em painéis e cartões. */
 const PainelWindow: React.FC<AppWindowProps> = ({ frame, tiles, toolbar, bottom, title, children }) => {
   const theme = useAppTheme();
-  const online = tiles.filter((t) => t.state.online > 0.5).length;
+  // Sem selos dados, conta as máquinas da grade (as removidas da sala não entram).
+  const inRoom = tiles.filter((t) => t.state.appear > 0.5);
+  const online = inRoom.filter((t) => t.state.online > 0.5).length;
   return (
     <div
       style={{
@@ -116,7 +118,7 @@ const PainelWindow: React.FC<AppWindowProps> = ({ frame, tiles, toolbar, bottom,
         boxShadow: `${theme.window.shadow}, 0 0 0 1px ${theme.window.line}`,
       }}
     >
-      <PainelTitleBar title={title ?? { online, total: tiles.length }} />
+      <PainelTitleBar title={title ?? { online, total: inRoom.length }} />
       <Toolbar {...toolbar} />
       <div style={{ position: "absolute", left: 0, top: P_GRID_TOP, width: WIN.w, height: P_GRID_BOTTOM - P_GRID_TOP, overflow: "hidden" }}>
         {tiles.map((t) => (

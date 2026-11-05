@@ -35,8 +35,11 @@ export const CHAPTERS: Record<ChapterId, string> = {
   encerramento: "Midview",
 };
 
-/** `beat` reaproveita a cena de outra fala (o resumo abre com a cena de t01). */
-export type Fala = { id: string; chapter: ChapterId; say: string; caption?: string; beat?: string };
+/**
+ * `beat` reaproveita a cena de outra fala (o resumo abre com a cena de t01).
+ * `silent`: trecho sem fala gravada (só legenda), com a duração que a cena pede.
+ */
+export type Fala = { id: string; chapter: ChapterId; say: string; caption?: string; beat?: string; silent?: boolean };
 
 export const FALAS: Fala[] = [
   { id: "t01", chapter: "abertura", say: "Este é o Midview, o programa que coloca o laboratório de informática inteiro na tela do professor. Vamos ver, passo a passo, tudo o que ele faz." },
