@@ -43,6 +43,16 @@ public partial class ScheduleWindow : MidviewWindow
             ShutdownTimeTextBox.Text = PowerSchedule.FormatTime(shutdownMinute);
         }
         ShowLastRun();
+
+        // The ruler follows the switches and the times, however they change.
+        foreach (var box in new[] { WakeCheckBox, ShutdownCheckBox })
+        {
+            box.Checked += (_, _) => UpdateTimeline();
+            box.Unchecked += (_, _) => UpdateTimeline();
+        }
+        WakeTimeTextBox.TextChanged += (_, _) => UpdateTimeline();
+        ShutdownTimeTextBox.TextChanged += (_, _) => UpdateTimeline();
+        UpdateTimeline();
     }
 
     private (DayOfWeek Day, CheckBox Box)[] DayBoxes => new[]
@@ -171,4 +181,38 @@ public partial class ScheduleWindow : MidviewWindow
         var lastRun = WakeTask.LastRun(WakeTask.LogPath);
         LastRunTextBlock.Text = lastRun is null ? string.Empty : $"Última vez que a tarefa para ligar rodou: {lastRun}";
     }
+
+    private void OnTimelineSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        TimelineClip.Rect = new Rect(0, 0, TimelineTrack.ActualWidth, TimelineTrack.ActualHeight);
+        UpdateTimeline();
+    }
+
+    // Draws the on stretches over the day ruler. A time counts only while its
+    // switch is on and its text is a valid time; an invalid one is left out
+    // here and reported when saving, as before.
+    private void UpdateTimeline()
+    {
+        var (segments, text) = ScheduleTimeline.For(ReadTime(WakeCheckBox, WakeTimeTextBox), ReadTime(ShutdownCheckBox, ShutdownTimeTextBox));
+        TimelineTextBlock.Text = text;
+        var width = TimelineTrack.ActualWidth;
+        var bars = new[] { TimelineFirstSegment, TimelineSecondSegment };
+        for (var i = 0; i < bars.Length; i++)
+        {
+            if (i < segments.Count)
+            {
+                var left = segments[i].Start * width;
+                bars[i].Margin = new Thickness(left, 3, 0, 3);
+                bars[i].Width = Math.Max(0, (segments[i].End - segments[i].Start) * width);
+                bars[i].Visibility = Visibility.Visible;
+            }
+            else
+            {
+                bars[i].Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    private static int? ReadTime(CheckBox on, TextBox box) =>
+        on.IsChecked == true && PowerSchedule.TryParseTime(box.Text, out var minute) ? minute : null;
 }
