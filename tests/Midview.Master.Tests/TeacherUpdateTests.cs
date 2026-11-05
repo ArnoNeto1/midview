@@ -285,6 +285,7 @@ public sealed class TeacherUpdateTests : IDisposable
         Assert.Equal(("0.0.39", "0.0.40"), content.Versions);
         Assert.Equal("Atualizar agora", content.Yes);
         Assert.Equal("Agora não", content.No);
+        Assert.Equal(QuestionButtons.ActionOnRight, content.Buttons);
         Assert.Equal(
             new[]
             {

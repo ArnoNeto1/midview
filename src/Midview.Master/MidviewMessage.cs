@@ -2,9 +2,9 @@ using System.Windows;
 
 namespace Midview.Master;
 
-// Midview's own MessageBox: same arguments and answers, drawn in the Painel
-// look. Closing the window or pressing Esc answers No in a YesNo box and OK in
-// an OK box, as the system one does.
+// Midview's own MessageBox: same arguments, answers and button order, drawn in
+// the Painel look. Closing the window or pressing Esc answers No in a YesNo box
+// and OK in an OK box, as the system one does.
 public static class MidviewMessage
 {
     public static MessageBoxResult Show(
@@ -13,7 +13,8 @@ public static class MidviewMessage
     {
         var (yes, no) = Labels(buttons);
         var content = new QuestionContent(
-            title, IconFor(image), title, yes, no, Body: text, NoIsDefault: defaultResult == MessageBoxResult.No);
+            title, IconFor(image), title, yes, no, Body: text, NoIsDefault: defaultResult == MessageBoxResult.No,
+            Buttons: ButtonsFor(buttons, image, defaultResult));
         var answeredYes = QuestionWindow.Ask(owner, content);
         if (buttons == MessageBoxButton.YesNo)
         {
@@ -29,6 +30,13 @@ public static class MidviewMessage
     // Only the two button sets the app uses.
     internal static (string Yes, string? No) Labels(MessageBoxButton buttons) =>
         buttons == MessageBoxButton.YesNo ? ("Sim", "Não") : ("OK", null);
+
+    // Windows' order, "Sim" before "Não". A "Sim" that a warning asks about, or
+    // that the box doesn't offer as its default, is drawn as dangerous.
+    internal static QuestionButtons ButtonsFor(MessageBoxButton buttons, MessageBoxImage image, MessageBoxResult defaultResult) =>
+        buttons == MessageBoxButton.YesNo && (image == MessageBoxImage.Warning || defaultResult == MessageBoxResult.No)
+            ? QuestionButtons.YesFirstDanger
+            : QuestionButtons.YesFirst;
 
     // Glyphs of the icon font: info, warning, error, question.
     internal static string IconFor(MessageBoxImage image) => image switch

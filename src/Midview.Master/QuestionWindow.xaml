@@ -31,7 +31,8 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
         <TextBlock x:Name="BodyTextBlock" TextWrapping="Wrap" Margin="0,16,0,0" Visibility="Collapsed" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+        <!-- "No | Yes" as drawn here; a message box puts Yes first (QuestionContent.Buttons). -->
+        <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
             <Button x:Name="NoButton" IsCancel="True" Margin="0,0,8,0" Padding="16,5" MinWidth="80" />
             <Button x:Name="YesButton" Click="OnYesClicked" IsDefault="True" Style="{StaticResource PrimaryButton}" Padding="16,5" MinWidth="80" />
         </StackPanel>

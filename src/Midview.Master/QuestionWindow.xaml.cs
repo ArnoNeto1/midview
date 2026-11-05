@@ -32,6 +32,16 @@ public partial class QuestionWindow : MidviewWindow
             BodyTextBlock.Visibility = Visibility.Visible;
         }
         YesButton.Content = content.Yes;
+        var (yesFirst, yesStyle) = Arrangement(content.Buttons);
+        YesButton.Style = (Style)FindResource(yesStyle);
+        if (yesFirst)
+        {
+            ButtonsPanel.Children.Remove(YesButton);
+            ButtonsPanel.Children.Insert(0, YesButton);
+            // The gap goes after the first button, and only when there are two.
+            YesButton.Margin = content.No is null ? new Thickness(0) : NoButton.Margin;
+            NoButton.Margin = new Thickness(0);
+        }
 
         Button defaultButton = YesButton;
         if (content.No is { } no)
@@ -73,6 +83,14 @@ public partial class QuestionWindow : MidviewWindow
 
     public static bool Ask(Window owner, string title, string question, string yes, string no) =>
         Ask(owner, new QuestionContent(title, "", question, yes, no));
+
+    // Whether the yes button comes first, and its style (a resource key).
+    internal static (bool YesFirst, string YesStyle) Arrangement(QuestionButtons buttons) => buttons switch
+    {
+        QuestionButtons.YesFirst => (true, "PrimaryButton"),
+        QuestionButtons.YesFirstDanger => (true, "DangerButton"),
+        _ => (false, "PrimaryButton"),
+    };
 
     private void OnYesClicked(object sender, RoutedEventArgs e) => DialogResult = true;
 }
