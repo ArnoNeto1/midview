@@ -95,11 +95,11 @@ public partial class MainWindow
         if (_classHandOver.IsRunning)
         {
             e.Cancel = true;
-            MessageBox.Show(this, ClassFolderText.HandOverStillRunning, "Midview", MessageBoxButton.OK, MessageBoxImage.Information);
+            MidviewMessage.Show(this, ClassFolderText.HandOverStillRunning, "Midview", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else if (_classHandOver.Unconfirmed is { Count: > 0 } pcs)
         {
-            e.Cancel = MessageBox.Show(
+            e.Cancel = MidviewMessage.Show(
                 this, ClassFolderText.HandOverUnconfirmed(pcs), "Midview", MessageBoxButton.YesNo, MessageBoxImage.Question,
                 MessageBoxResult.No) != MessageBoxResult.Yes;
         }

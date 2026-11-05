@@ -175,7 +175,7 @@ public partial class ClassFolderWindow
             return;
         }
         var tooBigForTheBin = row.Class.Bytes > _binBytes;
-        if (MessageBox.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin, _controller.HomeName), "Excluir turma",
+        if (MidviewMessage.Show(this, ClassFolderText.DeleteQuestion(row.Class, tooBigForTheBin, _controller.HomeName), "Excluir turma",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
         {
             return;

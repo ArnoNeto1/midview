@@ -57,7 +57,7 @@ public partial class ClassFolderWindow
                 home, read.Classes.Count, read.Classes.Sum(summary => summary.Files), read.Classes.Sum(summary => summary.Bytes),
                 handOver.MachineName, ownClasses);
         }
-        if (MessageBox.Show(this, question, ClassFolderText.TakeOverButton, MessageBoxButton.YesNo, MessageBoxImage.Warning,
+        if (MidviewMessage.Show(this, question, ClassFolderText.TakeOverButton, MessageBoxButton.YesNo, MessageBoxImage.Warning,
                 MessageBoxResult.No) != MessageBoxResult.Yes)
         {
             return;

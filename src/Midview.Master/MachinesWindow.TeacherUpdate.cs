@@ -85,7 +85,7 @@ public partial class MachinesWindow
             TeacherVersionTextBlock.Text = problem;
             return;
         }
-        if (MessageBox.Show(this,
+        if (MidviewMessage.Show(this,
                 $"Atualizar o Midview deste PC da versão {TeacherUpdate.CurrentVersion} para a {release.Version}?\n\n" +
                 "Ele baixa o instalador do GitHub e depois fecha para instalar, o que leva 1 ou 2 minutos; no fim, abre de novo sozinho. " +
                 "Ao fechar, as telas bloqueadas dos alunos são liberadas.\n\n" +
@@ -186,7 +186,7 @@ public partial class MachinesWindow
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             // The windows are gone already: said on its own, then the Midview ends.
-            MessageBox.Show(
+            MidviewMessage.Show(
                 $"A atualização não pôde começar: {ErrorText.Describe(ex)}. Abra o Midview de novo e tente outra vez.",
                 "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Error);
         }

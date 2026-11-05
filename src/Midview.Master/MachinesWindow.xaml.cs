@@ -81,7 +81,7 @@ public partial class MachinesWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
         {
-            MessageBox.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
+            MidviewMessage.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
                 "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
@@ -93,7 +93,7 @@ public partial class MachinesWindow : MidviewWindow
 
     private void OnRemoveAdminPasswordClicked(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "Remover a senha de administrador guardada neste computador?",
+        if (MidviewMessage.Show(this, "Remover a senha de administrador guardada neste computador?",
                 "Senha de administrador", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             return;
@@ -104,7 +104,7 @@ public partial class MachinesWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Não foi possível remover a senha: {ErrorText.Describe(ex)}",
+            MidviewMessage.Show(this, $"Não foi possível remover a senha: {ErrorText.Describe(ex)}",
                 "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         RefreshAdminPasswordStatus();

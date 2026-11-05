@@ -3,13 +3,37 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
         SizeToContent="Height" Width="460"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False"
-        FocusManager.FocusedElement="{Binding ElementName=YesButton}">
-    <StackPanel Margin="20">
-        <TextBlock x:Name="QuestionTextBlock" TextWrapping="Wrap" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-            <Button x:Name="YesButton" Click="OnYesClicked" IsDefault="True" Padding="16,4" />
-            <Button x:Name="NoButton" IsCancel="True" Margin="8,0,0,0" Padding="16,4" />
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False">
+    <StackPanel Margin="24,22,24,20">
+        <local:DialogHeader x:Name="Header" />
+        <StackPanel x:Name="VersionsPanel" Orientation="Horizontal" Margin="0,16,0,0" Visibility="Collapsed">
+            <Label x:Name="FromChip" Style="{StaticResource StatusChip}" />
+            <TextBlock Text="&#xE72A;" FontFamily="{StaticResource IconFont}" FontSize="12" Margin="10,0"
+                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+            <Label x:Name="ToChip" Style="{StaticResource StatusChip}"
+                   Foreground="{StaticResource AccentTextBrush}" BorderBrush="{StaticResource AccentBrush}" />
+        </StackPanel>
+        <ItemsControl x:Name="FactsList" Margin="0,16,0,0" Focusable="False">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:QuestionFact}">
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource CardBrush}" VerticalAlignment="Top">
+                            <TextBlock Text="{Binding Icon}" FontFamily="{StaticResource IconFont}" FontSize="14"
+                                       Foreground="{StaticResource TelaBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="BodyTextBlock" TextWrapping="Wrap" Margin="0,16,0,0" Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+            <Button x:Name="NoButton" IsCancel="True" Margin="0,0,8,0" Padding="16,5" MinWidth="80" />
+            <Button x:Name="YesButton" Click="OnYesClicked" IsDefault="True" Style="{StaticResource PrimaryButton}" Padding="16,5" MinWidth="80" />
         </StackPanel>
     </StackPanel>
 </local:MidviewWindow>

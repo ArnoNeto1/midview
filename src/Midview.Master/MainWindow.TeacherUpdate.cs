@@ -37,8 +37,7 @@ public partial class MainWindow
         {
             return;
         }
-        if (QuestionWindow.Ask(this, "Atualizar professor", TeacherUpdate.NewVersionQuestion(current, release.Version),
-                "Atualizar agora", "Agora não"))
+        if (QuestionWindow.Ask(this, TeacherUpdate.NewVersionContent(current, release.Version)))
         {
             OpenMachinesWindow(search: false);
             _machinesWindow?.StartTeacherUpdate(release);

@@ -276,15 +276,23 @@ public sealed class TeacherUpdateTests : IDisposable
     }
 
     [Fact]
-    public void NewVersionQuestion_SaysBothVersionsAndWhatHappens()
+    public void NewVersionContent_SaysBothVersionsAndWhatHappens()
     {
-        var question = TeacherUpdate.NewVersionQuestion(new Version(0, 0, 39), new Version(0, 0, 40));
+        var content = TeacherUpdate.NewVersionContent(new Version(0, 0, 39), new Version(0, 0, 40));
 
-        Assert.StartsWith("Chegou uma versão nova do Midview: 0.0.40 (este PC está na 0.0.39).", question);
-        Assert.Contains("1 ou 2 minutos", question);
-        Assert.Contains("telas bloqueadas dos alunos são liberadas", question);
-        Assert.Contains("permissão de administrador", question);
-        Assert.EndsWith("Deseja atualizar agora?", question);
+        Assert.Equal("Atualizar professor", content.Title);
+        Assert.Equal("Chegou uma versão nova do Midview", content.Heading);
+        Assert.Equal(("0.0.39", "0.0.40"), content.Versions);
+        Assert.Equal("Atualizar agora", content.Yes);
+        Assert.Equal("Agora não", content.No);
+        Assert.Equal(
+            new[]
+            {
+                "O Midview fecha e abre de novo sozinho, o que leva 1 ou 2 minutos.",
+                "Enquanto isso, as telas bloqueadas dos alunos são liberadas.",
+                "O Windows vai pedir permissão de administrador.",
+            },
+            content.Facts!.Select(f => f.Text));
     }
 
     [Fact]

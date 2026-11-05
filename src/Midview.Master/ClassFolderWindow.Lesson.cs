@@ -138,7 +138,7 @@ public partial class ClassFolderWindow
         }
         var question = ClassFolderText.EndQuestion(
             choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice), _controller.HomeName);
-        return question is null || MessageBox.Show(this, question, "Encerrar a aula", MessageBoxButton.YesNo,
+        return question is null || MidviewMessage.Show(this, question, "Encerrar a aula", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 

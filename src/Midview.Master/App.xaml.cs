@@ -76,7 +76,7 @@ public partial class App : Application
             window.ContentRendered -= OnShown;
             if (_updateNotice is { } notice)
             {
-                MessageBox.Show(window, notice, "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Information);
+                MidviewMessage.Show(window, notice, "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Information);
                 if (_updatedWell)
                 {
                     window.OfferStudentUpdate();

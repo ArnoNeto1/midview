@@ -313,11 +313,15 @@ public static class TeacherUpdate
     // What the teacher is asked when the Midview opens and GitHub has a newer
     // version: the same warnings as the button in Máquinas da sala, since
     // answering yes goes straight to the download.
-    public static string NewVersionQuestion(Version current, Version available) =>
-        $"Chegou uma versão nova do Midview: {available} (este PC está na {current}).\n\n" +
-        "Para instalar, o Midview fecha e abre de novo sozinho, o que leva 1 ou 2 minutos. " +
-        "Enquanto isso, as telas bloqueadas dos alunos são liberadas. O Windows vai pedir permissão de administrador.\n\n" +
-        "Deseja atualizar agora?";
+    public static QuestionContent NewVersionContent(Version current, Version available) =>
+        new("Atualizar professor", "", "Chegou uma versão nova do Midview", "Atualizar agora", "Agora não",
+            Facts: new QuestionFact[]
+            {
+                new("", "O Midview fecha e abre de novo sozinho, o que leva 1 ou 2 minutos."),
+                new("", "Enquanto isso, as telas bloqueadas dos alunos são liberadas."),
+                new("", "O Windows vai pedir permissão de administrador."),
+            },
+            Versions: (current.ToString(), available.ToString()));
 
     // "v0.0.38", "0.0.38" or "0.0.38+abc" as a version; null for anything else.
     private static Version? ParseVersion(string? text)

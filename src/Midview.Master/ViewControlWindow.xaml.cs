@@ -474,7 +474,7 @@ public partial class ViewControlWindow : MidviewWindow
         var password = store.Load();
         if (password is null)
         {
-            MessageBox.Show(this,
+            MidviewMessage.Show(this,
                 "Não foi possível ler a senha guardada. Use \"Trocar senha de administrador...\" para digitá-la de novo.",
                 "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -521,7 +521,7 @@ public partial class ViewControlWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
         {
-            MessageBox.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
+            MidviewMessage.Show(this, $"Não foi possível guardar a senha: {ErrorText.Describe(ex)}",
                 "Senha de administrador", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
