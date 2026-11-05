@@ -84,15 +84,21 @@ public class ThemeXamlTests
             "SelectedLineBrush", "SelectedFillBrush", "SelectionBandFillBrush",
         };
 
+        // A scan that finds no file would pass without checking anything.
+        var xamlFiles = Directory.GetFiles(masterDir, "*.xaml", SearchOption.AllDirectories).Where(Own).ToList();
+        var codeFiles = Directory.GetFiles(masterDir, "*.cs", SearchOption.AllDirectories).Where(Own).ToList();
+        Assert.NotEmpty(xamlFiles);
+        Assert.NotEmpty(codeFiles);
+
         var found = new List<string>();
-        foreach (var file in Directory.GetFiles(masterDir, "*.xaml", SearchOption.AllDirectories).Where(Own))
+        foreach (var file in xamlFiles)
         {
             var text = File.ReadAllText(file);
             foreach (var bad in forbidden)
                 if (text.Contains(bad, StringComparison.OrdinalIgnoreCase))
                     found.Add($"{Path.GetRelativePath(masterDir, file)}: {bad}");
         }
-        foreach (var file in Directory.GetFiles(masterDir, "*.cs", SearchOption.AllDirectories).Where(Own))
+        foreach (var file in codeFiles)
             if (File.ReadAllText(file).Contains("MessageBox.Show("))
                 found.Add($"{Path.GetRelativePath(masterDir, file)}: MessageBox.Show(");
 

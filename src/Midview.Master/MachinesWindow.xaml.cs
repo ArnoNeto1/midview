@@ -137,8 +137,7 @@ public partial class MachinesWindow : MidviewWindow
 
     public async Task SearchAsync()
     {
-        SearchButton.IsEnabled = false;
-        SearchStatusTextBlock.Text = "Procurando...";
+        ShowSearching();
         try
         {
             var thumbprint = _masterCertificate.Thumbprint;
@@ -170,6 +169,15 @@ public partial class MachinesWindow : MidviewWindow
             SearchButton.IsEnabled = true;
             UpdatePairButton();
         }
+    }
+
+    // A search shows on its own page, whichever page was open ("Procurar
+    // máquinas na rede" with the window already open on another one).
+    private void ShowSearching()
+    {
+        ShowPage(MachinesPage.Search);
+        SearchButton.IsEnabled = false;
+        SearchStatusTextBlock.Text = "Procurando...";
     }
 
     // Rows still being paired stay; the rest are replaced by what answered.

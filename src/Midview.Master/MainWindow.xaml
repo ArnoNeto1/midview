@@ -261,7 +261,9 @@
                                              tagged "varias" show, those tagged "uma" (one machine only) hide,
                                              and the rest act on all of them. -->
                                         <ContextMenu>
-                                            <MenuItem Tag="varias" IsEnabled="False" FontWeight="SemiBold" Visibility="Collapsed" />
+                                            <!-- "N máquinas selecionadas": a heading, not an item. It stays enabled so it
+                                                 reads in full text, but the mouse and the arrow keys pass over it. -->
+                                            <MenuItem Tag="varias" Focusable="False" IsHitTestVisible="False" FontWeight="SemiBold" Visibility="Collapsed" />
                                             <Separator Tag="varias" Visibility="Collapsed" />
                                             <!-- Energia first, as on the toolbar. -->
                                             <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />

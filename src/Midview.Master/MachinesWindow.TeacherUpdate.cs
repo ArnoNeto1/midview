@@ -169,34 +169,47 @@ public partial class MachinesWindow
         TeacherVersionTextBlock.Text = "Fechando o Midview para instalar...";
         // With the default shutdown mode the app starts ending as the last window
         // closes, and the error message below would have no window life left to
-        // show in: the explicit Shutdown() at the end ends it instead.
+        // show in: the explicit Shutdown() in the finally ends it instead, on
+        // every path from here, unless the close is refused (then the mode
+        // goes back to how it was).
         var shutdownMode = Application.Current.ShutdownMode;
         Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        var main = Application.Current.MainWindow;
-        main?.Close();
-        if (main is { IsVisible: true })
-        {
-            Application.Current.ShutdownMode = shutdownMode;
-            _teacherUpdating = false;
-            TeacherVersionTextBlock.Text = "A atualização ficou para depois: o Midview não fechou.";
-            TeacherUpdateButton.Content = $"Atualizar para a {release.Version}...";
-            TeacherUpdateButton.IsEnabled = true;
-            return;
-        }
-
+        var shutDown = true;
         try
         {
-            Process.Start(TeacherUpdate.ApplyStartInfo(
-                script, setup, release.Sha256, Environment.ProcessId, program,
-                TeacherUpdate.LogPath(TeacherUpdate.Folder, release.Version), release.Version))?.Dispose();
+            var main = Application.Current.MainWindow;
+            main?.Close();
+            if (main is { IsVisible: true })
+            {
+                shutDown = false;
+                Application.Current.ShutdownMode = shutdownMode;
+                _teacherUpdating = false;
+                TeacherVersionTextBlock.Text = "A atualização ficou para depois: o Midview não fechou.";
+                TeacherUpdateButton.Content = $"Atualizar para a {release.Version}...";
+                TeacherUpdateButton.IsEnabled = true;
+                return;
+            }
+
+            try
+            {
+                Process.Start(TeacherUpdate.ApplyStartInfo(
+                    script, setup, release.Sha256, Environment.ProcessId, program,
+                    TeacherUpdate.LogPath(TeacherUpdate.Folder, release.Version), release.Version))?.Dispose();
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+            {
+                // The windows are gone already: said on its own, then the Midview ends.
+                MidviewMessage.Show(
+                    $"A atualização não pôde começar: {ErrorText.Describe(ex)}. Abra o Midview de novo e tente outra vez.",
+                    "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        finally
         {
-            // The windows are gone already: said on its own, then the Midview ends.
-            MidviewMessage.Show(
-                $"A atualização não pôde começar: {ErrorText.Describe(ex)}. Abra o Midview de novo e tente outra vez.",
-                "Atualizar professor", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (shutDown)
+            {
+                Application.Current.Shutdown();
+            }
         }
-        Application.Current.Shutdown();
     }
 }
