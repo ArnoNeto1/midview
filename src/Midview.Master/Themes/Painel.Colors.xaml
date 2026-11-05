@@ -30,23 +30,4 @@
 
     <FontFamily x:Key="UiFont">Bahnschrift, Segoe UI</FontFamily>
     <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
-
-    <!-- The old light-theme names, kept with dark values until the last task of the
-         redesign moves every use to the names above and deletes these. -->
-    <SolidColorBrush x:Key="SlateBrush" Color="#0A111E" />
-    <SolidColorBrush x:Key="SlateHoverBrush" Color="#17233A" />
-    <SolidColorBrush x:Key="SlatePressedBrush" Color="#1F2C45" />
-    <SolidColorBrush x:Key="SlateLineBrush" Color="#22314D" />
-    <SolidColorBrush x:Key="ChalkTextBrush" Color="#DCE6F5" />
-    <SolidColorBrush x:Key="ChalkMutedBrush" Color="#8394AE" />
-    <SolidColorBrush x:Key="ChalkDisabledBrush" Color="#4A5872" />
-    <SolidColorBrush x:Key="ChalkYellowBrush" Color="#2DD4BF" />
-    <SolidColorBrush x:Key="CanvasBrush" Color="#0A111E" />
-    <SolidColorBrush x:Key="CardLineBrush" Color="#22314D" />
-    <SolidColorBrush x:Key="CardLineHoverBrush" Color="#3A4D70" />
-    <SolidColorBrush x:Key="InkBrush" Color="#DCE6F5" />
-    <SolidColorBrush x:Key="InkMutedBrush" Color="#8394AE" />
-    <SolidColorBrush x:Key="SelectedLineBrush" Color="#2DD4BF" />
-    <SolidColorBrush x:Key="SelectedFillBrush" Color="#132A33" />
-    <SolidColorBrush x:Key="SelectionBandFillBrush" Color="#2DD4BF" Opacity="0.15" />
 </ResourceDictionary>

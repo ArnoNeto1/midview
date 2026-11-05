@@ -65,4 +65,37 @@ public class ThemeXamlTests
 
         Assert.True(offenders.Count == 0, "Windows not derived from MidviewWindow:\n" + string.Join("\n", offenders));
     }
+
+    [Fact]
+    public void NoLightColorsOrWindowsMessageBoxesLeft()
+    {
+        var masterDir = Path.Combine(RepoRoot(), "src", "Midview.Master");
+        var sep = Path.DirectorySeparatorChar;
+        bool Own(string f) => !f.Contains($"{sep}obj{sep}") && !f.Contains($"{sep}bin{sep}");
+
+        var forbidden = new[]
+        {
+            "#B3261E", "#FAFAFA", "#E0E0E0", "#E3E3E3", "#FDECEA", "#F2B8B5", "#2D2D30", "#5A4A1E",
+            "Foreground=\"Gray\"", "Foreground=\"White\"", "Background=\"White\"",
+            // The old light-theme names.
+            "SlateBrush", "SlateHoverBrush", "SlatePressedBrush", "SlateLineBrush",
+            "ChalkTextBrush", "ChalkMutedBrush", "ChalkDisabledBrush", "ChalkYellowBrush",
+            "CanvasBrush", "CardLineBrush", "CardLineHoverBrush", "InkBrush", "InkMutedBrush",
+            "SelectedLineBrush", "SelectedFillBrush", "SelectionBandFillBrush",
+        };
+
+        var found = new List<string>();
+        foreach (var file in Directory.GetFiles(masterDir, "*.xaml", SearchOption.AllDirectories).Where(Own))
+        {
+            var text = File.ReadAllText(file);
+            foreach (var bad in forbidden)
+                if (text.Contains(bad, StringComparison.OrdinalIgnoreCase))
+                    found.Add($"{Path.GetRelativePath(masterDir, file)}: {bad}");
+        }
+        foreach (var file in Directory.GetFiles(masterDir, "*.cs", SearchOption.AllDirectories).Where(Own))
+            if (File.ReadAllText(file).Contains("MessageBox.Show("))
+                found.Add($"{Path.GetRelativePath(masterDir, file)}: MessageBox.Show(");
+
+        Assert.True(found.Count == 0, "Light colours or Windows message boxes:\n" + string.Join("\n", found));
+    }
 }
