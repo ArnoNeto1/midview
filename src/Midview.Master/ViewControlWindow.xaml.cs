@@ -438,9 +438,12 @@ public partial class ViewControlWindow : MidviewWindow
     {
         Title = $"Midview - {(_controlling ? "controlando" : "vendo")} {_machineName}";
         ControlButton.Content = _controlling ? "Parar de controlar (só ver)" : "Controlar";
-        ModeTextBlock.Text = _controlling
+        ModeTextBlock.Content = _controlling
             ? "Controlando: o teclado e o mouse do aluno estão travados."
             : "Só vendo: o aluno continua usando o computador normalmente.";
+        // The chip is accent-colored while controlling, muted while only viewing.
+        ModeTextBlock.Background = (Brush)FindResource(_controlling ? "AccentSoftBrush" : "CardBrush");
+        ModeTextBlock.Foreground = (Brush)FindResource(_controlling ? "AccentTextBrush" : "TextMutedBrush");
         CompatibilityNote.Visibility = _controlling && _endpoint == ControlEndpoint.Session
             ? Visibility.Visible
             : Visibility.Collapsed;

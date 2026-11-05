@@ -11,8 +11,6 @@ namespace Midview.Master;
 // reads out, and that colleague's class comes into this one.
 public partial class JoinClassWindow : MidviewWindow
 {
-    private static readonly Brush ErrorBrush = new SolidColorBrush(Color.FromRgb(0xB3, 0x26, 0x1E));
-
     private readonly X509Certificate2 _masterCertificate;
     private readonly Action<IReadOnlyList<KnownMachine>> _addMachines;
 
@@ -84,6 +82,6 @@ public partial class JoinClassWindow : MidviewWindow
     private void ShowStatus(string text, bool isError)
     {
         StatusTextBlock.Text = text;
-        StatusTextBlock.Foreground = isError ? ErrorBrush : (Brush)FindResource("InkBrush");
+        StatusTextBlock.Foreground = (Brush)FindResource(isError ? "ErrorBrush" : "TextBrush");
     }
 }

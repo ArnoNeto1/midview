@@ -5,14 +5,28 @@
         Title="Dar acesso a um colega" SizeToContent="Height" MinHeight="300" MaxHeight="640" Width="500"
         WindowStartupLocation="CenterOwner"
         Loaded="OnLoaded" Closed="OnClosed">
-    <StackPanel Margin="20">
-        <TextBlock x:Name="LeadTextBlock" Text="Passe este código ao colega:" FontSize="14" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
-        <TextBlock x:Name="CodeTextBlock" FontFamily="Consolas" FontSize="40" FontWeight="Bold"
-                   Foreground="{StaticResource InkBrush}" Margin="0,10,0,10" />
-        <TextBlock x:Name="HintTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}" />
+    <StackPanel Margin="24,22,24,20">
+        <local:DialogHeader Icon="&#xE716;" Heading="Dar acesso a um colega" Accent="{StaticResource ConfigurarBrush}">
+            <TextBlock x:Name="LeadTextBlock" Text="Passe este código ao colega:" TextWrapping="Wrap" />
+        </local:DialogHeader>
+        <!-- The card shows only while there is a code (it is empty before the invite opens and after it ends). -->
+        <Border Margin="0,16,0,0" Padding="16,10">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Text, ElementName=CodeTextBlock}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock x:Name="CodeTextBlock" FontFamily="Consolas" FontSize="40" FontWeight="Bold"
+                       Foreground="{StaticResource AccentTextBrush}" HorizontalAlignment="Center" />
+        </Border>
+        <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}" Margin="0,10,0,0" />
         <!-- The list of machines that were not released can be long: it scrolls, so the button stays in view. -->
         <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
-            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
+            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" />
         </ScrollViewer>
         <Button x:Name="CloseButton" Content="Cancelar" Click="OnCloseClicked"
                 HorizontalAlignment="Left" Margin="0,16,0,0" Padding="14,5" />

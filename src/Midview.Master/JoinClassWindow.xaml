@@ -5,19 +5,23 @@
         Title="Entrar na sala de um colega" SizeToContent="Height" MinHeight="260" MaxHeight="640" Width="500"
         WindowStartupLocation="CenterOwner"
         FocusManager.FocusedElement="{Binding ElementName=CodeTextBox}">
-    <StackPanel Margin="20">
-        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource InkMutedBrush}"
-                   Text="Peça ao colega que já tem a sala para clicar em &quot;Máquinas da sala&quot; &gt; &quot;Dar acesso a um colega&quot;, e digite aqui o código que aparecer na tela dele." />
-        <TextBlock Text="Código do convite:" Margin="0,14,0,4" Foreground="{StaticResource InkBrush}" />
-        <StackPanel Orientation="Horizontal">
-            <TextBox x:Name="CodeTextBox" Width="200" FontFamily="Consolas" FontSize="20" Padding="6,3"
-                     MaxLength="20" CharacterCasing="Upper" />
-            <Button x:Name="JoinButton" Content="Entrar" Click="OnJoinClicked" IsDefault="True"
-                    Margin="8,0,0,0" Padding="16,4" />
-        </StackPanel>
+    <StackPanel Margin="24,22,24,20">
+        <local:DialogHeader Icon="&#xE716;" Heading="Entrar na sala de um colega" Accent="{StaticResource ConfigurarBrush}"
+                Content="Peça ao colega que já tem a sala para clicar em &quot;Máquinas da sala&quot; &gt; &quot;Dar acesso a um colega&quot;, e digite aqui o código que aparecer na tela dele." />
+        <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+            <StackPanel>
+                <TextBlock Text="Código do convite:" Margin="0,0,0,6" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="CodeTextBox" Width="200" FontFamily="Consolas" FontSize="20" Padding="6,3"
+                             MaxLength="20" CharacterCasing="Upper" />
+                    <Button x:Name="JoinButton" Content="Entrar" Click="OnJoinClicked" IsDefault="True"
+                            Style="{StaticResource PrimaryButton}" Margin="8,0,0,0" Padding="16,4" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
         <!-- The list of machines that were not released can be long: it scrolls instead of being cut off. -->
         <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto" Margin="0,14,0,0">
-            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" />
+            <TextBlock x:Name="StatusTextBlock" TextWrapping="Wrap" />
         </ScrollViewer>
     </StackPanel>
 </local:MidviewWindow>
