@@ -73,21 +73,39 @@ deliveryFolder.TryCreate();
 // seconds, tells the student about a new lesson and sets the old one's files
 // aside. The folders are the student's own, so all of it happens here.
 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+var desktopDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 var classFolder = new ClassFolder(
-    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+    desktopDirectory,
     Path.Combine(localAppData, "Midview", "Pasta da turma guardada"),
     () => ClassLessonFile.Read(ClassLessonFile.DefaultPath),
     new WindowsRecycleBin(),
     Path.Combine(localAppData, "Midview", "class-folder-session.json"));
+using var software = Microsoft.Win32.Registry.CurrentUser.CreateSubKey("Software", writable: true);
+var saveLocations = new ClassSaveLocations(
+    desktopDirectory,
+    () => ClassLessonFile.Read(ClassLessonFile.DefaultPath),
+    Path.Combine(localAppData, "Midview", ClassSaveLocationsFile.FileName),
+    software,
+    new WindowsShellFolders());
 var messageDisplay = new WinFormsMessageDisplay();
 
 // A new lesson's notice goes in a corner of the screen and away on its own,
 // never taking the focus (not the teacher's message window, which waits for
 // "OK, ENTENDI"). `using`, so the timer is still referred to (and not
-// collected) for as long as the server runs below.
+// collected) for as long as the server runs below. The save locations (Downloads,
+// Office, Notepad/Paint) follow the same lesson file on the same 5 s timer, and
+// go first: at a lesson's end the class folder is recycled, and Windows may
+// carry a known folder's path along when its target moves, so Downloads must be
+// put back before the folder goes, or it could be left in the Recycle Bin for
+// good. Pointing them needs nothing from ClassFolder (the Agent creates the
+// folder; until it is there, they wait), so a new lesson can go first too.
 var lessonNotice = new WinFormsCornerNotice();
 using var classFolderTimer = new System.Threading.Timer(
-    _ => classFolder.Follow(lessonNotice), null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+    _ =>
+    {
+        saveLocations.Follow();
+        classFolder.Follow(lessonNotice);
+    }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
 // Any Ctrl+Alt+Del lockdown left behind by a Session that crashed while the
 // screen was locked is cleared here, before serving, so the student is never

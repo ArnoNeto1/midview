@@ -38,8 +38,11 @@ public sealed record ClassLesson(long SavedAt, Guid LessonId, string Turma, long
 
     public bool IsOn => !Ended && LessonId != Guid.Empty;
 
-    // The folder on the student's Desktop. U+2013 (en dash), not a hyphen.
-    public string FolderName => "Pasta da turma – " + Turma;
+    // What every lesson's folder name starts with. U+2013 (en dash), not a hyphen.
+    public const string FolderPrefix = "Pasta da turma – ";
+
+    // The folder on the student's Desktop.
+    public string FolderName => FolderPrefix + Turma;
 
     // Did the lesson start on a calendar day (local time) before the day of
     // localToday? Then it is left over from an earlier class.

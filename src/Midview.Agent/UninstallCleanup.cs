@@ -25,7 +25,13 @@ public static class UninstallCleanup
         // class folder (DownloadFolderPolicy; a download folder someone else
         // set is left as it is) wherever the student's registry
         // is loaded (openUserSoftware; null skips it). A student who isn't
-        // logged on keeps the value in their own hive.
+        // logged on keeps the value in their own hive. The save locations the
+        // Session pointed at the class folder (the student's Downloads, the
+        // Office 2016+ default save folder, and Notepad's and Paint's "last
+        // folder used") are put back from the student's own state file, but
+        // only what is still as Midview left it. The student can edit that
+        // file, so it is read with no link on the way below the profile and
+        // is never written or deleted.
         foreach (var (desktop, student) in studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>())
         {
             // "Travar a Área de Trabalho" first: the Desktop's Deny below is
@@ -50,6 +56,28 @@ public static class UninstallCleanup
                     if (software is not null)
                     {
                         DownloadFolderPolicy.Remove(software);
+                    }
+                });
+                Step(failures, $"devolver as pastas de salvar do aluno de {desktop}", () =>
+                {
+                    using var software = openUserSoftware(student);
+                    if (software is null)
+                    {
+                        return;
+                    }
+                    // Links are refused from the profile folder down, so the
+                    // file can't be a way to read (or aim at) something else.
+                    var state = ClassSaveLocationsFile.Read(SaveLocationsStatePath(desktop), out var readProblem,
+                        linkFreeBelow: Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(desktop)));
+                    if (readProblem is not null)
+                    {
+                        failures.Add($"Não foi possível ler as pastas de salvar do aluno de {desktop}: {readProblem}");
+                        return;
+                    }
+                    // No setDownloads: the raw registry write is the whole restore here.
+                    foreach (var problem in ClassSaveLocationsUndo.Run(software, state.Settings))
+                    {
+                        failures.Add($"Pastas de salvar do aluno de {desktop}: {problem}");
                     }
                 });
             }
@@ -99,6 +127,12 @@ public static class UninstallCleanup
 
         return failures;
     }
+
+    // Where the Session keeps what it changed: <profile>\AppData\Local\Midview,
+    // the profile being the folder above the student's Desktop.
+    internal static string SaveLocationsStatePath(string desktop) =>
+        Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(desktop)) ?? "",
+            "AppData", "Local", "Midview", ClassSaveLocationsFile.FileName);
 
     // Every "Pasta da turma – " folder on that Desktop, links left out, and
     // none on a Desktop that is itself a link (as the Agent leaves them alone
