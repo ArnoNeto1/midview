@@ -31,10 +31,11 @@ public static class MidviewMessage
     internal static (string Yes, string? No) Labels(MessageBoxButton buttons) =>
         buttons == MessageBoxButton.YesNo ? ("Sim", "Não") : ("OK", null);
 
-    // Windows' order, "Sim" before "Não". A "Sim" that a warning asks about, or
-    // that the box doesn't offer as its default, is drawn as dangerous.
+    // Windows' order, "Sim" before "Não". Only a warning's "Sim" (deleting a
+    // class, ending a lesson, taking over the class folders) is drawn as
+    // dangerous; a question's stays the main action, even with "Não" as the default.
     internal static QuestionButtons ButtonsFor(MessageBoxButton buttons, MessageBoxImage image, MessageBoxResult defaultResult) =>
-        buttons == MessageBoxButton.YesNo && (image == MessageBoxImage.Warning || defaultResult == MessageBoxResult.No)
+        buttons == MessageBoxButton.YesNo && image == MessageBoxImage.Warning
             ? QuestionButtons.YesFirstDanger
             : QuestionButtons.YesFirst;
 

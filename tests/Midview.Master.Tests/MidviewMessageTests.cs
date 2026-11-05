@@ -28,14 +28,14 @@ public class MidviewMessageTests
     }
 
     // Windows' order ("Sim | Não") for every message box; "Sim" in the danger
-    // style when the answer has no way back (a warning, or "Não" as the default).
+    // style only for a warning (the answers with no way back), whatever the default.
     [Theory]
     [InlineData(MessageBoxButton.OK, MessageBoxImage.Information, MessageBoxResult.None, QuestionButtons.YesFirst)]
     [InlineData(MessageBoxButton.OK, MessageBoxImage.Warning, MessageBoxResult.None, QuestionButtons.YesFirst)]
     [InlineData(MessageBoxButton.OK, MessageBoxImage.Error, MessageBoxResult.None, QuestionButtons.YesFirst)]
     [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.None, QuestionButtons.YesFirst)]
     [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.Yes, QuestionButtons.YesFirst)]
-    [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No, QuestionButtons.YesFirstDanger)]
+    [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No, QuestionButtons.YesFirst)]
     [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.None, QuestionButtons.YesFirstDanger)]
     [InlineData(MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No, QuestionButtons.YesFirstDanger)]
     public void ButtonsFor_KeepsWindowsOrderAndMarksTheDangerousYes(
