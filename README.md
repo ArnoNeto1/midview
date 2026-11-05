@@ -22,9 +22,9 @@ O Midview gerencia o laboratório de informática da escola. Do próprio computa
 
 ### Tutorial completo
 
-Passo a passo, com narração, de todas as funções: instalação, pareamento, a sala de aula, energia, tela, turma, programas e sites, configurações, o botão direito e a sala com dois professores.
+Passo a passo, com narração, de todas as funções, no visual escuro da versão 0.0.41: instalação, pareamento, a sala de aula, energia, tela, turma, programas e sites, configurações, o botão direito e a sala com dois professores.
 
-[![Tutorial do Midview: a janela "Midview - Sala de aula" com todas as telas ao vivo](docs/tutorial-capa.jpg)](https://arnoneto1.github.io/midview/tutorial.mp4)
+[![Tutorial do Midview: a janela "Midview - Sala de aula" no visual escuro, com todas as telas ao vivo](docs/tutorial-capa.jpg)](https://arnoneto1.github.io/midview/tutorial.mp4)
 
 [Assistir ao tutorial](https://arnoneto1.github.io/midview/tutorial.mp4) (MP4, 8 min).
 
