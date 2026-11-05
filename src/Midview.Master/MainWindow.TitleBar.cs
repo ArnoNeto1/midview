@@ -1,8 +1,10 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 
 namespace Midview.Master;
@@ -54,7 +56,33 @@ public partial class MainWindow
         base.OnSourceInitialized(e);
         HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(OnTitleBarMessage);
         ShowWindowState();
+        ShowTitleLogo();
     }
+
+    // The title bar's logo (again on a scale change: MainWindow.TileLayout.cs's OnDpiChanged): the picture in the program's icon that is just
+    // big enough for this screen's scale, so it is never scaled up into a
+    // blur, and small enough to be the icon's simpler small-size drawing.
+    private void ShowTitleLogo()
+    {
+        try
+        {
+            var decoder = BitmapDecoder.Create(
+                new Uri("pack://application:,,,/Midview.Master;component/midview.ico"),
+                BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+            var size = LogoFrameSize(decoder.Frames.Select(frame => frame.PixelWidth).ToList(),
+                TitleLogo.Width * VisualTreeHelper.GetDpi(this).DpiScaleX);
+            TitleLogo.Source = decoder.Frames.First(frame => frame.PixelWidth == size);
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or FileFormatException)
+        {
+            // Without its picture the title bar still reads "Midview".
+        }
+    }
+
+    // The smallest picture at least as big as the logo on screen, or the
+    // biggest when none is.
+    internal static int LogoFrameSize(IReadOnlyCollection<int> sizes, double neededPixels) =>
+        sizes.Where(size => size >= neededPixels).DefaultIfEmpty(sizes.Max()).Min();
 
     protected override void OnStateChanged(EventArgs e)
     {

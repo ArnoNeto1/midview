@@ -192,6 +192,7 @@ public partial class MainWindow
     {
         base.OnDpiChanged(oldDpi, newDpi);
         Volatile.Write(ref _dpiScale, newDpi.DpiScaleX);
+        ShowTitleLogo();
     }
 
     private void SaveGridView()

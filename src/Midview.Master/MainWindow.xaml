@@ -22,15 +22,14 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
-                <Grid Width="16" Height="16" VerticalAlignment="Center">
-                    <Border Width="7" Height="7" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Top" Background="{StaticResource AccentBrush}" />
-                    <Border Width="7" Height="7" CornerRadius="2" HorizontalAlignment="Right" VerticalAlignment="Top" Background="{StaticResource TelaBrush}" />
-                    <Border Width="7" Height="7" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="{StaticResource TelaBrush}" />
-                    <Border Width="7" Height="7" CornerRadius="2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{StaticResource ConfigurarBrush}" />
-                </Grid>
-                <TextBlock Text="Midview" FontSize="15" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
-                <TextBlock Text="Sala de aula" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="8,0,0,0"
-                           VerticalAlignment="Center" />
+                <!-- The Midview logo, from the program's icon at the size this screen needs (ShowTitleLogo). -->
+                <Image x:Name="TitleLogo" Width="20" Height="20" VerticalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+                <!-- One line of text, so "Sala de aula" sits on the same baseline as "Midview". -->
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center">
+                    <Run Text="Midview" FontSize="15" FontWeight="SemiBold" />
+                    <Run Text=" Sala de aula" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                </TextBlock>
                 <StackPanel Orientation="Horizontal" Margin="18,0,0,0">
                     <Border x:Name="LessonChip" Style="{StaticResource TitleChip}" Visibility="Collapsed">
                         <Border.BorderBrush>
