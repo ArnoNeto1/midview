@@ -80,9 +80,10 @@
                                         <Label Grid.Column="3" Content="{Binding Status, Mode=OneWay}" Style="{StaticResource StatusChip}"
                                                VerticalAlignment="Center" Margin="10,0,0,0" />
                                         <TextBlock Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Text="{Binding Outcome}" Margin="0,8,0,0"
-                                                   TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextBrush}">
+                                                   TextWrapping="Wrap" FontSize="12">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding OutcomeIsError}" Value="True">
                                                             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
