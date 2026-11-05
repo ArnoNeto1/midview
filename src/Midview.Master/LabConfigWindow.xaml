@@ -4,244 +4,245 @@
         xmlns:local="clr-namespace:Midview.Master"
         Title="Painel do laboratório" Height="700" Width="620"
         WindowStartupLocation="CenterOwner">
-    <DockPanel Margin="16">
+    <DockPanel Margin="24,22,24,20">
         <StackPanel DockPanel.Dock="Top">
-            <TextBlock x:Name="TargetsTextBlock" TextWrapping="Wrap" FontWeight="Bold" Margin="0,0,0,8" />
-            <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,8"
+            <local:DialogHeader Icon="&#xE713;" Heading="Painel do laboratório" Accent="{StaticResource ConfigurarBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0"
                        Text="Cada função é aplicada na máquina do aluno pelo Midview e continua valendo se ela reiniciar. O Chrome do aluno é fechado ao aplicar, para a mudança valer na hora." />
         </StackPanel>
 
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <StackPanel.Resources>
-                    <Style TargetType="Button">
+                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                         <Setter Property="Padding" Value="10,4" />
                         <Setter Property="Margin" Value="0,0,8,0" />
                         <Setter Property="MinWidth" Value="92" />
                     </Style>
-                    <Style TargetType="TextBlock" x:Key="SectionHeader">
-                        <Setter Property="FontWeight" Value="Bold" />
-                        <Setter Property="FontSize" Value="13" />
-                        <Setter Property="Foreground" Value="#2D2D30" />
-                        <Setter Property="Margin" Value="0,16,0,2" />
-                    </Style>
-                    <Style TargetType="TextBlock" x:Key="SectionNote">
-                        <Setter Property="Foreground" Value="Gray" />
-                        <Setter Property="FontSize" Value="11" />
-                        <Setter Property="TextWrapping" Value="Wrap" />
-                        <Setter Property="Margin" Value="0,0,0,2" />
+                    <!-- The same as the buttons above, in the error color (Limpar agora, Tudo, RESET geral). -->
+                    <Style x:Key="RowDangerButton" TargetType="Button" BasedOn="{StaticResource DangerButton}">
+                        <Setter Property="Padding" Value="10,4" />
+                        <Setter Property="Margin" Value="0,0,8,0" />
+                        <Setter Property="MinWidth" Value="92" />
                     </Style>
                     <Style TargetType="TextBlock" x:Key="FunctionName">
                         <Setter Property="FontWeight" Value="SemiBold" />
                     </Style>
-                    <Style TargetType="TextBlock" x:Key="FunctionHint">
-                        <Setter Property="Foreground" Value="Gray" />
-                        <Setter Property="FontSize" Value="11" />
-                        <Setter Property="TextWrapping" Value="Wrap" />
-                        <Setter Property="Margin" Value="0,2,0,0" />
+                    <Style TargetType="TextBlock" x:Key="FunctionHint" BasedOn="{StaticResource Hint}">
+                        <Setter Property="Margin" Value="0,2,12,0" />
                     </Style>
+                    <!-- A line of a card: a separator above it. -->
                     <Style TargetType="Border" x:Key="Row">
-                        <Setter Property="BorderBrush" Value="#E0E0E0" />
-                        <Setter Property="BorderThickness" Value="0,0,0,1" />
-                        <Setter Property="Padding" Value="0,8" />
+                        <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+                        <Setter Property="BorderThickness" Value="0,1,0,0" />
+                        <Setter Property="Padding" Value="0,10" />
                     </Style>
                 </StackPanel.Resources>
 
-                <!-- Sequência de configuração ideal (início da aula) -->
-                <TextBlock Style="{StaticResource SectionHeader}" Text="Sequência de configuração ideal (início da aula)" />
-                <TextBlock Style="{StaticResource SectionNote}" Text="Para preparar as máquinas no começo da aula, aplique os passos 1 a 5 nesta ordem." />
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="adblock" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="adblock" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Passo 1 — Bloqueador de anúncios" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Instala o bloqueador no Chrome; aparece sozinho na próxima vez que o aluno abrir o Chrome (vale no modo anônimo também)." />
-                        </StackPanel>
-                    </DockPanel>
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Sequência de configuração ideal (início da aula)" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,8" Text="Para preparar as máquinas no começo da aula, aplique os passos 1 a 5 nesta ordem." />
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="adblock" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="adblock" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <Label Style="{StaticResource StepBadge}" Content="1" VerticalAlignment="Top" Margin="0,0,12,0" />
+                            <StackPanel>
+                                <TextBlock Text="Passo 1 — Bloqueador de anúncios" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Instala o bloqueador no Chrome; aparece sozinho na próxima vez que o aluno abrir o Chrome (vale no modo anônimo também)." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="clean" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="clean" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <Label Style="{StaticResource StepBadge}" Content="2" VerticalAlignment="Top" Margin="0,0,12,0" />
+                            <StackPanel>
+                                <TextBlock Text="Passo 2 — Limpeza ao fechar" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="O Chrome apaga histórico, cookies, senhas e downloads quando fecha." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="lockdown" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="lockdown" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <Label Style="{StaticResource StepBadge}" Content="3" VerticalAlignment="Top" Margin="0,0,12,0" />
+                            <StackPanel>
+                                <TextBlock Text="Passo 3 — Blindagem total" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Trava as configurações, a personalização, o modo anônimo e a página inicial do Chrome, e o papel de parede do Windows." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="edge" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="edge" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <Label Style="{StaticResource StepBadge}" Content="4" VerticalAlignment="Top" Margin="0,0,12,0" />
+                            <StackPanel>
+                                <TextBlock Text="Passo 4 — Bloquear o Microsoft Edge" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Fecha o Edge sempre que o aluno abrir, pelo mesmo bloqueio de programas do Midview." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="downloads" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="downloads" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <Label Style="{StaticResource StepBadge}" Content="5" VerticalAlignment="Top" Margin="0,0,12,0" />
+                            <StackPanel>
+                                <TextBlock Text="Passo 5 — Bloquear downloads" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Impede qualquer download pelo Chrome." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="clean" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="clean" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Passo 2 — Limpeza ao fechar" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="O Chrome apaga histórico, cookies, senhas e downloads quando fecha." />
-                        </StackPanel>
-                    </DockPanel>
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Bloqueios extras" />
+                        <Border Height="8" />
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="guest" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="guest" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Modo visitante" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="O Chrome só abre como visitante, sem perfis, login nem histórico." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="taskbar" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="taskbar" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Travar a barra de tarefas" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Impede o aluno de fixar ou desafixar ícones da barra de tarefas." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="desktop" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="desktop" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Travar a Área de Trabalho" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="O aluno não consegue criar, apagar nem renomear nada na Área de Trabalho; dentro das pastas continua livre. Para salvar um arquivo, ele usa outra pasta (Documentos, Downloads)." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Bloquear" Click="OnBlockDistractionClicked" />
+                                <Button Content="Liberar" Click="OnUnblockDistractionClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Bloquear sites de distração" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Redes sociais, jogos e YouTube, pelo mesmo &quot;Bloquear sites&quot; do Midview (vale em qualquer navegador). &quot;Liberar&quot; desbloqueia esses endereços." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="lockdown" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="lockdown" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Passo 3 — Blindagem total" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Trava as configurações, a personalização, o modo anônimo e a página inicial do Chrome, e o papel de parede do Windows." />
-                        </StackPanel>
-                    </DockPanel>
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Manutenção" />
+                        <Border Height="8" />
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource RowDangerButton}" Content="Limpar agora" Click="OnClearChromeProfilesClicked" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Limpar perfis do Chrome" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Fecha o Chrome e apaga os perfis salvos de todos os usuários, deixando o navegador zerado para a próxima turma. Não dá para desfazer." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="De hoje" Click="OnClearDownloadsTodayClicked" />
+                                <Button Style="{StaticResource RowDangerButton}" Content="Tudo" Click="OnClearDownloadsAllClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Apagar os downloads dos alunos" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Apaga a pasta Downloads de cada aluno: só os arquivos de hoje, ou tudo. Não dá para desfazer." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource RowDangerButton}" Content="RESET geral" Click="OnResetClicked"
+                                        ToolTip="Remove todas as configurações do painel e devolve a máquina ao padrão." />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="RESET geral" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Remove tudo o que este painel aplicou (e o que um script antigo tenha deixado) e devolve a máquina ao padrão." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="edge" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="edge" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Passo 4 — Bloquear o Microsoft Edge" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Fecha o Edge sempre que o aluno abrir, pelo mesmo bloqueio de programas do Midview." />
-                        </StackPanel>
-                    </DockPanel>
+                <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Consulta" />
+                        <Border Height="8" />
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ver agora" Click="OnShowAppliedClicked" MinWidth="110" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Ver o que está aplicado" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="Lê de cada máquina o que está ligado agora." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="downloads" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="downloads" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Passo 5 — Bloquear downloads" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Impede qualquer download pelo Chrome." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <!-- Bloqueios extras -->
-                <TextBlock Style="{StaticResource SectionHeader}" Text="Bloqueios extras" />
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="guest" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="guest" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Modo visitante" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="O Chrome só abre como visitante, sem perfis, login nem histórico." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="taskbar" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="taskbar" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Travar a barra de tarefas" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Impede o aluno de fixar ou desafixar ícones da barra de tarefas." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ativar" Tag="desktop" Click="OnActivateClicked" />
-                            <Button Content="Desativar" Tag="desktop" Click="OnDeactivateClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Travar a Área de Trabalho" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="O aluno não consegue criar, apagar nem renomear nada na Área de Trabalho; dentro das pastas continua livre. Para salvar um arquivo, ele usa outra pasta (Documentos, Downloads)." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Bloquear" Click="OnBlockDistractionClicked" />
-                            <Button Content="Liberar" Click="OnUnblockDistractionClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Bloquear sites de distração" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Redes sociais, jogos e YouTube, pelo mesmo &quot;Bloquear sites&quot; do Midview (vale em qualquer navegador). &quot;Liberar&quot; desbloqueia esses endereços." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <!-- Manutenção -->
-                <TextBlock Style="{StaticResource SectionHeader}" Text="Manutenção" />
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Limpar agora" Click="OnClearChromeProfilesClicked" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Limpar perfis do Chrome" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Fecha o Chrome e apaga os perfis salvos de todos os usuários, deixando o navegador zerado para a próxima turma. Não dá para desfazer." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="De hoje" Click="OnClearDownloadsTodayClicked" />
-                            <Button Content="Tudo" Click="OnClearDownloadsAllClicked" Margin="0" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Apagar os downloads dos alunos" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Apaga a pasta Downloads de cada aluno: só os arquivos de hoje, ou tudo. Não dá para desfazer." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="RESET geral" Click="OnResetClicked"
-                                    ToolTip="Remove todas as configurações do painel e devolve a máquina ao padrão." />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="RESET geral" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Remove tudo o que este painel aplicou (e o que um script antigo tenha deixado) e devolve a máquina ao padrão." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <!-- Consulta -->
-                <TextBlock Style="{StaticResource SectionHeader}" Text="Consulta" />
-
-                <Border Style="{StaticResource Row}">
-                    <DockPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="Ver agora" Click="OnShowAppliedClicked" MinWidth="110" />
-                        </StackPanel>
-                        <StackPanel>
-                            <TextBlock Text="Ver o que está aplicado" Style="{StaticResource FunctionName}" />
-                            <TextBlock Style="{StaticResource FunctionHint}"
-                                       Text="Lê de cada máquina o que está ligado agora." />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
-
-                <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" Margin="0,12,0,4" />
-                <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+                <TextBlock x:Name="ProgressTextBlock" TextWrapping="Wrap" Margin="0,14,0,4" />
+                <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" Margin="0,0,0,4" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

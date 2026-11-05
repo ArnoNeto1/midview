@@ -2,49 +2,40 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Pasta da turma" Height="640" Width="600" MinHeight="440" MinWidth="480"
+        Title="Pasta da turma" Height="700" Width="600" MinHeight="440" MinWidth="480"
         WindowStartupLocation="CenterOwner"
         Closed="OnClosed">
     <Window.Resources>
         <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="12,5" />
         </Style>
-        <Style x:Key="Note" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+        <!-- The same padding for the destructive button (Excluir). -->
+        <Style x:Key="PaddedDangerButton" TargetType="Button" BasedOn="{StaticResource DangerButton}">
+            <Setter Property="Padding" Value="12,5" />
         </Style>
-        <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Margin" Value="0,14,0,4" />
-        </Style>
-        <!-- The primary button of each view: the selected tile's colours. -->
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource SelectedFillBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource SelectedLineBrush}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Padding" Value="14,6" />
-        </Style>
+        <Style x:Key="Note" TargetType="TextBlock" BasedOn="{StaticResource Hint}" />
     </Window.Resources>
 
-    <DockPanel Margin="18,14,18,16">
+    <DockPanel Margin="24,22,24,20">
+        <local:DialogHeader DockPanel.Dock="Top" Icon="&#xE8F7;" Heading="Pasta da turma" Accent="{StaticResource TurmaBrush}"
+                            Margin="0,0,0,14" />
+
         <!-- On a colleague's PC: which teacher PC keeps the class folders (ClassFolderText.RemoteBanner),
              and what that PC said instead of its state (the controller's Note). -->
-        <Border x:Name="RemoteBorder" DockPanel.Dock="Top" Visibility="Collapsed" Background="{StaticResource SelectedFillBrush}"
-                BorderBrush="{StaticResource SelectedLineBrush}" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
+        <Border x:Name="RemoteBorder" DockPanel.Dock="Top" Visibility="Collapsed" Style="{StaticResource Card}"
+                Background="{StaticResource AccentSoftBrush}" BorderBrush="{StaticResource AccentBrush}"
+                Padding="12,8" Margin="0,0,0,10">
             <StackPanel>
-                <TextBlock x:Name="RemoteText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkBrush}" />
-                <TextBlock x:Name="RemoteNoteText" TextWrapping="Wrap" FontSize="12" Foreground="#B3261E" Margin="0,4,0,0"
+                <TextBlock x:Name="RemoteText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextBrush}" />
+                <TextBlock x:Name="RemoteNoteText" Style="{StaticResource ErrorText}" FontSize="12" Margin="0,4,0,0"
                            Visibility="Collapsed" />
             </StackPanel>
         </Border>
 
         <!-- Classes a take-over left aside, beside the class folders, which no view shows (ClassFolderText.AsideNote). -->
-        <Border x:Name="AsideBorder" DockPanel.Dock="Top" Visibility="Collapsed" BorderBrush="{StaticResource CardLineBrush}"
-                BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
-            <TextBlock x:Name="AsideText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
+        <Border x:Name="AsideBorder" DockPanel.Dock="Top" Visibility="Collapsed" Style="{StaticResource Card}"
+                Padding="12,8" Margin="0,0,0,10">
+            <TextBlock x:Name="AsideText" Style="{StaticResource Hint}" />
         </Border>
 
         <!-- On a colleague's PC: the class folders to this PC (ClassFolderWindow.TakeOver.cs; its text is
@@ -53,129 +44,139 @@
                 ToolTipService.ShowOnDisabled="True" Click="OnTakeOverClicked" />
 
         <!-- Shown in both views when the teacher's disk is filling (ClassFolderText.LowSpaceWarning). -->
-        <Border x:Name="LowSpaceBorder" DockPanel.Dock="Top" Visibility="Collapsed" Background="#FDECEA" BorderBrush="#F2B8B5"
-                BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,10">
-            <TextBlock x:Name="LowSpaceText" Foreground="#B3261E" TextWrapping="Wrap" FontSize="12" />
+        <Border x:Name="LowSpaceBorder" DockPanel.Dock="Top" Visibility="Collapsed" Style="{StaticResource Card}"
+                Background="{StaticResource DangerSoftBrush}" BorderBrush="{StaticResource ErrorBrush}"
+                Padding="12,8" Margin="0,0,0,10">
+            <TextBlock x:Name="LowSpaceText" Style="{StaticResource ErrorText}" FontSize="12" />
         </Border>
 
         <!-- What a start, an end or a change to the list did: a line for the whole, then one per PC. -->
         <StackPanel x:Name="ResultsPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,12,0,0">
-            <TextBlock x:Name="ProgressText" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
-            <!-- While the class folders are being copied to this PC (ClassFolderWindow.TakeOver.cs). -->
-            <Button x:Name="CancelTakeOverButton" Content="Cancelar" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed"
-                    Click="OnCancelTakeOverClicked" />
-            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
-                <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
-            </ScrollViewer>
+            <Border Style="{StaticResource ResultCard}">
+                <StackPanel>
+                    <TextBlock x:Name="ProgressText" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
+                    <!-- While the class folders are being copied to this PC (ClassFolderWindow.TakeOver.cs). -->
+                    <Button x:Name="CancelTakeOverButton" Content="Cancelar" HorizontalAlignment="Left" Margin="0,6,0,0" Visibility="Collapsed"
+                            Click="OnCancelTakeOverClicked" />
+                    <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+                        <TextBlock x:Name="ResultText" Style="{StaticResource Hint}" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
         </StackPanel>
 
         <Grid>
             <!-- On a colleague's PC, the home PC's Midview not answering: only the end of the lesson, keeping the files. -->
             <StackPanel x:Name="ClosedView" Visibility="Collapsed" VerticalAlignment="Center" Margin="24,0">
                 <TextBlock x:Name="ClosedText" TextWrapping="Wrap" TextAlignment="Center" FontSize="15" FontWeight="SemiBold"
-                           Foreground="{StaticResource InkBrush}" />
+                           Foreground="{StaticResource TextBrush}" />
                 <TextBlock x:Name="ClosedHintText" Style="{StaticResource Note}" TextAlignment="Center" Margin="0,8,0,0" />
-                <Button x:Name="ClosedEndButton" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}"
+                <Button x:Name="ClosedEndButton" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}" Padding="16,6"
                         HorizontalAlignment="Center" Margin="0,18,0,0" Click="OnEndClicked" />
             </StackPanel>
 
             <!-- Before a lesson. -->
             <DockPanel x:Name="ClassesView">
-                <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" FontSize="13" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10"
+                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" FontSize="13" Margin="0,0,0,10"
                            Text="Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
 
                 <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                    <Button x:Name="StartButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Click="OnStartClicked"
-                            IsEnabled="False" />
+                    <Button x:Name="StartButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Padding="16,6"
+                            Click="OnStartClicked" IsEnabled="False" />
                     <Button x:Name="CloseButton" Content="Fechar" Click="OnCloseClicked" HorizontalAlignment="Left" />
                 </DockPanel>
 
                 <!-- "+ Nova turma" and "Renomear" ask the name here. -->
                 <StackPanel x:Name="NamePanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,10,0,0">
-                    <TextBlock x:Name="NamePrompt" FontSize="12" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,0,3" />
+                    <TextBlock x:Name="NamePrompt" Style="{StaticResource Hint}" Margin="0,0,0,3" />
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Content="Cancelar" Click="OnNameCancelClicked" Margin="6,0,0,0" />
                         <Button x:Name="NameOkButton" DockPanel.Dock="Right" Click="OnNameOkClicked" Margin="8,0,0,0" />
                         <TextBox x:Name="NameTextBox" FontSize="13" Padding="4,3" VerticalContentAlignment="Center"
                                  KeyDown="OnNameKeyDown" />
                     </DockPanel>
-                    <TextBlock x:Name="NameErrorText" Foreground="#B3261E" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0"
+                    <TextBlock x:Name="NameErrorText" Style="{StaticResource ErrorText}" FontSize="12" Margin="0,3,0,0"
                                Visibility="Collapsed" />
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
                     <Button x:Name="NewClassButton" Content="+ Nova turma" Click="OnNewClassClicked" />
                     <Button x:Name="RenameButton" Content="Renomear" Click="OnRenameClicked" Margin="8,0,0,0" IsEnabled="False" />
-                    <Button x:Name="DeleteButton" Content="Excluir" Click="OnDeleteClicked" Margin="8,0,0,0" IsEnabled="False" />
+                    <Button x:Name="DeleteButton" Content="Excluir" Style="{StaticResource PaddedDangerButton}" Click="OnDeleteClicked"
+                            Margin="8,0,0,0" IsEnabled="False" />
                 </StackPanel>
 
-                <Grid>
-                    <ListBox x:Name="ClassesList" SelectionChanged="OnClassSelected" BorderBrush="{StaticResource CardLineBrush}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="10,6" />
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding Turma}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{StaticResource InkMutedBrush}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                    <TextBlock x:Name="NoClassesText" Visibility="Collapsed" Style="{StaticResource Note}" FontSize="13"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="24"
-                               Text="Nenhuma turma ainda. Crie a primeira com &quot;+ Nova turma&quot;." />
-                </Grid>
+                <Border Style="{StaticResource Card}" Padding="6">
+                    <Grid>
+                        <ListBox x:Name="ClassesList" SelectionChanged="OnClassSelected" BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                    <Setter Property="Padding" Value="10,6" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Turma}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Summary}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock x:Name="NoClassesText" Visibility="Collapsed" Style="{StaticResource Note}" FontSize="13"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" Margin="24"
+                                   Text="Nenhuma turma ainda. Crie a primeira com &quot;+ Nova turma&quot;." />
+                    </Grid>
+                </Border>
             </DockPanel>
 
             <!-- During a lesson. -->
             <DockPanel x:Name="LessonView" Visibility="Collapsed">
-                <StackPanel DockPanel.Dock="Top">
-                    <TextBlock x:Name="LessonTitleText" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <TextBlock x:Name="LessonTitleText" Style="{StaticResource CardTitle}" FontSize="16" />
                     <TextBlock x:Name="HeaderText" Style="{StaticResource Note}" Margin="0,2,0,0" />
                 </StackPanel>
 
                 <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                    <Button x:Name="EndButton" DockPanel.Dock="Right" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}"
+                    <Button x:Name="EndButton" DockPanel.Dock="Right" Content="Encerrar a aula" Style="{StaticResource PrimaryButton}" Padding="16,6"
                             Click="OnEndClicked" />
                     <Button x:Name="SwitchButton" Content="Trocar de turma…" Click="OnSwitchClicked" HorizontalAlignment="Left"
                             ToolTip="Encerra esta aula como escolhido acima e volta para a lista de turmas, para começar a da próxima." />
                 </DockPanel>
 
-                <StackPanel DockPanel.Dock="Bottom">
-                    <TextBlock Text="Ao encerrar a aula" Style="{StaticResource SectionHeader}" />
-                    <RadioButton x:Name="KeepChoice" GroupName="EndChoice" IsChecked="True" Margin="0,2,0,6">
-                        <StackPanel>
-                            <TextBlock Text="Manter os arquivos" FontWeight="SemiBold" />
-                            <TextBlock x:Name="KeepHint" Style="{StaticResource Note}" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton x:Name="DeleteTodayChoice" GroupName="EndChoice" Margin="0,2,0,6">
-                        <StackPanel>
-                            <TextBlock Text="Apagar só os de hoje" FontWeight="SemiBold" />
-                            <TextBlock x:Name="DeleteTodayHint" Style="{StaticResource Note}" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton x:Name="DeleteAllChoice" GroupName="EndChoice" Margin="0,2,0,6">
-                        <StackPanel>
-                            <TextBlock x:Name="DeleteAllLabel" FontWeight="SemiBold" />
-                            <TextBlock x:Name="DeleteAllHint" Style="{StaticResource Note}" />
-                        </StackPanel>
-                    </RadioButton>
-                    <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
-                               Text="Pode fechar esta janela: a aula continua até você encerrá-la." />
-                </StackPanel>
+                <Border DockPanel.Dock="Bottom" Style="{StaticResource Card}" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Ao encerrar a aula" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
+                        <RadioButton x:Name="KeepChoice" GroupName="EndChoice" IsChecked="True" Margin="0,2,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Manter os arquivos" FontWeight="SemiBold" />
+                                <TextBlock x:Name="KeepHint" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton x:Name="DeleteTodayChoice" GroupName="EndChoice" Margin="0,2,0,4">
+                            <StackPanel>
+                                <TextBlock Text="Apagar só os de hoje" FontWeight="SemiBold" />
+                                <TextBlock x:Name="DeleteTodayHint" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton x:Name="DeleteAllChoice" GroupName="EndChoice" Margin="0,2,0,4">
+                            <StackPanel>
+                                <TextBlock x:Name="DeleteAllLabel" FontWeight="SemiBold" />
+                                <TextBlock x:Name="DeleteAllHint" Style="{StaticResource Note}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <TextBlock Style="{StaticResource Note}" Margin="0,6,0,0"
+                                   Text="Pode fechar esta janela: a aula continua até você encerrá-la." />
+                    </StackPanel>
+                </Border>
 
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Computadores" Style="{StaticResource SectionHeader}" />
-                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}" FontSize="11" Margin="0,4,0,0"
-                               Text="✓ em dia    ⟳ copiando    ○ desligado (recebe ao ligar)    ✗ com problema" />
-                    <Border BorderBrush="{StaticResource CardLineBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6">
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Computadores" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
+                        <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}" FontSize="11" Margin="0,6,0,0"
+                                   Text="✓ em dia    ⟳ copiando    ○ desligado (recebe ao ligar)    ✗ com problema" />
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="PcsList">
                                 <ItemsControl.ItemsPanel>
@@ -188,13 +189,13 @@
                                         <TextBlock Text="{Binding Text}" ToolTip="{Binding Hint}" FontSize="12" Margin="0,2,18,2">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsFailed}" Value="True">
-                                                            <Setter Property="Foreground" Value="#B3261E" />
+                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsOffline}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource InkMutedBrush}" />
+                                                            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -204,8 +205,8 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
-                    </Border>
-                </DockPanel>
+                    </DockPanel>
+                </Border>
             </DockPanel>
         </Grid>
     </DockPanel>
