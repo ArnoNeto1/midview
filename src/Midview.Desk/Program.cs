@@ -75,6 +75,27 @@ void AttachThreadToDesktop(IntPtr desktop)
     }
 }
 
+// While the teacher has the screen locked, the Ctrl+Alt+Del screen a student
+// opens is closed again with Esc (CtrlAltDelDismisser), on a thread of its own
+// beside the control server. Its own injector: SendInputInjector keeps no state.
+var ctrlAltDelInjector = new SendInputInjector();
+var ctrlAltDelDismisser = new CtrlAltDelDismisser(
+    () => CtrlAltDelScreen.ScreenLocked(), CtrlAltDelScreen.InputDesktopName, CtrlAltDelScreen.SomeoneLoggedOn,
+    CtrlAltDelScreen.UacPromptUp, () => CtrlAltDelScreen.PressEscape(ctrlAltDelInjector),
+    message => Console.Error.WriteLine(message));
+new Thread(() =>
+{
+    while (true)
+    {
+        ctrlAltDelDismisser.Poll(DateTime.UtcNow);
+        Thread.Sleep(CtrlAltDelScreen.PollInterval);
+    }
+})
+{
+    IsBackground = true,
+    Name = "Ctrl+Alt+Del dismisser",
+}.Start();
+
 // CancellationToken.None: nothing stops this helper but its process ending -- the
 // Agent's supervisor starts it and kills it -- the same as SessionServer's Run
 // in Session/Program.cs.

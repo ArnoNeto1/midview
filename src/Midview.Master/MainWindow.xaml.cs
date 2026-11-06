@@ -657,7 +657,7 @@ public partial class MainWindow : MidviewWindow
         keeper.Start();
 
         // Also close the Ctrl+Alt+Del escapes while it's locked (switch user, the
-        // Task Manager, sign out), so the student can't get past the lock. Only when
+        // Task Manager, sign out, lock, change password, power), so the student can't get past the lock. Only when
         // the Agent thumbprint is known (machines paired before it simply keep
         // the screen lock without this).
         if (tile.Machine.AgentThumbprint is { } agentThumbprint)

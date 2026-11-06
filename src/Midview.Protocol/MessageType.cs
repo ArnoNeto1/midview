@@ -321,8 +321,9 @@ public enum MessageType : byte
 
     // Master -> Agent: close the Ctrl+Alt+Del escapes from a locked screen for
     // as long as this connection stays open: "Switch user" (the HKLM policy
-    // HideFastUserSwitching) and, from 0.0.44, the student's Task Manager and
-    // sign out (DisableTaskMgr and NoLogoff in their own hive). All are policy
+    // HideFastUserSwitching) and, from 0.0.44, the student's Task Manager, sign
+    // out, lock, change password and power (DisableTaskMgr, NoLogoff,
+    // DisableLockWorkstation, DisableChangePassword and NoClose in their own hive). All are policy
     // keys only the Agent's SYSTEM rights can write (a standard student can
     // only read their own), so the Master holds this alongside the screen
     // lock. The Agent answers one CommandAck; closing the connection (or its

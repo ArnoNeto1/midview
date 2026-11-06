@@ -39,16 +39,19 @@ public sealed class StudentCtrlAltDelLockdownTests : IDisposable
     }
 
     [Fact]
-    public void Block_TurnsOffTaskManagerAndSignOut_ForTheStudentLoggedOn()
+    public void Block_EmptiesTheCtrlAltDelScreen_ForTheStudentLoggedOn()
     {
         Lockdown().Block();
 
         Assert.Equal(1, Read(Ana, SystemPath, "DisableTaskMgr"));
         Assert.Equal(1, Read(Ana, ExplorerPath, "NoLogoff"));
+        Assert.Equal(1, Read(Ana, SystemPath, "DisableLockWorkstation"));
+        Assert.Equal(1, Read(Ana, SystemPath, "DisableChangePassword"));
+        Assert.Equal(1, Read(Ana, ExplorerPath, "NoClose"));
     }
 
     [Fact]
-    public void Unblock_GivesBothBack()
+    public void Unblock_GivesThemAllBack()
     {
         var lockdown = Lockdown();
         lockdown.Block();
@@ -57,6 +60,9 @@ public sealed class StudentCtrlAltDelLockdownTests : IDisposable
 
         Assert.Null(Read(Ana, SystemPath, "DisableTaskMgr"));
         Assert.Null(Read(Ana, ExplorerPath, "NoLogoff"));
+        Assert.Null(Read(Ana, SystemPath, "DisableLockWorkstation"));
+        Assert.Null(Read(Ana, SystemPath, "DisableChangePassword"));
+        Assert.Null(Read(Ana, ExplorerPath, "NoClose"));
     }
 
     // A school that already keeps the Task Manager off (its own policy) keeps it

@@ -3,9 +3,14 @@ using Microsoft.Win32;
 
 namespace Midview.Agent;
 
-// Turns off the Task Manager (DisableTaskMgr) and signing out (NoLogoff) on the
-// Ctrl+Alt+Del screen for the student logged on, while the screen is locked:
-// one of the policies SwitchUserBlockHandler holds, beside switch user.
+// Empties the Ctrl+Alt+Del screen for the student logged on, while the screen
+// is locked: the Task Manager (DisableTaskMgr), signing out (NoLogoff), locking
+// the PC (DisableLockWorkstation, Win+L too), changing the password
+// (DisableChangePassword) and the power button's shut down, restart and sleep
+// (NoClose, the Start menu's too; the teacher's shutdown, run by the Agent, is
+// not a user's and still works) are taken off it, so the blue screen still opens --
+// nothing short of a keyboard driver stops that -- but only "Cancelar" leads
+// anywhere. One of the policies SwitchUserBlockHandler holds, beside switch user.
 //
 // They are per-user policies, in the student's own hive
 // (HKEY_USERS\<SID>\Software\Microsoft\Windows\CurrentVersion\Policies), whose
@@ -32,6 +37,9 @@ public sealed class StudentCtrlAltDelLockdown : ISwitchUserPolicy
     {
         (@"Microsoft\Windows\CurrentVersion\Policies\System", "DisableTaskMgr"),
         (@"Microsoft\Windows\CurrentVersion\Policies\Explorer", "NoLogoff"),
+        (@"Microsoft\Windows\CurrentVersion\Policies\System", "DisableLockWorkstation"),
+        (@"Microsoft\Windows\CurrentVersion\Policies\System", "DisableChangePassword"),
+        (@"Microsoft\Windows\CurrentVersion\Policies\Explorer", "NoClose"),
     };
 
     private readonly Func<string?> _loggedOnSid;
@@ -100,7 +108,7 @@ public sealed class StudentCtrlAltDelLockdown : ISwitchUserPolicy
             }
             catch (Exception ex)
             {
-                _log($"Ctrl+Alt+Del lockdown (Task Manager, sign out): {ex.Message}");
+                _log($"Ctrl+Alt+Del lockdown (Task Manager, sign out, lock, change password, power): {ex.Message}");
             }
         }
     }

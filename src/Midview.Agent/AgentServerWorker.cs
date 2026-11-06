@@ -48,14 +48,17 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly ClassLessonHandler _classLesson;
     private readonly ProgramInstaller _installer;
     private readonly StudentCtrlAltDelLockdown _ctrlAltDelLockdown;
+    private readonly ScreenLockSignal _screenLockSignal;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
         AppBlockCommandHandler appBlock, LabConfigCommandHandler labConfig, ProgramUninstaller uninstaller,
         PendingUninstalls pendingUninstalls, TrustStore masterTrustStore, PairingService pairing,
-        ClassLessonHandler classLesson, ProgramInstaller installer, StudentCtrlAltDelLockdown ctrlAltDelLockdown)
+        ClassLessonHandler classLesson, ProgramInstaller installer, StudentCtrlAltDelLockdown ctrlAltDelLockdown,
+        ScreenLockSignal screenLockSignal)
     {
         _ctrlAltDelLockdown = ctrlAltDelLockdown;
+        _screenLockSignal = screenLockSignal;
         _classLesson = classLesson;
         _installer = installer;
         _masterTrustStore = masterTrustStore;
@@ -128,8 +131,8 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile the class lesson at startup: {ex.Message}");
             }
 
-            // Hides "Switch user" and turns off the student's Task Manager and
-            // sign out while the Master holds the screen lock. Built once (its
+            // Hides "Switch user" and turns off the student's Task Manager, sign
+            // out, lock, change password and power while the Master holds the screen lock. Built once (its
             // stale-clear runs now); a registry failure here must not keep the
             // service from starting, so switch user falls back to no block and
             // the student's part goes on alone.
@@ -143,6 +146,9 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Switch-user block unavailable: {ex.Message}");
             }
             lockPolicies.Add(_ctrlAltDelLockdown);
+            // And tells the Desk helper, which closes the Ctrl+Alt+Del screen
+            // a student opens while the lock is on.
+            lockPolicies.Add(_screenLockSignal);
             var switchUserBlock = new SwitchUserBlockHandler(lockPolicies, AgentLog.Warn);
 
             return Task.Run(async () =>

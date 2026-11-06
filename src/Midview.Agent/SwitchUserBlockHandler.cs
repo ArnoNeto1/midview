@@ -5,8 +5,8 @@ namespace Midview.Agent;
 // Closes the Ctrl+Alt+Del escapes from a locked screen while any teacher holds
 // a HoldSwitchUserBlock connection -- that is, while the machine's screen is
 // locked: "Switch user" (HKLM HideFastUserSwitching, RegistrySwitchUserPolicy)
-// and the student's Task Manager and sign out (their own hive,
-// StudentCtrlAltDelLockdown). Ref-counted across teachers, so two locks block
+// and the student's Task Manager, sign out, lock, change password and power (their
+// own hive, StudentCtrlAltDelLockdown). Ref-counted across teachers, so two locks block
 // once and it all comes back only when the last lock ends. It rides on the
 // Agent's SYSTEM rights, which the user-level Session doesn't have for these
 // policies. Each policy is applied on its own: one that fails is logged and

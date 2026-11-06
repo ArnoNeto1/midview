@@ -108,7 +108,7 @@ using var classFolderTimer = new System.Threading.Timer(
     }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
 // The Ctrl+Alt+Del escapes from a locked screen (Task Manager, sign out,
-// switch user) are the Agent's: as SYSTEM it can write the student's policy
+// lock, change password, power, switch user) are the Agent's: as SYSTEM it can write the student's policy
 // keys, which a standard account can only read (StudentCtrlAltDelLockdown).
 
 var server = new SessionServer(

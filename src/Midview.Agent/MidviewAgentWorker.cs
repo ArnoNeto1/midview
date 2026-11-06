@@ -24,7 +24,7 @@ public sealed class MidviewAgentWorker : BackgroundService
     // Ending a leftover helper and the log are injectable so a test can run the
     // loop without ending real processes or writing the real agent.log.
     // labConfig: null leaves the Desktop lock alone (tests of the rest of the loop);
-    // ctrlAltDelLockdown: null leaves the student's Task Manager and sign out alone.
+    // ctrlAltDelLockdown: null leaves the student's Ctrl+Alt+Del screen alone.
     internal MidviewAgentWorker(
         SessionSupervisor supervisor, HelperSupervisor helperSupervisor, StudentFolderGuard folderGuard,
         ClassLessonHandler classLesson, Action clearStrayHelper, Action<string> log,
@@ -57,7 +57,7 @@ public sealed class MidviewAgentWorker : BackgroundService
             // "Travar a Área de Trabalho" kept on whoever is logged on, after
             // the folders above came back so they are locked in this pass.
             _labConfig?.KeepDesktopLock();
-            // The Task Manager and sign out of whoever is logged on follow the
+            // The Ctrl+Alt+Del screen of whoever is logged on follows the
             // screen lock: off for a student who logs on during it, given back
             // after a lock a crash or a power cut left behind. Never throws.
             _ctrlAltDelLockdown?.Keep();
