@@ -19,10 +19,18 @@ public sealed class AgentServerWorker : BackgroundService
     private const string SessionInboundRuleName = "MidviewSessionInbound";
     private const string DiscoveryInboundRuleName = "MidviewAgentDiscovery";
     private const string DeskInboundRuleName = "MidviewDeskInbound";
+    private const string SessionProgramRuleName = "MidviewSessionProgram";
+
+    // What Windows names the rules it makes for Session when its "allow
+    // access?" prompt is answered (the exe's description).
+    private const string WindowsSessionRuleName = "Midview.Session";
 
     // The inbound openings added on every start; the uninstaller removes them.
-    public static readonly IReadOnlyList<string> InboundRuleNames =
-        new[] { AgentInboundRuleName, SessionInboundRuleName, DiscoveryInboundRuleName, DeskInboundRuleName };
+    public static readonly IReadOnlyList<string> InboundRuleNames = new[]
+    {
+        AgentInboundRuleName, SessionInboundRuleName, DiscoveryInboundRuleName, DeskInboundRuleName,
+        SessionProgramRuleName,
+    };
 
     // The teachers this machine trusts; pairing adds to it (see PairingService).
     public static string TrustedMastersPath => Path.Combine(AgentDataDirectory.DirectoryPath, "trusted-masters.json");
@@ -214,6 +222,37 @@ public sealed class AgentServerWorker : BackgroundService
             return new SiteBlockState();
         }
     }
+
+    // Lets Session through the firewall by its exe, run at every Agent start
+    // before the first Session is launched (Program.cs). The first time Session
+    // listens without a rule of its own, Windows asks the student "allow
+    // access?"; a standard account can't say yes, and cancelling leaves inbound
+    // BLOCK rules for the exe, which beat SessionInboundRuleName's port rule:
+    // the teacher saw the machine "Offline" until someone ticked it in the
+    // firewall's allowed apps. A network update runs Session from a new folder
+    // (Midview.update\<attempt>), so Windows asks again after every update and
+    // a block can be for any of those folders. So Windows' own rules go first
+    // (it names them after the exe, "Midview.Session", whatever the folder),
+    // then any rule for this exe, then this exe is allowed, which also keeps
+    // the prompt from coming back.
+    public static void AllowSessionThroughFirewall(string sessionExecutablePath)
+    {
+        foreach (var command in SessionProgramRuleCommands(sessionExecutablePath))
+        {
+            RunNetsh(command);
+        }
+    }
+
+    internal static IReadOnlyList<string[]> SessionProgramRuleCommands(string sessionExecutablePath) => new[]
+    {
+        new[] { "advfirewall", "firewall", "delete", "rule", $"name={WindowsSessionRuleName}", "dir=in" },
+        new[] { "advfirewall", "firewall", "delete", "rule", "name=all", "dir=in", $"program={sessionExecutablePath}" },
+        new[]
+        {
+            "advfirewall", "firewall", "add", "rule", $"name={SessionProgramRuleName}", "dir=in", "action=allow",
+            $"program={sessionExecutablePath}", "enable=yes", "profile=any",
+        },
+    };
 
     private static void EnsureInboundFirewallRuleExists(string ruleName, int port, string protocol = "TCP")
     {

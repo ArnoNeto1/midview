@@ -33,7 +33,7 @@ public class UninstallCleanupTests : IDisposable
             new[]
             {
                 "name=MidviewAgentInbound", "name=MidviewSessionInbound", "name=MidviewAgentDiscovery",
-                "name=MidviewDeskInbound",
+                "name=MidviewDeskInbound", "name=MidviewSessionProgram",
             },
             _netshCalls.Select(call => call[^1]));
         Assert.All(_netshCalls, call => Assert.Equal(new[] { "advfirewall", "firewall", "delete", "rule" }, call[..4]));

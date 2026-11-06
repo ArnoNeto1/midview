@@ -27,10 +27,10 @@ var sessionExecutablePath = Path.Combine(AppContext.BaseDirectory, "Midview.Sess
 // The Desk helper sits next to this exe too.
 var deskExecutablePath = Path.Combine(AppContext.BaseDirectory, "Midview.Desk.exe");
 
-// Before the host starts, so the directory's permissions and Session's
-// certificate are in place before SessionSupervisor launches the first
-// Session.
-PrepareDataDirectory();
+// Before the host starts, so the directory's permissions, Session's
+// certificate and its firewall rule are in place before SessionSupervisor
+// launches the first Session.
+PrepareDataDirectory(sessionExecutablePath);
 
 var host = Host.CreateDefaultBuilder(args)
     .UseWindowsService(options => options.ServiceName = "MidviewAgent")
@@ -135,7 +135,7 @@ return 0;
 
 // Each step isolated from the others: none of them may keep the Agent from
 // starting (and so from listening for the teacher's commands).
-static void PrepareDataDirectory()
+static void PrepareDataDirectory(string sessionExecutablePath)
 {
     TryStep("secure the data directory", () => AgentDataDirectory.EnsureSecure());
 
@@ -157,6 +157,10 @@ static void PrepareDataDirectory()
     // Network updates keep their lock and record where students can't
     // open them (see UpdatePaths.EnsureStateDirectory).
     TryStep("protect the network update folder", () => UpdatePaths.Default.EnsureStateDirectory());
+
+    // Before the first Session listens, so Windows never asks the student to
+    // allow it and a block an earlier cancel left is gone.
+    TryStep("let Session through the firewall", () => AgentServerWorker.AllowSessionThroughFirewall(sessionExecutablePath));
 }
 
 static int RefuseUnknownArguments(string[] args)
