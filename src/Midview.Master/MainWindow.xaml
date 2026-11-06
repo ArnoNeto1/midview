@@ -88,12 +88,13 @@
                                                  IsEnabled="False" ToolTip="Abre a tela da máquina selecionada, só para ver." />
                             <local:ToolbarButton x:Name="ControlButton" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
                                                  IsEnabled="False" ToolTip="Controla a máquina selecionada e trava o teclado e o mouse do aluno." />
-                            <!-- Becomes "Desbloquear telas" while any screen is locked (UpdateScreenLockButton).
-                                 Width overridden from the shared 64: "Desbloquear" alone measures 65px at this
-                                 font, wider than the 58px the default width leaves, so it would break mid-word
-                                 instead of wrapping at the space. 72 leaves 66px. -->
-                            <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear telas" Icon="&#xE7F4;" Badge="&#xE72E;"
-                                                 Width="72" Click="OnScreenLockClassClicked"
+                            <!-- Becomes "Desbloquear telas" while any screen is locked, with the padlock in
+                                 its screen closed instead of open (UpdateScreenLockButton, ScreenLockText).
+                                 One word per line in both. Width overridden from the shared 58: "Desbloquear"
+                                 alone measures 65px at this font, wider than the 58px the default width
+                                 leaves, so it would break mid-word. 72 leaves 66px. -->
+                            <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear&#10;telas" Icon="&#xE7F4;" Badge="&#xE785;"
+                                                 BadgeInScreen="True" Width="72" Click="OnScreenLockClassClicked"
                                                  ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
                         </StackPanel>
                         <ContentControl Content="Tela" Style="{StaticResource ToolbarGroupCaption}" />

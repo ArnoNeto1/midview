@@ -23,14 +23,17 @@ public class ScreenLockTextTests
         Assert.Equal(("🔒 Tela bloqueada", false), ScreenLockText.Badge(locked: true, wasLocked: true, "tela bloqueada"));
 
     // One toolbar button: it locks the class, and once any screen is
-    // locked it becomes the one that gives them all back.
+    // locked it becomes the one that gives them all back. Its padlock shows
+    // how the screens are (open while free, closed while locked), and its
+    // label keeps one word per line either way, so the button doesn't change
+    // shape when it flips.
     [Fact]
     public void TheClassButton_LocksWhileNothingIsLocked()
     {
         var button = ScreenLockText.ClassButton(anyLocked: false);
 
-        Assert.Equal("Bloquear telas", button.Label);
-        Assert.Equal("", button.Badge);
+        Assert.Equal("Bloquear\ntelas", button.Label);
+        Assert.Equal("\uE785", button.Badge); // open padlock
     }
 
     [Fact]
@@ -38,8 +41,8 @@ public class ScreenLockTextTests
     {
         var button = ScreenLockText.ClassButton(anyLocked: true);
 
-        Assert.Equal("Desbloquear telas", button.Label);
-        Assert.Equal("", button.Badge);
+        Assert.Equal("Desbloquear\ntelas", button.Label);
+        Assert.Equal("\uE72E", button.Badge); // closed padlock
         Assert.Contains("todos os alunos", button.ToolTip);
     }
 

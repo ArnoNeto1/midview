@@ -81,16 +81,21 @@
     <Style x:Key="ToolbarGroupCaption" TargetType="ContentControl">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="HorizontalAlignment" Value="Center" />
-        <Setter Property="Margin" Value="0,0,0,6" />
+        <!-- 5 above, so the name clears a highlighted button's border; 1 below
+             (was 6), so the group keeps its height. -->
+        <Setter Property="Margin" Value="0,5,0,1" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ContentControl">
+                    <!-- The empty 11 on the right matches the dot and its gap on the left, so
+                         the name itself, not dot and name together, is centred under the group. -->
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center"
                                  Fill="{Binding (local:ToolbarButton.IconBrush), RelativeSource={RelativeSource Self}}" />
                         <local:SpacedCapsText Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
-                                              FontFamily="{StaticResource UiFont}" FontSize="9.5" Spacing="0.13"
+                                              FontFamily="{StaticResource UiFont}" FontSize="9.5" Spacing="0.13" FontWeight="Bold"
                                               Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                        <FrameworkElement Width="11" />
                     </StackPanel>
                 </ControlTemplate>
             </Setter.Value>
@@ -159,6 +164,16 @@
                         </Trigger>
                         <Trigger Property="Caption" Value="">
                             <Setter TargetName="CaptionPill" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <!-- The badge inside the monitor's screen (BadgeInScreen): no disc, centred
+                             on the screen, which sits above the middle of the glyph (its stand is
+                             below). -->
+                        <Trigger Property="BadgeInScreen" Value="True">
+                            <Setter TargetName="BadgeDisc" Property="Background" Value="Transparent" />
+                            <Setter TargetName="BadgeDisc" Property="HorizontalAlignment" Value="Center" />
+                            <Setter TargetName="BadgeDisc" Property="VerticalAlignment" Value="Center" />
+                            <Setter TargetName="BadgeDisc" Property="Margin" Value="0,0,0,4" />
+                            <Setter TargetName="BadgeText" Property="FontSize" Value="9" />
                         </Trigger>
                         <Trigger Property="OpensOptions" Value="True">
                             <Setter TargetName="OptionsArrow" Property="Visibility" Value="Visible" />

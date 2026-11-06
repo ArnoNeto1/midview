@@ -15,6 +15,8 @@ namespace Midview.Master;
 // not empty; it takes the label's second line, so it goes on a button whose
 // label fits on one. IconBrush is the color of the button's group, set once
 // on the group's panel and inherited by its buttons and its caption's dot.
+// BadgeInScreen draws the badge inside the icon's screen instead of on its
+// corner, for a monitor icon ("Bloquear telas": the padlock in the screen).
 public sealed class ToolbarButton : Button
 {
     public static readonly DependencyProperty IconBrushProperty =
@@ -42,6 +44,15 @@ public sealed class ToolbarButton : Button
 
     public static readonly DependencyProperty OpensOptionsProperty =
         DependencyProperty.Register(nameof(OpensOptions), typeof(bool), typeof(ToolbarButton), new PropertyMetadata(false));
+
+    public static readonly DependencyProperty BadgeInScreenProperty =
+        DependencyProperty.Register(nameof(BadgeInScreen), typeof(bool), typeof(ToolbarButton), new PropertyMetadata(false));
+
+    public bool BadgeInScreen
+    {
+        get => (bool)GetValue(BadgeInScreenProperty);
+        set => SetValue(BadgeInScreenProperty, value);
+    }
 
     public bool OpensOptions
     {

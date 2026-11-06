@@ -22,12 +22,18 @@ public static class ScreenLockText
     // while any of them is locked, and locks them otherwise.
     public static string MachineMenuItem(bool anyLocked) => anyLocked ? "Desbloquear a tela" : "Bloquear a tela";
 
+    // Segoe Fluent Icons padlocks, drawn inside the button's screen.
+    private const string ClosedPadlock = "";
+    private const string OpenPadlock = "";
+
     // The toolbar's one screen-lock button: it locks the class, and while
     // any screen is locked (the class's or a single machine's) it gives them
-    // all back instead. Badge is a Segoe Fluent Icons glyph: a closed or an
-    // open padlock.
+    // all back instead. The padlock shows how the screens are now: open while
+    // they're free, closed while any is locked. The label keeps one word per
+    // line in both, so the button doesn't change shape when it flips
+    // ("Bloquear telas" alone would fit on one line, "Desbloquear telas" not).
     public static (string Label, string Badge, string ToolTip) ClassButton(bool anyLocked) =>
         anyLocked
-            ? ("Desbloquear telas", "", "Devolve a tela, o teclado e o mouse a todos os alunos.")
-            : ("Bloquear telas", "", "Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse.");
+            ? ("Desbloquear\ntelas", ClosedPadlock, "Devolve a tela, o teclado e o mouse a todos os alunos.")
+            : ("Bloquear\ntelas", OpenPadlock, "Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse.");
 }
