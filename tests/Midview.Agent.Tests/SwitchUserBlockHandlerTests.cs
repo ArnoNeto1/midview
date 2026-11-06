@@ -43,4 +43,27 @@ public sealed class SwitchUserBlockHandlerTests
         handler.Release();
         Assert.False(policy.Blocked);
     }
+
+    private sealed class FailingPolicy : ISwitchUserPolicy
+    {
+        public void Block() => throw new UnauthorizedAccessException("sem acesso");
+        public void Unblock() => throw new UnauthorizedAccessException("sem acesso");
+    }
+
+    // Switch user (HKLM) and the student's Task Manager and sign-out (their own
+    // hive) ride on the same hold: one that fails leaves the other working.
+    [Fact]
+    public void APolicyThatFails_DoesNotStopTheOthers()
+    {
+        var log = new List<string>();
+        var working = new FakePolicy();
+        var handler = new SwitchUserBlockHandler(new ISwitchUserPolicy[] { new FailingPolicy(), working }, log.Add);
+
+        handler.Acquire();
+        Assert.True(working.Blocked);
+
+        handler.Release();
+        Assert.False(working.Blocked);
+        Assert.Contains(log, line => line.Contains("sem acesso"));
+    }
 }

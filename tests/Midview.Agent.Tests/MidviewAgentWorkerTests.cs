@@ -24,6 +24,37 @@ public sealed class MidviewAgentWorkerTests
         Assert.Equal(1, helper.LaunchAttempts);
     }
 
+    // Locked with nobody logged on: the first pass after a student logs on turns
+    // off their Task Manager and sign out (in a throwaway subtree for their hive).
+    [Fact]
+    public async Task EachPass_LocksDownAStudentWhoLoggedOnDuringTheLock()
+    {
+        var root = $@"Software\MidviewTest\{Guid.NewGuid():N}";
+        var state = Path.Combine(Path.GetTempPath(), $"midview-cad-{Guid.NewGuid():N}.json");
+        string? loggedOn = null;
+        var lockdown = new StudentCtrlAltDelLockdown(
+            () => loggedOn, sid => Microsoft.Win32.Registry.CurrentUser.CreateSubKey($@"{root}\{sid}", writable: true), state, _ => { });
+        try
+        {
+            lockdown.Block();
+            loggedOn = "S-1-5-21-1-2-3-1001";
+            var worker = Worker(new FakeSessionProcessLauncher(true), new FakeSessionProcessLauncher(true),
+                TimeSpan.FromMinutes(1), ctrlAltDelLockdown: lockdown);
+
+            await worker.StartAsync(CancellationToken.None);
+            await worker.StopAsync(CancellationToken.None);
+
+            using var system = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                $@"{root}\{loggedOn}\Microsoft\Windows\CurrentVersion\Policies\System");
+            Assert.Equal(1, system?.GetValue("DisableTaskMgr"));
+        }
+        finally
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(root, throwOnMissingSubKey: false);
+            File.Delete(state);
+        }
+    }
+
     // A helper left by an earlier Agent (a restart, a crash, an update) still holds
     // its port and its exe, and the supervisor can't adopt it: it doesn't know its
     // pid. So it is ended once, before the first launch -- not on every pass, which
@@ -93,7 +124,7 @@ public sealed class MidviewAgentWorkerTests
     // left alone.
     private static MidviewAgentWorker Worker(
         FakeSessionProcessLauncher session, FakeSessionProcessLauncher helper, TimeSpan poll,
-        Action? clearStrayHelper = null, Action<string>? log = null)
+        Action? clearStrayHelper = null, Action<string>? log = null, StudentCtrlAltDelLockdown? ctrlAltDelLockdown = null)
     {
         var me = WindowsIdentity.GetCurrent().User!;
         return new MidviewAgentWorker(
@@ -103,7 +134,7 @@ public sealed class MidviewAgentWorkerTests
             new ClassLessonHandler(
                 Path.Combine(Path.GetTempPath(), $"midview-lesson-{Guid.NewGuid():N}.json"),
                 () => null, _ => null, new AppBlockEnforcer(new NoProcesses()), me, () => DateTime.Now),
-            clearStrayHelper ?? (() => { }), log ?? (_ => { }));
+            clearStrayHelper ?? (() => { }), log ?? (_ => { }), ctrlAltDelLockdown: ctrlAltDelLockdown);
     }
 
     private static async Task WaitUntil(Func<bool> condition)

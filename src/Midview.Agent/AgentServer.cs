@@ -136,8 +136,9 @@ public sealed class AgentServer
             return;
         }
 
-        // Held open by the Master while it keeps the screen locked: hides
-        // "Switch user" on the Ctrl+Alt+Del screen until the connection drops.
+        // Held open by the Master while it keeps the screen locked: closes the
+        // Ctrl+Alt+Del escapes (switch user, the student's Task Manager and sign
+        // out) until the connection drops.
         if (message.Type == MessageType.HoldSwitchUserBlock && _switchUserBlock is not null)
         {
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, "trocar usuário bloqueado")));

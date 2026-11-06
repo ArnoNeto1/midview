@@ -1,8 +1,10 @@
 namespace Midview.Agent;
 
-// Hides or restores "Switch user" on the Ctrl+Alt+Del screen (the HKLM policy
-// HideFastUserSwitching). Only the Agent's SYSTEM rights can write it, which
-// is why the Session can't block switching user itself.
+// One of the Ctrl+Alt+Del escapes SwitchUserBlockHandler closes while the
+// screen is locked: "Switch user" (RegistrySwitchUserPolicy, HKLM) or the
+// student's Task Manager and sign out (StudentCtrlAltDelLockdown, their own
+// hive). Only the Agent's SYSTEM rights can write either, which is why the
+// Session can't close them itself.
 public interface ISwitchUserPolicy
 {
     void Block();

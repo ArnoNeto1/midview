@@ -53,6 +53,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(new StudentFolderGuard(
             UserSessionProcessLauncher.LoggedOnStudent, new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null)));
         services.AddSingleton(new InputLockCoordinator(new WindowsInputDeviceController()));
+        // The student's Task Manager and sign out while the screen is locked:
+        // applied by the lock's hold (AgentServerWorker) and kept on the poll
+        // (MidviewAgentWorker), so one instance for both.
+        services.AddSingleton(StudentCtrlAltDelLockdown.ForTheConsole());
         // The countdown on the student's screen while a shutdown is on its
         // way, shared by the teacher's and the schedule's.
         services.AddSingleton<ICountdownDisplay>(new SessionCountdownDisplay(new UserSessionProcessLauncher(sessionExecutablePath)));

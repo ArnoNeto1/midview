@@ -107,11 +107,9 @@ using var classFolderTimer = new System.Threading.Timer(
         classFolder.Follow(lessonNotice);
     }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
-// Any Ctrl+Alt+Del lockdown left behind by a Session that crashed while the
-// screen was locked is cleared here, before serving, so the student is never
-// stuck without the Task Manager or sign-out outside a lock.
-var screenLockPolicy = new RegistryScreenLockPolicy();
-screenLockPolicy.Unblock();
+// The Ctrl+Alt+Del escapes from a locked screen (Task Manager, sign out,
+// switch user) are the Agent's: as SYSTEM it can write the student's policy
+// keys, which a standard account can only read (StudentCtrlAltDelLockdown).
 
 var server = new SessionServer(
     new TcpListener(IPAddress.Any, 5901),
@@ -138,7 +136,6 @@ var server = new SessionServer(
     new WindowsWebsiteOpener(),
     new WindowsProgramStarter(),
     clipboard: new WindowsClipboard(),
-    classFolder: classFolder,
-    screenLockPolicy: screenLockPolicy);
+    classFolder: classFolder);
 
 server.Run(CancellationToken.None);

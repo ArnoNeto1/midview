@@ -9,30 +9,33 @@ public sealed class MidviewAgentWorker : BackgroundService
     private readonly StudentFolderGuard _folderGuard;
     private readonly ClassLessonHandler _classLesson;
     private readonly LabConfigCommandHandler? _labConfig;
+    private readonly StudentCtrlAltDelLockdown? _ctrlAltDelLockdown;
     private readonly Action _clearStrayHelper;
     private readonly Action<string> _log;
 
     public MidviewAgentWorker(
         SessionSupervisor supervisor, HelperSupervisor helperSupervisor, StudentFolderGuard folderGuard,
-        ClassLessonHandler classLesson, LabConfigCommandHandler labConfig)
+        ClassLessonHandler classLesson, LabConfigCommandHandler labConfig, StudentCtrlAltDelLockdown ctrlAltDelLockdown)
         : this(supervisor, helperSupervisor, folderGuard, classLesson,
-            () => SessionProcesses.KillByName(SessionProcesses.HelperName), AgentLog.Warn, labConfig)
+            () => SessionProcesses.KillByName(SessionProcesses.HelperName), AgentLog.Warn, labConfig, ctrlAltDelLockdown)
     {
     }
 
     // Ending a leftover helper and the log are injectable so a test can run the
     // loop without ending real processes or writing the real agent.log.
-    // labConfig: null leaves the Desktop lock alone (tests of the rest of the loop).
+    // labConfig: null leaves the Desktop lock alone (tests of the rest of the loop);
+    // ctrlAltDelLockdown: null leaves the student's Task Manager and sign out alone.
     internal MidviewAgentWorker(
         SessionSupervisor supervisor, HelperSupervisor helperSupervisor, StudentFolderGuard folderGuard,
         ClassLessonHandler classLesson, Action clearStrayHelper, Action<string> log,
-        LabConfigCommandHandler? labConfig = null)
+        LabConfigCommandHandler? labConfig = null, StudentCtrlAltDelLockdown? ctrlAltDelLockdown = null)
     {
         _supervisor = supervisor;
         _helperSupervisor = helperSupervisor;
         _folderGuard = folderGuard;
         _classLesson = classLesson;
         _labConfig = labConfig;
+        _ctrlAltDelLockdown = ctrlAltDelLockdown;
         _clearStrayHelper = clearStrayHelper;
         _log = log;
     }
@@ -54,6 +57,10 @@ public sealed class MidviewAgentWorker : BackgroundService
             // "Travar a Área de Trabalho" kept on whoever is logged on, after
             // the folders above came back so they are locked in this pass.
             _labConfig?.KeepDesktopLock();
+            // The Task Manager and sign out of whoever is logged on follow the
+            // screen lock: off for a student who logs on during it, given back
+            // after a lock a crash or a power cut left behind. Never throws.
+            _ctrlAltDelLockdown?.Keep();
             // The class folder and the download folder follow the lesson for
             // whoever is logged on; a lesson from an earlier day ends here.
             _classLesson.Reconcile();

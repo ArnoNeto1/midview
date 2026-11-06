@@ -259,19 +259,6 @@ public class RecordingScreenLock : IScreenLockDisplay
     public void Hide() => Volatile.Write(ref _showing, false);
 }
 
-public class RecordingLockPolicy : IScreenLockPolicy
-{
-    private int _blocks;
-    private int _unblocks;
-
-    public int Blocks => Volatile.Read(ref _blocks);
-    public int Unblocks => Volatile.Read(ref _unblocks);
-    public bool Blocked => Blocks > Unblocks;
-
-    public void Block() => Interlocked.Increment(ref _blocks);
-    public void Unblock() => Interlocked.Increment(ref _unblocks);
-}
-
 public class RecordingFileOpener : IFileOpener
 {
     private readonly List<string> _opened = new();
@@ -680,46 +667,6 @@ public partial class SessionServerTests
         Assert.True(screenLock.Showing);
         Assert.Equal(1, screenLock.Shows);
         Assert.Equal(0, harness.Devices.EnableCalls);
-    }
-
-    [Fact]
-    public async Task LockScreen_BlocksTheCtrlAltDelEscapes_ThenRestoresOnUnlock()
-    {
-        var policy = new RecordingLockPolicy();
-        using var harness = new ServerHarness(
-            new CountingScreenCapture(), screenLock: new RecordingScreenLock(), screenLockPolicy: policy);
-        var teacher = harness.ConnectMaster();
-
-        await Task.Run(() => teacher.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(policy.Blocked);
-
-        teacher.Dispose(); // "Desbloquear", or the teacher's program closing
-        await WaitUntil(() => !policy.Blocked);
-        Assert.Equal(1, policy.Blocks);
-        Assert.Equal(1, policy.Unblocks);
-    }
-
-    [Fact]
-    public async Task TwoLocks_BlockTheEscapesOnce_AndRestoreAfterBoth()
-    {
-        var policy = new RecordingLockPolicy();
-        using var harness = new ServerHarness(
-            new CountingScreenCapture(), screenLock: new RecordingScreenLock(), screenLockPolicy: policy);
-        var first = harness.ConnectMaster();
-        using var second = harness.ConnectMaster();
-        await Task.Run(() => first.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Run(() => second.LockScreen()).WaitAsync(TimeSpan.FromSeconds(5));
-
-        Assert.Equal(1, policy.Blocks);
-
-        first.Dispose();
-        await Task.Delay(500);
-        Assert.True(policy.Blocked); // the second lock still holds it
-        Assert.Equal(0, policy.Unblocks);
-
-        second.Dispose();
-        await WaitUntil(() => !policy.Blocked);
-        Assert.Equal(1, policy.Unblocks);
     }
 
     [Fact]
@@ -1964,8 +1911,7 @@ public partial class SessionServerTests
             IOpenProgramsLister? openPrograms = null, IScreenLockDisplay? screenLock = null,
             IFileOpener? fileOpener = null, IRecycleBin? recycleBin = null, string? trustedMastersFile = null,
             ICountdownNotice? countdownNotice = null, IWebsiteOpener? websiteOpener = null,
-            IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, ClassFolder? classFolder = null,
-            IScreenLockPolicy? screenLockPolicy = null)
+            IProgramStarter? programStarter = null, TimeSpan? frameAckTimeout = null, ClassFolder? classFolder = null)
         {
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
@@ -1979,7 +1925,7 @@ public partial class SessionServerTests
                 InputLock,
                 messageDisplay, chatWindows, fileInbox, appCloser, deliveryFolder, openPrograms, screenLock,
                 fileOpener, recycleBin, countdownNotice, websiteOpener, programStarter, frameAckTimeout,
-                classFolder: classFolder, screenLockPolicy: screenLockPolicy);
+                classFolder: classFolder);
             _serverTask = Task.Run(() => server.Run(_stopServer.Token));
         }
 

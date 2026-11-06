@@ -656,8 +656,8 @@ public partial class MainWindow : MidviewWindow
         tile.ShowScreenLock(ScreenLockText.Locking, alert: false);
         keeper.Start();
 
-        // Also hide "Switch user" on the Ctrl+Alt+Del screen while it's locked,
-        // so the student can't switch accounts to get past the lock. Only when
+        // Also close the Ctrl+Alt+Del escapes while it's locked (switch user, the
+        // Task Manager, sign out), so the student can't get past the lock. Only when
         // the Agent thumbprint is known (machines paired before it simply keep
         // the screen lock without this).
         if (tile.Machine.AgentThumbprint is { } agentThumbprint)

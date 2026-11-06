@@ -47,13 +47,15 @@ public sealed class AgentServerWorker : BackgroundService
     private readonly PairingService _pairing;
     private readonly ClassLessonHandler _classLesson;
     private readonly ProgramInstaller _installer;
+    private readonly StudentCtrlAltDelLockdown _ctrlAltDelLockdown;
 
     public AgentServerWorker(
         ScheduledShutdown scheduledShutdown, PowerCommandHandler powerHandler, UpdateReceiver updateReceiver,
         AppBlockCommandHandler appBlock, LabConfigCommandHandler labConfig, ProgramUninstaller uninstaller,
         PendingUninstalls pendingUninstalls, TrustStore masterTrustStore, PairingService pairing,
-        ClassLessonHandler classLesson, ProgramInstaller installer)
+        ClassLessonHandler classLesson, ProgramInstaller installer, StudentCtrlAltDelLockdown ctrlAltDelLockdown)
     {
+        _ctrlAltDelLockdown = ctrlAltDelLockdown;
         _classLesson = classLesson;
         _installer = installer;
         _masterTrustStore = masterTrustStore;
@@ -126,18 +128,22 @@ public sealed class AgentServerWorker : BackgroundService
                 AgentLog.Warn($"Failed to reconcile the class lesson at startup: {ex.Message}");
             }
 
-            // Hides "Switch user" while the Master holds the screen lock. Built
-            // once (its stale-clear runs now); a registry failure here must not
-            // keep the service from starting, so it falls back to no block.
-            SwitchUserBlockHandler? switchUserBlock = null;
+            // Hides "Switch user" and turns off the student's Task Manager and
+            // sign out while the Master holds the screen lock. Built once (its
+            // stale-clear runs now); a registry failure here must not keep the
+            // service from starting, so switch user falls back to no block and
+            // the student's part goes on alone.
+            var lockPolicies = new List<ISwitchUserPolicy>();
             try
             {
-                switchUserBlock = new SwitchUserBlockHandler(RegistrySwitchUserPolicy.OpenMachine());
+                lockPolicies.Add(RegistrySwitchUserPolicy.OpenMachine());
             }
             catch (Exception ex)
             {
                 AgentLog.Warn($"Switch-user block unavailable: {ex.Message}");
             }
+            lockPolicies.Add(_ctrlAltDelLockdown);
+            var switchUserBlock = new SwitchUserBlockHandler(lockPolicies, AgentLog.Warn);
 
             return Task.Run(async () =>
             {
