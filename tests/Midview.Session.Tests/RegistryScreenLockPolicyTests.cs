@@ -56,4 +56,49 @@ public sealed class RegistryScreenLockPolicyTests : IDisposable
     {
         Policy().Unblock();
     }
+
+    // A student account's Policies keys are read-only to the student (Windows
+    // sets them so): opening them to write throws SecurityException. The lab's
+    // Session called Unblock as it started and crashed on it, again and again,
+    // so no screen ever reached the teacher. Neither may ever throw.
+    [Fact]
+    public void Unblock_OnPolicyKeysTheStudentCanOnlyRead_DoesNotThrow()
+    {
+        ReadOnlyPolicyKeys(withValues: true);
+
+        Policy().Unblock();
+
+        Assert.Equal(1, Read(SystemPath, "DisableTaskMgr")); // left as it was, not deleted
+    }
+
+    [Fact]
+    public void Block_OnPolicyKeysTheStudentCanOnlyRead_DoesNotThrow()
+    {
+        ReadOnlyPolicyKeys(withValues: false);
+
+        Policy().Block();
+
+        Assert.Null(Read(SystemPath, "DisableTaskMgr"));
+    }
+
+    // Both policy keys, with the current user denied every write to them (but
+    // not their deletion, so Dispose still cleans up), as Windows leaves them
+    // for a standard account.
+    private void ReadOnlyPolicyKeys(bool withValues)
+    {
+        foreach (var (path, name) in new[] { (SystemPath, "DisableTaskMgr"), (ExplorerPath, "NoLogoff") })
+        {
+            using var key = _root.CreateSubKey(path, writable: true);
+            if (withValues)
+            {
+                key.SetValue(name, 1, RegistryValueKind.DWord);
+            }
+            var security = key.GetAccessControl();
+            security.AddAccessRule(new System.Security.AccessControl.RegistryAccessRule(
+                System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                System.Security.AccessControl.RegistryRights.SetValue | System.Security.AccessControl.RegistryRights.CreateSubKey,
+                System.Security.AccessControl.AccessControlType.Deny));
+            key.SetAccessControl(security);
+        }
+    }
 }
