@@ -227,7 +227,10 @@ public sealed class LabPolicyWriter : IDisposable
     private void ApplyLockTaskbar()
     {
         using var explorer = _base.Value.CreateSubKey(ExplorerPath, writable: true);
-        // Stops the student pinning or unpinning anything.
+        // The machine-wide copy of the pin/unpin block. Windows reads that
+        // policy only per user, so what actually stops the student pinning
+        // and unpinning is StudentTaskbarLock, in their own hive; this one is
+        // kept as it always was.
         explorer.SetValue("NoPinningToTaskbar", 1, RegistryValueKind.DWord);
 
         // With a layout file present, also lock the icon order to it; without

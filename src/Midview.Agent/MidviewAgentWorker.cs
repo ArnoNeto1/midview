@@ -57,6 +57,9 @@ public sealed class MidviewAgentWorker : BackgroundService
             // "Travar a Área de Trabalho" kept on whoever is logged on, after
             // the folders above came back so they are locked in this pass.
             _labConfig?.KeepDesktopLock();
+            // "Travar a barra de tarefas": pinning and unpinning are a per-user
+            // policy, so it goes in whoever is logged on, kept on every pass.
+            _labConfig?.KeepTaskbarLock();
             // The Ctrl+Alt+Del screen of whoever is logged on follows the
             // screen lock: off for a student who logs on during it, given back
             // after a lock a crash or a power cut left behind. Never throws.

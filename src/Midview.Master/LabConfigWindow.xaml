@@ -144,7 +144,7 @@
                             <StackPanel>
                                 <TextBlock Text="Travar a barra de tarefas" Style="{StaticResource FunctionName}" />
                                 <TextBlock Style="{StaticResource FunctionHint}"
-                                           Text="Impede o aluno de fixar ou desafixar ícones da barra de tarefas." />
+                                           Text="Impede o aluno de fixar ou desafixar ícones da barra de tarefas. Vale a partir da próxima vez que ele entrar na conta (ou reiniciar o PC)." />
                             </StackPanel>
                         </DockPanel>
                     </Border>

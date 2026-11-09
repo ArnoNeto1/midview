@@ -28,16 +28,28 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
         try { File.Delete(_statePath + ".tmp"); } catch { }
         try { Directory.Delete(_usersRoot, recursive: true); } catch { }
         try { File.Delete(_layoutPath); } catch { }
+        try { File.Delete(_taskbarStatePath); } catch { }
     }
 
     private AppBlockEnforcer _enforcer = null!;
 
-    private LabConfigCommandHandler Create(StudentDesktopLockGuard? desktopLock = null)
+    private LabConfigCommandHandler Create(
+        StudentDesktopLockGuard? desktopLock = null, StudentTaskbarLock? taskbarLock = null)
     {
         _enforcer = new AppBlockEnforcer(_inspector);
         var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath);
-        return new LabConfigCommandHandler(_statePath, writer, _enforcer, _usersRoot, desktopLock);
+        return new LabConfigCommandHandler(_statePath, writer, _enforcer, _usersRoot, desktopLock, taskbarLock);
     }
+
+    // The logged-on student's hive is a subtree of the test's own root.
+    private const string Student = "S-1-5-21-1-2-3-1001";
+    private readonly string _taskbarStatePath = Path.Combine(Path.GetTempPath(), $"midview-tb-lock-{Guid.NewGuid():N}.json");
+
+    private StudentTaskbarLock TaskbarLock() =>
+        new(() => Student, sid => _root.CreateSubKey($@"hives\{sid}", writable: true), _taskbarStatePath, _ => { });
+
+    private object? StudentPinningBlock() =>
+        Read($@"hives\{Student}\{StudentTaskbarLock.ExplorerPath}", StudentTaskbarLock.ValueName);
 
     private static readonly System.Security.Principal.SecurityIdentifier Me =
         System.Security.Principal.WindowsIdentity.GetCurrent().User!;
@@ -369,6 +381,45 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
         {
             StudentDesktopLock.Unlock(desktop, Me);
         }
+    }
+
+    // "Travar a barra de tarefas": pinning is a per-user policy, so turning it
+    // on blocks the student logged on right away, and off gives it back.
+    [Fact]
+    public void Handle_LockTaskbar_BlocksPinningForTheStudentRightAway()
+    {
+        var handler = Create(taskbarLock: TaskbarLock());
+
+        handler.Handle((LabConfig.Off(100) with { LockTaskbar = true }).Encode());
+        Assert.Equal(1, StudentPinningBlock());
+
+        handler.Handle(LabConfig.Off(101).Encode());
+        Assert.Null(StudentPinningBlock());
+    }
+
+    [Fact]
+    public void Reset_GivesPinningBack()
+    {
+        var handler = Create(taskbarLock: TaskbarLock());
+        handler.Handle((LabConfig.Off(100) with { LockTaskbar = true }).Encode());
+
+        Assert.True(handler.Reset().Succeeded);
+
+        Assert.Null(StudentPinningBlock());
+    }
+
+    // What the poll does: a student who logs on after it was turned on (or
+    // after a restart) is blocked too.
+    [Fact]
+    public void KeepTaskbarLock_BlocksPinningForWhoeverIsLoggedOn()
+    {
+        Create().Handle((LabConfig.Off(100) with { LockTaskbar = true }).Encode());
+        var afterRestart = Create(taskbarLock: TaskbarLock());
+        Assert.Null(StudentPinningBlock());
+
+        afterRestart.KeepTaskbarLock();
+
+        Assert.Equal(1, StudentPinningBlock());
     }
 
     // The state an Agent from before the Desktop lock saved has no such field.

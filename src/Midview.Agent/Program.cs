@@ -88,11 +88,13 @@ var host = Host.CreateDefaultBuilder(args)
         // The lab-configuration panel: writes Chrome and Windows policies
         // (the enforcer ends Edge for it). One writer open on HKLM for the
         // Agent's life. "Travar a Área de Trabalho" goes on the logged-on
-        // student's Desktop, kept on the same poll as their folders.
+        // student's Desktop, and the pin/unpin block of "Travar a barra de
+        // tarefas" in their own hive, both kept on the same poll as their folders.
         services.AddSingleton(provider => new LabConfigCommandHandler(
             LabConfigCommandHandler.DefaultStatePath, LabPolicyWriter.OpenMachine(),
             provider.GetRequiredService<AppBlockEnforcer>(),
-            desktopLock: new StudentDesktopLockGuard(UserSessionProcessLauncher.LoggedOnStudent)));
+            desktopLock: new StudentDesktopLockGuard(UserSessionProcessLauncher.LoggedOnStudent),
+            taskbarLock: StudentTaskbarLock.ForTheConsole()));
         // The class folder's lesson: the protected "Pasta da turma" folder and
         // the download folder in the logged-on student's own registry hive
         // (the enforcer closes Chrome when it changes). It keeps which teacher

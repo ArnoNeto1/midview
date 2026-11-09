@@ -27,20 +27,23 @@ public sealed class LabConfigCommandHandler
     private readonly AppBlockEnforcer _enforcer;
     private readonly string _usersRoot;
     private readonly StudentDesktopLockGuard? _desktopLock;
+    private readonly StudentTaskbarLock? _taskbarLock;
     private readonly object _gate = new();
     private LabConfig _config;
 
-    // desktopLock: keeps "Travar a Área de Trabalho" on whoever is logged on
-    // (null: not kept, as in tests of the other functions).
+    // desktopLock: keeps "Travar a Área de Trabalho" on whoever is logged on;
+    // taskbarLock: the pin/unpin block of "Travar a barra de tarefas", which
+    // is per user (null: not kept, as in tests of the other functions).
     public LabConfigCommandHandler(
         string statePath, LabPolicyWriter writer, AppBlockEnforcer enforcer, string? usersRoot = null,
-        StudentDesktopLockGuard? desktopLock = null)
+        StudentDesktopLockGuard? desktopLock = null, StudentTaskbarLock? taskbarLock = null)
     {
         _statePath = statePath;
         _writer = writer;
         _enforcer = enforcer;
         _usersRoot = usersRoot ?? Environment.ExpandEnvironmentVariables(@"%SystemDrive%\Users");
         _desktopLock = desktopLock;
+        _taskbarLock = taskbarLock;
         _config = Load(statePath) ?? LabConfig.Off(0);
     }
 
@@ -48,6 +51,11 @@ public sealed class LabConfigCommandHandler
     // whoever is logged on locked or given back as the saved state says,
     // what appeared on it since locked too. Never throws.
     public void KeepDesktopLock() => _desktopLock?.Check(Current.LockDesktop);
+
+    // On the same poll: whoever is logged on blocked from pinning and
+    // unpinning on the taskbar, or given that back, as the saved state says.
+    // Never throws.
+    public void KeepTaskbarLock() => _taskbarLock?.Keep(Current.LockTaskbar);
 
     public static string DefaultStatePath => Path.Combine(AgentDataDirectory.DirectoryPath, "lab-config.json");
 
@@ -346,6 +354,8 @@ public sealed class LabConfigCommandHandler
         Volatile.Write(ref _config, config);
         ApplyEdge(config);
         _enforcer.EndNow("chrome.exe", ChromeClosedNotice);
+        // Right away for the student logged on; the poll does the next ones.
+        _taskbarLock?.Keep(config.LockTaskbar);
 
         // Right away, so the teacher sees what couldn't be locked; with
         // nobody logged on, the poll does it at the next logon.
