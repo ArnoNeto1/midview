@@ -107,6 +107,25 @@ using var classFolderTimer = new System.Threading.Timer(
         classFolder.Follow(lessonNotice);
     }, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
 
+// "Travar a Área de Trabalho": the Agent keeps the student from creating,
+// deleting or renaming anything on the Desktop; here, as the student, each icon
+// is kept where it is (DesktopIconGuard). Explorer's Desktop is reached through
+// COM, so on a thread of its own in a single-threaded apartment, once a second.
+var desktopIcons = new DesktopIconGuard(
+    new WindowsDesktopIcons(), () => LabDesktopLock.IsOn(LabDesktopLock.DefaultPath),
+    Path.Combine(localAppData, "Midview", "desktop-layout.json"));
+var desktopIconThread = new Thread(() =>
+{
+    while (true)
+    {
+        desktopIcons.Pass();
+        Thread.Sleep(TimeSpan.FromSeconds(1));
+    }
+})
+{ IsBackground = true, Name = "Desktop icon lock" };
+desktopIconThread.SetApartmentState(ApartmentState.STA);
+desktopIconThread.Start();
+
 // The Ctrl+Alt+Del escapes from a locked screen (Task Manager, sign out,
 // lock, change password, power, switch user) are the Agent's: as SYSTEM it can write the student's policy
 // keys, which a standard account can only read (StudentCtrlAltDelLockdown).

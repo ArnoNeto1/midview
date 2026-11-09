@@ -157,7 +157,7 @@
                             <StackPanel>
                                 <TextBlock Text="Travar a Área de Trabalho" Style="{StaticResource FunctionName}" />
                                 <TextBlock Style="{StaticResource FunctionHint}"
-                                           Text="O aluno não consegue criar, apagar nem renomear nada na Área de Trabalho; dentro das pastas continua livre. Para salvar um arquivo, ele usa outra pasta (Documentos, Downloads)." />
+                                           Text="O aluno não consegue criar, apagar, renomear nem mudar os ícones de lugar na Área de Trabalho; dentro das pastas continua livre. Para salvar um arquivo, ele usa outra pasta (Documentos, Downloads)." />
                             </StackPanel>
                         </DockPanel>
                     </Border>
