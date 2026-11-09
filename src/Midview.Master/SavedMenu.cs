@@ -33,6 +33,10 @@ public static class SavedMenu
     public static string NameFor(Uri website) =>
         website.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? website.Host[4..] : website.Host;
 
+    // Several sites saved together: the first one's name, and how many more.
+    public static string NameFor(IReadOnlyList<Uri> websites) =>
+        websites.Count == 1 ? NameFor(websites[0]) : $"{NameFor(websites[0])} e mais {websites.Count - 1}";
+
     public static string NameFor(string commands)
     {
         var first = commands.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.Length > 0) ?? string.Empty;

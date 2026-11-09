@@ -43,6 +43,16 @@ public class SavedMenuTests : IDisposable
         Assert.Equal(expected, SavedMenu.NameFor(new Uri(address)));
     }
 
+    [Fact]
+    public void NameFor_SeveralSites_IsTheFirstOneAndHowManyMore()
+    {
+        Assert.Equal("google.com e mais 2", SavedMenu.NameFor(new[]
+        {
+            new Uri("https://www.google.com/"), new Uri("https://www.youtube.com/"), new Uri("https://scratch.mit.edu/"),
+        }));
+        Assert.Equal("google.com", SavedMenu.NameFor(new[] { new Uri("https://www.google.com/") }));
+    }
+
     [Theory]
     [InlineData("powershell -NoExit", "powershell")]
     [InlineData("\"C:\\Program Files\\VideoLAN\\VLC\\vlc.exe\" aula.mp4\nnotepad", "vlc")]

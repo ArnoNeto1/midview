@@ -15,7 +15,9 @@
                     <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
                                Text="Abre o site no navegador do aluno. Um site bloqueado continua bloqueado, e com a tela bloqueada ele abre por baixo do cadeado." />
                     <TextBlock Text="Endereço do site:" Margin="0,0,0,4" />
-                    <TextBox x:Name="AddressTextBox" Padding="4,3" MaxLength="2000" TextChanged="OnAddressChanged" />
+                    <TextBox x:Name="AddressTextBox" Padding="4,3" MaxLength="20000" TextChanged="OnAddressChanged" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap"
+                               Text="Para abrir mais de um site, separe com vírgula: www.google.com, www.youtube.com" />
                     <TextBlock x:Name="ProblemTextBlock" Style="{StaticResource ErrorText}" Margin="0,4,0,0" Visibility="Collapsed" />
                 </StackPanel>
             </Border>

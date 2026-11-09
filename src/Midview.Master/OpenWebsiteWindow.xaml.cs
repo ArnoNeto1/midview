@@ -32,7 +32,8 @@ public partial class OpenWebsiteWindow : MidviewWindow
 
     private async void OnOpenClicked(object sender, RoutedEventArgs e)
     {
-        if (!WebsiteAddress.TryParse(AddressTextBox.Text, out var address, out var problem))
+        // One site, or several separated by commas or spaces.
+        if (!WebsiteAddress.TryParseMany(AddressTextBox.Text, out var addresses, out var problem))
         {
             ProblemTextBlock.Text = problem;
             ProblemTextBlock.Visibility = Visibility.Visible;
@@ -40,10 +41,13 @@ public partial class OpenWebsiteWindow : MidviewWindow
             return;
         }
 
+        // Several sites are saved as one item, which opens them all.
         var saved = SaveCheckBox.IsChecked == true
             ? SavedMenu.AddAndSave(SavedMenu.WebsitesPath, new MenuEntry(
-                NameTextBox.Text.Trim() is { Length: > 0 } name ? name : SavedMenu.NameFor(address), address.AbsoluteUri))
+                NameTextBox.Text.Trim() is { Length: > 0 } name ? name : SavedMenu.NameFor(addresses),
+                string.Join(", ", addresses.Select(address => address.AbsoluteUri))))
             : null;
+        var what = addresses.Count == 1 ? addresses[0].AbsoluteUri : $"{addresses.Count} sites";
 
         // The window stays open, and "Abrir site" brings it back as it was:
         // it is cleared now, ready for the next site (the summary below still
@@ -56,14 +60,14 @@ public partial class OpenWebsiteWindow : MidviewWindow
 
         OpenButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
-        ProgressTextBlock.Text = $"Abrindo {address.AbsoluteUri}...";
+        ProgressTextBlock.Text = $"Abrindo {what}...";
 
-        var results = await RemoteLaunch.OpenWebsite(_targets, _masterCertificate, address);
+        var results = await RemoteLaunch.OpenWebsites(_targets, _masterCertificate, addresses);
 
         var failures = results.Count(result => !result.Succeeded);
         var summary = failures == 0
-            ? results.Length == 1 ? $"Aberto: {address.AbsoluteUri}" : $"Aberto nas {results.Length} máquinas: {address.AbsoluteUri}"
-            : $"Aberto em {results.Length - failures} de {results.Length}: {address.AbsoluteUri}";
+            ? results.Length == 1 ? $"Aberto: {what}" : $"Aberto nas {results.Length} máquinas: {what}"
+            : $"Aberto em {results.Length - failures} de {results.Length}: {what}";
         ProgressTextBlock.Text = saved is null ? summary : $"{summary}\n{saved}";
         ResultTextBlock.Text = LaunchText.Lines(results);
         OpenButton.IsEnabled = true;

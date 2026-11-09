@@ -69,6 +69,70 @@ public static class WebsiteAddress
         return true;
     }
 
+    // At most this many sites at once ("Abrir site" with several addresses).
+    public const int MaxSites = 10;
+
+    // Several sites typed together, separated by commas or spaces
+    // ("www.google.com, www.youtube.com"), each checked as TryParse does and
+    // in the order typed; the same one twice opens once. A comma inside an
+    // address that is fine as it is stays in it (a map link's coordinates);
+    // only one that doesn't parse whole is split at its commas
+    // ("google.com,youtube.com"). Never more than MaxSites.
+    public static bool TryParseMany(string? typed, out IReadOnlyList<Uri> addresses, out string problem)
+    {
+        addresses = Array.Empty<Uri>();
+        var found = new List<Uri>();
+        foreach (var piece in (typed ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = piece.Trim(',', ';');
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+            if (TryParse(trimmed, out var whole, out var wholeProblem))
+            {
+                Add(found, whole);
+                continue;
+            }
+            var parts = trimmed.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+            {
+                problem = $"\"{trimmed}\": {wholeProblem}";
+                return false;
+            }
+            foreach (var part in parts)
+            {
+                if (!TryParse(part, out var address, out var partProblem))
+                {
+                    problem = $"\"{part.Trim()}\": {partProblem}";
+                    return false;
+                }
+                Add(found, address);
+            }
+        }
+
+        if (found.Count == 0)
+        {
+            return TryParse(typed, out _, out problem); // the usual "Escreva o endereço..."
+        }
+        if (found.Count > MaxSites)
+        {
+            problem = $"No máximo {MaxSites} sites de uma vez.";
+            return false;
+        }
+        addresses = found;
+        problem = string.Empty;
+        return true;
+    }
+
+    private static void Add(List<Uri> found, Uri address)
+    {
+        if (!found.Any(other => other.AbsoluteUri == address.AbsoluteUri))
+        {
+            found.Add(address);
+        }
+    }
+
     private static bool IsWebScheme(string scheme) =>
         scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
         || scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);

@@ -9,16 +9,26 @@ namespace Midview.Master;
 // from the windows and from a click in the menu.
 public static class RemoteLaunch
 {
-    public static Task<LaunchResult[]> OpenWebsite(
-        IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate, Uri address)
-    {
-        var payload = TextMessage.Encode(address.AbsoluteUri);
-        return Task.WhenAll(targets.Select(machine => Task.Run(() =>
+    // On a machine the sites open one after the other, in the order typed (so
+    // the browser's tabs follow it); one that can't be reached isn't tried
+    // again for each of the rest.
+    public static Task<LaunchResult[]> OpenWebsites(
+        IReadOnlyList<KnownMachine> targets, X509Certificate2 masterCertificate, IReadOnlyList<Uri> addresses) =>
+        Task.WhenAll(targets.Select(machine => Task.Run(() =>
         {
-            var (succeeded, detail, _) = Send(machine, masterCertificate, MessageType.OpenWebsite, payload);
-            return new LaunchResult(machine.Name, succeeded, detail);
+            var answers = new List<(string Command, bool Succeeded, string Detail)>();
+            foreach (var address in addresses)
+            {
+                var (succeeded, detail, reached) = Send(
+                    machine, masterCertificate, MessageType.OpenWebsite, TextMessage.Encode(address.AbsoluteUri));
+                if (!reached)
+                {
+                    return new LaunchResult(machine.Name, false, detail);
+                }
+                answers.Add((address.AbsoluteUri, succeeded, detail));
+            }
+            return LaunchText.Combine(machine.Name, answers);
         })));
-    }
 
     // On a machine the commands go one after the other; one that can't be
     // reached isn't tried again for each of the rest.

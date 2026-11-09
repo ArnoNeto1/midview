@@ -127,13 +127,14 @@ public partial class MainWindow
         LaunchResult[] results;
         if (kind == LaunchKind.Website)
         {
-            if (!WebsiteAddress.TryParse(entry.Target, out var address, out var problem))
+            // An item can hold several sites, saved together.
+            if (!WebsiteAddress.TryParseMany(entry.Target, out var addresses, out var problem))
             {
                 StatusTextBlock.Text = $"{entry.Name}: {problem}";
                 return;
             }
             StatusTextBlock.Text = $"Abrindo {entry.Name}...";
-            results = await RemoteLaunch.OpenWebsite(targets, _masterCertificate, address);
+            results = await RemoteLaunch.OpenWebsites(targets, _masterCertificate, addresses);
         }
         else
         {
