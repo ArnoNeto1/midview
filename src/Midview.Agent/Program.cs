@@ -93,7 +93,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton(provider => new LabConfigCommandHandler(
             LabConfigCommandHandler.DefaultStatePath, LabPolicyWriter.OpenMachine(),
             provider.GetRequiredService<AppBlockEnforcer>(),
-            desktopLock: new StudentDesktopLockGuard(UserSessionProcessLauncher.LoggedOnStudent),
+            desktopLock: new StudentDesktopLockGuard(
+                UserSessionProcessLauncher.LoggedOnStudent, openSoftware: StudentDesktopLockGuard.OpenStudentSoftware),
             taskbarLock: StudentTaskbarLock.ForTheConsole()));
         // The class folder's lesson: the protected "Pasta da turma" folder and
         // the download folder in the logged-on student's own registry hive

@@ -50,6 +50,14 @@ public static class UninstallCleanup
             });
             if (openUserSoftware is not null)
             {
+                Step(failures, $"destravar os nomes da Lixeira e de Este Computador do aluno de {desktop}", () =>
+                {
+                    using var software = openUserSoftware(student);
+                    if (software is not null && StudentDesktopNamesLock.Unlock(software, student).Problems is { Count: > 0 } problems)
+                    {
+                        throw new InvalidOperationException(string.Join("; ", problems));
+                    }
+                });
                 Step(failures, $"remover a pasta de downloads do navegador do aluno de {desktop}", () =>
                 {
                     using var software = openUserSoftware(student);
