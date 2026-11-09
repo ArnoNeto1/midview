@@ -6,8 +6,10 @@ namespace Midview.Session;
 // A strip across the top of the student's screen while the teacher controls
 // it. It never takes focus or clicks -- the teacher's clicks go through it to
 // whatever is underneath -- and never shows in Alt+Tab or the taskbar, so
-// "Fechar programas" leaves it alone like Midview's other windows. Like the
-// teacher's messages, it runs on a short-lived STA thread of its own.
+// "Fechar programas" leaves it alone like Midview's other windows. While the
+// mouse is on or near it, it all but fades away (NoticeFade), so the teacher
+// sees what it covers. Like the teacher's messages, it runs on a short-lived
+// STA thread of its own.
 public sealed class WinFormsControlNotice : IControlNotice
 {
     private readonly object _gate = new();
@@ -88,6 +90,10 @@ public sealed class WinFormsControlNotice : IControlNotice
         private const int WS_EX_TOOLWINDOW = 0x00000080;
         private const int WS_EX_NOACTIVATE = 0x08000000;
 
+        // Often enough that the fade follows the mouse, cheap enough for
+        // as long as the teacher controls.
+        private readonly System.Windows.Forms.Timer _fade = new() { Interval = 30 };
+
         public NoticeForm()
         {
             Text = "Midview";
@@ -99,7 +105,9 @@ public sealed class WinFormsControlNotice : IControlNotice
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
             BackColor = Color.FromArgb(176, 0, 32);
-            Opacity = 0.9; // also makes it a layered window, which clicks pass through
+            // Also makes it a layered window, which clicks pass through. The
+            // fade never takes it to 1, where WinForms would drop that.
+            Opacity = NoticeFade.Shown;
 
             Controls.Add(new Label
             {
@@ -114,10 +122,27 @@ public sealed class WinFormsControlNotice : IControlNotice
             {
                 var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
                 Location = new Point(area.Left + (area.Width - Width) / 2, area.Top);
+                _fade.Start();
+            };
+
+            _fade.Tick += (_, _) =>
+            {
+                var near = NoticeFade.IsNear(Bounds, Cursor.Position, DeviceDpi / 96.0);
+                var next = NoticeFade.Next(Opacity, near);
+                if (next != Opacity)
+                {
+                    Opacity = next;
+                }
             };
         }
 
         protected override bool ShowWithoutActivation => true;
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _fade.Dispose();
+            base.OnFormClosed(e);
+        }
 
         protected override CreateParams CreateParams
         {
