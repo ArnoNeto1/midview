@@ -109,7 +109,14 @@ public partial class ViewControlWindow : MidviewWindow
 
     // ScreenImage doesn't receive keyboard focus just by being Focusable and
     // visible -- without this, KeyDown/KeyUp never fire at all.
-    private void OnWindowLoaded(object sender, RoutedEventArgs e) => ScreenImage.Focus();
+    private void OnWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        ScreenImage.Focus();
+        if (_fitPending)
+        {
+            FitWindowToPicture();
+        }
+    }
 
     // Every send/receive here crosses the network; the connection can die at
     // any point (the remote side closing, a transient failure, ...). Instead
@@ -213,6 +220,7 @@ public partial class ViewControlWindow : MidviewWindow
             return;
         }
 
+        var sized = false;
         var frameId = _remoteScreen.TakeChanges(picture =>
         {
             try
@@ -228,6 +236,7 @@ public partial class ViewControlWindow : MidviewWindow
                     _bitmapHeight = picture.Height;
                     ScreenImage.Source = _screenBitmap;
                     parts = new[] { new PixelRect(0, 0, picture.Width, picture.Height) };
+                    sized = true;
                 }
 
                 foreach (var part in parts)
@@ -241,6 +250,11 @@ public partial class ViewControlWindow : MidviewWindow
                 // As in ReceiveLoop: a bad update is skipped, the view stays.
             }
         });
+
+        if (sized)
+        {
+            OnPictureSized();
+        }
 
         if (frameId != 0)
         {
@@ -381,7 +395,13 @@ public partial class ViewControlWindow : MidviewWindow
         e.Handled = true;
     }
 
-    private void OnKeyDown(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyDown, e);
+    private void OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (!LeftFullScreenByKey(e))
+        {
+            SendKey(InputEventKind.KeyDown, e);
+        }
+    }
 
     private void OnKeyUp(object sender, KeyEventArgs e) => SendKey(InputEventKind.KeyUp, e);
 
@@ -536,24 +556,11 @@ public partial class ViewControlWindow : MidviewWindow
 
     private void OnDisconnectClicked(object sender, RoutedEventArgs e) => Close();
 
-    private void OnFullscreenClicked(object sender, RoutedEventArgs e)
-    {
-        if (WindowState == WindowState.Maximized)
-        {
-            WindowState = WindowState.Normal;
-            FullscreenButton.Content = "Tela Cheia";
-        }
-        else
-        {
-            WindowState = WindowState.Maximized;
-            FullscreenButton.Content = "Restaurar";
-        }
-    }
-
     private void OnWindowClosed(object sender, EventArgs e)
     {
         _closing = true;
         _heartbeatTimer.Stop();
+        _toolbarTimer?.Stop();
         _lockKeeper?.Dispose(); // gives the student the keyboard and mouse back
         _lockKeeper = null;
         try

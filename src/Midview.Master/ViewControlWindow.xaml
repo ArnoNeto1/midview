@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Midview.Master"
-        Title="Midview" Height="700" Width="1280"
+        Title="Midview" Height="700" Width="1280" WindowStartupLocation="CenterScreen"
         Closed="OnWindowClosed" Loaded="OnWindowLoaded">
     <Window.Resources>
         <!-- The StatusChip look, with a gentler corner: the mode sentence is long, and a full pill would turn it into a lens. -->
@@ -20,34 +20,40 @@
             </Setter>
         </Style>
     </Window.Resources>
-    <DockPanel>
-        <Border DockPanel.Dock="Top" Background="{StaticResource SurfaceBrush}"
+    <!-- The picture takes the whole window; the toolbar floats over its top and
+         slides away (ViewControlWindow.Layout.cs). -->
+    <Grid x:Name="ViewRoot" Background="Black" ClipToBounds="True"
+          PreviewMouseMove="OnViewMouseMove" MouseLeave="OnViewMouseLeave">
+        <Image x:Name="ScreenImage" Stretch="Uniform"
+               MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
+               MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
+               KeyDown="OnKeyDown" KeyUp="OnKeyUp" MouseWheel="OnMouseWheel" Focusable="True" />
+        <Border x:Name="Toolbar" VerticalAlignment="Top" Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal">
-                <Button x:Name="ControlButton" Click="OnControlClicked" Padding="10,4" Margin="8,6,4,6" />
-                <Button x:Name="FullscreenButton" Content="Tela Cheia" Click="OnFullscreenClicked" Padding="10,4" Margin="4,6" />
-                <Button Content="Desconectar" Click="OnDisconnectClicked" Padding="10,4" Margin="4,6" />
-                <!-- Only on the helper connection (ShowMode): the password never goes over the Session. -->
-                <Button x:Name="FillPasswordButton" Content="Preencher a senha de administrador" Click="OnFillPasswordClicked"
-                        Padding="10,4" Margin="4,6" Visibility="Collapsed" />
-                <Button x:Name="ChangePasswordButton" Content="Trocar senha de administrador..." Click="OnChangePasswordClicked"
-                        Padding="10,4" Margin="4,6" Visibility="Collapsed" />
-                <!-- ShowMode sets the colors: accent while controlling, muted while only viewing. -->
-                <Label x:Name="ModeTextBlock" Style="{StaticResource ModeChip}" VerticalAlignment="Center" Margin="12,0,8,0" />
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="ToolbarSlide" />
+            </Border.RenderTransform>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="ControlButton" Click="OnControlClicked" Padding="10,4" Margin="8,6,4,6" />
+                    <Button x:Name="FullscreenButton" Content="Tela Cheia" Click="OnFullscreenClicked" Padding="10,4" Margin="4,6" />
+                    <Button Content="Desconectar" Click="OnDisconnectClicked" Padding="10,4" Margin="4,6" />
+                    <!-- Only on the helper connection (ShowMode): the password never goes over the Session. -->
+                    <Button x:Name="FillPasswordButton" Content="Preencher a senha de administrador" Click="OnFillPasswordClicked"
+                            Padding="10,4" Margin="4,6" Visibility="Collapsed" />
+                    <Button x:Name="ChangePasswordButton" Content="Trocar senha de administrador..." Click="OnChangePasswordClicked"
+                            Padding="10,4" Margin="4,6" Visibility="Collapsed" />
+                    <!-- ShowMode sets the colors: accent while controlling, muted while only viewing. -->
+                    <Label x:Name="ModeTextBlock" Style="{StaticResource ModeChip}" VerticalAlignment="Center" Margin="12,0,8,0" />
+                </StackPanel>
+                <Border x:Name="CompatibilityNote" Visibility="Collapsed">
+                    <Border.Background>
+                        <SolidColorBrush Color="#FFC53D" Opacity="0.16" />
+                    </Border.Background>
+                    <TextBlock Foreground="{StaticResource WarningBrush}" Margin="12,5"
+                               Text="Controle em modo compatível: não responde à tela do UAC." />
+                </Border>
             </StackPanel>
         </Border>
-        <Border x:Name="CompatibilityNote" DockPanel.Dock="Top" Visibility="Collapsed">
-            <Border.Background>
-                <SolidColorBrush Color="#FFC53D" Opacity="0.16" />
-            </Border.Background>
-            <TextBlock Foreground="{StaticResource WarningBrush}" Margin="12,5"
-                       Text="Controle em modo compatível: não responde à tela do UAC." />
-        </Border>
-        <Grid Background="Black">
-            <Image x:Name="ScreenImage" Stretch="Uniform"
-                   MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
-                   MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
-                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" MouseWheel="OnMouseWheel" Focusable="True" />
-        </Grid>
-    </DockPanel>
+    </Grid>
 </local:MidviewWindow>
