@@ -114,6 +114,17 @@ public partial class MainWindow : MidviewWindow
     // chosen on purpose with the toolbar's buttons or the tile's menu.
     private void OnMachineClicked(object sender, RoutedEventArgs e) => SelectTileOf(sender);
 
+    // Two clicks open the screen, as "Ver a tela" does. With Shift or Ctrl
+    // they stay selection clicks.
+    private void OnMachineDoubleClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Left && Keyboard.Modifiers == ModifierKeys.None
+            && ((FrameworkElement)sender).DataContext is MachineTile tile)
+        {
+            OpenScreen(tile, control: false);
+        }
+    }
+
     // The right button keeps a selection of several that the tile is part of,
     // for its menu to act on all of them; otherwise it selects just this tile.
     private void OnMachineRightClicked(object sender, MouseButtonEventArgs e) => RightClickTileOf(sender);

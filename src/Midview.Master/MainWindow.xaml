@@ -253,9 +253,10 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
+                                        MouseDoubleClick="OnMachineDoubleClicked"
                                         PreviewMouseLeftButtonDown="OnTilePressed"
                                         PreviewMouseRightButtonDown="OnMachineRightClicked" ContextMenuOpening="OnMachineMenuOpening"
-                                        ToolTip="Clique para selecionar. Botão direito para mais opções.">
+                                        ToolTip="Clique para selecionar, dois cliques para ver a tela. Botão direito para mais opções.">
                                     <Button.ContextMenu>
                                         <!-- With several machines selected (OnMachineMenuOpening) the items
                                              tagged "varias" show, those tagged "uma" (one machine only) hide,
