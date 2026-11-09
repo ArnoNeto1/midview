@@ -82,7 +82,7 @@ public sealed class DownloadFolderPolicyTests : IDisposable
         DownloadFolderPolicy.Apply(_software, @"C:\Users\aluno\Desktop\Pasta da turma – 7A");
         using (var chrome = _software.OpenSubKey(ChromePath, writable: true)!)
         {
-            chrome.SetValue("DownloadRestriction", 3, RegistryValueKind.DWord);
+            chrome.SetValue("DownloadRestrictions", 3, RegistryValueKind.DWord);
         }
 
         DownloadFolderPolicy.Remove(_software);
@@ -90,7 +90,7 @@ public sealed class DownloadFolderPolicyTests : IDisposable
         Assert.Null(Read(ChromePath, "DownloadDirectory"));
         Assert.Null(Read(EdgePath, "DownloadDirectory"));
         Assert.Null(DownloadFolderPolicy.Current(_software));
-        Assert.Equal(3, Read(ChromePath, "DownloadRestriction"));
+        Assert.Equal(3, Read(ChromePath, "DownloadRestrictions"));
     }
 
     [Fact]

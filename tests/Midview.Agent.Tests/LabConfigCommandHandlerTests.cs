@@ -37,7 +37,8 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
         StudentDesktopLockGuard? desktopLock = null, StudentTaskbarLock? taskbarLock = null)
     {
         _enforcer = new AppBlockEnforcer(_inspector);
-        var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath);
+        var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath,
+            Path.Combine(Path.GetTempPath(), $"midview-sem-downloads-{Guid.NewGuid():N}"));
         return new LabConfigCommandHandler(_statePath, writer, _enforcer, _usersRoot, desktopLock, taskbarLock);
     }
 
@@ -81,7 +82,7 @@ public sealed class LabConfigCommandHandlerTests : IDisposable
         var (ok, _) = handler.Handle((LabConfig.Off(100) with { BlockDownloads = true }).Encode());
 
         Assert.True(ok);
-        Assert.Equal(3, Read(ChromePath, "DownloadRestriction"));
+        Assert.Equal(3, Read(ChromePath, "DownloadRestrictions"));
         Assert.True(File.Exists(_statePath));
         Assert.True(handler.Current.BlockDownloads);
     }

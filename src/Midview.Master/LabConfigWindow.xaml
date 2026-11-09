@@ -44,7 +44,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,14,0,0">
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardTitle}" Text="Sequência de configuração ideal (início da aula)" />
-                        <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,8" Text="Para preparar as máquinas no começo da aula, aplique os passos 1 a 5 nesta ordem." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,8" Text="Para preparar as máquinas no começo da aula, aplique os passos 1 a 4 nesta ordem." />
                     <Border Style="{StaticResource Row}">
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -101,20 +101,6 @@
                             </StackPanel>
                         </DockPanel>
                     </Border>
-                    <Border Style="{StaticResource Row}">
-                        <DockPanel>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="Ativar" Tag="downloads" Click="OnActivateClicked" />
-                                <Button Content="Desativar" Tag="downloads" Click="OnDeactivateClicked" Margin="0" />
-                            </StackPanel>
-                            <Label Style="{StaticResource StepBadge}" Content="5" VerticalAlignment="Top" Margin="0,0,12,0" />
-                            <StackPanel>
-                                <TextBlock Text="Passo 5 — Bloquear downloads" Style="{StaticResource FunctionName}" />
-                                <TextBlock Style="{StaticResource FunctionHint}"
-                                           Text="Impede qualquer download pelo Chrome." />
-                            </StackPanel>
-                        </DockPanel>
-                    </Border>
                     </StackPanel>
                 </Border>
 
@@ -158,6 +144,19 @@
                                 <TextBlock Text="Travar a Área de Trabalho" Style="{StaticResource FunctionName}" />
                                 <TextBlock Style="{StaticResource FunctionHint}"
                                            Text="O aluno não consegue criar, apagar, renomear nem mudar os ícones de lugar na Área de Trabalho; dentro das pastas continua livre. Para salvar um arquivo, ele usa outra pasta (Documentos, Downloads)." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <Border Style="{StaticResource Row}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Content="Ativar" Tag="downloads" Click="OnActivateClicked" />
+                                <Button Content="Desativar" Tag="downloads" Click="OnDeactivateClicked" Margin="0" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Travar downloads" Style="{StaticResource FunctionName}" />
+                                <TextBlock Style="{StaticResource FunctionHint}"
+                                           Text="O aluno não consegue baixar nenhum arquivo da internet: no Chrome, no Edge e em outros navegadores (Brave, Firefox). Vale também com a Pasta da turma." />
                             </StackPanel>
                         </DockPanel>
                     </Border>

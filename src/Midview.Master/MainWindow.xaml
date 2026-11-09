@@ -149,7 +149,7 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" Click="OnLabConfigClassClicked" OpensOptions="True"
-                                                 ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, bloquear downloads, Edge e sites de distração, travar a barra de tarefas e a Área de Trabalho e limpar os perfis do Chrome." />
+                                                 ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, Edge, sites de distração, travas (barra de tarefas, Área de Trabalho e downloads) e limpar os perfis do Chrome." />
                             <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
                                                  ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
                         </StackPanel>

@@ -26,9 +26,13 @@ public sealed class LabPolicyWriterTests : IDisposable
         _root.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_rootPath, throwOnMissingSubKey: false); } catch { }
         try { File.Delete(_layoutPath); } catch { }
+        try { Directory.Delete(_noDownloadsFolder); } catch { }
     }
 
-    private LabPolicyWriter Writer() => new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath);
+    private readonly string _noDownloadsFolder = Path.Combine(Path.GetTempPath(), $"midview-sem-downloads-{Guid.NewGuid():N}");
+
+    private LabPolicyWriter Writer() =>
+        new(Registry.CurrentUser.CreateSubKey(_rootPath, writable: true), _layoutPath, _noDownloadsFolder);
 
     private object? Read(string subPath, string name)
     {
@@ -53,14 +57,85 @@ public sealed class LabPolicyWriterTests : IDisposable
         Assert.True(SubKeyExists(ChromePath + @"\URLBlocklist"));
     }
 
+    private static readonly string[] ChromiumBrowsers =
+        { ChromePath, @"Policies\Microsoft\Edge", @"Policies\BraveSoftware\Brave", @"Policies\Chromium" };
+    private const string FirefoxPath = @"Policies\Mozilla\Firefox";
+
     [Fact]
     public void ApplyThenRemove_OneFunction_LeavesNothingOfIt()
     {
         Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true });
-        Assert.Equal(3, Read(ChromePath, "DownloadRestriction"));
+        Assert.Equal(3, Read(ChromePath, "DownloadRestrictions"));
 
         Writer().Apply(LabConfig.Off(2)); // declarative: downloads now off
+        Assert.Null(Read(ChromePath, "DownloadRestrictions"));
+    }
+
+    // "Travar downloads": every browser built on Chromium blocks all downloads
+    // (3), under its own policy key.
+    [Fact]
+    public void BlockDownloads_BlocksAllDownloadsInEveryChromiumBrowser()
+    {
+        Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true });
+
+        Assert.All(ChromiumBrowsers, path => Assert.Equal(3, Read(path, "DownloadRestrictions")));
+    }
+
+    // Firefox has no such policy: its download folder is locked to one the
+    // student can only read, without asking where to save.
+    [Fact]
+    public void BlockDownloads_LocksFirefoxToAFolderItCantSaveIn()
+    {
+        Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true });
+
+        Assert.Equal(_noDownloadsFolder, Read(FirefoxPath, "DownloadDirectory"));
+        Assert.Equal(0, Read(FirefoxPath, "PromptForDownloadLocation"));
+        Assert.True(Directory.Exists(_noDownloadsFolder));
+    }
+
+    [Fact]
+    public void BlockDownloadsOff_TakesItBackFromEveryBrowser()
+    {
+        Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true });
+
+        Writer().Apply(LabConfig.Off(2));
+
+        Assert.All(ChromiumBrowsers, path => Assert.Null(Read(path, "DownloadRestrictions")));
+        Assert.Null(Read(FirefoxPath, "DownloadDirectory"));
+        Assert.Null(Read(FirefoxPath, "PromptForDownloadLocation"));
+    }
+
+    // Before 0.0.48 Midview wrote "DownloadRestriction", a name Chrome never
+    // read: it goes away either way.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheOldMisnamedValue_IsTakenAway(bool blocked)
+    {
+        using (var chrome = _root.CreateSubKey(ChromePath, writable: true))
+        {
+            chrome.SetValue("DownloadRestriction", 3, RegistryValueKind.DWord);
+        }
+
+        Writer().Apply(LabConfig.Off(1) with { BlockDownloads = blocked });
+
         Assert.Null(Read(ChromePath, "DownloadRestriction"));
+    }
+
+    [Fact]
+    public void ResetAll_TakesTheDownloadLockOffEveryBrowser()
+    {
+        Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true });
+        using (var edge = _root.CreateSubKey(@"Policies\Microsoft\Edge", writable: true))
+        {
+            edge.SetValue("HomepageLocation", "https://escola.br"); // the school's own
+        }
+
+        Writer().ResetAll();
+
+        Assert.All(ChromiumBrowsers, path => Assert.Null(Read(path, "DownloadRestrictions")));
+        Assert.Null(Read(FirefoxPath, "DownloadDirectory"));
+        Assert.Equal("https://escola.br", Read(@"Policies\Microsoft\Edge", "HomepageLocation"));
     }
 
     [Fact]
@@ -69,7 +144,7 @@ public sealed class LabPolicyWriterTests : IDisposable
         Writer().Apply(LabConfig.Off(1) with { BlockDownloads = true, ForceGuest = true });
         Writer().Apply(LabConfig.Off(2) with { ForceGuest = true }); // downloads off, guest kept
 
-        Assert.Null(Read(ChromePath, "DownloadRestriction"));
+        Assert.Null(Read(ChromePath, "DownloadRestrictions"));
         Assert.Equal(1, Read(ChromePath, "BrowserGuestModeEnforced"));
     }
 

@@ -159,7 +159,7 @@ public partial class LabConfigWindow : MidviewWindow
         var on = new List<string>();
         if (config.CleanOnExit) on.Add("limpeza ao fechar");
         if (config.Lockdown) on.Add("blindagem");
-        if (config.BlockDownloads) on.Add("bloquear downloads");
+        if (config.BlockDownloads) on.Add("travar downloads");
         if (config.ForceGuest) on.Add("modo visitante");
         if (config.Adblock) on.Add("bloqueador de anúncios");
         if (config.BlockEdge) on.Add("bloquear Edge");

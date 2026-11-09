@@ -19,7 +19,8 @@ public class AgentServerTests
         using var root = Registry.CurrentUser.CreateSubKey(rootPath, writable: true);
         var statePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
         var siteBlock = new SiteBlockCommandHandler(new SiteBlockState(), "unused", "unused-hosts", new FakeFirewallController());
-        var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath, writable: true));
+        var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath, writable: true),
+            noDownloadsFolder: Path.Combine(Path.GetTempPath(), $"midview-sem-downloads-{Guid.NewGuid():N}"));
         var labConfig = new LabConfigCommandHandler(statePath, writer, new AppBlockEnforcer(new EmptyInspector()));
 
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -58,7 +59,7 @@ public class AgentServerTests
             Assert.True(applied.BlockDownloads);
             using (var chrome = root.OpenSubKey(@"Policies\Google\Chrome"))
             {
-                Assert.Equal(3, chrome!.GetValue("DownloadRestriction"));
+                Assert.Equal(3, chrome!.GetValue("DownloadRestrictions"));
             }
 
             var reset = await Task.Run(() => Exchange(new Message(MessageType.ResetLabConfig, Array.Empty<byte>())))

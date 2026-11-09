@@ -24,6 +24,26 @@ public sealed class LabPolicyWriter : IDisposable
     private const string WallpaperPath = @"Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop";
     private const string ExplorerPath = @"Policies\Microsoft\Windows\Explorer";
 
+    // "Travar downloads": the browsers built on Chromium all read Chrome's
+    // DownloadRestrictions (3 = block all downloads, applied without a
+    // restart), each under its own policy key. Opera reads no policies.
+    private static readonly string[] ChromiumBrowserPaths =
+    {
+        ChromePath, @"Policies\Microsoft\Edge", @"Policies\BraveSoftware\Brave", @"Policies\Chromium",
+    };
+    private const string DownloadRestrictions = "DownloadRestrictions";
+    private const int BlockAllDownloads = 3;
+    // What Midview wrote before 0.0.48 by mistake, a name Chrome never read:
+    // taken away wherever it is still there.
+    private const string OldDownloadRestriction = "DownloadRestriction";
+    // Firefox has no "block all downloads" policy: its download folder is
+    // locked to one the student can only read, without asking where to save,
+    // so every download fails. Firefox reads it when it starts.
+    private const string FirefoxPath = @"Policies\Mozilla\Firefox";
+
+    public static readonly string DefaultNoDownloadsFolder =
+        Path.Combine(Environment.ExpandEnvironmentVariables("%ProgramData%"), "Midview", "sem-downloads");
+
     private const string Homepage = "https://www.google.com.br";
     private const string AdblockExtensionId = "cfhdojbkjhnklbpkdaibdccddilifddb";
     private const string AdblockUpdateUrl = "https://clients2.google.com/service/update2/crx";
@@ -58,13 +78,16 @@ public sealed class LabPolicyWriter : IDisposable
 
     private readonly Lazy<RegistryKey> _base;
     private readonly string _taskbarLayoutPath;
+    private readonly string _noDownloadsFolder;
 
-    public LabPolicyWriter(RegistryKey baseKey, string? taskbarLayoutPath = null)
-        : this(() => baseKey, taskbarLayoutPath)
+    // noDownloadsFolder: Firefox's locked download folder for "Travar
+    // downloads", one students can only read (under %ProgramData%\Midview).
+    public LabPolicyWriter(RegistryKey baseKey, string? taskbarLayoutPath = null, string? noDownloadsFolder = null)
+        : this(() => baseKey, taskbarLayoutPath, noDownloadsFolder)
     {
     }
 
-    private LabPolicyWriter(Func<RegistryKey> baseKeyFactory, string? taskbarLayoutPath)
+    private LabPolicyWriter(Func<RegistryKey> baseKeyFactory, string? taskbarLayoutPath, string? noDownloadsFolder)
     {
         // Opened on first use, not now: OpenMachine runs while the Agent's
         // host is being built, and a registry failure there must not keep the
@@ -72,11 +95,12 @@ public sealed class LabPolicyWriter : IDisposable
         // reconcile's own try/catch, or a command handler's).
         _base = new Lazy<RegistryKey>(baseKeyFactory);
         _taskbarLayoutPath = taskbarLayoutPath ?? DefaultTaskbarLayoutPath;
+        _noDownloadsFolder = noDownloadsFolder ?? DefaultNoDownloadsFolder;
     }
 
     // HKLM\SOFTWARE, writable (opened lazily). Needs the Agent's SYSTEM rights.
     public static LabPolicyWriter OpenMachine() =>
-        new(() => Registry.LocalMachine.CreateSubKey("SOFTWARE", writable: true), null);
+        new(() => Registry.LocalMachine.CreateSubKey("SOFTWARE", writable: true), null, null);
 
     // Makes the registry match config: each lockdown that is on is written,
     // each that is off has its keys removed. Declarative, so it is also the
@@ -99,6 +123,7 @@ public sealed class LabPolicyWriter : IDisposable
         _base.Value.DeleteSubKeyTree(ChromePath, throwOnMissingSubKey: false);
         DeleteValue(WallpaperPath, "NoChangingWallPaper");
         RemoveLockTaskbar();
+        RemoveBlockDownloads(); // the other browsers' keys aren't only Midview's
     }
 
     private static void Set(bool on, Action apply, Action remove)
@@ -185,11 +210,29 @@ public sealed class LabPolicyWriter : IDisposable
 
     private void ApplyBlockDownloads()
     {
-        using var chrome = _base.Value.CreateSubKey(ChromePath, writable: true);
-        chrome.SetValue("DownloadRestriction", 3, RegistryValueKind.DWord);
+        foreach (var path in ChromiumBrowserPaths)
+        {
+            using var browser = _base.Value.CreateSubKey(path, writable: true);
+            browser.SetValue(DownloadRestrictions, BlockAllDownloads, RegistryValueKind.DWord);
+        }
+        DeleteValue(ChromePath, OldDownloadRestriction);
+
+        Directory.CreateDirectory(_noDownloadsFolder);
+        using var firefox = _base.Value.CreateSubKey(FirefoxPath, writable: true);
+        firefox.SetValue("DownloadDirectory", _noDownloadsFolder, RegistryValueKind.String);
+        firefox.SetValue("PromptForDownloadLocation", 0, RegistryValueKind.DWord);
     }
 
-    private void RemoveBlockDownloads() => DeleteValue(ChromePath, "DownloadRestriction");
+    private void RemoveBlockDownloads()
+    {
+        foreach (var path in ChromiumBrowserPaths)
+        {
+            DeleteValue(path, DownloadRestrictions);
+        }
+        DeleteValue(ChromePath, OldDownloadRestriction);
+        DeleteValue(FirefoxPath, "DownloadDirectory");
+        DeleteValue(FirefoxPath, "PromptForDownloadLocation");
+    }
 
     private void ApplyForceGuest()
     {

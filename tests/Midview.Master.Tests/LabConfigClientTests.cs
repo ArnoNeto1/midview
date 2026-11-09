@@ -36,7 +36,8 @@ public sealed class LabConfigClientTests : IDisposable
         if (withLabConfig)
         {
             var rootPath = $@"Software\MidviewTest\{Guid.NewGuid():N}";
-            var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath, writable: true));
+            var writer = new LabPolicyWriter(Registry.CurrentUser.CreateSubKey(rootPath, writable: true),
+            noDownloadsFolder: Path.Combine(Path.GetTempPath(), $"midview-sem-downloads-{Guid.NewGuid():N}"));
             var statePath = Path.Combine(Path.GetTempPath(), $"midview-labcfg-{Guid.NewGuid():N}.json");
             var usersRoot = Path.Combine(Path.GetTempPath(), $"midview-users-{Guid.NewGuid():N}");
             labConfig = new LabConfigCommandHandler(statePath, writer, new AppBlockEnforcer(new EmptyInspector()), usersRoot);
