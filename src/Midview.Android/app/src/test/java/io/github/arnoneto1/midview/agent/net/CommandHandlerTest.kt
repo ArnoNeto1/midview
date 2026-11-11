@@ -23,7 +23,7 @@ class CommandHandlerTest {
     private val stranger = "B".repeat(40)
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
-    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> }, {}, deviceName = { "Cel 01" }) }
+    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }) }
     private val handler by lazy { CommandHandler(trusted, pairing) }
 
     private fun message(type: Int, payload: ByteArray = ByteArray(0)) = Message(type, payload)

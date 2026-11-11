@@ -27,7 +27,7 @@ class DiscoveryResponderTest {
     private val probeId = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
-    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> }, {}, deviceName = { "Cel 01" }) }
+    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }) }
     private val responder by lazy { DiscoveryResponder(pairing, identity.thumbprint) { "Cel 01" } }
 
     // What the Master broadcasts (.NET's Discovery.Encode(DiscoveryProbe)).

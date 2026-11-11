@@ -5,12 +5,12 @@ import android.os.Build
 import android.provider.Settings
 
 // The phone's name, for its certificate (CN) and for the teacher's search:
-// the one given in the phone's settings ("Nome do dispositivo"), or else
-// "Celular" and the end of its Android ID (which tells two phones of the
-// same model apart), or else its model.
+// "Celular" and the end of its Android ID, which tells apart a classroom of
+// the same model. Not the name in the phone's settings: MIUI fills it with
+// the model, so every phone of a set would answer with the same one. Only
+// without an Android ID, the model.
 object DeviceName {
-    fun choose(settingsName: String?, androidId: String?, model: String?): String {
-        settingsName?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    fun choose(androidId: String?, model: String?): String {
         val id = androidId?.trim().orEmpty()
         if (id.length >= 4) {
             return "Celular " + id.takeLast(4).uppercase()
@@ -20,7 +20,6 @@ object DeviceName {
     }
 
     fun read(context: Context): String = choose(
-        Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME),
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID),
         Build.MODEL,
     )

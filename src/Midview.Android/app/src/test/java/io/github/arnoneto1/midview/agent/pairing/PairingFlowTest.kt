@@ -35,13 +35,18 @@ class PairingFlowTest {
     private val events = mutableListOf<String>()
     private val shown = mutableListOf<Pair<String, String>>()
     private var hidden = 0
+    private var canShow = true
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
 
     private val flow by lazy {
         PairingFlow(
             identity, trusted,
-            showCode = { code, teacher -> events += "show"; shown += code to teacher },
+            showCode = { code, teacher ->
+                events += "show"
+                shown += code to teacher
+                canShow
+            },
             hideCode = { events += "hide"; hidden++ },
             deviceName = { "Cel 01" },
             newNonce = { agentNonce.copyOf() },
@@ -193,6 +198,20 @@ class PairingFlowTest {
         assertEquals(0, trusted.count())
     }
 
+    // As on a PC: a code the student can't see is no pairing.
+    @Test fun aCodeThePhoneCannotShowIsRefused() {
+        canShow = false
+        val channel = teacher(teacherA, nonce(), confirm())
+        flow.run(channel, request("PROF-01"))
+
+        assertEquals(listOf(MessageType.PAIR_COMMIT, MessageType.PAIR_REFUSED), channel.sent.map { it.type })
+        assertEquals("Não foi possível mostrar o código na tela do celular. Tente de novo.", Pairing.refusalText(channel.sent[1].payload))
+        assertEquals(0, trusted.count())
+        assertEquals(1, hidden)
+        // The teacher never gets the phone's nonce, so never a code.
+        assertFalse(channel.events.contains("send ${MessageType.PAIR_REVEAL}"))
+    }
+
     @Test fun aConfirmAfterFiveMinutesIsRefused() {
         val channel = teacher(teacherA, nonce(), confirm())
         channel.onReceive = { if (it.type == MessageType.PAIR_CONFIRM) clock += 5 * 60 * 1000L + 1 }
@@ -209,7 +228,10 @@ class PairingFlowTest {
         // While the first teacher's code is up, a second one asks.
         val busyFlow = PairingFlow(
             identity, trusted,
-            showCode = { _, _ -> if (second.sent.isEmpty()) flowRef!!.run(second, request("PROF-02")) },
+            showCode = { _, _ ->
+                if (second.sent.isEmpty()) flowRef!!.run(second, request("PROF-02"))
+                true
+            },
             hideCode = {},
             deviceName = { "Cel 01" },
         )

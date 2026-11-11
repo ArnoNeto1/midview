@@ -48,6 +48,7 @@ class TlsServer(
         try {
             socket.reuseAddress = true
             socket.needClientAuth = true
+            socket.enabledProtocols = modernProtocols(socket.supportedProtocols)
             socket.bind(InetSocketAddress(bindAddress, port), BACKLOG)
         } catch (e: IOException) {
             socket.close()
@@ -69,6 +70,9 @@ class TlsServer(
                 socket.accept() as SSLSocket
             } catch (e: IOException) {
                 if (socket.isClosed) return
+                // A failure that repeats (no file handles left, say) must
+                // not keep the CPU busy.
+                Thread.sleep(ACCEPT_RETRY_MILLIS)
                 continue
             }
             if (!connections.tryAcquire()) {
@@ -144,8 +148,14 @@ class TlsServer(
         const val HANDSHAKE_TIMEOUT_MILLIS = 10_000
 
         private const val BACKLOG = 50
+        private const val ACCEPT_RETRY_MILLIS = 1000L
         private const val MAX_CONNECTIONS = 64
         private const val ALIAS = "midview-agent"
+
+        // TLS 1.2 and 1.3, as far as the platform has them: what the
+        // Master's Windows speaks, and nothing older.
+        fun modernProtocols(supported: Array<String>): Array<String> =
+            supported.filter { it == "TLSv1.2" || it == "TLSv1.3" }.sorted().toTypedArray()
 
         // The identity's key and certificate, for a TLS context.
         fun keyManagers(identity: AgentIdentity): Array<KeyManager> {

@@ -6,6 +6,7 @@ import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageFramer
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -57,6 +58,28 @@ class TlsServerTest {
             assertEquals(Message(MessageType.HEARTBEAT, byteArrayOf(7)), echo)
         }
         assertEquals(teacher.thumbprint, seen.poll(5, TimeUnit.SECONDS))
+    }
+
+    @Test fun onlyTls12And13AreOffered() {
+        assertArrayEquals(
+            arrayOf("TLSv1.2", "TLSv1.3"),
+            TlsServer.modernProtocols(arrayOf("SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3")),
+        )
+        assertArrayEquals(arrayOf("TLSv1.2"), TlsServer.modernProtocols(arrayOf("TLSv1", "TLSv1.2")))
+    }
+
+    @Test fun aTls11TeacherIsTurnedAway() {
+        val port = server.start()
+        connect(port, TlsServer.keyManagers(teacher)).use { socket ->
+            socket.enabledProtocols = arrayOf("TLSv1.1")
+            try {
+                socket.startHandshake()
+                fail("TLS 1.1 got through")
+            } catch (e: java.io.IOException) {
+                // Refused.
+            }
+        }
+        assertTrue(seen.poll(1, TimeUnit.SECONDS) == null)
     }
 
     @Test fun aTeacherWithoutACertificateIsTurnedAway() {

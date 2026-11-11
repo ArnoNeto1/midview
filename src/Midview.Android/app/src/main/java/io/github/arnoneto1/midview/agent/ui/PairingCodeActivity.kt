@@ -10,6 +10,8 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 // The pairing code on the whole phone screen while a teacher pairs with it,
 // as PairingCodeWindow on a PC. Nothing to tap: the teacher compares the
@@ -33,6 +35,7 @@ class PairingCodeActivity : Activity() {
         }
         open = this
         setContentView(layout(shown))
+        visible.countDown()
     }
 
     override fun onPause() {
@@ -77,6 +80,9 @@ class PairingCodeActivity : Activity() {
         @Volatile private var current: Shown? = null
         @Volatile private var open: PairingCodeActivity? = null
 
+        // Counted down when the screen with the current code is up.
+        @Volatile private var visible = CountDownLatch(1)
+
         // What the student reads, in the PC's words (PairingCodeWindow.Texts).
         fun texts(code: String, teacher: String) = listOf(
             "Pareamento com o professor",
@@ -90,16 +96,28 @@ class PairingCodeActivity : Activity() {
             Intent(context, PairingCodeActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY)
 
+        // Asks for the screen. From the background, Android 10 and newer
+        // drop the start without a word unless the app may start screens
+        // (a Device Owner may): awaitShown tells whether it came up.
         fun show(context: Context, code: String, teacher: String) {
+            val latch = CountDownLatch(1)
+            visible = latch
             current = Shown(code, teacher)
-            open?.let { activity -> activity.runOnUiThread { activity.setContentView(activity.layout(Shown(code, teacher))) } }
+            open?.let { activity ->
+                activity.runOnUiThread {
+                    activity.setContentView(activity.layout(Shown(code, teacher)))
+                    latch.countDown()
+                }
+            }
             try {
                 context.startActivity(intent(context))
             } catch (e: RuntimeException) {
-                // Not allowed from the background on this phone: the
-                // notification (AgentService) shows the code instead.
+                // Refused outright: awaitShown says false.
             }
         }
+
+        // Whether the screen with the current code came up within timeoutMillis.
+        fun awaitShown(timeoutMillis: Long): Boolean = visible.await(timeoutMillis, TimeUnit.MILLISECONDS)
 
         fun hide() {
             current = null

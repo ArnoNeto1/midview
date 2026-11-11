@@ -132,22 +132,32 @@ class AgentService : Service() {
         Log.i(TAG, "Agent listening as $name (${identity.thumbprint}).")
     }
 
-    private fun showCode(code: String, teacher: String) {
+    // True only when the code is really on the screen: the notification
+    // can show (the app's notifications and the pairing channel are on), or
+    // else the code screen came up.
+    private fun showCode(code: String, teacher: String): Boolean {
         PairingCodeActivity.show(this, code, teacher)
-        val open = PendingIntent.getActivity(
-            this, 0, PairingCodeActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val (title, detail) = PairingCodeActivity.texts(code, teacher)
-        val notification = Notification.Builder(this, PAIRING_CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-            .setContentTitle("$title: $code")
-            .setContentText(detail)
-            .setCategory(Notification.CATEGORY_CALL)
-            .setOngoing(true)
-            .setContentIntent(open)
-            .setFullScreenIntent(open, true)
-            .build()
-        notifications().notify(PAIRING_NOTIFICATION, notification)
+        val manager = notifications()
+        val notified = manager.areNotificationsEnabled() &&
+            manager.getNotificationChannel(PAIRING_CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+        if (notified) {
+            val open = PendingIntent.getActivity(
+                this, 0, PairingCodeActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val (title, detail) = PairingCodeActivity.texts(code, teacher)
+            val notification = Notification.Builder(this, PAIRING_CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                .setContentTitle("$title: $code")
+                .setContentText(detail)
+                .setCategory(Notification.CATEGORY_CALL)
+                .setOngoing(true)
+                .setContentIntent(open)
+                .setFullScreenIntent(open, true)
+                .build()
+            manager.notify(PAIRING_NOTIFICATION, notification)
+            return true
+        }
+        return PairingCodeActivity.awaitShown(SHOW_TIMEOUT_MILLIS)
     }
 
     private fun hideCode() {
@@ -197,10 +207,14 @@ class AgentService : Service() {
         const val STATUS_TEXT = "Celular da escola, gerenciado pelo Midview"
         const val REPLACED_TEXT =
             "Celular da escola, gerenciado pelo Midview. A identificação deste celular foi refeita: os professores precisam parear de novo."
-        const val THUMBNAIL_STATUS = "Online. A tela aparece aqui depois do plano 2."
+        const val THUMBNAIL_STATUS = "Online. A tela do celular ainda não aparece aqui."
 
         private const val TAG = "Midview"
         private const val RETRY_MILLIS = 30_000L
+
+        // How long the code screen has to come up when it is the only way
+        // to show the code.
+        private const val SHOW_TIMEOUT_MILLIS = 3_000L
         private const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"

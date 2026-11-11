@@ -19,11 +19,13 @@ import java.util.Locale
 // "Permitir novo professor" lasts, which ends with the first new teacher.
 // One pairing at a time. The code shows on the phone (showCode, with the
 // teacher's computer name) before the teacher can have it, and is taken
-// down (hideCode) however the pairing ends.
+// down (hideCode) however the pairing ends. showCode says whether the code
+// is really on the screen: a code the student can't see is no pairing, and
+// the teacher is told so before getting the phone's nonce.
 class PairingFlow(
     private val identity: AgentIdentity,
     private val trusted: TrustedMasters,
-    private val showCode: (String, String) -> Unit,
+    private val showCode: (String, String) -> Boolean,
     private val hideCode: () -> Unit,
     private val deviceName: () -> String = { commonName(identity) },
     private val newNonce: () -> ByteArray = Pairing::newNonce,
@@ -94,8 +96,12 @@ class PairingFlow(
         }
 
         val code = Pairing.code(master, identity.thumbprint, agentNonce, nonce.payload)
-        showCode(Pairing.format(code), teacherName)
         try {
+            if (!showCode(Pairing.format(code), teacherName)) {
+                channel.send(Pairing.refused("Não foi possível mostrar o código na tela do celular. Tente de novo."))
+                return
+            }
+
             val revealedAt = now()
             channel.send(Message(MessageType.PAIR_REVEAL, agentNonce))
 
