@@ -21,7 +21,7 @@
 - Chaves do pacote de extras (todas string): `midview.number`, `midview.token`, `midview.master`.
 - `token`: 32 bytes aleatórios em Base64 URL sem `=`; `claim` na busca = 16 primeiros caracteres hex maiúsculos de `SHA-256(UTF-8 do token)`.
 - Mensagens novas: `ClaimPhone` e `WipePhone`, com os **dois próximos números livres** de `MessageType` no momento da implementação, iguais em `src/Midview.Protocol/MessageType.cs` e `.../agent/protocol/MessageType.kt` (o plano 2 também acrescenta números; conferir os dois arquivos).
-- Campos novos são opcionais: Master antigo ignora `claim`; agente antigo responde `CommandAck` com `NOT_ON_PHONE`/desconhecido a `ClaimPhone`/`WipePhone`, e o Master trata como "Midview antigo neste celular".
+- Campos novos são opcionais: Master antigo ignora `claim`; agente antigo responde `CommandAck` com `NOT_ON_PHONE`/desconhecido a `ClaimPhone`/`WipePhone`, e o Master diz ao professor que o celular ainda não aceita o pedido (`PhoneWipe.OldAgent`); uma reivindicação recusada assim só fica pendente.
 - `PhoneProvisioning.WizardReady` (= `IsReady` **e** `ClaimsReady`) falso esconde o botão, o link e o item "Apagar e preparar de novo". `ClaimsReady` é uma constante que nasce `false`; as Tasks 4/5 a viram para `true` quando o APK do agente com reivindicação e apagar for publicado (Ruling J).
 - Textos em português, sem jargão (nada de Device Owner, APK, provisionamento, adb para o professor); nunca citar produto concorrente. Commits sem `Co-Authored-By`.
 - .NET pelo SDK em `C:\Users\Neto\AppData\Local\Microsoft\dotnet\dotnet.exe`; Android por `src/Midview.Android/gradlew -p src/Midview.Android testDebugUnitTest`.
@@ -220,7 +220,7 @@
 - [ ] **Step 2:** `dotnet test tests/Midview.Master.Tests --filter "FullyQualifiedName~PhoneSetupProgress|FullyQualifiedName~GridFilter"` → FAIL.
 - [ ] **Step 3:** Implementar `PhoneSetupProgress`, a janela e os pontos de entrada; apagar a janela antiga e o que só ela usava.
 - [ ] **Step 4:** Mesmo comando → PASS; `dotnet test Midview.sln` inteiro (lembrar as falhas ambientais já registradas no plano 1: ACL do Agent.Tests e captura do Desk.Tests).
-- [ ] **Step 5: Conferência visual pelo harness** (pasta temporária, roster falso com 2 PCs e nenhum celular, `PhoneProvisioning.IsReady` verdadeiro na build de teste): capturas do filtro Celulares vazio com o botão, de cada página do assistente a 560×860 e na menor tela de 1366×768 (a janela cabe sem rolagem horizontal), do "ainda não apareceu" e do "pronto". Salvar em `.superpowers/sdd/<este plano>/screens/` e mostrar ao professor.
+- [ ] **Step 5: Conferência visual pelo harness** (pasta temporária, roster falso com 2 PCs e nenhum celular, `PhoneProvisioning.WizardReady` não é forçado (Ruling C do ledger): a janela é aberta direto no harness): capturas do filtro Celulares vazio com o botão, de cada página do assistente a 560×860 e na menor tela de 1366×768 (a janela cabe sem rolagem horizontal), do "ainda não apareceu" e do "pronto". Salvar em `.superpowers/sdd/<este plano>/screens/` e mostrar ao professor.
 - [ ] **Step 6:** Commit `feat(master): assistente Preparar celulares`.
 
 ### Task 8: "Apagar e preparar de novo" no Master
@@ -238,7 +238,7 @@
 
 - [ ] **Step 1: Testes que falham:** os textos e casos acima; `DeviceSupport.Supports(DeviceKind.Android, ToolbarAction.WipePhone)` verdadeiro e falso para Windows.
 - [ ] **Step 2:** `dotnet test tests/Midview.Master.Tests --filter "FullyQualifiedName~PhoneWipe|FullyQualifiedName~DeviceSupport"` → FAIL.
-- [ ] **Step 3:** Implementar; o item só aparece com `PhoneProvisioning.IsReady` e só fica ativo com um celular online selecionado.
+- [ ] **Step 3:** Implementar; o item só aparece com `PhoneProvisioning.WizardReady` (`IsReady && ClaimsReady`) e só fica ativo com um celular online selecionado.
 - [ ] **Step 4:** Mesmo comando → PASS.
 - [ ] **Step 5:** Commit `feat(master): apagar e preparar de novo um celular da escola`.
 
