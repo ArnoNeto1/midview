@@ -65,25 +65,46 @@ object Discovery {
     }
 
     // The reply with the fields and order .NET writes, always with
-    // "kind":"android" so the teacher shows a phone.
+    // "kind":"android" so the teacher shows a phone. The device's name is
+    // whatever the phone's owner typed: a blank one becomes "Celular", and
+    // one too long is cut (never inside a character) to MAX_NAME_LENGTH and
+    // then to what fits in one packet, which the Master drops when bigger.
     fun encodeReply(r: Reply): ByteArray {
-        require(r.name.isNotEmpty()) { "A reply needs the device's name" }
         require(r.agentThumbprint.isNotEmpty()) { "A reply needs the agent's thumbprint" }
         require(TeacherStatus.isKnown(r.teachers)) { "Unknown teacher status ${r.teachers}" }
 
-        val text = JsonText.obj(
-            "midview" to VERSION.toString(),
-            "probe" to JsonText.string(r.probeId.toString()),
-            "name" to JsonText.string(r.name),
-            "agent" to JsonText.string(r.agentThumbprint),
-            "teachers" to JsonText.string(r.teachers),
-            "newTeacherOpen" to r.newTeacherOpen.toString(),
-            "kind" to JsonText.string(ANDROID_KIND),
-        )
-        val bytes = text.toByteArray(Charsets.UTF_8)
-        // The Master drops a bigger reply.
-        require(bytes.size <= MAX_PACKET_SIZE) { "Reply of ${bytes.size} bytes is over $MAX_PACKET_SIZE" }
-        return bytes
+        var name = cut(r.name.trim().ifEmpty { BLANK_NAME }, MAX_NAME_LENGTH)
+        while (true) {
+            val bytes = JsonText.obj(
+                "midview" to VERSION.toString(),
+                "probe" to JsonText.string(r.probeId.toString()),
+                "name" to JsonText.string(name),
+                "agent" to JsonText.string(r.agentThumbprint),
+                "teachers" to JsonText.string(r.teachers),
+                "newTeacherOpen" to r.newTeacherOpen.toString(),
+                "kind" to JsonText.string(ANDROID_KIND),
+            ).toByteArray(Charsets.UTF_8)
+            if (bytes.size <= MAX_PACKET_SIZE) {
+                return bytes
+            }
+            // Only a name of escaped characters gets here (up to six bytes
+            // each); a thumbprint too long to fit is the caller's mistake.
+            require(name.length > 1) { "Reply of ${bytes.size} bytes is over $MAX_PACKET_SIZE" }
+            name = cut(name, name.length / 2)
+        }
+    }
+
+    // The longest device name a reply carries, in UTF-16 units.
+    const val MAX_NAME_LENGTH = 100
+
+    private const val BLANK_NAME = "Celular"
+
+    private fun cut(text: String, length: Int): String {
+        if (text.length <= length) {
+            return text
+        }
+        val end = if (Character.isHighSurrogate(text[length - 1])) length - 1 else length
+        return text.substring(0, maxOf(end, 1))
     }
 
     // Invalid UTF-8 is refused, as .NET's JSON reader does.

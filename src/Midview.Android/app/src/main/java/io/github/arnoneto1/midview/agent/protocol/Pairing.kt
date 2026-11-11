@@ -71,14 +71,18 @@ object Pairing {
 
     // PairDone's payload, .NET's PairingResult: the device as the classroom
     // list keeps it, always with "kind":"android". mac ("AA-BB-CC-DD-EE-FF")
-    // is null when the device can't tell.
-    fun encodeResult(name: String, sessionThumbprint: String, mac: String?): ByteArray =
-        JsonText.obj(
+    // is null when the device can't tell. .NET's PairingResult.Decode drops a
+    // result without a name or a session, so none is ever sent.
+    fun encodeResult(name: String, sessionThumbprint: String, mac: String?): ByteArray {
+        require(name.isNotBlank()) { "A pairing result needs the device's name" }
+        require(sessionThumbprint.isNotBlank()) { "A pairing result needs the session's thumbprint" }
+        return JsonText.obj(
             "name" to JsonText.string(name),
             "session" to JsonText.string(sessionThumbprint),
             "mac" to JsonText.string(mac),
             "kind" to JsonText.string(Discovery.ANDROID_KIND),
         ).toByteArray(Charsets.UTF_8)
+    }
 
     private fun sha256(bytes: ByteArray): ByteArray = MessageDigest.getInstance("SHA-256").digest(bytes)
 }

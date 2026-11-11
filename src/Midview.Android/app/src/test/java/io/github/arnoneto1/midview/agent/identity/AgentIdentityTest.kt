@@ -1,15 +1,18 @@
 package io.github.arnoneto1.midview.agent.identity
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.File
 import java.security.MessageDigest
 import java.security.Signature
 import java.security.interfaces.RSAPublicKey
 import java.util.Calendar
+import java.util.concurrent.Executors
 
 class AgentIdentityTest {
     @get:Rule val folder = TemporaryFolder()
@@ -64,11 +67,32 @@ class AgentIdentityTest {
         )
     }
 
-    @Test fun aDamagedStoreIsReplacedOnce() {
+    @Test fun aDamagedStoreIsReplacedOnceAndSaysSo() {
         val dir = folder.newFolder()
-        AgentIdentity(dir, "Cel 01")
-        dir.listFiles()!!.forEach { it.writeBytes(byteArrayOf(1, 2, 3)) }
+        File(dir, "agent-identity.p12").writeBytes(byteArrayOf(1, 2, 3))
+        File(dir, "agent-identity.key").writeBytes(byteArrayOf(4, 5, 6))
         val again = AgentIdentity(dir, "Cel 01")
+        assertTrue(again.replaced)
         assertEquals(again.thumbprint, AgentIdentity(dir, "Cel 01").thumbprint)
+    }
+
+    @Test fun aNewOrAReadableStoreIsNotReplaced() {
+        val dir = folder.newFolder()
+        assertFalse(AgentIdentity(dir, "Cel 01").replaced)
+        assertFalse(AgentIdentity(dir, "Cel 01").replaced)
+        assertFalse(AgentIdentity(folder.newFolder(), "Cel 02").replaced)
+    }
+
+    @Test fun manyInstancesAtOnceShareOneIdentity() {
+        val dir = folder.newFolder()
+        val pool = Executors.newFixedThreadPool(8)
+        try {
+            val thumbprints = (1..8).map { pool.submit<String> { AgentIdentity(dir, "Cel 01").thumbprint } }.map { it.get() }
+            assertEquals(1, thumbprints.toSet().size)
+        } finally {
+            pool.shutdown()
+        }
+        // No temporary file is left behind.
+        assertEquals(setOf("agent-identity.p12", "agent-identity.key"), dir.list()!!.toSet())
     }
 }

@@ -25,7 +25,10 @@ import java.util.TimeZone
 // makes for a Windows Agent. Made the first time and kept in dir (the app's
 // private storage) as PKCS12, with its random password in a file beside it;
 // every later start reuses it, so the teachers that paired keep trusting the
-// same thumbprint. A store that can no longer be read is replaced.
+// same thumbprint. A store that can no longer be read is replaced (replaced
+// tells so: the teachers must pair again). Loaded or made once per process
+// and directory, under one lock for every instance, so two parts of the
+// agent starting together never make two identities.
 class AgentIdentity(dir: File, deviceName: String) {
     val certificate: X509Certificate
     val privateKey: PrivateKey
@@ -34,14 +37,26 @@ class AgentIdentity(dir: File, deviceName: String) {
     // upper-case hex. What the teachers pin.
     val thumbprint: String
 
+    // True when the store this process found could not be read and a new
+    // identity was made: the teachers that had paired no longer know it.
+    val replaced: Boolean
+
     init {
-        val store = File(dir, STORE_FILE)
-        val password = File(dir, PASSWORD_FILE)
-        val (cert, key) = load(store, password) ?: create(dir, store, password, deviceName)
-        certificate = cert
-        privateKey = key
-        thumbprint = MessageDigest.getInstance("SHA-1").digest(cert.encoded)
-            .joinToString("") { "%02X".format(it.toInt() and 0xFF) }
+        val loaded = synchronized(lock) {
+            val key = dir.absoluteFile.normalize().path
+            cache.getOrPut(key) {
+                val store = File(dir, STORE_FILE)
+                val password = File(dir, PASSWORD_FILE)
+                val existing = load(store, password)
+                // Only a password (a first start that stopped midway) was never an identity.
+                val damaged = existing == null && store.exists()
+                Loaded(existing ?: create(dir, store, password, deviceName), damaged)
+            }
+        }
+        certificate = loaded.pair.first
+        privateKey = loaded.pair.second
+        replaced = loaded.replaced
+        thumbprint = thumbprintOf(certificate)
     }
 
     private companion object {
@@ -52,6 +67,11 @@ class AgentIdentity(dir: File, deviceName: String) {
         const val VALID_YEARS = 20
 
         val random = SecureRandom()
+
+        private class Loaded(val pair: Pair<X509Certificate, PrivateKey>, val replaced: Boolean)
+
+        private val lock = Any()
+        private val cache = HashMap<String, Loaded>()
 
         fun load(store: File, password: File): Pair<X509Certificate, PrivateKey>? {
             if (!store.isFile || !password.isFile) {
@@ -112,3 +132,9 @@ class AgentIdentity(dir: File, deviceName: String) {
         }
     }
 }
+
+// The .NET X509Certificate2.Thumbprint of a certificate: SHA-1 of its DER
+// encoding, upper-case hex.
+fun thumbprintOf(certificate: X509Certificate): String =
+    MessageDigest.getInstance("SHA-1").digest(certificate.encoded)
+        .joinToString("") { "%02X".format(it.toInt() and 0xFF) }

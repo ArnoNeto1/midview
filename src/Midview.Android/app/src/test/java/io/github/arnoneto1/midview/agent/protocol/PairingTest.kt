@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -97,5 +98,12 @@ class PairingTest {
             """{"name":"Cel 01","session":"$agent","mac":"00-1A-2B-3C-4D-5E","kind":"android"}""",
             String(Pairing.encodeResult("Cel 01", agent, "00-1A-2B-3C-4D-5E"), Charsets.UTF_8),
         )
+    }
+
+    // .NET's PairingResult.Decode drops a result without either.
+    @Test fun pairingResultNeedsANameAndASession() {
+        assertThrows(IllegalArgumentException::class.java) { Pairing.encodeResult("", agent, null) }
+        assertThrows(IllegalArgumentException::class.java) { Pairing.encodeResult(" ", agent, null) }
+        assertThrows(IllegalArgumentException::class.java) { Pairing.encodeResult("Cel 01", "", null) }
     }
 }

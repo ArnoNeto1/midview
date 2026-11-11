@@ -4,6 +4,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
 
@@ -79,6 +80,36 @@ class DiscoveryTest {
         assertEquals("Sala \"2\" é", json.getString("name"))
         assertEquals("others", json.getString("teachers"))
         assertFalse(json.getBoolean("newTeacherOpen"))
+    }
+
+    @Test fun aLongNameIsCutToFitOnePacket() {
+        // Control characters are written as \u0001: six bytes each.
+        val long = "\u0001é".repeat(2000)
+        val bytes = Discovery.encodeReply(
+            Discovery.Reply(UUID.fromString(id), long, "ABCDEF", TeacherStatus.NONE, newTeacherOpen = false),
+        )
+        assertTrue(bytes.size <= Discovery.MAX_PACKET_SIZE)
+        val name = JSONObject(String(bytes, Charsets.UTF_8)).getString("name")
+        assertTrue(name.isNotEmpty())
+        assertTrue(name.length <= Discovery.MAX_NAME_LENGTH)
+        assertTrue(long.startsWith(name))
+    }
+
+    @Test fun aNameIsNeverCutInsideACharacter() {
+        val phone = "📱"
+        val bytes = Discovery.encodeReply(
+            Discovery.Reply(UUID.fromString(id), phone.repeat(Discovery.MAX_NAME_LENGTH), "AB", TeacherStatus.NONE, newTeacherOpen = false),
+        )
+        val name = JSONObject(String(bytes, Charsets.UTF_8)).getString("name")
+        assertTrue(name.isNotEmpty())
+        assertEquals("", name.replace(phone, ""))
+    }
+
+    @Test fun aBlankNameStillAnswers() {
+        val bytes = Discovery.encodeReply(
+            Discovery.Reply(UUID.fromString(id), "  ", "AB", TeacherStatus.NONE, newTeacherOpen = false),
+        )
+        assertEquals("Celular", JSONObject(String(bytes, Charsets.UTF_8)).getString("name"))
     }
 
     @Test fun teacherStatusMatchesDotNet() {
