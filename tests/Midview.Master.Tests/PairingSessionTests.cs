@@ -60,6 +60,8 @@ public class PairingSessionTests : IDisposable
 
         public MessageType Answer { get; private set; }
 
+        public string? Kind { get; init; }
+
         public void Run(SecureChannel channel, string agentThumbprint)
         {
             var request = channel.Receive();
@@ -73,7 +75,7 @@ public class PairingSessionTests : IDisposable
             Answer = channel.Receive().Type;
             if (Answer == MessageType.PairConfirm)
             {
-                channel.Send(new Message(MessageType.PairDone, new PairingResult("ALUNO-07", Session, "00:1a:2b:3c:4d:5e").Encode()));
+                channel.Send(new Message(MessageType.PairDone, new PairingResult("ALUNO-07", Session, "00:1a:2b:3c:4d:5e", Kind).Encode()));
             }
         }
     }
@@ -94,6 +96,20 @@ public class PairingSessionTests : IDisposable
 
         Assert.Equal("PROF-01", agent.TeacherName);
         Assert.Equal(new KnownMachine("ALUNO-07", "127.0.0.1", Session, _agentCert.Thumbprint, "00-1A-2B-3C-4D-5E"), machine);
+    }
+
+    [Fact]
+    public async Task Confirm_keeps_android_kind_from_PairDone()
+    {
+        var agent = new HonestAgent { Kind = DeviceKindText.AndroidWire };
+        var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
+
+        using var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        var machine = await OwnThread(session.Confirm).WaitAsync(TimeSpan.FromSeconds(30));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(DeviceKind.Android, machine.Kind);
+        Assert.True(machine.IsPhone);
     }
 
     [Fact]

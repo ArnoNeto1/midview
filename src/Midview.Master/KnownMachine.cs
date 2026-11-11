@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Midview.Protocol;
+
 namespace Midview.Master;
 
 // One machine in the teacher's classroom list. AgentThumbprint is optional:
@@ -7,8 +10,13 @@ namespace Midview.Master;
 // (MainWindow's "Ligar"); it comes from the installer's machine file or from the
 // Agent itself, the first time Master sees the machine on.
 public sealed record KnownMachine(
-    string Name, string HostAddress, string SessionThumbprint, string? AgentThumbprint, string? MacAddress = null)
+    string Name, string HostAddress, string SessionThumbprint, string? AgentThumbprint, string? MacAddress = null,
+    DeviceKind Kind = DeviceKind.Windows)
 {
+    // An Android phone, not a Windows PC. Not saved: it follows from Kind.
+    [JsonIgnore]
+    public bool IsPhone => Kind == DeviceKind.Android;
+
     // For a new version of the same entry (edited by hand, or imported
     // again) that doesn't know the network card: keeps the one known
     // before, as long as the entry still points to the same host.

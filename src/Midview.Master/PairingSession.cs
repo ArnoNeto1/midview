@@ -80,7 +80,7 @@ public sealed class PairingSession : IDisposable
             ?? throw new PairingRefusedException(InvalidAnswer);
         return new KnownMachine(
             result.Name, Address, result.SessionThumbprint.Trim().ToUpperInvariant(), AgentThumbprint,
-            WakeOnLan.NormalizeMacAddress(result.MacAddress));
+            WakeOnLan.NormalizeMacAddress(result.MacAddress), result.DeviceKind);
     }
 
     // The codes didn't match, or the teacher gave up: the machine takes its

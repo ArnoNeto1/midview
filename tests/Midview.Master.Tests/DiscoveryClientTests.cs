@@ -34,6 +34,22 @@ public class DiscoveryClientTests
     }
 
     [Fact]
+    public void Merge_keeps_the_kind_of_the_answer()
+    {
+        var probe = Guid.NewGuid();
+        var answers = new (IPAddress, DiscoveryReply)[]
+        {
+            (IPAddress.Parse("10.0.0.5"), new DiscoveryReply(probe, "Celular-5", X, TeacherStatus.None, false, DeviceKind.Android)),
+            (IPAddress.Parse("10.0.0.6"), new DiscoveryReply(probe, "Aluno-6", Y, TeacherStatus.None, false)),
+        };
+
+        var found = DiscoveryClient.Merge(probe, answers);
+
+        Assert.Equal(DeviceKind.Android, found.Single(m => m.Name == "Celular-5").Kind);
+        Assert.Equal(DeviceKind.Windows, found.Single(m => m.Name == "Aluno-6").Kind);
+    }
+
+    [Fact]
     public async Task Search_FindsAMachineThatAnswers()
     {
         using var agentSide = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
