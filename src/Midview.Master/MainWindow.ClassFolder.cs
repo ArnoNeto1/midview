@@ -63,7 +63,13 @@ public partial class MainWindow
     }
 
     // After every change to _tiles.
-    private void PublishRoster() => Volatile.Write(ref _roster, _tiles.Select(tile => tile.Machine).ToList());
+    // Only the machines that take part in the class folder: a phone has no
+    // Agent to hold a lesson, so it never gets a round.
+    private void PublishRoster()
+    {
+        Volatile.Write(ref _roster, DeviceSupport.Only(_tiles.Select(tile => tile.Machine), ToolbarAction.ClassFolder));
+        UpdateActionButtons();
+    }
 
     // A machine answering: until the room has been asked, it is asked again soon (ClassFolderRole).
     private void PublishPresence(MachineTile tile)

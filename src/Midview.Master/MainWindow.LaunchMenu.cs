@@ -124,7 +124,7 @@ public partial class MainWindow
 
     private async void LaunchSaved(LaunchKind kind, MenuEntry entry, IReadOnlyList<KnownMachine> targets)
     {
-        if (!SupportedTargets(ref targets, LaunchAction(kind)))
+        if (!SupportedTargets(ref targets, LaunchAction(kind), out var leftOut))
         {
             return;
         }
@@ -137,7 +137,7 @@ public partial class MainWindow
                 StatusTextBlock.Text = $"{entry.Name}: {problem}";
                 return;
             }
-            StatusTextBlock.Text = $"Abrindo {entry.Name}...";
+            StatusTextBlock.Text = WithNotice($"Abrindo {entry.Name}...", leftOut);
             results = await RemoteLaunch.OpenWebsites(targets, _masterCertificate, addresses);
         }
         else
@@ -147,10 +147,10 @@ public partial class MainWindow
                 StatusTextBlock.Text = $"{entry.Name}: {problem}";
                 return;
             }
-            StatusTextBlock.Text = $"Abrindo {entry.Name}...";
+            StatusTextBlock.Text = WithNotice($"Abrindo {entry.Name}...", leftOut);
             results = await RemoteLaunch.OpenPrograms(targets, _masterCertificate, commands);
         }
-        StatusTextBlock.Text = LaunchText.Summary(entry.Name, results);
+        StatusTextBlock.Text = WithNotice(LaunchText.Summary(entry.Name, results), leftOut);
     }
 
     private void DeleteHighlighted(ItemCollection items, LaunchKind kind, KeyEventArgs e)

@@ -360,7 +360,8 @@ public partial class MachinesWindow : MidviewWindow
             _updateWindow.Activate();
             return;
         }
-        _updateWindow = new UpdateWindow(UpdatePackage.BundledStudentFolder, _roster, _masterCertificate) { Owner = this };
+        _updateWindow = new UpdateWindow(
+            UpdatePackage.BundledStudentFolder, () => DeviceSupport.Only(_roster(), ToolbarAction.Update), _masterCertificate) { Owner = this };
         _updateWindow.Closed += (_, _) => _updateWindow = null;
         OwnedWindow.ReturnToOwnerWhenClosed(_updateWindow);
         _updateWindow.Show();

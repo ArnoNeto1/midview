@@ -30,6 +30,14 @@ public class KnownMachineTests
     }
 
     [Fact]
+    public void KeepingKindOf_ANewPcThatOnlySharesThePhonesName_StaysAComputer()
+    {
+        var phone = new KnownMachine("Cel 01", "192.168.0.30", "SESSION", null, Kind: DeviceKind.Android);
+
+        Assert.False(new KnownMachine("Cel 01", "192.168.0.77", "SESSION2", "AGENT").KeepingKindOf(phone).IsPhone);
+    }
+
+    [Fact]
     public void KeepingKindOf_AComputer_StaysAComputer() =>
         Assert.False(new KnownMachine("Aluno-1", "192.168.0.21", "SESSION", "AGENT").KeepingKindOf(Learned).IsPhone);
 

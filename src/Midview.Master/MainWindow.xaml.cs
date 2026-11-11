@@ -178,12 +178,64 @@ public partial class MainWindow : MidviewWindow
         var machines = selected.Select(tile => tile.Machine).ToList();
         ViewButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.View);
         ControlButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.Control);
+        UpdateActionButtons();
         StatusTextBlock.Text = selected.Count switch
         {
             0 => string.Empty,
             1 => $"Selecionada: {selected[0].Name}",
             _ => $"Selecionadas: {selected.Count}",
         };
+    }
+
+    // Greys the toolbar buttons that do not work on the machines they would
+    // reach: the selection, or the whole class when nothing is selected. A
+    // room with no machines keeps them on, as they say so themselves when clicked.
+    private void UpdateActionButtons()
+    {
+        var reach = (_selection.Selected.Count > 0
+            ? _selection.Selected.Select(tile => tile.Machine)
+            : _tiles.Select(tile => tile.Machine)).ToList();
+        foreach (var button in ToolbarButtonsIn(ToolbarPanel))
+        {
+            if (DeviceActions.Of(button) is not { } action || action is ToolbarAction.View or ToolbarAction.Control)
+            {
+                continue;
+            }
+            // One button for both: it also gives the locked screens back.
+            var enabled = reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
+                || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
+            button.IsEnabled = enabled;
+        }
+    }
+
+    private static IEnumerable<ToolbarButton> ToolbarButtonsIn(DependencyObject parent)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent).OfType<DependencyObject>())
+        {
+            if (child is ToolbarButton button)
+            {
+                yield return button;
+            }
+            foreach (var inner in ToolbarButtonsIn(child))
+            {
+                yield return inner;
+            }
+        }
+    }
+
+    // A tile's menu: the items that do not work on any of the machines it
+    // would act on are greyed.
+    private void GreyUnsupportedItems(ItemCollection items, IReadOnlyList<MachineTile> targets)
+    {
+        var machines = targets.Select(target => target.Machine).ToList();
+        foreach (var item in items.OfType<MenuItem>())
+        {
+            if (DeviceActions.Of(item) is { } action)
+            {
+                item.IsEnabled = DeviceSupport.IsEnabled(machines, action)
+                    || (action == ToolbarAction.ScreenLock && targets.Any(_screenLocks.ContainsKey));
+            }
+        }
     }
 
     // A click on empty space or Esc. Nothing selected, nothing to change: the
@@ -439,6 +491,7 @@ public partial class MainWindow : MidviewWindow
         RightClickTileOf(sender);
         var targets = TargetsOf(tile);
         ShowMenuFor(menu, targets.Count);
+        GreyUnsupportedItems(menu.Items, targets);
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
@@ -600,15 +653,26 @@ public partial class MainWindow : MidviewWindow
     // Keeps only the machines that can do the action, saying in the status
     // bar how many were left out (DeviceSupport.LeftOutNotice). False when
     // none is left: nothing to act on.
-    private bool SupportedTargets(ref IReadOnlyList<KnownMachine> targets, ToolbarAction action)
+    private bool SupportedTargets(ref IReadOnlyList<KnownMachine> targets, ToolbarAction action) =>
+        SupportedTargets(ref targets, action, out _);
+
+    // Also gives the notice, for an action that writes its own status after
+    // this one: it adds the notice to its text, so it is not lost.
+    private bool SupportedTargets(ref IReadOnlyList<KnownMachine> targets, ToolbarAction action, out string? notice)
     {
-        if (DeviceSupport.LeftOutNotice(targets, action) is { } notice)
+        notice = DeviceSupport.LeftOutNotice(targets, action);
+        if (notice is not null)
         {
             StatusTextBlock.Text = notice;
         }
         targets = targets.Where(machine => DeviceSupport.Supports(machine.Kind, action)).ToList();
         return targets.Count > 0;
     }
+
+    private static string WithNotice(string text, string? notice) => notice is null ? text : $"{text} {notice}";
+
+    // How many phones the last lock left out, for every status line about it.
+    private string? _screenLockLeftOut;
 
     private static void BringBack(Window window)
     {
@@ -641,10 +705,11 @@ public partial class MainWindow : MidviewWindow
             return;
         }
         IReadOnlyList<KnownMachine> everyone = _tiles.Select(tile => tile.Machine).ToList();
-        if (!SupportedTargets(ref everyone, ToolbarAction.ScreenLock))
+        if (!SupportedTargets(ref everyone, ToolbarAction.ScreenLock, out var leftOut))
         {
             return;
         }
+        _screenLockLeftOut = leftOut;
         foreach (var tile in _tiles.Where(tile => DeviceSupport.Supports(tile.Machine.Kind, ToolbarAction.ScreenLock)))
         {
             LockScreen(tile);
@@ -667,6 +732,7 @@ public partial class MainWindow : MidviewWindow
         ScreenLockButton.Content = label;
         ScreenLockButton.Badge = badge;
         ScreenLockButton.ToolTip = toolTip;
+        UpdateActionButtons();
     }
 
     // One item for both, like the toolbar's button: while any of the machines
@@ -691,10 +757,11 @@ public partial class MainWindow : MidviewWindow
         else
         {
             IReadOnlyList<KnownMachine> machines = targets.Select(target => target.Machine).ToList();
-            if (!SupportedTargets(ref machines, ToolbarAction.ScreenLock))
+            if (!SupportedTargets(ref machines, ToolbarAction.ScreenLock, out var leftOut))
             {
                 return;
             }
+            _screenLockLeftOut = leftOut;
             foreach (var target in targets.Where(target => DeviceSupport.Supports(target.Machine.Kind, ToolbarAction.ScreenLock)))
             {
                 LockScreen(target);
@@ -754,6 +821,10 @@ public partial class MainWindow : MidviewWindow
         }
         _screenLockStatus.Remove(tile);
         _wereLocked.Remove(tile);
+        if (_screenLocks.Count == 0)
+        {
+            _screenLockLeftOut = null;
+        }
         tile.ShowScreenLock(string.Empty, alert: false);
         UpdateScreenLockButton();
     }
@@ -773,10 +844,10 @@ public partial class MainWindow : MidviewWindow
         var gotOut = notLocked.Where(pair => _wereLocked.Contains(pair.Key)).ToList();
         var failed = notLocked.Where(pair => !_wereLocked.Contains(pair.Key)).ToList();
         var waiting = _screenLocks.Count - _screenLockStatus.Count;
-        StatusTextBlock.Text = $"Telas bloqueadas: {locked} de {_screenLocks.Count}."
+        StatusTextBlock.Text = WithNotice($"Telas bloqueadas: {locked} de {_screenLocks.Count}."
             + (waiting > 0 ? $" Aguardando {waiting}." : string.Empty)
             + (gotOut.Count > 0 ? $" Saíram do bloqueio: {Names(gotOut)}." : string.Empty)
-            + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty);
+            + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty), _screenLockLeftOut);
     }
 
     private void OnMessageClassClicked(object sender, RoutedEventArgs e)
@@ -1150,7 +1221,7 @@ public partial class MainWindow : MidviewWindow
     // the Master has learned (RememberMacAddress); the status bar says who.
     private async void Wake(IReadOnlyList<KnownMachine> machines)
     {
-        if (!SupportedTargets(ref machines, ToolbarAction.Wake))
+        if (!SupportedTargets(ref machines, ToolbarAction.Wake, out var leftOut))
         {
             return;
         }
@@ -1160,13 +1231,14 @@ public partial class MainWindow : MidviewWindow
         var toWake = known.Where(machine => machine.MacAddress is not null).ToList();
         var unknown = known.Where(machine => machine.MacAddress is null).Select(machine => machine.Name).ToList();
 
-        StatusTextBlock.Text = "Enviando o pedido para ligar...";
+        StatusTextBlock.Text = WithNotice("Enviando o pedido para ligar...", leftOut);
         var (sent, lastError) = toWake.Count == 0
             ? (0, null)
             : await Task.Run(() => WakeOnLanSender.Send(
                 toWake.Select(machine => machine.MacAddress!).ToList(),
                 WakeOnLanSender.BroadcastTargets(WakeOnLanSender.LocalNetworks())));
-        StatusTextBlock.Text = WakeText.Summary(toWake.Select(machine => machine.Name).ToList(), unknown, sent > 0, lastError);
+        StatusTextBlock.Text = WithNotice(
+            WakeText.Summary(toWake.Select(machine => machine.Name).ToList(), unknown, sent > 0, lastError), leftOut);
     }
 
     // From a tile's poller, once per Master start. Only written to disk when

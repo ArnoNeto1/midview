@@ -63,18 +63,18 @@
              from about 1312 px wide (so on a 1366px screen, and the window opens 1340 wide
              to fit one), and whole groups move to a second row on a narrower window. -->
         <Border DockPanel.Dock="Top" Padding="2,0,2,6">
-            <WrapPanel>
+            <WrapPanel x:Name="ToolbarPanel">
                 <!-- Energia first, as the owner asked. -->
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource EnergiaBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" Click="OnPowerClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" local:DeviceActions.Action="Power" Click="OnPowerClassClicked" OpensOptions="True"
                                                  ToolTip="Desliga a turma, com aviso aos alunos." />
-                            <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" Click="OnRestartClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" local:DeviceActions.Action="Power" Click="OnRestartClassClicked" OpensOptions="True"
                                                  ToolTip="Reinicia a turma, com aviso aos alunos." />
-                            <local:ToolbarButton Content="Ligar" Icon="&#xE945;" Click="OnWakeClassClicked"
+                            <local:ToolbarButton Content="Ligar" Icon="&#xE945;" local:DeviceActions.Action="Wake" Click="OnWakeClassClicked"
                                                  ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
-                            <local:ToolbarButton Content="Agendar" Icon="&#xE787;" Click="OnScheduleClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Agendar" Icon="&#xE787;" local:DeviceActions.Action="Schedule" Click="OnScheduleClicked" OpensOptions="True"
                                                  ToolTip="Escolhe dias e horários para ligar e desligar o laboratório." />
                         </StackPanel>
                         <ContentControl Content="Energia" Style="{StaticResource ToolbarGroupCaption}" />
@@ -94,7 +94,7 @@
                                  alone measures 65px at this font, wider than the 58px the default width
                                  leaves, so it would break mid-word. 72 leaves 66px. -->
                             <local:ToolbarButton x:Name="ScreenLockButton" Content="Bloquear&#10;telas" Icon="&#xE7F4;" Badge="&#xE785;"
-                                                 BadgeInScreen="True" Width="72" Click="OnScreenLockClassClicked"
+                                                 BadgeInScreen="True" Width="72" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockClassClicked"
                                                  ToolTip="Cobre a tela de todos os alunos com um cadeado e trava o teclado e o mouse." />
                         </StackPanel>
                         <ContentControl Content="Tela" Style="{StaticResource ToolbarGroupCaption}" />
@@ -104,19 +104,19 @@
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource TurmaBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Mensagem" Icon="&#xE8BD;" Click="OnMessageClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Mensagem" Icon="&#xE8BD;" local:DeviceActions.Action="Message" Click="OnMessageClassClicked" OpensOptions="True"
                                                  ToolTip="Envia uma mensagem para a turma toda." />
                             <!-- No options arrow: like "Ligar", it acts right away, opening the chat on every student's screen. -->
-                            <local:ToolbarButton Content="Bate-papo" Icon="&#xE8F2;" Click="OnChatClassClicked"
+                            <local:ToolbarButton Content="Bate-papo" Icon="&#xE8F2;" local:DeviceActions.Action="Chat" Click="OnChatClassClicked"
                                                  ToolTip="Abre uma conversa com a turma toda: o que você escreve aparece para todos os alunos, e as respostas deles só para você." />
-                            <local:ToolbarButton Content="Enviar arquivo" Icon="&#xE898;" Click="OnFileClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Enviar arquivo" Icon="&#xE898;" local:DeviceActions.Action="SendFile" Click="OnFileClassClicked" OpensOptions="True"
                                                  ToolTip="Envia um arquivo para a turma toda." />
-                            <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" Click="OnCollectClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" local:DeviceActions.Action="CollectFiles" Click="OnCollectClassClicked" OpensOptions="True"
                                                  ToolTip="Recolhe o que os alunos colocaram em &quot;Entregar ao professor&quot;." />
                             <!-- Wider than the shared 64 so "Pasta da turma" (76px) stays on one line: while a
                                  lesson is on, the class's name (Caption) takes the label's second line. -->
                             <local:ToolbarButton x:Name="ClassFolderButton" Content="Pasta da turma" Icon="&#xE8F7;" Width="84"
-                                                 Click="OnClassFolderClicked" OpensOptions="True"
+                                                 local:DeviceActions.Action="ClassFolder" Click="OnClassFolderClicked" OpensOptions="True"
                                                  ToolTip="Escolhe a turma da aula: o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
                         </StackPanel>
                         <ContentControl Content="Turma" Style="{StaticResource ToolbarGroupCaption}" />
@@ -126,19 +126,19 @@
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource ProgramasBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" local:DeviceActions.Action="OpenWebsite" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
                                                  ToolTip="Abre um site no navegador da turma toda." />
-                            <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" Click="OnOpenProgramClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" local:DeviceActions.Action="OpenProgram" Click="OnOpenProgramClassClicked" OpensOptions="True"
                                                  ToolTip="Abre um programa na turma toda, como o Executar do Windows (ex.: powershell)." />
-                            <local:ToolbarButton Content="Instalar programa" Icon="&#xE7B8;" Click="OnInstallClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Instalar programa" Icon="&#xE7B8;" local:DeviceActions.Action="Install" Click="OnInstallClassClicked" OpensOptions="True"
                                                  ToolTip="Instala um programa na turma toda, como administrador, sem a tela do UAC e sem digitar senha." />
-                            <local:ToolbarButton Content="Desinstalar programa" Icon="&#xE74D;" Click="OnUninstallClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Desinstalar programa" Icon="&#xE74D;" local:DeviceActions.Action="Uninstall" Click="OnUninstallClassClicked" OpensOptions="True"
                                                  ToolTip="Desinstala programas das máquinas da turma (lista a partir de uma máquina)." />
-                            <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" Click="OnCloseAppsClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" local:DeviceActions.Action="CloseApps" Click="OnCloseAppsClassClicked" OpensOptions="True"
                                                  ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
-                            <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" Click="OnBlockAppsClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsClassClicked" OpensOptions="True"
                                                  ToolTip="Impede programas de abrir nas máquinas da turma." />
-                            <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" Click="OnSiteBlockClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" local:DeviceActions.Action="BlockSites" Click="OnSiteBlockClassClicked" OpensOptions="True"
                                                  ToolTip="Bloqueia a internet inteira ou alguns sites na turma." />
                         </StackPanel>
                         <ContentControl Content="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
@@ -148,7 +148,7 @@
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource ConfigurarBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" Click="OnLabConfigClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" local:DeviceActions.Action="LabConfig" Click="OnLabConfigClassClicked" OpensOptions="True"
                                                  ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, Edge, sites de distração, travas (barra de tarefas, Área de Trabalho e downloads) e limpar os perfis do Chrome." />
                             <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
                                                  ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
@@ -178,16 +178,6 @@
                     <ToggleButton x:Name="OnlineOnlyButton" Content="Só online" Click="OnOnlineOnlyClicked" Padding="10,2" FontSize="12"
                                   Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
                                   ToolTip="Mostra só as máquinas ligadas e respondendo; as desligadas ou sem resposta saem da grade. As ações para a turma toda continuam valendo para todas as máquinas." />
-                    <!-- DeviceFilter: all the machines, only the computers or only the phones. -->
-                    <ToggleButton x:Name="AllDevicesButton" Content="Todos" Click="OnAllDevicesClicked" Padding="10,2" FontSize="12"
-                                  Margin="12,0,0,0" Style="{StaticResource FilterToggleButton}"
-                                  ToolTip="Mostra computadores e celulares." />
-                    <ToggleButton x:Name="ComputersButton" Content="Computadores" Click="OnComputersClicked" Padding="10,2" FontSize="12"
-                                  Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
-                                  ToolTip="Mostra só os computadores. As ações para a turma toda continuam valendo para todas as máquinas." />
-                    <ToggleButton x:Name="PhonesButton" Content="Celulares" Click="OnPhonesClicked" Padding="10,2" FontSize="12"
-                                  Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
-                                  ToolTip="Mostra só os celulares. As ações para a turma toda continuam valendo para todas as máquinas." />
                     <Button Click="OnSmallerTilesClicked" Padding="6,3" Margin="12,0,6,0"
                             ToolTip="Telas menores, para ver mais máquinas de uma vez (Ctrl + roda do mouse ou Ctrl -).">
                         <TextBlock Text="&#xE71F;" FontFamily="{StaticResource IconFont}" FontSize="12" />
@@ -202,6 +192,21 @@
                 <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource TextMutedBrush}" FontSize="13" TextWrapping="Wrap"
                            VerticalAlignment="Center" />
             </DockPanel>
+        </Border>
+
+        <!-- DeviceFilter: all the machines, only the computers or only the phones. -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource BackgroundBrush}" Padding="14,0,14,6">
+            <StackPanel Orientation="Horizontal">
+                <ToggleButton x:Name="AllDevicesButton" Content="Todos" Click="OnAllDevicesClicked" Padding="10,2" FontSize="12"
+                              Style="{StaticResource FilterToggleButton}"
+                              ToolTip="Mostra computadores e celulares." />
+                <ToggleButton x:Name="ComputersButton" Content="Computadores" Click="OnComputersClicked" Padding="10,2" FontSize="12"
+                              Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
+                              ToolTip="Mostra só os computadores." />
+                <ToggleButton x:Name="PhonesButton" Content="Celulares" Click="OnPhonesClicked" Padding="10,2" FontSize="12"
+                              Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
+                              ToolTip="Mostra só os celulares. Os celulares ficam de fora das ações que ainda não funcionam neles." />
+            </StackPanel>
         </Border>
 
         <Grid Background="{StaticResource BackgroundBrush}">
@@ -277,33 +282,33 @@
                                             <MenuItem Tag="varias" Focusable="False" IsHitTestVisible="False" FontWeight="SemiBold" Visibility="Collapsed" />
                                             <Separator Tag="varias" Visibility="Collapsed" />
                                             <!-- Energia first, as on the toolbar. -->
-                                            <MenuItem Header="Desligar..." Click="OnPowerMachineClicked" />
-                                            <MenuItem Header="Reiniciar..." Click="OnRestartMachineClicked" />
-                                            <MenuItem Header="Ligar" Click="OnWakeMachineClicked" />
+                                            <MenuItem Header="Desligar..." local:DeviceActions.Action="Power" Click="OnPowerMachineClicked" />
+                                            <MenuItem Header="Reiniciar..." local:DeviceActions.Action="Power" Click="OnRestartMachineClicked" />
+                                            <MenuItem Header="Ligar" local:DeviceActions.Action="Wake" Click="OnWakeMachineClicked" />
                                             <Separator />
-                                            <MenuItem Tag="uma" Header="Ver a tela" Click="OnViewMachineClicked" />
-                                            <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" Click="OnControlMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Ver a tela" local:DeviceActions.Action="View" Click="OnViewMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" local:DeviceActions.Action="Control" Click="OnControlMachineClicked" />
                                             <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
-                                            <MenuItem Tag="bloqueio" Header="Bloquear a tela" Click="OnScreenLockMachineClicked" />
+                                            <MenuItem Tag="bloqueio" Header="Bloquear a tela" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockMachineClicked" />
                                             <Separator />
-                                            <MenuItem Header="Enviar mensagem..." Click="OnMessageMachineClicked" />
-                                            <MenuItem Tag="uma" Header="Conversar (chat)..." Click="OnChatMachineClicked" />
-                                            <MenuItem Header="Enviar arquivo..." Click="OnFileMachineClicked" />
-                                            <MenuItem Header="Recolher arquivos..." Click="OnCollectMachineClicked" />
+                                            <MenuItem Header="Enviar mensagem..." local:DeviceActions.Action="Message" Click="OnMessageMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Conversar (chat)..." local:DeviceActions.Action="Chat" Click="OnChatMachineClicked" />
+                                            <MenuItem Header="Enviar arquivo..." local:DeviceActions.Action="SendFile" Click="OnFileMachineClicked" />
+                                            <MenuItem Header="Recolher arquivos..." local:DeviceActions.Action="CollectFiles" Click="OnCollectMachineClicked" />
                                             <!-- Filled with the saved items when opened (MainWindow.LaunchMenu.cs). -->
-                                            <MenuItem Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
+                                            <MenuItem local:DeviceActions.Action="OpenWebsite" Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
                                                 <MenuItem Header="Outro site..." Click="OnOpenWebsiteMachineClicked" />
                                             </MenuItem>
-                                            <MenuItem Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
+                                            <MenuItem local:DeviceActions.Action="OpenProgram" Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
                                                 <MenuItem Header="Outro programa..." Click="OnOpenProgramMachineClicked" />
                                             </MenuItem>
                                             <Separator />
-                                            <MenuItem Header="Fechar programas..." Click="OnCloseAppsMachineClicked" />
-                                            <MenuItem Header="Bloquear programas..." Click="OnBlockAppsMachineClicked" />
-                                            <MenuItem Header="Bloquear sites..." Click="OnSiteBlockMachineClicked" />
-                                            <MenuItem Header="Painel do laboratório..." Click="OnLabConfigMachineClicked" />
-                                            <MenuItem Header="Instalar programa..." Click="OnInstallMachineClicked" />
-                                            <MenuItem Tag="uma" Header="Desinstalar programa..." Click="OnUninstallMachineClicked" />
+                                            <MenuItem Header="Fechar programas..." local:DeviceActions.Action="CloseApps" Click="OnCloseAppsMachineClicked" />
+                                            <MenuItem Header="Bloquear programas..." local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsMachineClicked" />
+                                            <MenuItem Header="Bloquear sites..." local:DeviceActions.Action="BlockSites" Click="OnSiteBlockMachineClicked" />
+                                            <MenuItem Header="Painel do laboratório..." local:DeviceActions.Action="LabConfig" Click="OnLabConfigMachineClicked" />
+                                            <MenuItem Header="Instalar programa..." local:DeviceActions.Action="Install" Click="OnInstallMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
                                             <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
                                             <Separator Tag="uma" />
                                             <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />

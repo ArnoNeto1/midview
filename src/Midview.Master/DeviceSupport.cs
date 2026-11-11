@@ -34,6 +34,11 @@ public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind == DeviceKind.Windows;
 
+    // The machines that can do the action, in order: what a feature that
+    // phones do not take part in (the class folder, the Windows update) is fed.
+    public static IReadOnlyList<KnownMachine> Only(IEnumerable<KnownMachine> machines, ToolbarAction action) =>
+        machines.Where(machine => Supports(machine.Kind, action)).ToList();
+
     // True when at least one of the machines can do it.
     public static bool IsEnabled(IReadOnlyCollection<KnownMachine> selected, ToolbarAction action) =>
         selected.Any(machine => Supports(machine.Kind, action));
@@ -50,4 +55,23 @@ public static class DeviceSupport
             _ => $"{leftOut} celulares ficaram de fora: essa ação ainda não funciona em celular.",
         };
     }
+}
+
+// The action a toolbar button or a tile's menu item stands for, set in the
+// XAML ("Power", "SendFile"...): MainWindow greys the ones that do not work
+// on the machines they would reach.
+public static class DeviceActions
+{
+    public static readonly System.Windows.DependencyProperty ActionProperty =
+        System.Windows.DependencyProperty.RegisterAttached(
+            "Action", typeof(string), typeof(DeviceActions), new System.Windows.PropertyMetadata(null));
+
+    public static string? GetAction(System.Windows.DependencyObject element) =>
+        (string?)element.GetValue(ActionProperty);
+
+    public static void SetAction(System.Windows.DependencyObject element, string? value) =>
+        element.SetValue(ActionProperty, value);
+
+    public static ToolbarAction? Of(System.Windows.DependencyObject element) =>
+        Enum.TryParse<ToolbarAction>(GetAction(element), out var action) ? action : null;
 }

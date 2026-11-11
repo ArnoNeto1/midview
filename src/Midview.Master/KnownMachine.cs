@@ -26,9 +26,12 @@ public sealed record KnownMachine(
             : this;
 
     // For the entry edited by hand ("Editar a máquina"), which can't say
-    // what kind of device it is: a phone stays a phone.
+    // what kind of device it is: a phone stays a phone, as long as the entry
+    // still points to the same host (a new PC that only shares the name is not it).
     public KnownMachine KeepingKindOf(KnownMachine previous) =>
-        Kind == DeviceKind.Windows ? this with { Kind = previous.Kind } : this;
+        Kind == DeviceKind.Windows && string.Equals(HostAddress, previous.HostAddress, StringComparison.OrdinalIgnoreCase)
+            ? this with { Kind = previous.Kind }
+            : this;
 
     // The same roster entry, whether or not its MAC address was learned in
     // the meantime.
