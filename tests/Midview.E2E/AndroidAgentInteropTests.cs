@@ -183,6 +183,32 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
         Assert.Equal((false, "este celular não bloqueia a tela"), status.Task.Result);
     }
 
+    // The same lock on a phone made Device Owner (MIDVIEW_ANDROID_DEVICE_OWNER=1):
+    // locked while the keeper lives, released when it is disposed. With adb set
+    // (MIDVIEW_ANDROID_ADB / MIDVIEW_ANDROID_SERIAL) the phone's own state is
+    // read too; without it the answers of the keeper are what is checked.
+    [AndroidDeviceOwnerFact]
+    public void Lock_on_phone_answers_and_releases()
+    {
+        using var teacher = Teacher();
+        var machine = Pair(teacher);
+        var status = new TaskCompletionSource<(bool Locked, string Detail)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (var keeper = new ScreenLockKeeper(machine, teacher, SessionPort))
+        {
+            keeper.StatusChanged += (locked, detail) => status.TrySetResult((locked, detail));
+            keeper.Start();
+            Assert.True(status.Task.Wait(TimeSpan.FromSeconds(15)), "no answer to LockScreen in 15 s");
+            output.WriteLine($"lock: {status.Task.Result}");
+            Assert.True(status.Task.Result.Locked, status.Task.Result.Detail);
+            Thread.Sleep(ScreenLockKeeper.HeartbeatInterval * 2);
+        }
+
+        // Closed: the phone lets go at once (its own silence limit is 15 s).
+        Thread.Sleep(TimeSpan.FromSeconds(2));
+        output.WriteLine("released: keeper disposed");
+    }
+
     [AndroidLanFact]
     public void Search_finds_the_phone()
     {
@@ -287,6 +313,18 @@ public class AndroidFactAttribute : FactAttribute
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_HOST")))
         {
             Skip = "MIDVIEW_ANDROID_HOST is not set: no Android agent to test against";
+        }
+    }
+}
+
+// One that also needs a phone made Device Owner (the lock only works on it).
+public sealed class AndroidDeviceOwnerFactAttribute : AndroidFactAttribute
+{
+    public AndroidDeviceOwnerFactAttribute()
+    {
+        if (Skip is null && Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_DEVICE_OWNER") != "1")
+        {
+            Skip = "MIDVIEW_ANDROID_DEVICE_OWNER=1 is not set: the test phone is not Device Owner";
         }
     }
 }

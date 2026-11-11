@@ -40,6 +40,26 @@ public class ViewWindowFitTests
         Assert.Equal(540, size.Height, 6);
     }
 
+    [Fact]
+    public void Portrait_screen_fits_the_view_window()
+    {
+        // A 720x1650 phone in the room of a Full HD teacher: standing, no bands.
+        var size = ViewWindowFit.ClientSize(720, 1650, 1, 1, new Size(1904, 1001));
+
+        Assert.Equal(1001, size.Height, 6);
+        Assert.Equal(1001 * 720.0 / 1650, size.Width, 6);
+        Assert.True(size.Height > size.Width);
+    }
+
+    [Fact]
+    public void Portrait_screen_on_a_scaled_screen_keeps_its_shape()
+    {
+        var size = ViewWindowFit.ClientSize(559, 1280, 1.5, 1.5, new Size(1269, 667));
+
+        Assert.Equal(559.0 / 1280, size.Width / size.Height, 6);
+        Assert.True(size.Height <= 667 + 1e-9);
+    }
+
     [Theory]
     [InlineData(0, 1080, 1, 1, 1000, 1000)]
     [InlineData(1920, 0, 1, 1, 1000, 1000)]

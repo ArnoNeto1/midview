@@ -27,12 +27,17 @@ public enum ToolbarAction
     Update,
 }
 
-// What each kind of device accepts. A phone supports none of them yet; the
-// plans that teach the Android agent to watch the screen, lock it, block
-// programs and sites and update itself turn those on here.
+// What each kind of device accepts. A phone can have its screen watched and
+// locked; the plans that teach the Android agent to block programs and sites
+// and update itself turn the rest on here. Control stays for computers.
 public static class DeviceSupport
 {
-    public static bool Supports(DeviceKind kind, ToolbarAction action) => kind == DeviceKind.Windows;
+    public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
+    {
+        DeviceKind.Windows => true,
+        DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.ScreenLock,
+        _ => false,
+    };
 
     // The machines that can do the action, in order: what a feature that
     // phones do not take part in (the class folder, the Windows update) is fed.

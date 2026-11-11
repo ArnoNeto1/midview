@@ -69,6 +69,48 @@ public class ScreenLockKeeperTests
         Assert.Equal((false, "esta máquina não bloqueia a tela"), statuses.Last());
     }
 
+    // A phone that is not Device Owner answers LockScreen with this refusal;
+    // the tile and the status line then say why, and the keeper tries again later.
+    [Fact]
+    public async Task Keeper_shows_refusal_from_phone_that_is_not_owner()
+    {
+        const string Refusal = "este celular não bloqueia a tela";
+        using var phoneCertificate = SelfSignedCertificate.Create("phone-under-test");
+        using var masterCertificate = SelfSignedCertificate.Create("master-under-test");
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var phone = Task.Run(() =>
+        {
+            using var client = listener.AcceptTcpClient();
+            using var channel = SecureChannel.AuthenticateAsServer(
+                client, phoneCertificate, new TrustStore(new[] { masterCertificate.Thumbprint }));
+            Assert.Equal(MessageType.LockScreen, channel.Receive().Type);
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(false, Refusal)));
+            try
+            {
+                channel.Receive();
+            }
+            catch (Exception)
+            {
+                // The keeper hung up.
+            }
+        });
+        var machine = new KnownMachine("Cel 01", "127.0.0.1", phoneCertificate.Thumbprint, phoneCertificate.Thumbprint, Kind: DeviceKind.Android);
+        var statuses = new StatusLog();
+        using (var keeper = new ScreenLockKeeper(machine, masterCertificate, port))
+        {
+            keeper.StatusChanged += statuses.Add;
+            keeper.Start();
+            await WaitUntil(() => statuses.Count > 0);
+        }
+        listener.Stop();
+
+        Assert.Equal((false, Refusal), statuses.Last());
+        Assert.Equal(("⚠ Não bloqueou (este celular não bloqueia a tela)", true),
+                     ScreenLockText.Badge(false, wasLocked: false, Refusal));
+    }
+
     private static int FreePort()
     {
         var probe = new TcpListener(IPAddress.Loopback, 0);

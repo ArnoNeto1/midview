@@ -25,6 +25,7 @@ public partial class ViewControlWindow : MidviewWindow
     private readonly KnownMachine? _machine;
     private readonly X509Certificate2? _masterCertificate;
     private ControlLockKeeper? _lockKeeper;
+    private readonly bool _isPhone;
 
     // 1 while a DrawChanges is waiting to run on the window's thread.
     private int _drawScheduled;
@@ -44,6 +45,9 @@ public partial class ViewControlWindow : MidviewWindow
         _endpoint = endpoint;
         _machine = machine;
         _masterCertificate = masterCertificate;
+        // A phone is only watched: no StartControl is ever sent to it.
+        _isPhone = machine?.IsPhone == true;
+        control &= !_isPhone;
 
         // Asks for the screen as ScreenFrame updates, which starts it; a
         // Session from before that ignores the type and sends FrameTile,
@@ -437,6 +441,10 @@ public partial class ViewControlWindow : MidviewWindow
 
     private void OnControlClicked(object sender, RoutedEventArgs e)
     {
+        if (_isPhone)
+        {
+            return;
+        }
         RunOrCloseOnFailure(() =>
         {
             if (_controlling)
@@ -458,9 +466,12 @@ public partial class ViewControlWindow : MidviewWindow
     {
         Title = $"Midview - {(_controlling ? "controlando" : "vendo")} {_machineName}";
         ControlButton.Content = _controlling ? "Parar de controlar (só ver)" : "Controlar";
+        ControlButton.Visibility = _isPhone ? Visibility.Collapsed : Visibility.Visible;
         ModeTextBlock.Content = _controlling
             ? "Controlando: o teclado e o mouse do aluno estão travados."
-            : "Só vendo: o aluno continua usando o computador normalmente.";
+            : _isPhone
+                ? "Só vendo: o aluno continua usando o celular normalmente."
+                : "Só vendo: o aluno continua usando o computador normalmente.";
         // The chip is accent-colored while controlling, muted while only viewing.
         ModeTextBlock.Background = (Brush)FindResource(_controlling ? "AccentSoftBrush" : "CardBrush");
         ModeTextBlock.Foreground = (Brush)FindResource(_controlling ? "AccentTextBrush" : "TextMutedBrush");

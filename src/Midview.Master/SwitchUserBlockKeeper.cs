@@ -25,6 +25,10 @@ public sealed class SwitchUserBlockKeeper : IDisposable
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
     private const int ReplyTimeoutMs = 10_000;
 
+    // Only a PC with a paired Agent has the port (28900) this is held on; a phone has none.
+    public static bool AppliesTo(KnownMachine machine) =>
+        !machine.IsPhone && machine.AgentThumbprint is { Length: > 0 };
+
     private readonly KnownMachine _machine;
     private readonly string _agentThumbprint;
     private readonly X509Certificate2 _masterCertificate;

@@ -22,13 +22,51 @@ public class DeviceSupportTests
 
     [Theory]
     [InlineData(ToolbarAction.View)]
+    [InlineData(ToolbarAction.Control)]
+    [InlineData(ToolbarAction.ScreenLock)]
     [InlineData(ToolbarAction.Power)]
     [InlineData(ToolbarAction.BlockSites)]
     [InlineData(ToolbarAction.Update)]
-    public void Computers_support_every_action_and_phones_none_yet(ToolbarAction action)
-    {
+    public void Computers_support_every_action(ToolbarAction action) =>
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
-        Assert.False(DeviceSupport.Supports(DeviceKind.Android, action));
+
+    [Fact]
+    public void Phone_supports_view_and_screen_lock_only()
+    {
+        foreach (var action in Enum.GetValues<ToolbarAction>())
+        {
+            var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock;
+            Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
+        }
+    }
+
+    [Fact]
+    public void Phone_only_selection_keeps_control_grey_but_view_and_lock_on()
+    {
+        var selected = new[] { Phone("Cel 01") };
+
+        Assert.True(DeviceSupport.IsEnabled(selected, ToolbarAction.View));
+        Assert.True(DeviceSupport.IsEnabled(selected, ToolbarAction.ScreenLock));
+        Assert.False(DeviceSupport.IsEnabled(selected, ToolbarAction.Control));
+    }
+
+    [Fact]
+    public void Lock_of_a_mixed_class_leaves_no_phone_out() =>
+        Assert.Null(DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01") }, ToolbarAction.ScreenLock));
+
+    [Fact]
+    public void Control_of_a_phone_is_left_out() =>
+        Assert.Equal("1 celular ficou de fora: essa ação ainda não funciona em celular.",
+                     DeviceSupport.LeftOutNotice(new[] { Phone("Cel 01") }, ToolbarAction.Control));
+
+    // The Ctrl+Alt+Del escapes are a Windows Agent thing (port 28900): a phone has no Agent for it.
+    [Fact]
+    public void Phone_lock_does_not_start_switch_user_block()
+    {
+        Assert.True(SwitchUserBlockKeeper.AppliesTo(new KnownMachine("PC 01", "192.0.2.1", "ANY", "AGENT")));
+        Assert.False(SwitchUserBlockKeeper.AppliesTo(new KnownMachine("PC 02", "192.0.2.2", "ANY", null)));
+        Assert.False(SwitchUserBlockKeeper.AppliesTo(
+            new KnownMachine("Cel 01", "192.0.2.9", "ANY", "AGENT", Kind: DeviceKind.Android)));
     }
 
     [Fact]

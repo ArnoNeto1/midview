@@ -843,8 +843,8 @@ public partial class MainWindow : MidviewWindow
         // Also close the Ctrl+Alt+Del escapes while it's locked (switch user, the
         // Task Manager, sign out, lock, change password, power), so the student can't get past the lock. Only when
         // the Agent thumbprint is known (machines paired before it simply keep
-        // the screen lock without this).
-        if (tile.Machine.AgentThumbprint is { } agentThumbprint)
+        // the screen lock without this). Never for a phone: it has no such Agent.
+        if (SwitchUserBlockKeeper.AppliesTo(tile.Machine) && tile.Machine.AgentThumbprint is { } agentThumbprint)
         {
             var block = new SwitchUserBlockKeeper(tile.Machine, agentThumbprint, _masterCertificate);
             _switchUserBlocks[tile] = block;
