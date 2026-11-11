@@ -1,5 +1,7 @@
 # Assistente "Preparar celulares" Implementation Plan
 
+> **Substituído** em 2026-11-11 por `2026-11-11-assistente-preparar-celulares-cabo.md`: o Google bloqueou o QR para o agente, e a spec revisada prepara o celular pelo cabo USB.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Qualquer professor prepara sozinho os celulares Xiaomi da escola por um assistente de um passo por vez no Midview do professor; cada celular escaneia um QR com o seu número, entra na turma sozinho como "Celular 07" (sem código de 6 dígitos) e pode ser apagado e preparado de novo por um botão.
