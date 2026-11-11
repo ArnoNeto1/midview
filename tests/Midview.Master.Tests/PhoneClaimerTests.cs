@@ -1,0 +1,104 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using Midview.Master;
+using Midview.Protocol;
+using Xunit;
+
+public class PhoneClaimerTests : IDisposable
+{
+    private static readonly string Session = new('7', 40);
+
+    private readonly X509Certificate2 _agentCert = SelfSignedCertificate.Create("phone-under-test");
+    private readonly X509Certificate2 _teacher = SelfSignedCertificate.Create("teacher-under-test");
+
+    public void Dispose()
+    {
+        _agentCert.Dispose();
+        _teacher.Dispose();
+    }
+
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private (int Port, Task Done) FakeAgent(Action<SecureChannel> script)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var done = OwnThread(() =>
+        {
+            try
+            {
+                using var client = listener.AcceptTcpClient();
+                client.ReceiveTimeout = 30_000;
+                using var channel = SecureChannel.AuthenticateAsServerAcceptingAnyClient(client, _agentCert);
+                script(channel);
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        });
+        return (port, done);
+    }
+
+    [Fact]
+    public async Task Claim_sends_token_and_teacher_and_returns_the_phone()
+    {
+        PhoneClaimRequest? seen = null;
+        var (port, done) = FakeAgent(channel =>
+        {
+            var message = channel.Receive();
+            Assert.Equal(MessageType.ClaimPhone, message.Type);
+            seen = PhoneClaimRequest.Decode(message.Payload);
+            channel.Send(new Message(MessageType.PairDone,
+                new PairingResult("Celular 07", Session, null, DeviceKindText.AndroidWire).Encode()));
+        });
+
+        var machine = await OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(new PhoneClaimRequest("tok-abc", "PROF-01"), seen);
+        Assert.Equal("Celular 07", machine.Name);
+        Assert.True(machine.IsPhone);
+        Assert.Equal(_agentCert.Thumbprint, machine.AgentThumbprint);
+        Assert.Equal(Session, machine.SessionThumbprint);
+    }
+
+    [Fact]
+    public async Task Claim_refused_carries_the_text()
+    {
+        var (port, done) = FakeAgent(channel =>
+        {
+            channel.Receive();
+            channel.Send(new Message(MessageType.PairRefused, Encoding.UTF8.GetBytes("Este celular não espera este computador.")));
+        });
+
+        var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("Este celular não espera este computador.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Claim_answered_by_CommandAck_is_an_old_agent()
+    {
+        var (port, done) = FakeAgent(channel =>
+        {
+            channel.Receive();
+            channel.Send(new Message(MessageType.CommandAck, Array.Empty<byte>()));
+        });
+
+        var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(PairingSession.OldAgent, ex.Message);
+    }
+}

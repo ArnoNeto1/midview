@@ -79,4 +79,27 @@ public class PendingPhoneClaimsFileTests : IDisposable
             Assert.DoesNotContain("segredo-token", System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file)));
         }
     }
+
+    [Fact]
+    public void Concurrent_Add_and_Remove_on_different_numbers_lose_nothing()
+    {
+        for (var round = 0; round < 20; round++)
+        {
+            var folder = Path.Combine(_folder, "r" + round);
+            var kept = Enumerable.Range(0, 15).Select(i => new PendingPhoneClaim("K" + i, "keep-" + i, Now.AddHours(1))).ToList();
+            var doomed = Enumerable.Range(0, 15).Select(i => new PendingPhoneClaim("D" + i, "drop-" + i, Now.AddHours(1))).ToList();
+            foreach (var c in doomed)
+            {
+                PendingPhoneClaimsFile.Add(c, folder);
+            }
+
+            var adds = Task.Run(() => Parallel.ForEach(kept, c => PendingPhoneClaimsFile.Add(c, folder)));
+            var removes = Task.Run(() => Parallel.ForEach(doomed, c => PendingPhoneClaimsFile.Remove(c.Token, folder)));
+            Task.WaitAll(adds, removes);
+
+            Assert.Equal(
+                kept.Select(c => c.Token).OrderBy(t => t),
+                PendingPhoneClaimsFile.LoadValid(Now, folder).Select(c => c.Token).OrderBy(t => t));
+        }
+    }
 }

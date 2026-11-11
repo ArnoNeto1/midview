@@ -6,7 +6,7 @@ namespace Midview.Master;
 
 // A machine that answered "Procurar na rede". Address is where the answer
 // came from.
-public sealed record FoundMachine(string Name, string Address, string AgentThumbprint, string Teachers, bool NewTeacherOpen, DeviceKind Kind = DeviceKind.Windows);
+public sealed record FoundMachine(string Name, string Address, string AgentThumbprint, string Teachers, bool NewTeacherOpen, DeviceKind Kind = DeviceKind.Windows, string? ClaimId = null);
 
 // The Master's side of Discovery: one probe to every target (broadcasts and
 // local subnet hosts, see WakeOnLanSender.DiscoveryTargets), then the answers
@@ -112,7 +112,7 @@ public static class DiscoveryClient
             .Select(group => group.First())
             .Select(answer => new FoundMachine(
                 answer.Reply.Name, answer.From.ToString(), answer.Reply.AgentThumbprint.ToUpperInvariant(),
-                answer.Reply.Teachers, answer.Reply.NewTeacherOpen, answer.Reply.Kind))
+                answer.Reply.Teachers, answer.Reply.NewTeacherOpen, answer.Reply.Kind, answer.Reply.ClaimId))
             .OrderBy(machine => machine.Name, NaturalOrder.Instance)
             .ToList();
 }

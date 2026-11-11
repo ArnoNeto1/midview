@@ -14,36 +14,49 @@ public sealed record PendingPhoneClaim(string Number, string Token, DateTimeOffs
 // are proofs of use and must not be readable by another Windows user.
 public static class PendingPhoneClaimsFile
 {
+    // The UI thread (Add) and the watcher on the thread pool (Remove) both
+    // read-modify-write the same file: one at a time.
+    private static readonly object Gate = new();
+
     private static string PathIn(string? folder) => Path.Combine(folder ?? MasterData.Folder, "phone-claims.bin");
 
     // Claims still valid at "now"; expired ones are dropped and the file is
     // rewritten without them. Missing or damaged file: empty list, no throw.
     public static IReadOnlyList<PendingPhoneClaim> LoadValid(DateTimeOffset now, string? folder = null)
     {
-        var all = Read(folder);
-        var valid = all.Where(c => c.ExpiresAt >= now).ToList();
-        if (valid.Count != all.Count)
+        lock (Gate)
         {
-            TryWrite(valid, folder);
+            var all = Read(folder);
+            var valid = all.Where(c => c.ExpiresAt >= now).ToList();
+            if (valid.Count != all.Count)
+            {
+                TryWrite(valid, folder);
+            }
+            return valid;
         }
-        return valid;
     }
 
     // A number already pending is replaced by the new claim.
     public static void Add(PendingPhoneClaim claim, string? folder = null)
     {
-        var list = Read(folder).Where(c => c.Number != claim.Number).ToList();
-        list.Add(claim);
-        Write(list, folder);
+        lock (Gate)
+        {
+            var list = Read(folder).Where(c => c.Number != claim.Number).ToList();
+            list.Add(claim);
+            Write(list, folder);
+        }
     }
 
     public static void Remove(string token, string? folder = null)
     {
-        var all = Read(folder);
-        var rest = all.Where(c => c.Token != token).ToList();
-        if (rest.Count != all.Count)
+        lock (Gate)
         {
-            Write(rest, folder);
+            var all = Read(folder);
+            var rest = all.Where(c => c.Token != token).ToList();
+            if (rest.Count != all.Count)
+            {
+                Write(rest, folder);
+            }
         }
     }
 
@@ -80,7 +93,7 @@ public static class PendingPhoneClaimsFile
         var blob = ProtectedData.Protect(
             Encoding.UTF8.GetBytes(JsonSerializer.Serialize(list)), optionalEntropy: null, DataProtectionScope.CurrentUser);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temp = path + ".tmp";
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         File.WriteAllBytes(temp, blob);
         File.Move(temp, path, overwrite: true);
     }
