@@ -1,0 +1,319 @@
+{
+  "fps": 30,
+  "comeco": 0.25,
+  "trilha": {
+    "arquivo": "trilha-b",
+    "impactoNaTrilha": 19.24,
+    "impactoNaCena": "chamada"
+  },
+  "cenas": [
+    {
+      "id": "gancho",
+      "arquivo": "v-gancho",
+      "folga": 0.2,
+      "legendas": [
+        [
+          {
+            "texto": "Um"
+          },
+          {
+            "texto": "jogando,",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "outro"
+          },
+          {
+            "texto": "no"
+          },
+          {
+            "texto": "site"
+          },
+          {
+            "texto": "errado,",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "e"
+          },
+          {
+            "texto": "ninguém"
+          },
+          {
+            "texto": "te"
+          },
+          {
+            "texto": "ouve.",
+            "forte": true
+          }
+        ]
+      ],
+      "efeitos": []
+    },
+    {
+      "id": "chamada",
+      "arquivo": "v-chamada",
+      "folga": 0.3,
+      "legendas": [
+        [
+          {
+            "texto": "Olha"
+          },
+          {
+            "texto": "como"
+          },
+          {
+            "texto": "o"
+          },
+          {
+            "texto": "Midview"
+          },
+          {
+            "texto": "resolve.",
+            "forte": true
+          }
+        ]
+      ],
+      "efeitos": []
+    },
+    {
+      "id": "p1",
+      "arquivo": "v-p1",
+      "folga": 0.6,
+      "legendas": [
+        [
+          {
+            "texto": "Um"
+          },
+          {
+            "texto": "clique:",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "todas"
+          },
+          {
+            "texto": "as"
+          },
+          {
+            "texto": "telas"
+          },
+          {
+            "texto": "bloqueadas.",
+            "forte": true
+          }
+        ]
+      ],
+      "efeitos": [
+        {
+          "tipo": "clique",
+          "em": 0.75
+        },
+        {
+          "tipo": "trava",
+          "em": 0.9
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "arquivo": "v-p2",
+      "folga": 0.5,
+      "legendas": [
+        [
+          {
+            "texto": "Outro"
+          },
+          {
+            "texto": "clique"
+          },
+          {
+            "texto": "fecha"
+          },
+          {
+            "texto": "os"
+          },
+          {
+            "texto": "programas,",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "com"
+          },
+          {
+            "texto": "aviso",
+            "forte": true
+          },
+          {
+            "texto": "para"
+          },
+          {
+            "texto": "o"
+          },
+          {
+            "texto": "aluno"
+          },
+          {
+            "texto": "salvar."
+          }
+        ]
+      ],
+      "efeitos": [
+        {
+          "tipo": "clique",
+          "em": 0.6
+        },
+        {
+          "tipo": "varredura",
+          "em": 1.85
+        }
+      ]
+    },
+    {
+      "id": "p3",
+      "arquivo": "v-p3",
+      "folga": 0.6,
+      "legendas": [
+        [
+          {
+            "texto": "Jogo"
+          },
+          {
+            "texto": "na"
+          },
+          {
+            "texto": "aula?"
+          }
+        ],
+        [
+          {
+            "texto": "Programa"
+          },
+          {
+            "texto": "bloqueado.",
+            "forte": true
+          }
+        ]
+      ],
+      "efeitos": [
+        {
+          "tipo": "clique",
+          "em": 1.3
+        },
+        {
+          "tipo": "trava",
+          "em": 1.45
+        }
+      ]
+    },
+    {
+      "id": "p4",
+      "arquivo": "v-p4",
+      "folga": 0.4,
+      "legendas": [
+        [
+          {
+            "texto": "Site"
+          },
+          {
+            "texto": "errado?"
+          }
+        ],
+        [
+          {
+            "texto": "Internet"
+          },
+          {
+            "texto": "bloqueada,",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "mesmo"
+          },
+          {
+            "texto": "depois"
+          },
+          {
+            "texto": "de"
+          },
+          {
+            "texto": "reiniciar.",
+            "forte": true
+          }
+        ]
+      ],
+      "efeitos": [
+        {
+          "tipo": "clique",
+          "em": 1.45
+        },
+        {
+          "tipo": "trava",
+          "em": 1.6
+        }
+      ]
+    },
+    {
+      "id": "p5",
+      "arquivo": "v-p5",
+      "folga": 0.5,
+      "legendas": [
+        [
+          {
+            "texto": "E"
+          },
+          {
+            "texto": "a"
+          },
+          {
+            "texto": "sala"
+          },
+          {
+            "texto": "inteira"
+          }
+        ],
+        [
+          {
+            "texto": "aparece"
+          },
+          {
+            "texto": "ao"
+          },
+          {
+            "texto": "vivo,",
+            "forte": true
+          }
+        ],
+        [
+          {
+            "texto": "na"
+          },
+          {
+            "texto": "sua"
+          },
+          {
+            "texto": "tela."
+          }
+        ]
+      ],
+      "efeitos": []
+    },
+    {
+      "id": "fim",
+      "arquivo": "v-fim",
+      "folga": 1.5,
+      "legendas": [],
+      "efeitos": []
+    }
+  ]
+}

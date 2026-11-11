@@ -1,0 +1,131 @@
+{
+  "fps": 30,
+  "duracao": 52.32,
+  "locucao": [
+    {
+      "id": "cena1",
+      "arquivo": "cena1-c",
+      "de": 0,
+      "ate": null,
+      "em": 0.3
+    },
+    {
+      "id": "cena2a",
+      "arquivo": "cena2-a",
+      "de": 0,
+      "ate": 1.78,
+      "em": 11.07
+    },
+    {
+      "id": "cena2b",
+      "arquivo": "cena2-a",
+      "de": 2.7,
+      "ate": null,
+      "em": 14.77
+    },
+    {
+      "id": "cena3",
+      "arquivo": "cena3-a",
+      "de": 0,
+      "ate": null,
+      "em": 21.87
+    },
+    {
+      "id": "cena4",
+      "arquivo": "cena4-a",
+      "de": 0,
+      "ate": null,
+      "em": 41.52
+    }
+  ],
+  "trilha": {
+    "arquivo": "trilha-b",
+    "impactoNaTrilha": 19.24,
+    "impactoNoFilme": 12.82,
+    "batida": 0.6,
+    "repetirDe": 28.84,
+    "repetirBatidas": 16,
+    "fimNaTrilha": 48.4,
+    "volume": [
+      [
+        0,
+        0.25
+      ],
+      [
+        10.62,
+        0.25
+      ],
+      [
+        11.02,
+        0.08
+      ],
+      [
+        12.77,
+        0.08
+      ],
+      [
+        12.82,
+        0.42
+      ],
+      [
+        14.42,
+        0.42
+      ],
+      [
+        15.02,
+        0.095
+      ],
+      [
+        51.42,
+        0.095
+      ],
+      [
+        51.52,
+        0.14
+      ]
+    ]
+  },
+  "efeitos": [
+    {
+      "tipo": "clique",
+      "em": 22.32
+    },
+    {
+      "tipo": "trava",
+      "em": 22.45
+    },
+    {
+      "tipo": "trava",
+      "em": 24.52
+    },
+    {
+      "tipo": "clique",
+      "em": 27.12
+    },
+    {
+      "tipo": "varredura",
+      "em": 29.57
+    },
+    {
+      "tipo": "clique",
+      "em": 32.9
+    },
+    {
+      "tipo": "trava",
+      "em": 33.05
+    },
+    {
+      "tipo": "clique",
+      "em": 34.17
+    },
+    {
+      "tipo": "trava",
+      "em": 34.32
+    }
+  ],
+  "ia": {
+    "cena1": null,
+    "cena2": null,
+    "cena4": null
+  }
+}
