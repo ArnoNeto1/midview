@@ -170,6 +170,25 @@ public partial class ThumbnailPollerTests
     }
 
     [Fact]
+    public async Task Poller_skips_pc_steps_for_phones()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.WakeAddress, new byte[6]));
+        var schedule = new PowerSchedule(1000, PowerSchedule.Weekdays, null, 18 * 60);
+        var phone = session.Machine() with { AgentThumbprint = agent.Thumbprint, Kind = DeviceKind.Android };
+        using var poller = new ThumbnailPoller(
+            phone, session.MasterCertificate, session.Port, agent.Port, () => schedule, agentRetryInterval: RetryAtOnce);
+        var learned = false;
+        poller.MacAddressLearned += _ => learned = true;
+
+        await ThreeThumbnails(poller);
+
+        Assert.Equal(0, agent.Questions);
+        Assert.Empty(agent.SchedulesReceived);
+        Assert.False(learned);
+    }
+
+    [Fact]
     public async Task NoAgentThumbprint_TheAgentIsNeverAsked()
     {
         using var session = new LoopbackSession();

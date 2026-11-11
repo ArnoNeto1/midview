@@ -76,6 +76,8 @@ public partial class MainWindow : MidviewWindow
     // filtered and kept up to date as machines answer or stop answering;
     // selecting only ever reaches the tiles it shows.
     private bool _onlineOnly;
+    // "Todos / Computadores / Celulares" (GridFilter), kept the same way.
+    private DeviceFilter _devices;
     private readonly ListCollectionView _shownTiles;
 
     public MainWindow()
@@ -86,7 +88,7 @@ public partial class MainWindow : MidviewWindow
         Height = Math.Min(Height, SystemParameters.WorkArea.Height);
         MachinesItemsControl.ItemsSource = _tiles;
         _shownTiles = (ListCollectionView)CollectionViewSource.GetDefaultView(_tiles);
-        _shownTiles.Filter = item => GridFilter.Shows((MachineTile)item, _onlineOnly);
+        _shownTiles.Filter = item => GridFilter.Shows((MachineTile)item, _onlineOnly, _devices);
         _shownTiles.IsLiveFiltering = true;
         _shownTiles.LiveFilteringProperties.Add(nameof(MachineTile.Presence));
         ((INotifyCollectionChanged)_shownTiles).CollectionChanged += OnShownTilesChanged;
@@ -96,6 +98,8 @@ public partial class MainWindow : MidviewWindow
         LoadTileLayout(gridView);
         _onlineOnly = gridView.OnlineOnly;
         OnlineOnlyButton.IsChecked = _onlineOnly;
+        _devices = gridView.Devices;
+        CheckDeviceButtons();
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
         _classSync = StartClassFolder();
@@ -171,8 +175,9 @@ public partial class MainWindow : MidviewWindow
             tile.IsSelected = marked.Contains(tile);
         }
 
-        ViewButton.IsEnabled = selected.Count == 1;
-        ControlButton.IsEnabled = selected.Count == 1;
+        var machines = selected.Select(tile => tile.Machine).ToList();
+        ViewButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.View);
+        ControlButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.Control);
         StatusTextBlock.Text = selected.Count switch
         {
             0 => string.Empty,
@@ -222,7 +227,34 @@ public partial class MainWindow : MidviewWindow
     private void OnOnlineOnlyClicked(object sender, RoutedEventArgs e) => ShowOnlineOnly(OnlineOnlyButton.IsChecked == true);
 
     // The button under "Nenhuma máquina online agora".
-    private void OnShowAllMachinesClicked(object sender, RoutedEventArgs e) => ShowOnlineOnly(false);
+    private void OnShowAllMachinesClicked(object sender, RoutedEventArgs e)
+    {
+        ShowDevices(DeviceFilter.All);
+        ShowOnlineOnly(false);
+    }
+
+    private void OnAllDevicesClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.All);
+
+    private void OnComputersClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.Computers);
+
+    private void OnPhonesClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.Phones);
+
+    private void CheckDeviceButtons()
+    {
+        AllDevicesButton.IsChecked = _devices == DeviceFilter.All;
+        ComputersButton.IsChecked = _devices == DeviceFilter.Computers;
+        PhonesButton.IsChecked = _devices == DeviceFilter.Phones;
+    }
+
+    // One of the three is always on: a click on the one already on keeps it.
+    private void ShowDevices(DeviceFilter devices)
+    {
+        _devices = devices;
+        CheckDeviceButtons();
+        _shownTiles.Refresh();
+        UpdateEmptyHint();
+        SaveGridView();
+    }
 
     // The teacher turned "Só online" on or off: shown now, and the next time
     // Midview opens.
@@ -474,6 +506,11 @@ public partial class MainWindow : MidviewWindow
     private async void OpenScreen(MachineTile tile, bool control)
     {
         var machine = tile.Machine;
+        IReadOnlyList<KnownMachine> onlyThis = new[] { machine };
+        if (!SupportedTargets(ref onlyThis, control ? ToolbarAction.Control : ToolbarAction.View))
+        {
+            return;
+        }
         var key = OpenOnce<Window>.Key("tela", new[] { machine.Name });
         if (_openWindows.TryGet(key, out var open))
         {
@@ -556,7 +593,22 @@ public partial class MainWindow : MidviewWindow
     // Targets are machines of the classroom list, each once, so as many of
     // them as tiles is all of them: the windows then say "turma toda"
     // (TargetsText) instead of naming them.
-    private bool IsWholeClass(IReadOnlyList<KnownMachine> targets) => targets.Count == _tiles.Count;
+    // Phones don't count toward an action they don't support: they are not part of the class it reaches.
+    private bool IsWholeClass(IReadOnlyList<KnownMachine> targets, ToolbarAction action) =>
+        targets.Count == _tiles.Count(tile => DeviceSupport.Supports(tile.Machine.Kind, action));
+
+    // Keeps only the machines that can do the action, saying in the status
+    // bar how many were left out (DeviceSupport.LeftOutNotice). False when
+    // none is left: nothing to act on.
+    private bool SupportedTargets(ref IReadOnlyList<KnownMachine> targets, ToolbarAction action)
+    {
+        if (DeviceSupport.LeftOutNotice(targets, action) is { } notice)
+        {
+            StatusTextBlock.Text = notice;
+        }
+        targets = targets.Where(machine => DeviceSupport.Supports(machine.Kind, action)).ToList();
+        return targets.Count > 0;
+    }
 
     private static void BringBack(Window window)
     {
@@ -588,7 +640,12 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear.";
             return;
         }
-        foreach (var tile in _tiles)
+        IReadOnlyList<KnownMachine> everyone = _tiles.Select(tile => tile.Machine).ToList();
+        if (!SupportedTargets(ref everyone, ToolbarAction.ScreenLock))
+        {
+            return;
+        }
+        foreach (var tile in _tiles.Where(tile => DeviceSupport.Supports(tile.Machine.Kind, ToolbarAction.ScreenLock)))
         {
             LockScreen(tile);
         }
@@ -633,7 +690,12 @@ public partial class MainWindow : MidviewWindow
         }
         else
         {
-            foreach (var target in targets)
+            IReadOnlyList<KnownMachine> machines = targets.Select(target => target.Machine).ToList();
+            if (!SupportedTargets(ref machines, ToolbarAction.ScreenLock))
+            {
+                return;
+            }
+            foreach (var target in targets.Where(target => DeviceSupport.Supports(target.Machine.Kind, ToolbarAction.ScreenLock)))
             {
                 LockScreen(target);
             }
@@ -753,8 +815,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("arquivo", targets, () => new SendFileWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenSendFileWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.SendFile))
+        {
+            return;
+        }
+        ShowOnce("arquivo", targets, () => new SendFileWindow(targets, IsWholeClass(targets, ToolbarAction.SendFile), _masterCertificate) { Owner = this });
+    }
 
     private void OnCollectClassClicked(object sender, RoutedEventArgs e)
     {
@@ -774,8 +842,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenCollectFilesWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("recolher", targets, () => new CollectFilesWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenCollectFilesWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.CollectFiles))
+        {
+            return;
+        }
+        ShowOnce("recolher", targets, () => new CollectFilesWindow(targets, IsWholeClass(targets, ToolbarAction.CollectFiles), _masterCertificate) { Owner = this });
+    }
 
     private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -795,8 +869,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("fechar", targets, () => new CloseAppsWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenCloseAppsWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.CloseApps))
+        {
+            return;
+        }
+        ShowOnce("fechar", targets, () => new CloseAppsWindow(targets, IsWholeClass(targets, ToolbarAction.CloseApps), _masterCertificate) { Owner = this });
+    }
 
     private void OnBlockAppsClassClicked(object sender, RoutedEventArgs e)
     {
@@ -813,7 +893,11 @@ public partial class MainWindow : MidviewWindow
     // every machine selected: both are the same window (ShowOnce's key).
     private void OpenAppBlockWindow(IReadOnlyList<KnownMachine> targets)
     {
-        var wholeClass = IsWholeClass(targets);
+        if (!SupportedTargets(ref targets, ToolbarAction.BlockPrograms))
+        {
+            return;
+        }
+        var wholeClass = IsWholeClass(targets, ToolbarAction.BlockPrograms);
         ShowOnce("programas", targets, () => new AppBlockWindow(
             targets, wholeClass, _masterCertificate,
             wholeClass
@@ -846,8 +930,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenSiteBlockWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("sites", targets, () => new SiteBlockWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenSiteBlockWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.BlockSites))
+        {
+            return;
+        }
+        ShowOnce("sites", targets, () => new SiteBlockWindow(targets, IsWholeClass(targets, ToolbarAction.BlockSites), _masterCertificate) { Owner = this });
+    }
 
     private void OnLabConfigClassClicked(object sender, RoutedEventArgs e)
     {
@@ -867,8 +957,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenLabConfigWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("painel", targets, () => new LabConfigWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenLabConfigWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.LabConfig))
+        {
+            return;
+        }
+        ShowOnce("painel", targets, () => new LabConfigWindow(targets, IsWholeClass(targets, ToolbarAction.LabConfig), _masterCertificate) { Owner = this });
+    }
 
     // On the tiles' menu only, for the machines selected (drag over the grid
     // for the whole room): a toolbar button would wrap the toolbar onto a
@@ -891,8 +987,14 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void OpenInstallWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("instalar", targets, () => new InstallWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenInstallWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.Install))
+        {
+            return;
+        }
+        ShowOnce("instalar", targets, () => new InstallWindow(targets, IsWholeClass(targets, ToolbarAction.Install), _masterCertificate) { Owner = this });
+    }
 
     private void OnUninstallClassClicked(object sender, RoutedEventArgs e)
     {
@@ -901,7 +1003,11 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para desinstalar programas.";
             return;
         }
-        var classTargets = _tiles.Select(t => t.Machine).ToList();
+        IReadOnlyList<KnownMachine> classTargets = _tiles.Select(t => t.Machine).ToList();
+        if (!SupportedTargets(ref classTargets, ToolbarAction.Uninstall))
+        {
+            return;
+        }
         var listFrom = classTargets[0];
         ShowOnce("desinstalar", new[] { listFrom },
             () => new UninstallWindow(listFrom, classTargets, _masterCertificate) { Owner = this });
@@ -911,7 +1017,13 @@ public partial class MainWindow : MidviewWindow
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            var classTargets = _tiles.Select(t => t.Machine).ToList();
+            IReadOnlyList<KnownMachine> onlyThis = new[] { tile.Machine };
+            if (!SupportedTargets(ref onlyThis, ToolbarAction.Uninstall))
+            {
+                return;
+            }
+            var classTargets = _tiles.Select(t => t.Machine)
+                .Where(machine => DeviceSupport.Supports(machine.Kind, ToolbarAction.Uninstall)).ToList();
             ShowOnce("desinstalar", new[] { tile.Machine },
                 () => new UninstallWindow(tile.Machine, classTargets, _masterCertificate) { Owner = this });
         }
@@ -987,18 +1099,32 @@ public partial class MainWindow : MidviewWindow
     }
 
     // "Desligar" and "Reiniciar" each have their own, set to their action.
-    private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets, PowerAction action = PowerAction.Shutdown) =>
+    private void OpenPowerWindow(IReadOnlyList<KnownMachine> targets, PowerAction action = PowerAction.Shutdown)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.Power))
+        {
+            return;
+        }
         ShowOnce(action == PowerAction.Restart ? "reiniciar" : "desligar", targets,
-            () => new PowerWindow(targets, IsWholeClass(targets), _masterCertificate, action) { Owner = this });
+            () => new PowerWindow(targets, IsWholeClass(targets, ToolbarAction.Power), _masterCertificate, action) { Owner = this });
+    }
 
     // For the whole room, whichever machines are in it.
-    private void OnScheduleClicked(object sender, RoutedEventArgs e) =>
+    private void OnScheduleClicked(object sender, RoutedEventArgs e)
+    {
+        IReadOnlyList<KnownMachine> everyone = _tiles.Select(tile => tile.Machine).ToList();
+        if (everyone.Count > 0 && !SupportedTargets(ref everyone, ToolbarAction.Schedule))
+        {
+            return;
+        }
         ShowOnce("agendar", Array.Empty<KnownMachine>(), () => new ScheduleWindow(
-            () => _tiles.Select(tile => tile.Machine).ToList(), Volatile.Read(ref _powerSchedule), _masterCertificate,
+            () => _tiles.Select(tile => tile.Machine).Where(machine => DeviceSupport.Supports(machine.Kind, ToolbarAction.Schedule)).ToList(),
+            Volatile.Read(ref _powerSchedule), _masterCertificate,
             schedule => Volatile.Write(ref _powerSchedule, schedule))
         {
             Owner = this,
         });
+    }
 
     // One click, no window: turning machines on can't hurt (one already on
     // ignores the request), so it goes out at once.
@@ -1024,6 +1150,10 @@ public partial class MainWindow : MidviewWindow
     // the Master has learned (RememberMacAddress); the status bar says who.
     private async void Wake(IReadOnlyList<KnownMachine> machines)
     {
+        if (!SupportedTargets(ref machines, ToolbarAction.Wake))
+        {
+            return;
+        }
         var known = machines
             .Select(machine => (machine.Name, MacAddress: WakeOnLan.TryParseMacAddress(machine.MacAddress, out var mac) ? mac : null))
             .ToList();
@@ -1070,13 +1200,23 @@ public partial class MainWindow : MidviewWindow
         // One class chat at a time, whoever is in the room list now: a second
         // one would pop a second chat up on every student's screen. Machines
         // added meanwhile join when it's closed and opened again.
-        var targets = _tiles.Select(tile => tile.Machine).ToList();
+        IReadOnlyList<KnownMachine> targets = _tiles.Select(tile => tile.Machine).ToList();
+        if (!SupportedTargets(ref targets, ToolbarAction.Chat))
+        {
+            return;
+        }
         ShowOnce("bate-papo", Array.Empty<KnownMachine>(), () => new ClassChatWindow(targets, _masterCertificate) { Owner = this });
     }
 
     private void OnChatMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile)
+        {
+            return;
+        }
+
+        IReadOnlyList<KnownMachine> onlyThis = new[] { tile.Machine };
+        if (!SupportedTargets(ref onlyThis, ToolbarAction.Chat))
         {
             return;
         }
@@ -1094,8 +1234,14 @@ public partial class MainWindow : MidviewWindow
         chat.Show();
     }
 
-    private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets) =>
-        ShowOnce("mensagem", targets, () => new SendMessageWindow(targets, IsWholeClass(targets), _masterCertificate) { Owner = this });
+    private void OpenSendMessageWindow(IReadOnlyList<KnownMachine> targets)
+    {
+        if (!SupportedTargets(ref targets, ToolbarAction.Message))
+        {
+            return;
+        }
+        ShowOnce("mensagem", targets, () => new SendMessageWindow(targets, IsWholeClass(targets, ToolbarAction.Message), _masterCertificate) { Owner = this });
+    }
 
     private void OnEditMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -1192,7 +1338,7 @@ public partial class MainWindow : MidviewWindow
             {
                 // The window doesn't show the network card; saving from it
                 // must not forget the one learned.
-                updated = updated.KeepingMacAddressOf(machine);
+                updated = updated.KeepingMacAddressOf(machine).KeepingKindOf(machine);
                 RemoveTileAt(i);
                 position = i;
             }
@@ -1419,7 +1565,7 @@ public partial class MainWindow : MidviewWindow
     private void UpdateEmptyHint()
     {
         EmptyRosterPanel.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly);
+        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices);
         NoneShownText.Text = notice ?? string.Empty;
         NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
     }

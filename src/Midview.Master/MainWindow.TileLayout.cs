@@ -206,7 +206,7 @@ public partial class MainWindow
         _saveTimer.Stop();
         try
         {
-            GridViewFile.Save(GridViewFile.DefaultPath, new GridView(_tileWidth, _onlineOnly, _fitAll, _arranged));
+            GridViewFile.Save(GridViewFile.DefaultPath, new GridView(_tileWidth, _onlineOnly, _fitAll, _arranged, _devices));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

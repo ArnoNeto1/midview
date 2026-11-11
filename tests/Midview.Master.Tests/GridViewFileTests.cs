@@ -86,4 +86,21 @@ public class GridViewFileTests : IDisposable
 
         Assert.Equal(new GridView(TileSize.Default, OnlineOnly: true), GridViewFile.Load(GridViewPath));
     }
+
+    [Fact]
+    public void Old_grid_view_file_shows_all_devices()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(GridViewPath, """{"TileWidth":300,"OnlineOnly":false,"FitAll":true,"Arranged":false}""");
+
+        Assert.Equal(DeviceFilter.All, GridViewFile.Load(GridViewPath).Devices);
+    }
+
+    [Fact]
+    public void The_device_filter_is_remembered()
+    {
+        GridViewFile.Save(GridViewPath, new GridView(300, OnlineOnly: false, Devices: DeviceFilter.Phones));
+
+        Assert.Equal(DeviceFilter.Phones, GridViewFile.Load(GridViewPath).Devices);
+    }
 }

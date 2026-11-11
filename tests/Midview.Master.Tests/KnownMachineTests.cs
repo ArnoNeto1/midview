@@ -1,4 +1,5 @@
 using Midview.Master;
+using Midview.Protocol;
 using Xunit;
 
 public class KnownMachineTests
@@ -18,6 +19,19 @@ public class KnownMachineTests
     [Fact]
     public void KeepingMacAddressOf_AnotherHost_DoesNotKeepIt() =>
         Assert.Null(new KnownMachine("Aluno-1", "192.168.0.99", "SESSION", "AGENT").KeepingMacAddressOf(Learned).MacAddress);
+
+    [Fact]
+    public void KeepingKindOf_AnEditedPhone_StaysAPhone()
+    {
+        var phone = new KnownMachine("Cel 01", "192.168.0.30", "SESSION", null, Kind: DeviceKind.Android);
+        var edited = new KnownMachine("Cel 01", "192.168.0.30", "SESSION", null).KeepingKindOf(phone);
+
+        Assert.True(edited.IsPhone);
+    }
+
+    [Fact]
+    public void KeepingKindOf_AComputer_StaysAComputer() =>
+        Assert.False(new KnownMachine("Aluno-1", "192.168.0.21", "SESSION", "AGENT").KeepingKindOf(Learned).IsPhone);
 
     [Fact]
     public void IsSameEntryAs_IgnoresOnlyTheMacAddress()

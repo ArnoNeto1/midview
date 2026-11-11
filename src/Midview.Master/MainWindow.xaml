@@ -178,6 +178,16 @@
                     <ToggleButton x:Name="OnlineOnlyButton" Content="Só online" Click="OnOnlineOnlyClicked" Padding="10,2" FontSize="12"
                                   Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
                                   ToolTip="Mostra só as máquinas ligadas e respondendo; as desligadas ou sem resposta saem da grade. As ações para a turma toda continuam valendo para todas as máquinas." />
+                    <!-- DeviceFilter: all the machines, only the computers or only the phones. -->
+                    <ToggleButton x:Name="AllDevicesButton" Content="Todos" Click="OnAllDevicesClicked" Padding="10,2" FontSize="12"
+                                  Margin="12,0,0,0" Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Mostra computadores e celulares." />
+                    <ToggleButton x:Name="ComputersButton" Content="Computadores" Click="OnComputersClicked" Padding="10,2" FontSize="12"
+                                  Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Mostra só os computadores. As ações para a turma toda continuam valendo para todas as máquinas." />
+                    <ToggleButton x:Name="PhonesButton" Content="Celulares" Click="OnPhonesClicked" Padding="10,2" FontSize="12"
+                                  Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
+                                  ToolTip="Mostra só os celulares. As ações para a turma toda continuam valendo para todas as máquinas." />
                     <Button Click="OnSmallerTilesClicked" Padding="6,3" Margin="12,0,6,0"
                             ToolTip="Telas menores, para ver mais máquinas de uma vez (Ctrl + roda do mouse ou Ctrl -).">
                         <TextBlock Text="&#xE71F;" FontFamily="{StaticResource IconFont}" FontSize="12" />

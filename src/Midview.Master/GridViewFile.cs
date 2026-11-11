@@ -7,8 +7,9 @@ namespace Midview.Master;
 // next time: the size of its tiles (TileSize), whether it shows only the
 // machines that are online (GridFilter), whether "Visualizar todos" keeps
 // every machine in view, and whether the tiles are placed like the room
-// (TileArrangement).
-public sealed record GridView(int TileWidth, bool OnlineOnly, bool FitAll = false, bool Arranged = false);
+// (TileArrangement), and which kind of device it shows (DeviceFilter).
+public sealed record GridView(int TileWidth, bool OnlineOnly, bool FitAll = false, bool Arranged = false,
+    DeviceFilter Devices = DeviceFilter.All);
 
 public static class GridViewFile
 {

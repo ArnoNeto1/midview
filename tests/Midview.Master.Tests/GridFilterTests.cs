@@ -1,6 +1,7 @@
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Midview.Master;
+using Midview.Protocol;
 using Xunit;
 
 public class GridFilterTests
@@ -66,4 +67,49 @@ public class GridFilterTests
 
         Assert.Equal("Nenhuma máquina online agora: todas estão desligadas ou sem resposta.", notice);
     }
+
+    private static MachineTile PhoneTile(string name = "Cel 01") =>
+        new(new KnownMachine(name, "192.0.2.9", "ANY", null, Kind: DeviceKind.Android));
+
+    [Fact]
+    public void Phones_filter_hides_computers()
+    {
+        Assert.False(GridFilter.Shows(Tile(TilePresence.Online), onlineOnly: false, DeviceFilter.Phones));
+        Assert.True(GridFilter.Shows(PhoneTile(), onlineOnly: false, DeviceFilter.Phones));
+    }
+
+    [Fact]
+    public void Computers_filter_hides_phones()
+    {
+        Assert.True(GridFilter.Shows(Tile(TilePresence.Online), onlineOnly: false, DeviceFilter.Computers));
+        Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: false, DeviceFilter.Computers));
+    }
+
+    [Fact]
+    public void All_filter_shows_both()
+    {
+        Assert.True(GridFilter.Shows(Tile(TilePresence.Online), onlineOnly: false, DeviceFilter.All));
+        Assert.True(GridFilter.Shows(PhoneTile(), onlineOnly: false, DeviceFilter.All));
+    }
+
+    [Fact]
+    public void Device_filter_and_online_only_both_apply() =>
+        Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: true, DeviceFilter.Phones)); // a phone not heard from yet is still connecting
+
+    [Fact]
+    public void Empty_notice_when_filter_leaves_no_phones()
+    {
+        var onlyComputers = new[] { Tile(TilePresence.Online) };
+        Assert.Equal("Nenhum celular nesta sala ainda. Use \"Preparar celular\" para colocar o primeiro.",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
+    }
+
+    [Fact]
+    public void Empty_notice_when_filter_leaves_no_computers() =>
+        Assert.Equal("Nenhum computador nesta sala: só há celulares.",
+                     GridFilter.EmptyNotice(new[] { PhoneTile() }, onlineOnly: false, DeviceFilter.Computers));
+
+    [Fact]
+    public void No_notice_when_the_device_filter_shows_something() =>
+        Assert.Null(GridFilter.EmptyNotice(new[] { Tile(TilePresence.Online), PhoneTile() }, onlineOnly: false, DeviceFilter.Phones));
 }

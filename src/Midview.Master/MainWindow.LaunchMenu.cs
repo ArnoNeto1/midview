@@ -124,6 +124,10 @@ public partial class MainWindow
 
     private async void LaunchSaved(LaunchKind kind, MenuEntry entry, IReadOnlyList<KnownMachine> targets)
     {
+        if (!SupportedTargets(ref targets, LaunchAction(kind)))
+        {
+            return;
+        }
         LaunchResult[] results;
         if (kind == LaunchKind.Website)
         {
@@ -181,15 +185,25 @@ public partial class MainWindow
         StatusTextBlock.Text = $"\"{entry.Name}\" saiu do menu.";
     }
 
-    private void ShowLaunchWindow(LaunchKind kind, IReadOnlyList<KnownMachine> targets) =>
+    private void ShowLaunchWindow(LaunchKind kind, IReadOnlyList<KnownMachine> targets)
+    {
+        var action = LaunchAction(kind);
+        if (!SupportedTargets(ref targets, action))
+        {
+            return;
+        }
         ShowOnce(kind == LaunchKind.Website ? "site" : "programa", targets, () =>
         {
             Window window = kind == LaunchKind.Website
-                ? new OpenWebsiteWindow(targets, IsWholeClass(targets), _masterCertificate)
-                : new OpenProgramWindow(targets, IsWholeClass(targets), _masterCertificate);
+                ? new OpenWebsiteWindow(targets, IsWholeClass(targets, action), _masterCertificate)
+                : new OpenProgramWindow(targets, IsWholeClass(targets, action), _masterCertificate);
             window.Owner = this;
             return window;
         });
+    }
+
+    private static ToolbarAction LaunchAction(LaunchKind kind) =>
+        kind == LaunchKind.Website ? ToolbarAction.OpenWebsite : ToolbarAction.OpenProgram;
 
     private static string MenuPath(LaunchKind kind) =>
         kind == LaunchKind.Website ? SavedMenu.WebsitesPath : SavedMenu.ProgramsPath;

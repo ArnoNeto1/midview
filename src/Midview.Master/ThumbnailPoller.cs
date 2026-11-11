@@ -153,13 +153,17 @@ public sealed partial class ThumbnailPoller : IDisposable
                     ThumbnailReceived?.Invoke(reply.Payload);
                 }
 
-                AskForMacAddressOnce();
-                SendPowerScheduleIfChanged();
-                SendAppBlockIfChanged();
-                // The home first: an Agent that keeps an older one refuses its lesson.
-                ClaimClassHome();
-                SendClassLessonIfChanged();
-                ObserveAppBlock();
+                // A phone has no PC Agent: none of the steps below apply to it.
+                if (!_machine.IsPhone)
+                {
+                    AskForMacAddressOnce();
+                    SendPowerScheduleIfChanged();
+                    SendAppBlockIfChanged();
+                    // The home first: an Agent that keeps an older one refuses its lesson.
+                    ClaimClassHome();
+                    SendClassLessonIfChanged();
+                    ObserveAppBlock();
+                }
             }
             catch (Exception ex)
             {
