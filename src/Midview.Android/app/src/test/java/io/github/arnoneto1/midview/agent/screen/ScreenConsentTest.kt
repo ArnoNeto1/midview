@@ -1,8 +1,12 @@
 package io.github.arnoneto1.midview.agent.screen
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class ScreenConsentTest {
     private var now = 0L
@@ -133,5 +137,109 @@ class ScreenConsentTest {
         consent.captureFailed()
         assertEquals(4, shown)
         assertEquals(ConsentState.Waiting, consent.state)
+    }
+
+    // The student left the request without answering (the home button, say):
+    // nobody said no, the tile still waits, and the teacher's next ask puts
+    // it up again at once instead of a minute later.
+    @Test fun aRequestLeftUnansweredIsShownAgainAtTheNextAsk() {
+        val consent = consent()
+        consent.teacherConnected()
+        assertEquals(1, shown)
+
+        consent.dismissed()
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // "Pedir de novo para ver a tela", well within the minute.
+        now += 1_000
+        consent.ask()
+        assertEquals(2, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // Still one request on the screen at a time.
+        consent.ask()
+        assertEquals(2, shown)
+    }
+
+    // The teacher's lock screen came over the request: it comes back at the unlock.
+    @Test fun aRequestPushedAsideByTheLockIsShownAtTheUnlock() {
+        val consent = consent()
+        consent.ask()
+        assertEquals(1, shown)
+
+        consent.lockedChanged(true)
+        consent.dismissed()
+        assertEquals(ConsentState.Waiting, consent.state)
+        assertEquals(1, shown)
+
+        consent.lockedChanged(false)
+        assertEquals(2, shown)
+    }
+
+    // A late "went away" changes nothing once the student answered.
+    @Test fun dismissedAfterAnAnswerChangesNothing() {
+        val consent = consent()
+        consent.ask()
+        consent.denied()
+        consent.dismissed()
+        assertEquals(ConsentState.Denied, consent.state)
+
+        consent.ask()
+        consent.granted()
+        consent.dismissed()
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertEquals(2, shown)
+    }
+
+    // Only leaving the request for something else counts as no answer: not
+    // turning the phone, not the answer itself, not the screen going off.
+    @Test fun onlyLeavingTheRequestIsNoAnswer() {
+        assertTrue(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = true, answered = false, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = true, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = false))
+
+        // A "no" still being weighed when the screen went away: the system
+        // took its request down as the student left, not a refusal.
+        assertTrue(
+            ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = true, closingRequest = true),
+        )
+        assertTrue(
+            ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = false, closingRequest = true),
+        )
+        assertFalse(
+            ScreenConsent.leftUnanswered(changingConfigurations = true, answered = false, screenOn = true, closingRequest = true),
+        )
+    }
+
+    // The lock cannot come up between deciding to show the request and
+    // showing it: lockedChanged waits until the request is on its way.
+    @Test fun theLockWaitsForARequestBeingShown() {
+        val inShow = CountDownLatch(1)
+        val letGo = CountDownLatch(1)
+        lateinit var consent: ScreenConsent
+        consent = ScreenConsent(clock = { now }) {
+            shown++
+            inShow.countDown()
+            letGo.await(5, TimeUnit.SECONDS)
+        }
+        val asking = Thread { consent.ask() }
+        asking.start()
+        assertTrue(inShow.await(5, TimeUnit.SECONDS))
+
+        val locked = CountDownLatch(1)
+        val locking = Thread {
+            consent.lockedChanged(true)
+            locked.countDown()
+        }
+        locking.start()
+        assertFalse("the lock came up while the request was being shown", locked.await(200, TimeUnit.MILLISECONDS))
+
+        letGo.countDown()
+        assertTrue(locked.await(5, TimeUnit.SECONDS))
+        asking.join(5_000)
+        locking.join(5_000)
+        assertTrue(consent.isLocked)
+        assertEquals(1, shown)
     }
 }

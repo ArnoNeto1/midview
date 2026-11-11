@@ -9,9 +9,13 @@ enum class ConsentState { NotAsked, Waiting, Denied, Capturing }
 // when the teacher asks again ("Pedir de novo para ver a tela") and, where
 // the system wants a new answer for each capture (askAgainWhenStopped:
 // Android 14 and newer), whenever the capture stops. A student who said no
-// is not asked again until the teacher asks. While the teacher keeps the
-// screen locked, a request waits for the unlock. No Android classes (JVM
-// tests); safe from any thread.
+// is not asked again until the teacher asks; one who left the request
+// without answering (dismissed) is asked again as soon as the teacher asks.
+// While the teacher keeps the screen locked, a request waits for the unlock.
+// The request is put on the screen under the same lock lockedChanged takes,
+// so the lock screen never comes up between the decision and the request
+// (show must not call back into this class). No Android classes (JVM tests);
+// safe from any thread.
 class ScreenConsent(
     private val clock: () -> Long,
     private val askAgainWhenStopped: Boolean = false,
@@ -33,13 +37,13 @@ class ScreenConsent(
 
     // A trusted teacher connected to the screen port: asks unless the
     // student was asked already.
-    fun teacherConnected() {
-        if (synchronized(lock) { current == ConsentState.NotAsked && request() }) show()
+    fun teacherConnected() = synchronized(lock) {
+        if (current == ConsentState.NotAsked && request()) show()
     }
 
     // The teacher asks (again), whatever the student said before.
-    fun ask() {
-        if (synchronized(lock) { request() }) show()
+    fun ask() = synchronized(lock) {
+        if (request()) show()
     }
 
     fun granted() = synchronized(lock) {
@@ -60,37 +64,38 @@ class ScreenConsent(
     // stop the first time; again right after, the phone stops asking (the
     // teacher reads "Não permitiu ver a tela" and may ask again) instead of
     // asking over and over for a capture that fails.
-    fun captureFailed() {
-        val giveUp = synchronized(lock) {
-            failures++
-            if (failures >= FAILURES_BEFORE_GIVING_UP) {
-                current = ConsentState.Denied
-                pending = false
-                true
-            } else {
-                false
-            }
+    fun captureFailed() = synchronized(lock) {
+        failures++
+        if (failures >= FAILURES_BEFORE_GIVING_UP) {
+            current = ConsentState.Denied
+            pending = false
+        } else {
+            stopped()
         }
-        if (!giveUp) stopped()
     }
 
     // The capture ended (the student stopped it, or the system did).
-    fun stopped() {
-        val asking = synchronized(lock) {
-            current = ConsentState.NotAsked
-            pending = false
-            askAgainWhenStopped && request()
+    fun stopped() = synchronized(lock) {
+        current = ConsentState.NotAsked
+        pending = false
+        if (askAgainWhenStopped && request()) show()
+    }
+
+    // The request went off the screen with no answer: the student went to
+    // something else, or the teacher's lock screen came over it. Nobody said
+    // no; the tile keeps waiting, the teacher's next ask shows it at once
+    // and, under the lock, it comes back at the unlock.
+    fun dismissed() = synchronized(lock) {
+        if (current == ConsentState.Waiting) {
+            shownAtMillis = null
+            if (locked) pending = true
         }
-        if (asking) show()
     }
 
     // The teacher's lock screen came up (true) or went away (false).
-    fun lockedChanged(locked: Boolean) {
-        val asking = synchronized(lock) {
-            this.locked = locked
-            !locked && pending && request()
-        }
-        if (asking) show()
+    fun lockedChanged(locked: Boolean) = synchronized(lock) {
+        this.locked = locked
+        if (!locked && pending && request()) show()
     }
 
     // Under the lock. True when the request must be put on the screen now.
@@ -116,6 +121,19 @@ class ScreenConsent(
     companion object {
         const val ASK_AGAIN_AFTER_MILLIS = 60_000L
         const val FAILURES_BEFORE_GIVING_UP = 2
+
+        // ConsentActivity stopped without an answer: the student left the
+        // request (home, another app, the lock screen over it). Turning the
+        // phone is not leaving it, and with the screen off the request is
+        // still there when it comes back on. A "no" that came just before
+        // the stop (closingRequest) is the system taking its request down
+        // as the student left (home on Android 13 does), not a refusal.
+        fun leftUnanswered(
+            changingConfigurations: Boolean,
+            answered: Boolean,
+            screenOn: Boolean,
+            closingRequest: Boolean = false,
+        ): Boolean = !changingConfigurations && !answered && (screenOn || closingRequest)
 
         const val WAITING_TEXT = "Aguardando o aluno permitir"
         const val DENIED_TEXT = "Não permitiu ver a tela"

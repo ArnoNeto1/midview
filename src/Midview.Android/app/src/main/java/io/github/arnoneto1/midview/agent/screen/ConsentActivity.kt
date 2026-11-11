@@ -13,21 +13,47 @@ import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 
 // Puts Android's own request on the screen ("Iniciar agora"), with nothing
 // of its own to see, and hands the answer on: yes starts the capture
 // (ScreenCaptureService), anything else is consent.denied(). The agent
 // starts it from the background (show): a Device Owner may; on any other
 // phone Android may hold the start back, so a notification that opens it
-// goes up too.
+// goes up too. A request the student leaves without answering (home, another
+// app, the teacher's lock screen over it) is closed, the system's request
+// with it, and counts as no answer (ScreenConsent.dismissed), so the next ask
+// puts up a new one instead of finding a stale one hidden behind. Android 13
+// takes its request down itself when the student goes home, with the same
+// "no" as the Cancel button: a "no" counts only if the student is still
+// here a moment later (REFUSAL_GRACE_MILLIS).
 class ConsentActivity : Activity() {
     private val token = Any()
+    private var recreated = false
+
+    // Answered, or closed as no answer: nothing more to do.
+    private var settled = false
+    private val main = Handler(Looper.getMainLooper())
+    private var refusalPending = false
+    private val refusal = Runnable {
+        if (!settled) {
+            settled = true
+            hideNotice(this)
+            Log.i(TAG, "screen request refused")
+            ScreenCaptureService.consent.denied()
+            finish()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Recreated (the phone turned, say): the system's request is already up.
         if (savedInstanceState != null) {
             open = token
+            recreated = true
             return
         }
         // Opened twice (the agent's start and the notification both got
@@ -37,6 +63,13 @@ class ConsentActivity : Activity() {
             return
         }
         open = token
+        // The teacher's lock screen came up meanwhile: the request waits for the unlock.
+        if (ScreenCaptureService.consent.isLocked) {
+            settled = true
+            ScreenCaptureService.consent.dismissed()
+            finish()
+            return
+        }
         val manager = getSystemService(MediaProjectionManager::class.java)
         val request = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // The whole screen, never a single app.
@@ -57,27 +90,63 @@ class ConsentActivity : Activity() {
         if (requestCode == REQUEST) answered(resultCode, data)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Recreated and in front with no answer: the system's request went
+        // away while the phone turned (its "no" went to the old instance).
+        if (recreated && !settled && !refusalPending) closeUnanswered()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing || isChangingConfigurations) return
+        val screenOn = getSystemService(PowerManager::class.java).isInteractive
+        if (ScreenConsent.leftUnanswered(isChangingConfigurations, settled, screenOn, refusalPending)) closeUnanswered()
+    }
+
+    // No answer: the system's request goes too, and the next ask shows a new one.
+    private fun closeUnanswered() {
+        main.removeCallbacks(refusal)
+        Log.i(TAG, "screen request left without an answer")
+        settled = true
+        if (open === token) open = null
+        try {
+            finishActivity(REQUEST)
+        } catch (e: RuntimeException) {
+            // Gone already.
+        }
+        ScreenCaptureService.consent.dismissed()
+        finish()
+    }
+
     override fun onDestroy() {
+        main.removeCallbacks(refusal)
         if (open === token) open = null
         super.onDestroy()
     }
 
     private fun answered(resultCode: Int, data: Intent?) {
-        hideNotice(this)
+        if (settled) return
         if (resultCode == Activity.RESULT_OK && data != null) {
+            settled = true
+            hideNotice(this)
             // From the screen in front, as a mediaProjection service must start.
             ScreenCaptureService.start(this, resultCode, data)
-        } else {
-            ScreenCaptureService.consent.denied()
+            finish()
+        } else if (!refusalPending) {
+            // A no, unless the screen goes away meanwhile (onStop).
+            refusalPending = true
+            main.postDelayed(refusal, REFUSAL_GRACE_MILLIS)
         }
-        finish()
     }
 
     companion object {
         const val NOTICE_TITLE = "O professor quer ver a tela"
         const val NOTICE_TEXT = "Toque aqui e depois em \"Iniciar agora\"."
 
+        private const val TAG = "Midview"
         private const val REQUEST = 1
+        private const val REFUSAL_GRACE_MILLIS = 500L
         private const val CHANNEL = "consent"
         private const val NOTICE_ID = 4
 
@@ -85,9 +154,10 @@ class ConsentActivity : Activity() {
         // activity itself, which must not outlive its screen).
         @Volatile private var open: Any? = null
 
-        // Asks the student, unless the request is already on the screen.
+        // Asks the student. With the request already up, the same start
+        // brings it back in front (a second ConsentActivity only finishes,
+        // see onCreate) and the notice goes up again.
         fun show(context: Context) {
-            if (open != null) return
             try {
                 context.startActivity(intent(context))
             } catch (e: RuntimeException) {
