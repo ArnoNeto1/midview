@@ -150,8 +150,6 @@
                         <StackPanel Orientation="Horizontal">
                             <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" local:DeviceActions.Action="LabConfig" Click="OnLabConfigClassClicked" OpensOptions="True"
                                                  ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, Edge, sites de distração, travas (barra de tarefas, Área de Trabalho e downloads) e limpar os perfis do Chrome." />
-                            <local:ToolbarButton Content="Preparar celular" Icon="&#xE8EA;" Click="OnPreparePhoneClicked" OpensOptions="True"
-                                                 ToolTip="Mostra o código para preparar um celular de fábrica: ele escaneia, entra no Wi-Fi do laboratório e instala o Midview." />
                             <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
                                                  ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
                         </StackPanel>

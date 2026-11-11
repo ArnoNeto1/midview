@@ -55,7 +55,7 @@ public partial class PreparePhoneWindow : MidviewWindow
         {
             PhoneWifiFile.Save(ssid, PasswordInput.Text);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
         {
             // Not remembering the Wi-Fi is not worth refusing the code.
         }

@@ -87,6 +87,13 @@ public partial class MachinesWindow : MidviewWindow
             : "Nenhuma senha salva ainda.";
     }
 
+    // The QR code that turns a factory-reset phone into a Midview phone; it is
+    // here, not on the toolbar, which would wrap onto a second row at 1340 px.
+    private void OnPreparePhoneClicked(object sender, RoutedEventArgs e)
+    {
+        new PreparePhoneWindow { Owner = this }.ShowDialog();
+    }
+
     private void OnSetAdminPasswordClicked(object sender, RoutedEventArgs e)
     {
         var dialog = new SetAdminPasswordWindow { Owner = this };
