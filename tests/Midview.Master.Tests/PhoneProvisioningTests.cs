@@ -23,6 +23,27 @@ public class PhoneProvisioningTests
     }
 
     [Fact]
+    public void Qr_carries_number_token_and_master_in_admin_extras()
+    {
+        using var doc = JsonDocument.Parse(PhoneProvisioning.QrJson("Lab", "senha123", "07", "tok-abc", "abcdef0123"));
+        var root = doc.RootElement;
+
+        var extras = root.GetProperty(Prefix + "PROVISIONING_ADMIN_EXTRAS_BUNDLE");
+        Assert.Equal(JsonValueKind.Object, extras.ValueKind);
+        Assert.Equal(3, extras.EnumerateObject().Count());
+        Assert.Equal("07", extras.GetProperty("midview.number").GetString());
+        Assert.Equal("tok-abc", extras.GetProperty("midview.token").GetString());
+        Assert.Equal("ABCDEF0123", extras.GetProperty("midview.master").GetString());
+        Assert.Equal("Lab", root.GetProperty(Prefix + "PROVISIONING_WIFI_SSID").GetString());
+        Assert.Equal("senha123", root.GetProperty(Prefix + "PROVISIONING_WIFI_PASSWORD").GetString());
+        Assert.Equal(PhoneProvisioning.AdminComponent, root.GetProperty(Prefix + "PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME").GetString());
+    }
+
+    [Fact]
+    public void Claim_lifetime_is_one_hour() =>
+        Assert.Equal(TimeSpan.FromHours(1), PhoneProvisioning.ClaimLifetime);
+
+    [Fact]
     public void Password_with_quotes_accents_and_semicolon_round_trips()
     {
         const string password = "a\"b;ç";
