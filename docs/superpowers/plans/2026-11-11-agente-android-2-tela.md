@@ -204,3 +204,31 @@
 - [ ] **Step 1: Redmi 10C (não é aparelho da escola).** Instalar o APK de teste pela pasta Download (a MIUI recusa o `adb install`), administrador e notificações já ligados. Abrir uma **cópia de teste do Master** (pasta de dados separada em `MasterData.Folder`, nunca a sala real), parear, ver o quadradinho "Aguardando o aluno permitir" → tocar "Iniciar agora" no celular → miniatura real → "Ver a tela" em janela grande, girar o celular → "Bloquear telas" → "Não bloqueou (este celular não bloqueia a tela)". Recusar o pedido → "Não permitiu ver a tela" → "Pedir de novo" → pedido aparece.
 - [ ] **Step 2: Bloqueio de verdade** num aparelho da escola: emulador Android (precisa da autorização do professor para baixar a imagem do sistema e aceitar a licença) com `dpm set-device-owner` e o APK **release** assinado com a chave de teste, ou o primeiro celular preparado pelo QR depois da Task 9 do plano 1. Conferir: cadeado em tela cheia, botões início/voltar/recentes sem efeito, fechar o Master → libera em até 15 s, reiniciar o celular com o Master segurando → bloqueia de novo.
 - [ ] **Step 3:** Anotar os resultados aqui e fazer o commit `docs: resultado do teste da tela no celular`.
+
+#### Resultado do teste
+
+**Redmi 10C (passo 1, feito pelo professor numa cópia de teste do Master):** pareou, o quadradinho do celular apareceu e "Ver a tela" funcionou. "Bloquear telas" não bloqueou, como esperado: o Redmi não é aparelho da escola (não é Device Owner) e responde "este celular não bloqueia a tela". O provisionamento pelo QR no Redmi (Android 13, MIUI 14) parou em "Can't set up device": no emulador o mesmo APK provisiona pelo caminho da própria plataforma, e a causa provável é o Play Protect barrar um DPC fora da lista aprovada (investigação à parte).
+
+**Emulador (passo 2), 11/11/2026:** AVD `midview33` (Android 13, `google_apis`, x86_64), apagado antes do teste, com o APK **debug** do commit 5277a6e feito Device Owner por `adb root` + `dpm set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver` (o debug mantém o adb). O PC chega ao agente por `adb forward` (38900→28900, 35901→5901). Do lado do professor, as classes de verdade do Master (`PairingSession`, `ThumbnailPoller`, `ConnectionClient` como a janela grande, `ViewWindowFit`, `ScreenConsentClient`, `ScreenLockKeeper`) num programa de teste descartável, e os testes E2E `AndroidAgentInteropTests` com o adb ligado.
+
+| Verificação | Resultado | Evidência |
+|---|---|---|
+| Janela grande recebe a tela | passou | Primeira atualização de tela inteira 591x1280 logo depois do "Start now"; E2E `Screen_stream_sends_frames_from_phone` passou (primeira atualização em 0,1 s com a captura já liberada). |
+| Girar o celular com a janela aberta | passou | Com Configurações aberto e `user_rotation 1`: quadro 4 de tela inteira 1280x591 (janela 1280x591), e de volta ao `user_rotation 0`: quadro 14 de tela inteira 591x1280 (janela 462x1001), sem fechar o fluxo (24 quadros em 45 s). No log do celular: "Screen capture now 1280x591" e "now 591x1280". A tela inicial do emulador não gira (só retrato), por isso o teste foi em Configurações. |
+| Recusar o pedido | passou | "Cancel" tocado pelo `input tap` (posição pelo `uiautomator dump`): o quadradinho mostra "Não permitiu ver a tela". |
+| "Pedir de novo" depois da recusa | passou | `ScreenConsentClient.Ask` → "pedido mostrado"; o pedido do sistema voltou na hora; "Start now" → miniatura real e quadros. |
+| Pedido largado com o botão início | passou (com a correção) | Antes da correção, no Android 13 o início derrubava o pedido com o mesmo "não" do Cancel e o quadradinho dizia "Não permitiu ver a tela". Agora: "screen request left without an answer", o quadradinho segue "Aguardando o aluno permitir" e o "Pedir de novo" seguinte, dentro do minuto, mostra o pedido de novo na hora. |
+| Tela apagada com o pedido aberto | passou no emulador | O Android 13 também derruba o pedido ao apagar a tela; conta como sem resposta ("Aguardando"), não como recusa. |
+| Cadeado (bloqueio pelo `ScreenLockKeeper`) | passou | "tela bloqueada", `mLockTaskModeState=LOCKED`, cadeado em tela cheia (`screens/emulator-lock-debug.png`). Início, voltar e recentes (`input keyevent`): a tela de cima continua `LockActivity`, estado LOCKED, capturas idênticas byte a byte. |
+| Professor some sem fechar a conexão | passou | O processo do professor foi congelado (conexão aberta, sem batimentos): o celular liberou sozinho em 13,9 s depois do congelamento (até 3 s de batimento antes + 15 s de silêncio). |
+| Fechar o professor | passou | E2E `Lock_on_phone_answers_and_releases`, agora lendo o estado pelo adb: LOCKED em 0,6 s, NONE 0,1 s depois de fechar. Matar o processo do professor também libera na hora. |
+| Reiniciar com o professor segurando | passou | `adb reboot` com o `ScreenLockKeeper` rodando: o agente subiu sozinho (`StartAtBoot`) e o cadeado voltou cerca de 3 s depois de o agente escutar (a nova tentativa do professor é a cada 3 s); LOCKED confirmado pelo adb. |
+| Pedido com a tela bloqueada | passou | Com o cadeado, "Pedir de novo" responde "a tela está bloqueada: o pedido aparece quando o celular for desbloqueado"; ao liberar, o pedido aparece sozinho. Cadeado subindo com o pedido aberto: o pedido sai ("left without an answer") e volta ao liberar. |
+| Celular que não é da escola recusa o bloqueio | passou (Redmi, passo 1) | No emulador Device Owner o teste `Lock_on_a_phone_that_is_not_device_owner_is_refused` falha, como esperado (ele bloqueia). |
+
+**Ainda precisa do celular de verdade:**
+
+- Provisionamento pelo QR num celular com Play Store (o Redmi falhou; investigação à parte sobre o Play Protect e os DPCs aprovados).
+- Bateria e aquecimento com a captura ligada durante uma aula inteira.
+- O que cada fabricante faz com o pedido do "Iniciar agora" quando a tela apaga ou o aluno vai para o início (no Android 10 a 12 o pedido pode ficar aberto; o agente agora o fecha como sem resposta quando o aluno sai, mas isso só foi visto no Android 13 do emulador).
+- No Android 14 ou mais novo, se o bloqueio da tela para a captura (pede de novo ao liberar).
