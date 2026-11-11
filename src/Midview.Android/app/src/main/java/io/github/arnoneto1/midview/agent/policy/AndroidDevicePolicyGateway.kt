@@ -40,6 +40,12 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun setLockTaskFeatures(features: Int) = dpm.setLockTaskFeatures(admin, features)
 
+    override fun setPermittedAccessibilityServices(pkgs: List<String>?) {
+        if (!dpm.setPermittedAccessibilityServices(admin, pkgs)) {
+            throw SecurityException("Accessibility services $pkgs were not permitted")
+        }
+    }
+
     // Whether "Bloquear telas" can hold this phone: the Device Owner, with
     // lock task mode allowed for the app (Lockdown).
     fun canLockScreen(): Boolean = isDeviceOwner() && dpm.isLockTaskPermitted(app.packageName)

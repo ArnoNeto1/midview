@@ -19,6 +19,7 @@ class LockdownTest {
         val granted = mutableSetOf<Pair<String, String>>()
         var lockTaskAllowed: List<String>? = null
         var lockTaskFeatureFlags: Int? = null
+        var accessibilityPermitted: List<String>? = listOf("never set")
         var calls = 0
 
         override fun addUserRestriction(r: String) {
@@ -50,6 +51,11 @@ class LockdownTest {
         override fun setLockTaskFeatures(features: Int) {
             calls++
             lockTaskFeatureFlags = features
+        }
+
+        override fun setPermittedAccessibilityServices(pkgs: List<String>?) {
+            calls++
+            accessibilityPermitted = pkgs
         }
 
         override fun isDeviceOwner(): Boolean = owner
@@ -192,5 +198,17 @@ class LockdownTest {
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
         assertEquals(listOf(pkg), gw.lockTaskAllowed)
+    }
+
+    // The screen is seen through the app's accessibility service: the
+    // Device Owner never leaves it out (null: every service allowed).
+    @Test fun accessibilityServicesAreAllPermitted() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 33, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertEquals(null, gw.accessibilityPermitted)
+        }
     }
 }

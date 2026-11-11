@@ -242,4 +242,76 @@ class ScreenConsentTest {
         assertTrue(consent.isLocked)
         assertEquals(1, shown)
     }
+
+    // A school phone with the accessibility service on (Android 11+): the
+    // screen is seen without asking the student, whatever happens.
+    @Test fun withAccessibilityTheStudentIsNeverAsked() {
+        val consent = ScreenConsent(clock = { now }, askAgainWhenStopped = true, source = { CaptureSource.Accessibility }) { shown++ }
+
+        consent.teacherConnected()
+        consent.ask()
+        consent.stopped()
+        consent.lockedChanged(true)
+        consent.ask()
+        consent.lockedChanged(false)
+        consent.captureFailed()
+        consent.captureFailed()
+        consent.denied()
+        now += ScreenConsent.ASK_AGAIN_AFTER_MILLIS
+        consent.ask()
+
+        assertEquals(0, shown)
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertNull(ScreenConsent.statusText(consent.state))
+    }
+
+    // Enabled in the settings but not connected yet (the phone or the app
+    // just started): no request meanwhile, the tile keeps waiting.
+    @Test fun accessibilityStartingAsksNothingMeanwhile() {
+        var source = CaptureSource.AccessibilityStarting
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+
+        consent.teacherConnected()
+        consent.ask()
+        assertEquals(0, shown)
+        assertEquals("Aguardando o aluno permitir", ScreenConsent.statusText(consent.state))
+
+        source = CaptureSource.Accessibility
+        consent.sourceChanged()
+        assertEquals(0, shown)
+        assertEquals(ConsentState.Capturing, consent.state)
+    }
+
+    // Accessibility turned off later: back to the request ("Iniciar agora"),
+    // at once if a teacher is already looking.
+    @Test fun accessibilityTurnedOffFallsBackToTheRequest() {
+        var source = CaptureSource.Accessibility
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+        consent.teacherConnected()
+        assertEquals(0, shown)
+
+        source = CaptureSource.MediaProjection
+        consent.sourceChanged()
+        assertEquals(1, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // Turned on again: capturing, nothing more asked.
+        source = CaptureSource.Accessibility
+        consent.sourceChanged()
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertEquals(1, shown)
+    }
+
+    // Turned off with no teacher looking yet: asked when one connects.
+    @Test fun accessibilityTurnedOffBeforeAnyTeacherAsksAtTheFirstOne() {
+        var source = CaptureSource.Accessibility
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+        source = CaptureSource.MediaProjection
+        consent.sourceChanged()
+        assertEquals(0, shown)
+        assertEquals(ConsentState.NotAsked, consent.state)
+
+        consent.teacherConnected()
+        assertEquals(1, shown)
+    }
 }

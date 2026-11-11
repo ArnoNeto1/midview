@@ -255,12 +255,21 @@ class ScreenCaptureService : Service() {
         @SuppressLint("StaticFieldLeak")
         @Volatile private var context: Context? = null
 
-        // Asked once per run of the app: after a restart the student is asked again.
+        // Asked once per run of the app: after a restart the student is
+        // asked again; never with the accessibility service on.
         val consent = ScreenConsent(
             clock = { SystemClock.elapsedRealtime() },
             askAgainWhenStopped = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE,
+            source = { source() },
         ) {
             context?.let { ConsentActivity.show(it) }
+        }
+
+        // Where the screen's pictures come from now (CaptureSource).
+        fun source(): CaptureSource {
+            val connected = AccessibilityCapture.connected
+            val enabled = !connected && context?.let { AccessibilityCapture.enabledInSettings(it) } == true
+            return CaptureSource.choose(Build.VERSION.SDK_INT, enabled, connected)
         }
 
         // Called by the agent as it starts: consent needs a context to show its request.
@@ -268,13 +277,20 @@ class ScreenCaptureService : Service() {
             this.context = context.applicationContext
         }
 
-        // The student's answer was yes: start capturing with it.
+        // The student's answer was yes: start capturing with it (unless the
+        // accessibility service took over meanwhile).
         fun start(context: Context, resultCode: Int, data: Intent) {
+            if (AccessibilityCapture.connected) return
             context.startForegroundService(
                 Intent(context, ScreenCaptureService::class.java)
                     .putExtra(EXTRA_RESULT_CODE, resultCode)
                     .putExtra(EXTRA_DATA, data),
             )
+        }
+
+        // The accessibility service sees the screen: no capture of this kind.
+        fun stop(context: Context) {
+            context.stopService(Intent(context, ScreenCaptureService::class.java))
         }
 
         private fun consentData(intent: Intent): Intent? =

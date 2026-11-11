@@ -13,6 +13,9 @@ interface DevicePolicyGateway {
 
     // What the system keeps in lock task mode (DevicePolicyManager.LOCK_TASK_FEATURE_*).
     fun setLockTaskFeatures(features: Int)
+
+    // The accessibility services allowed (null: all of them).
+    fun setPermittedAccessibilityServices(pkgs: List<String>?)
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
 
@@ -26,7 +29,9 @@ interface DevicePolicyGateway {
 // uninstalled, force-stopped nor have its data cleared. The teacher's
 // "Bloquear telas" is allowed too: this app alone may hold the phone in lock
 // task mode, with nothing of the system's left to reach (no home, recents,
-// notifications nor power menu). Only a Device Owner
+// notifications nor power menu). The app's accessibility service, which
+// shows the teacher the screen without asking the student, is never left
+// out (every service allowed, as without a Device Owner). Only a Device Owner
 // can set these; on any other phone it does nothing. Every call sets a
 // state, so applying again changes nothing.
 //
@@ -69,6 +74,7 @@ class Lockdown(
         }
         step { gw.setLockTaskPackages(listOf(packageName)) }
         step { gw.setLockTaskFeatures(LOCK_TASK_FEATURE_NONE) }
+        step { gw.setPermittedAccessibilityServices(null) }
         refused?.let { throw it }
         return true
     }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown in the phone's accessibility settings (AccessibilityCapture). -->
+    <string name="accessibility_description">Midview: permite ao professor ver a tela deste celular da escola.</string>
+</resources>

@@ -124,6 +124,15 @@ adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
 adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
 ```
 
+Para o professor ver a tela do celular sem o aluno precisar tocar em "Iniciar agora" (Android 11 ou mais novo), ligue também, pelo cabo e antes do `dpm set-device-owner`, o serviço de acessibilidade do Midview:
+
+```
+adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
+adb shell settings put secure accessibility_enabled 1
+```
+
+Sem ele (ou no Android 10), o celular pede ao aluno para tocar em "Iniciar agora".
+
 ## Desinstalação
 
 Em **Configurações** > **Aplicativos**, desinstale "Midview Professor" ou "Midview Aluno". Na máquina do aluno, o desinstalador libera o que estava bloqueado, destrava a Área de Trabalho, devolve as pastas de downloads e de salvar se uma aula estiver em andamento e pergunta se deve apagar também os professores pareados.

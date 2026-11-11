@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AccessibilityCapture: pictures of the screen for the teacher, nothing
+     else. No events, no window content, no gestures, no keys. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAnnouncement"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:canTakeScreenshot="true"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="0"
+    android:packageNames="io.github.arnoneto1.midview.agent"
+    android:summary="@string/accessibility_description" />

@@ -30,7 +30,14 @@ class Picture(val pixels: IntArray, val width: Int, val height: Int)
 // pixels (convert, a few MB and some milliseconds each time) only when
 // someone asks for it: a big window as often as its pace allows, a
 // thumbnail every few seconds, nobody: never.
-class LatestFrame : FrameSource {
+//
+// The accessibility service (attachShots) works the other way: it has no
+// stream of pictures, it takes one when asked (shoot), and Android allows
+// one only every so often. A shot is taken only when someone asks and the
+// last one is at least minIntervalMillis old; meanwhile the last one is
+// given. While attached it wins over the capture's pictures (attach), which
+// go on being kept for when it goes away (detachShots).
+class LatestFrame(private val clock: () -> Long = { System.nanoTime() / 1_000_000 }) : FrameSource {
     // java.lang.Object, for wait and notifyAll.
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
     private val lock = Object()
@@ -38,13 +45,37 @@ class LatestFrame : FrameSource {
     private var seq = 0L
     private var convert: (() -> Picture?)? = null
     private var dirty = false
+    private var shoot: (() -> Picture?)? = null
+    private var shotInterval = 0L
+    private var lastShotAt: Long? = null
 
     // The capture started: convert turns its newest picture into pixels
     // (null: none to be had). Called by whoever asks, one at a time.
     fun attach(convert: () -> Picture?) = synchronized(lock) {
         this.convert = convert
-        frame = null
+        if (shoot == null) frame = null
         dirty = true
+        lock.notifyAll()
+    }
+
+    // The accessibility service connected: shoot takes a picture of the
+    // screen now (null: none to be had), called by whoever asks, one at a
+    // time, at most once every minIntervalMillis.
+    fun attachShots(minIntervalMillis: Long, shoot: () -> Picture?) = synchronized(lock) {
+        this.shoot = shoot
+        shotInterval = minIntervalMillis
+        lastShotAt = null
+        frame = null
+        lock.notifyAll()
+    }
+
+    // The accessibility service went away: the capture's pictures again, if any.
+    fun detachShots() = synchronized(lock) {
+        if (shoot == null) return@synchronized
+        shoot = null
+        lastShotAt = null
+        frame = null
+        dirty = convert != null
         lock.notifyAll()
     }
 
@@ -60,11 +91,12 @@ class LatestFrame : FrameSource {
         lock.notifyAll()
     }
 
-    // The capture stopped: no picture until it starts again.
+    // The capture stopped: no picture until it starts again (the shots, if
+    // attached, go on).
     fun clear() = synchronized(lock) {
         convert = null
         dirty = false
-        frame = null
+        if (shoot == null) frame = null
     }
 
     override fun latest(): Frame? = synchronized(lock) {
@@ -82,16 +114,34 @@ class LatestFrame : FrameSource {
                 if (newest != null && newest.seq > afterSeq) return newest
                 val leftMs = (deadline - System.nanoTime()) / 1_000_000
                 if (leftMs <= 0) return null
-                lock.wait(leftMs)
+                lock.wait(minOf(leftMs, untilNextShot() ?: leftMs))
             }
         }
     }
 
     // Under the lock.
     private fun refresh() {
+        val shots = shoot
+        if (shots != null) {
+            val now = clock()
+            val last = lastShotAt
+            if (last == null || now - last >= shotInterval) {
+                lastShotAt = now
+                shots()?.let { keep(it) }
+            }
+            return
+        }
         if (!dirty) return
         dirty = false
         convert?.invoke()?.let { keep(it) }
+    }
+
+    // Under the lock: how long until a shot may be taken again (at least
+    // 1 ms); null without shots.
+    private fun untilNextShot(): Long? {
+        if (shoot == null) return null
+        val last = lastShotAt ?: return 1
+        return maxOf(1, last + shotInterval - clock())
     }
 
     private fun keep(picture: Picture) {

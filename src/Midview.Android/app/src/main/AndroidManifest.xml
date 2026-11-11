@@ -45,6 +45,22 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- The screen seen without asking the student (Android 11+), once
+             turned on by cable while the phone is prepared: takes pictures
+             of the screen only, reads and does nothing else. -->
+        <service
+            android:name=".screen.AccessibilityCapture"
+            android:exported="false"
+            android:label="Midview"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_capture" />
+        </service>
+
         <!-- Android's request to see the screen, nothing of its own to show. -->
         <activity
             android:name=".screen.ConsentActivity"

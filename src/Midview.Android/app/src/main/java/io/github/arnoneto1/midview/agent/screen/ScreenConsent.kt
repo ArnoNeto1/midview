@@ -14,11 +14,16 @@ enum class ConsentState { NotAsked, Waiting, Denied, Capturing }
 // While the teacher keeps the screen locked, a request waits for the unlock.
 // The request is put on the screen under the same lock lockedChanged takes,
 // so the lock screen never comes up between the decision and the request
-// (show must not call back into this class). No Android classes (JVM tests);
-// safe from any thread.
+// (show must not call back into this class). With the app's accessibility
+// service on (source, CaptureSource.Accessibility) the screen is seen
+// without asking: the state is Capturing and nothing is ever put on the
+// screen; while it is starting nothing is asked either. When it goes off,
+// the request comes back as before (sourceChanged). No Android classes (JVM
+// tests); safe from any thread.
 class ScreenConsent(
     private val clock: () -> Long,
     private val askAgainWhenStopped: Boolean = false,
+    private val source: () -> CaptureSource = { CaptureSource.MediaProjection },
     private val show: () -> Unit,
 ) {
     private val lock = Any()
@@ -30,7 +35,13 @@ class ScreenConsent(
     private var failures = 0
     private var shownAtMillis: Long? = null
 
-    val state: ConsentState get() = synchronized(lock) { current }
+    // A teacher connected to the screen port in this run of the app.
+    private var teacherSeen = false
+
+    val state: ConsentState
+        get() = synchronized(lock) {
+            if (source() == CaptureSource.Accessibility) ConsentState.Capturing else current
+        }
 
     // The teacher's lock screen is up: a request waits for the unlock.
     val isLocked: Boolean get() = synchronized(lock) { locked }
@@ -38,6 +49,7 @@ class ScreenConsent(
     // A trusted teacher connected to the screen port: asks unless the
     // student was asked already.
     fun teacherConnected() = synchronized(lock) {
+        teacherSeen = true
         if (current == ConsentState.NotAsked && request()) show()
     }
 
@@ -92,6 +104,13 @@ class ScreenConsent(
         }
     }
 
+    // The accessibility service connected or went away. Gone (turned off
+    // in the settings) with a teacher already looking: the student is asked
+    // at once, as when that teacher connected.
+    fun sourceChanged() = synchronized(lock) {
+        if (teacherSeen && current == ConsentState.NotAsked && request()) show()
+    }
+
     // The teacher's lock screen came up (true) or went away (false).
     fun lockedChanged(locked: Boolean) = synchronized(lock) {
         this.locked = locked
@@ -101,6 +120,8 @@ class ScreenConsent(
     // Under the lock. True when the request must be put on the screen now.
     private fun request(): Boolean {
         if (current == ConsentState.Capturing) return false
+        // Seen without asking (or about to be): nothing to ask.
+        if (source() != CaptureSource.MediaProjection) return false
         val now = clock()
         val shownAt = shownAtMillis
         // A request already on the screen is not stacked on itself; one that
