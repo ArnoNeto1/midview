@@ -7,7 +7,11 @@
 # master with "publicar", it publishes the version itself: it creates the
 # v<Version> tag (Directory.Build.props) on that commit and its Release, with
 # the setup and the given notes -- for when pushing a tag isn't at hand. A
-# version already published is refused, never overwritten.
+# version already published is refused, never overwritten. Once the phone app
+# is enabled (PhoneProvisioning.SignatureChecksum is no longer the placeholder)
+# this path is refused: a tag made with the workflow's own token doesn't start
+# android.yml, so the version would come out without MidviewAgent.apk; publish
+# by pushing the annotated tag instead.
 name: Instalador
 
 on:
@@ -92,6 +96,11 @@ jobs:
         run: |
           $versao = (Select-Xml -Path Directory.Build.props -XPath '//Version').Node.InnerText.Trim()
           if (-not $versao) { throw 'Directory.Build.props sem <Version>.' }
+          $celular = Select-String -Path src/Midview.Master/PhoneProvisioning.cs -Pattern 'SignatureChecksum = "([^"]+)"'
+          if (-not $celular) { throw 'PhoneProvisioning.SignatureChecksum não encontrado.' }
+          if ($celular.Matches[0].Groups[1].Value -ne 'PREENCHER-NA-TASK-9') {
+            throw 'O app do celular já está habilitado: uma tag criada por aqui não inicia o fluxo Android e a versão sairia sem o MidviewAgent.apk. Publique empurrando a tag anotada (git tag -a v<versão> -m "..." e git push origin v<versão>).'
+          }
           if (git ls-remote --tags origin "refs/tags/v$versao") { throw "A versão v$versao já foi publicada." }
           "tag=v$versao" >> $env:GITHUB_OUTPUT
           "nome=Versão $versao" >> $env:GITHUB_OUTPUT

@@ -108,7 +108,7 @@ Nesta primeira versão, o celular Android (Android 10 ou mais novo) aparece na g
 
 Para preparar um celular:
 
-1. No Midview, abra **Máquinas da sala** > **Procurar e parear** > **Preparar celular**. Aparece um QR com o Wi-Fi do laboratório.
+1. No Midview, abra **Máquinas da sala** > **Procurar e parear** > **Preparar celular**. A janela pede primeiro o Wi-Fi do laboratório (nome da rede e senha); clique em **Gerar código** para aparecer o QR.
 2. No celular, saia antes da conta Mi (Xiaomi) em **Configurações**, se houver uma, e restaure o celular para o padrão de fábrica.
 3. Na primeira tela depois de reiniciar, toque 6 vezes em qualquer lugar da tela e escaneie o QR. O celular baixa o aplicativo do Midview e vira um aparelho da escola.
 4. Em **Procurar e parear** > **Procurar na rede**, selecione o celular e confira o código de 6 dígitos que aparece nele.

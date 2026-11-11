@@ -110,7 +110,7 @@ In this first version, an Android phone (Android 10 or newer) shows up in the gr
 
 To prepare a phone:
 
-1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). A QR with the lab's Wi-Fi appears.
+1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). The window first asks for the lab Wi-Fi (network name and password); click **Gerar código** (generate code) and the QR appears.
 2. On the phone, first sign out of the Mi account (Xiaomi) in **Settings**, if there is one, and factory reset the phone.
 3. On the first screen after it restarts, tap 6 times anywhere on the screen and scan the QR. The phone downloads the Midview app and becomes a school device.
 4. In **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.

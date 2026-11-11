@@ -55,8 +55,9 @@ public class PhoneProvisioningTests
         Assert.Matches("^[A-Za-z0-9_-]{43}$", PhoneProvisioning.SignatureChecksum);
     }
 
-    // The release workflow sets MIDVIEW_RELEASE=1 on a v* tag: a placeholder
-    // checksum would make every prepared phone refuse the app, so it can't ship.
+    // Opt-in guard: with MIDVIEW_RELEASE set (no workflow sets it; android.yml
+    // and pacote.yml gate on the placeholder themselves), a placeholder
+    // checksum fails, since prepared phones would refuse the app.
     [Fact]
     public void Placeholder_checksum_does_not_ship_in_a_release_build()
     {

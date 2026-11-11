@@ -1,14 +1,12 @@
 # Builds the solution and runs every test on Windows, including the
 # Session and Master tests (and the GDI+ ones in Protocol) that only run
 # there. A Windows runner bills 2x the minutes of a Linux one, so this runs
-# on pushes to master and on pull requests only (and on pushed v* tags, where
-# MIDVIEW_RELEASE=1 also makes a placeholder phone checksum fail the tests).
+# on pushes to master and on pull requests only.
 name: Testes (Windows)
 
 on:
   push:
     branches: [master]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -24,8 +22,6 @@ jobs:
     name: Build e testes
     runs-on: windows-latest
     timeout-minutes: 30
-    env:
-      MIDVIEW_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') && '1' || '' }}
     steps:
       - uses: actions/checkout@v4
 

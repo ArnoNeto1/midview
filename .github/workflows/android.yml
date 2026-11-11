@@ -1,11 +1,23 @@
-# Phone app (src/Midview.Android): runs its JVM unit tests on every push or
-# pull request that touches it. For a pushed v* tag, and only then, it also
-# builds the release APK signed with the release key from the repository
-# secrets, names it MidviewAgent.apk and attaches it to that tag's GitHub
-# Release, next to MidviewSetup.exe (pacote.yml attaches that one). Missing
-# secrets fail the tag build: an unsigned or debug APK is never published,
-# because phones prepared with it could not be updated later. An APK already
-# attached to the Release is refused, never overwritten.
+# Phone app (src/Midview.Android): the "test" job runs its JVM unit tests on
+# every push or pull request that touches it. For a pushed v* tag, and only
+# when the phone app is enabled, the "release" job also builds the release APK
+# signed with the release key from the repository secrets, names it
+# MidviewAgent.apk and attaches it to that tag's GitHub Release, next to
+# MidviewSetup.exe (pacote.yml attaches that one).
+#
+# PhoneProvisioning.SignatureChecksum is the single readiness switch:
+# - still the placeholder: the phone app isn't configured yet, the release job
+#   is skipped with a notice and an ordinary Windows release stays green;
+# - a real checksum: a tag build needs the secrets below (it fails with a
+#   clear error if one is missing) and the signed APK's certificate must match
+#   that checksum, so an unsigned, debug or wrongly signed APK is never
+#   published (phones prepared with it could not be updated later).
+# The tag must be v<Version> or v<Version>-<suffix>, Version being the one in
+# Directory.Build.props. Publish by pushing the annotated tag: pacote.yml's
+# manual "publicar" path (tag made with GITHUB_TOKEN) doesn't start this
+# workflow, so it refuses once the phone app is enabled.
+# Running a tag build again, with MidviewAgent.apk already on the Release,
+# stays green and keeps the old asset: nothing is overwritten.
 #
 # Secrets (Settings > Secrets and variables > Actions):
 #   ANDROID_KEYSTORE_BASE64    the .jks keystore, Base64 encoded
@@ -38,17 +50,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  android:
-    name: Testes e APK
+  test:
+    name: Testes
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Attaching the APK to a release needs write access to the contents.
     permissions:
-      contents: write
-    env:
-      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      contents: read
+    outputs:
+      habilitado: ${{ steps.celular.outputs.habilitado }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Ver se o app do celular está habilitado
+        id: celular
+        run: |
+          checksum=$(grep -oP 'SignatureChecksum = "\K[^"]+' src/Midview.Master/PhoneProvisioning.cs || true)
+          if [ -z "$checksum" ]; then
+            echo "::error::PhoneProvisioning.SignatureChecksum não encontrado em src/Midview.Master/PhoneProvisioning.cs."
+            exit 1
+          fi
+          if [ "$checksum" = "PREENCHER-NA-TASK-9" ]; then
+            echo "habilitado=false" >> "$GITHUB_OUTPUT"
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::notice::APK do celular ainda não configurado: esta versão sai sem o MidviewAgent.apk."
+            fi
+          else
+            echo "habilitado=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -63,10 +91,30 @@ jobs:
         working-directory: src/Midview.Android
         run: ./gradlew testDebugUnitTest
 
-      # A tag build fails here, before anything is built, when something would
-      # make the phone app unusable or unsigned.
-      - name: Conferir os segredos e o checksum (tag v*)
-        if: env.IS_RELEASE == 'true'
+  release:
+    name: APK assinado na versão
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') && needs.test.outputs.habilitado == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Attaching the APK to a release needs write access to the contents.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Fails here, before anything is built, when a secret is missing or the
+      # tag doesn't match the version.
+      - name: Conferir os segredos e a tag
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -80,33 +128,48 @@ jobs:
             echo "::error::Faltam os segredos do GitHub:$missing. Sem eles o APK não é assinado, e um APK sem assinatura ou de teste não é publicado."
             exit 1
           fi
-          if grep -q 'PREENCHER-NA-TASK-9' src/Midview.Master/PhoneProvisioning.cs; then
-            echo "::error::PhoneProvisioning.SignatureChecksum ainda é o texto provisório. Calcule o checksum do APK assinado e fixe-o antes de publicar."
+          version=$(grep -oP '<Version>\s*\K[0-9]+\.[0-9]+\.[0-9]+(?=\s*</Version>)' Directory.Build.props || true)
+          if [ -z "$version" ]; then
+            echo "::error::Directory.Build.props sem <Version>."
+            exit 1
+          fi
+          tag="$GITHUB_REF_NAME"
+          if [ "$tag" != "v$version" ] && [[ "$tag" != "v$version-"?* ]]; then
+            echo "::error::A tag $tag não combina com a versão $version de Directory.Build.props: use v$version ou v$version-<sufixo>."
             exit 1
           fi
 
-      - name: Gerar o APK assinado (tag v*)
-        if: env.IS_RELEASE == 'true'
+      - name: Gerar o APK assinado
         working-directory: src/Midview.Android
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           MIDVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           MIDVIEW_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/midview-android.jks"
-          export MIDVIEW_KEYSTORE_PATH="$RUNNER_TEMP/midview-android.jks"
+          keystore="$RUNNER_TEMP/midview-android.jks"
+          trap 'rm -f "$keystore"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          export MIDVIEW_KEYSTORE_PATH="$keystore"
           ./gradlew assembleRelease
-          rm -f "$RUNNER_TEMP/midview-android.jks"
           apk=app/build/outputs/apk/release/app-release.apk
           [ -f "$apk" ] || { echo "::error::O build não gerou o APK assinado ($apk)."; exit 1; }
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
-          "$apksigner" verify --print-certs "$apk"
+          "$apksigner" verify --print-certs "$apk" | tee "$RUNNER_TEMP/certs.txt"
+          # The checksum the QR carries: SHA-256 of the signing certificate,
+          # Base64 URL-safe without "=".
+          hex=$(grep -m1 'certificate SHA-256 digest:' "$RUNNER_TEMP/certs.txt" | sed 's/.*digest: *//' | tr -d ' :\r')
+          [ -n "$hex" ] || { echo "::error::O apksigner não mostrou o SHA-256 do certificado."; exit 1; }
+          assinatura=$(python3 -c "import sys,base64; print(base64.urlsafe_b64encode(bytes.fromhex(sys.argv[1])).decode().rstrip('='))" "$hex")
+          esperado=$(grep -oP 'SignatureChecksum = "\K[^"]+' ../Midview.Master/PhoneProvisioning.cs)
+          if [ "$assinatura" != "$esperado" ]; then
+            echo "::error::O certificado do APK ($assinatura) não bate com PhoneProvisioning.SignatureChecksum ($esperado). Os celulares preparados recusariam este app."
+            exit 1
+          fi
           cp "$apk" "$RUNNER_TEMP/MidviewAgent.apk"
 
-      # overwrite_files: false makes the upload fail if the Release already has
-      # a MidviewAgent.apk, instead of replacing it.
-      - name: Anexar o APK à versão (tag v*)
-        if: env.IS_RELEASE == 'true'
+      # overwrite_files: false keeps an asset already on the Release, so a
+      # re-run stays green and replaces nothing.
+      - name: Anexar o APK à versão
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ runner.temp }}/MidviewAgent.apk
