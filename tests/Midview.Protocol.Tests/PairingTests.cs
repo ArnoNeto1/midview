@@ -128,4 +128,23 @@ public class PairingTests
         Assert.Null(PairingCodeArguments.Parse(new[] { "--pairing-code", "12a456", "--from", "x" }));
         Assert.Null(PairingCodeArguments.Parse(new[] { new string('A', 40) }));
     }
+
+    [Fact]
+    public void PairingResult_without_kind_is_windows()
+    {
+        var old = Encoding.UTF8.GetBytes($"{{\"name\":\"ALUNO-01\",\"session\":\"{Agent}\",\"mac\":null}}");
+
+        Assert.Equal(DeviceKind.Windows, PairingResult.Decode(old)!.DeviceKind);
+        Assert.DoesNotContain("kind", Encoding.UTF8.GetString(new PairingResult("ALUNO-01", Agent, null).Encode()));
+    }
+
+    [Fact]
+    public void PairingResult_round_trips_android()
+    {
+        var result = new PairingResult("Cel 01", Agent, null, DeviceKindText.ToWire(DeviceKind.Android));
+
+        var decoded = PairingResult.Decode(result.Encode())!;
+        Assert.Equal(DeviceKind.Android, decoded.DeviceKind);
+        Assert.Contains("\"kind\":\"android\"", Encoding.UTF8.GetString(result.Encode()));
+    }
 }

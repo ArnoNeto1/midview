@@ -24,7 +24,9 @@ public static class Discovery
 
     public static byte[] Encode(DiscoveryReply reply) =>
         JsonSerializer.SerializeToUtf8Bytes(new ReplyJson(
-            Version, reply.ProbeId, reply.Name, reply.AgentThumbprint, reply.Teachers, reply.NewTeacherOpen));
+            Version, reply.ProbeId, reply.Name, reply.AgentThumbprint, reply.Teachers, reply.NewTeacherOpen,
+            // Only an Android device says so; a Windows machine stays as old Agents were.
+            reply.Kind == DeviceKind.Android ? DeviceKindText.ToWire(reply.Kind) : null));
 
     // A reply carries "agent", which a probe never does.
     public static DiscoveryProbe? ParseProbe(byte[] packet) =>
@@ -35,7 +37,7 @@ public static class Discovery
     public static DiscoveryReply? ParseReply(byte[] packet) =>
         Read<ReplyJson>(packet) is { Midview: Version, Name: { Length: > 0 } name, Agent: { Length: > 0 } agent, Teachers: { } teachers } json
         && json.Probe != Guid.Empty && TeacherStatus.IsKnown(teachers)
-            ? new DiscoveryReply(json.Probe, name, agent, teachers, json.NewTeacherOpen)
+            ? new DiscoveryReply(json.Probe, name, agent, teachers, json.NewTeacherOpen, DeviceKindText.FromWire(json.Kind))
             : null;
 
     private static T? Read<T>(byte[] packet) where T : class
@@ -67,12 +69,13 @@ public static class Discovery
         [property: JsonPropertyName("name")] string? Name,
         [property: JsonPropertyName("agent")] string? Agent,
         [property: JsonPropertyName("teachers")] string? Teachers,
-        [property: JsonPropertyName("newTeacherOpen")] bool NewTeacherOpen);
+        [property: JsonPropertyName("newTeacherOpen")] bool NewTeacherOpen,
+        [property: JsonPropertyName("kind"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null);
 }
 
 public sealed record DiscoveryProbe(Guid Id, string MasterThumbprint);
 
-public sealed record DiscoveryReply(Guid ProbeId, string Name, string AgentThumbprint, string Teachers, bool NewTeacherOpen);
+public sealed record DiscoveryReply(Guid ProbeId, string Name, string AgentThumbprint, string Teachers, bool NewTeacherOpen, DeviceKind Kind = DeviceKind.Windows);
 
 // DiscoveryReply.Teachers: whom the machine trusts, as the asking teacher
 // sees it.

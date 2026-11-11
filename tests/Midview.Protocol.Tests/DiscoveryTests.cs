@@ -71,4 +71,37 @@ public class DiscoveryTests
         Assert.True(big.Length > Discovery.MaxPacketSize);
         Assert.Null(Discovery.ParseReply(big));
     }
+
+    private static byte[] ReplyBytes(string? kindField) => Encoding.UTF8.GetBytes(
+        $"{{\"midview\":1,\"probe\":\"{Probe}\",\"name\":\"ALUNO-01\",\"agent\":\"{Agent}\",\"teachers\":\"none\",\"newTeacherOpen\":false{kindField}}}");
+
+    [Fact]
+    public void Reply_without_kind_is_a_windows_machine()
+    {
+        Assert.Equal(DeviceKind.Windows, Discovery.ParseReply(ReplyBytes(null))!.Kind);
+    }
+
+    [Fact]
+    public void Reply_with_unknown_kind_is_windows()
+    {
+        Assert.Equal(DeviceKind.Windows, Discovery.ParseReply(ReplyBytes(",\"kind\":\"tv\""))!.Kind);
+    }
+
+    [Fact]
+    public void Reply_round_trips_android_kind()
+    {
+        var reply = new DiscoveryReply(Probe, "Cel 01", Agent, TeacherStatus.None, false, DeviceKind.Android);
+        var bytes = Discovery.Encode(reply);
+
+        Assert.Equal(DeviceKind.Android, Discovery.ParseReply(bytes)!.Kind);
+        Assert.Contains("\"kind\":\"android\"", Encoding.UTF8.GetString(bytes));
+    }
+
+    [Fact]
+    public void A_windows_reply_does_not_send_kind()
+    {
+        var bytes = Discovery.Encode(new DiscoveryReply(Probe, "ALUNO-01", Agent, TeacherStatus.None, false));
+
+        Assert.DoesNotContain("kind", Encoding.UTF8.GetString(bytes));
+    }
 }

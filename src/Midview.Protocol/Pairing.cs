@@ -80,8 +80,13 @@ public static class Pairing
 public sealed record PairingResult(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("session")] string SessionThumbprint,
-    [property: JsonPropertyName("mac")] string? MacAddress)
+    [property: JsonPropertyName("mac")] string? MacAddress,
+    [property: JsonPropertyName("kind"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null)
 {
+    // Old Agents send no kind: they are Windows machines.
+    [JsonIgnore]
+    public DeviceKind DeviceKind => DeviceKindText.FromWire(Kind);
+
     public byte[] Encode() => JsonSerializer.SerializeToUtf8Bytes(this);
 
     public static PairingResult? Decode(byte[] payload)
