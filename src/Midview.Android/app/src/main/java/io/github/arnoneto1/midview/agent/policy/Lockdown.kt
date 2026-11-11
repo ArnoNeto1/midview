@@ -9,14 +9,21 @@ interface DevicePolicyGateway {
     fun grantPermission(pkg: String, permission: String)
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
+
+    // A debug build (ApplicationInfo.FLAG_DEBUGGABLE).
+    val debuggable: Boolean
 }
 
 // The locks of a school phone, so a student cannot remove the agent or get
 // around it: no factory reset, no developer options or USB debugging, no
 // safe mode, no other users, no files over USB, the app cannot be
-// uninstalled and, from Android 11, cannot be force-stopped nor have its
-// data cleared. Only a Device Owner can set these; on any other phone it
-// does nothing. Every call sets a state, so applying again changes nothing.
+// uninstalled, force-stopped nor have its data cleared. Only a Device Owner
+// can set these; on any other phone it does nothing. Every call sets a
+// state, so applying again changes nothing.
+//
+// A debug build keeps adb and factory reset, so a test phone or emulator
+// made Device Owner can still be reached and reset. The APK published for
+// the Master's QR code must be the release build.
 class Lockdown(
     private val gw: DevicePolicyGateway,
     private val packageName: String = PACKAGE,
@@ -35,10 +42,16 @@ class Lockdown(
             }
         }
 
-        RESTRICTIONS.forEach { r -> step { gw.addUserRestriction(r) } }
+        RESTRICTIONS
+            .filterNot { gw.debuggable && it in KEPT_ON_DEBUG_BUILDS }
+            .forEach { r -> step { gw.addUserRestriction(r) } }
         step { gw.setUninstallBlocked(packageName, true) }
         if (gw.sdkInt >= ANDROID_11) {
             step { gw.setUserControlDisabled(listOf(packageName)) }
+        } else {
+            // Android 10 has no per-app control lock: no app can be
+            // force-stopped nor have its data cleared.
+            step { gw.addUserRestriction(DISALLOW_APPS_CONTROL) }
         }
         // The pairing code goes in a notification; on a school phone nobody
         // is there to answer the permission question.
@@ -62,6 +75,13 @@ class Lockdown(
             "no_add_user",
             "no_usb_file_transfer",
         )
+
+        // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,
+        // left off on debug builds.
+        val KEPT_ON_DEBUG_BUILDS = setOf("no_factory_reset", "no_debugging_features")
+
+        // UserManager.DISALLOW_APPS_CONTROL, only before Android 11.
+        const val DISALLOW_APPS_CONTROL = "no_control_apps"
 
         // Manifest.permission.POST_NOTIFICATIONS.
         const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"

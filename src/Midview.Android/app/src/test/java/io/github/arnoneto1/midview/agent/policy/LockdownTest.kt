@@ -11,6 +11,7 @@ class LockdownTest {
         override val sdkInt: Int = 34,
         private val owner: Boolean = true,
         private val failing: String? = null,
+        override val debuggable: Boolean = false,
     ) : DevicePolicyGateway {
         val restrictions = mutableSetOf<String>()
         val uninstallBlocked = mutableMapOf<String, Boolean>()
@@ -65,12 +66,54 @@ class LockdownTest {
         val android10 = FakeGateway(sdkInt = 29)
         Lockdown(android10).apply()
         assertEquals(null, android10.controlDisabledPackages)
-        assertEquals(all, android10.restrictions)
         assertEquals(mapOf(pkg to true), android10.uninstallBlocked)
 
         val android11 = FakeGateway(sdkInt = 30)
         Lockdown(android11).apply()
         assertEquals(listOf(pkg), android11.controlDisabledPackages)
+    }
+
+    // Android 10 has no per-app lock: force stop and clear data are closed
+    // for every app instead.
+    @Test fun closesAppsControlOnlyOnAndroid10() {
+        val android10 = FakeGateway(sdkInt = 29)
+        Lockdown(android10).apply()
+        assertEquals(all + "no_control_apps", android10.restrictions)
+
+        val android11 = FakeGateway(sdkInt = 30)
+        Lockdown(android11).apply()
+        assertEquals(all, android11.restrictions)
+        assertEquals(listOf(pkg), android11.controlDisabledPackages)
+    }
+
+    // A test phone or emulator made Device Owner with a debug build can
+    // still be reached by adb and reset.
+    @Test fun debugBuildKeepsAdbAndFactoryReset() {
+        val gw = FakeGateway(sdkInt = 34, debuggable = true)
+
+        assertTrue(Lockdown(gw).apply())
+
+        assertEquals(all - "no_debugging_features" - "no_factory_reset", gw.restrictions)
+        assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
+        assertEquals(listOf(pkg), gw.controlDisabledPackages)
+        assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
+    }
+
+    @Test fun debugBuildOnAndroid10StillClosesAppsControl() {
+        val gw = FakeGateway(sdkInt = 29, debuggable = true)
+
+        Lockdown(gw).apply()
+
+        assertEquals(all - "no_debugging_features" - "no_factory_reset" + "no_control_apps", gw.restrictions)
+    }
+
+    @Test fun releaseBuildKeepsEveryLock() {
+        val gw = FakeGateway(sdkInt = 34, debuggable = false)
+
+        Lockdown(gw).apply()
+
+        assertTrue(gw.restrictions.containsAll(setOf("no_debugging_features", "no_factory_reset")))
+        assertEquals(all, gw.restrictions)
     }
 
     // The pairing code goes in a notification; from Android 13 the app

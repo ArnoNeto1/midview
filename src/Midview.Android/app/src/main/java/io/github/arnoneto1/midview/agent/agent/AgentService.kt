@@ -11,7 +11,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
@@ -40,6 +42,7 @@ class AgentService : Service() {
     private var discoverySocket: DatagramSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private val main = Handler(Looper.getMainLooper())
     private var stopped = false
     private val stopping = CountDownLatch(1)
 
@@ -47,9 +50,6 @@ class AgentService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // The school phone's locks, again at every start (nothing on a
-        // phone that is not the school's Device Owner).
-        AndroidDevicePolicyGateway.lockDown(this)
         createChannels()
         goForeground(STATUS_TEXT)
         holdWifi()
@@ -57,7 +57,19 @@ class AgentService : Service() {
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    // The school phone's locks, again at every start (nothing on a phone
+    // that is not the school's Device Owner). Made Device Owner by
+    // `dpm set-device-owner`, the app is told (and starts the agent) before
+    // it really is one: the locks are tried once more a little later.
+    // Applying them twice changes nothing.
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AndroidDevicePolicyGateway.lockDown(this)
+        main.removeCallbacks(lockAgain)
+        main.postDelayed(lockAgain, LOCK_AGAIN_MILLIS)
+        return START_STICKY
+    }
+
+    private val lockAgain = Runnable { AndroidDevicePolicyGateway.lockDown(this) }
 
     override fun onDestroy() {
         synchronized(lock) {
@@ -65,6 +77,7 @@ class AgentService : Service() {
             closeListeners()
         }
         stopping.countDown()
+        main.removeCallbacks(lockAgain)
         wifiLock?.let { if (it.isHeld) it.release() }
         wifiLock = null
         PairingCodeActivity.hide()
@@ -229,6 +242,7 @@ class AgentService : Service() {
 
         private const val TAG = "Midview"
         private const val RETRY_MILLIS = 30_000L
+        private const val LOCK_AGAIN_MILLIS = 3_000L
 
         // How long the code screen has to come up when it is the only way
         // to show the code.

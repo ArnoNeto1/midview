@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.policy
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
@@ -14,6 +15,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     private val admin = ComponentName(app, AdminReceiver::class.java)
 
     override val sdkInt: Int = Build.VERSION.SDK_INT
+
+    override val debuggable: Boolean = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     override fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(app.packageName)
 
