@@ -125,4 +125,46 @@ public class ScreenFrameTests
         BitConverter.GetBytes(value).CopyTo(copy, offset);
         return copy;
     }
+
+    // A real baseline JPEG, 2x1 px. The same bytes are in the Kotlin test
+    // (ScreenFrameTest.kt in the Android agent); keep them identical.
+    private const string JpegHex =
+        "ffd8ffe000104a46494600010100000100010000ffdb004300100b0c0e0c0a100e0d0e1211101318281a181616183123251d" +
+        "283a333d3c3933383740485c4e404457453738506d51575f626768673e4d71797064785c656763ffdb004301111212181518" +
+        "2f1a1a2f63423842636363636363636363636363636363636363636363636363636363636363636363636363636363636363" +
+        "6363636363636363ffc00011080001000203012200021101031101ffc4001f00000105010101010101000000000000000001" +
+        "02030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114" +
+        "328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a53545556" +
+        "5758595a636465666768696a737475767778797a838485868788898a92939495969798999aa2a3a4a5a6a7a8a9aab2b3b4b5" +
+        "b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffc4001f010003" +
+        "0101010101010101010000000000000102030405060708090a0bffc400b51100020102040403040705040400010277000102" +
+        "031104052131061241510761711322328108144291a1b1c109233352f0156272d10a162434e125f11718191a262728292a35" +
+        "363738393a434445464748494a535455565758595a636465666768696a737475767778797a82838485868788898a92939495" +
+        "969798999aa2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae2e3e4e5e6e7e8e9ea" +
+        "f2f3f4f5f6f7f8f9faffda000c03010002110311003f00e426ff005cff00ef1fe7451457dbd0fe147d118d6fe24bd59fffd9";
+
+    // What the Kotlin agent's ScreenFrame.encode writes for frame 1, a 2x1
+    // screen and one region covering it.
+    [Fact]
+    public void Kotlin_frame_vector_decodes()
+    {
+        var jpeg = Convert.FromHexString(JpegHex);
+        var payload = new byte[]
+        {
+            1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0,
+            (byte)(jpeg.Length & 0xFF), (byte)(jpeg.Length >> 8), 0, 0,
+        }.Concat(jpeg).ToArray();
+
+        var frame = ScreenFrame.Decode(payload);
+
+        Assert.NotNull(frame);
+        Assert.Equal(1, frame!.FrameId);
+        Assert.Equal(2, frame.ScreenWidth);
+        Assert.Equal(1, frame.ScreenHeight);
+        var region = Assert.Single(frame.Regions);
+        Assert.Equal((0, 0, 2, 1), (region.X, region.Y, region.Width, region.Height));
+        Assert.Equal(jpeg, region.Jpeg);
+        Assert.Equal(payload, frame.Encode());
+    }
 }

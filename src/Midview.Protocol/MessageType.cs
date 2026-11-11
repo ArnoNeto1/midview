@@ -330,6 +330,10 @@ public enum MessageType : byte
     // 10 s receive timeout) frees the block, ref-counted across teachers. None
     // needs a reboot to take effect on the next Ctrl+Alt+Del.
     HoldSwitchUserBlock = 91,
+
+    // Master -> Android agent (port 28900): ask the device to show its screen-capture
+    // consent dialog, so the screen can then be streamed (ScreenStream, ScreenFrame).
+    RequestScreenConsent = 92,
 }
 
 public enum CloseAppsMode : byte

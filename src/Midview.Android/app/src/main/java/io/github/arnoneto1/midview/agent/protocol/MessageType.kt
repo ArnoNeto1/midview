@@ -5,9 +5,13 @@ package io.github.arnoneto1.midview.agent.protocol
 // used here; add others from that file with the same number.
 object MessageType {
     const val HEARTBEAT = 2
+    const val START_CONTROL = 3
+    const val STOP_CONTROL = 4
+    const val INPUT_EVENT = 6
     const val COMMAND_ACK = 11
     const val REQUEST_THUMBNAIL = 12
     const val THUMBNAIL_FRAME = 13
+    const val LOCK_SCREEN = 34
 
     // Pairing a teacher with this device (see Pairing for the exchange).
     const val PAIR_REQUEST = 37
@@ -22,4 +26,16 @@ object MessageType {
     // From a trusted teacher only: let one more teacher pair for
     // Pairing.NEW_TEACHER_WINDOW_MILLIS ("Permitir novo professor").
     const val ALLOW_NEW_TEACHER = 45
+
+    // Screen streaming: a first ScreenStream message makes the agent answer
+    // with ScreenFrame updates, and the viewer acknowledges each with FrameAck.
+    const val SCREEN_STREAM = 48
+    const val SCREEN_FRAME = 49
+    const val FRAME_ACK = 50
+    const val CLIPBOARD_TEXT = 60
+    const val FILL_ADMIN_PASSWORD = 90
+
+    // Master -> Android agent (port 28900): ask this device to show the
+    // screen-capture consent dialog.
+    const val REQUEST_SCREEN_CONSENT = 92
 }
