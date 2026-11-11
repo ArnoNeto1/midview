@@ -334,6 +334,20 @@ public enum MessageType : byte
     // Master -> Android agent (port 28900): ask the device to show its screen-capture
     // consent dialog, so the screen can then be streamed (ScreenStream, ScreenFrame).
     RequestScreenConsent = 92,
+
+    // Master -> Android agent, over TLS, from a teacher it doesn't trust yet:
+    // the QR code's proof (a PhoneClaimRequest) that this phone was prepared
+    // for that teacher's class, matching the claim in its discovery reply.
+    // Answered with PairDone (a PairingResult), the phone now trusting the
+    // Master, or PairRefused (why, in Portuguese). The proof works once.
+    ClaimPhone = 93,
+
+    // Master -> Android agent, from a trusted teacher only: erase the phone
+    // and set it up again ("Apagar e preparar de novo"), no payload. Answered
+    // with one CommandAck carrying a CommandResult. An agent from before this
+    // answers CommandAck with a refusal, which the Master shows as "Midview
+    // antigo neste celular".
+    WipePhone = 94,
 }
 
 public enum CloseAppsMode : byte

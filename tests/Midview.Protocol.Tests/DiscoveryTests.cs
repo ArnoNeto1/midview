@@ -104,4 +104,13 @@ public class DiscoveryTests
 
         Assert.DoesNotContain("kind", Encoding.UTF8.GetString(bytes));
     }
+
+    [Fact]
+    public void Reply_claim_round_trips_and_is_absent_when_null()
+    {
+        var r = new DiscoveryReply(Guid.NewGuid(), "Celular 07", "AB", TeacherStatus.None, false, DeviceKind.Android, "0123456789ABCDEF");
+        Assert.Equal("0123456789ABCDEF", Discovery.ParseReply(Discovery.Encode(r))!.ClaimId);
+        Assert.DoesNotContain("claim", Encoding.UTF8.GetString(Discovery.Encode(r with { ClaimId = null })));
+        Assert.Null(Discovery.ParseReply(Discovery.Encode(r with { ClaimId = null }))!.ClaimId);
+    }
 }
