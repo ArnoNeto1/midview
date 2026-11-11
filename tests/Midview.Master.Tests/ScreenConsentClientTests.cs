@@ -51,6 +51,19 @@ public sealed class ScreenConsentClientTests
     }
 
     [Fact]
+    public void PCs_left_out_are_told_in_singular_and_plural()
+    {
+        var pc = new KnownMachine("PC-1", "10.0.0.1", "s", "a");
+        var phone = new KnownMachine("Cel 01", "10.0.0.2", "s", "a", Kind: DeviceKind.Android);
+
+        Assert.Null(DeviceSupport.PhoneOnlyLeftOutNotice(new[] { phone }));
+        Assert.Equal("1 computador ficou de fora: essa ação só funciona em celular.",
+            DeviceSupport.PhoneOnlyLeftOutNotice(new[] { phone, pc }));
+        Assert.Equal("2 computadores ficaram de fora: essa ação só funciona em celular.",
+            DeviceSupport.PhoneOnlyLeftOutNotice(new[] { pc, phone, pc }));
+    }
+
+    [Fact]
     public void Menu_item_only_for_phones()
     {
         var pc = new KnownMachine("PC-1", "10.0.0.1", "s", "a");

@@ -518,7 +518,8 @@ public partial class MainWindow : MidviewWindow
         {
             return;
         }
-        var phones = MachinesOf(tile).Where(machine => machine.IsPhone).ToList();
+        var targets = MachinesOf(tile);
+        var phones = targets.Where(machine => machine.IsPhone).ToList();
         if (phones.Count == 0)
         {
             return;
@@ -538,7 +539,7 @@ public partial class MainWindow : MidviewWindow
                 return ScreenConsentClient.Summary(phone.Name, false, ErrorText.Describe(ex));
             }
         }).ToList());
-        StatusTextBlock.Text = string.Join(" ", lines);
+        StatusTextBlock.Text = WithNotice(string.Join(" ", lines), DeviceSupport.PhoneOnlyLeftOutNotice(targets));
     }
 
     // With several machines the menu first says how many, and leaves out what

@@ -147,6 +147,28 @@ class CommandHandlerTest {
         assertEquals(true to "a tela já está liberada", CommandResult.decode(channel.sent.single().payload))
     }
 
+    @Test fun requestScreenConsentAfterADenialShowsTheRequest() {
+        trusted.add(teacher)
+        consent.denied()
+        val channel = FakeChannel(teacher, message(MessageType.REQUEST_SCREEN_CONSENT))
+        handler.handle(channel)
+
+        assertEquals(1, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+        assertEquals(true to "pedido mostrado", CommandResult.decode(channel.sent.single().payload))
+    }
+
+    @Test fun requestScreenConsentWhileWaitingShowsTheRequestAgain() {
+        trusted.add(teacher)
+        consent.ask()
+        assertEquals(1, shown)
+        val channel = FakeChannel(teacher, message(MessageType.REQUEST_SCREEN_CONSENT))
+        handler.handle(channel)
+
+        assertEquals(ConsentState.Waiting, consent.state)
+        assertEquals(true to "pedido mostrado", CommandResult.decode(channel.sent.single().payload))
+    }
+
     @Test fun untrustedTeacherCannotRequestScreenConsent() {
         trusted.add(teacher)
         handler.handle(FakeChannel(stranger, message(MessageType.REQUEST_SCREEN_CONSENT)))

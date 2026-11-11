@@ -55,6 +55,18 @@ public static class DeviceSupport
             _ => $"{leftOut} celulares ficaram de fora: essa ação ainda não funciona em celular.",
         };
     }
+
+    // For an action made for phones only: said after it when PCs were among the targets; null when none.
+    public static string? PhoneOnlyLeftOutNotice(IReadOnlyCollection<KnownMachine> targets)
+    {
+        var leftOut = targets.Count(machine => !machine.IsPhone);
+        return leftOut switch
+        {
+            0 => null,
+            1 => "1 computador ficou de fora: essa ação só funciona em celular.",
+            _ => $"{leftOut} computadores ficaram de fora: essa ação só funciona em celular.",
+        };
+    }
 }
 
 // The action a toolbar button or a tile's menu item stands for, set in the
