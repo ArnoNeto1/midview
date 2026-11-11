@@ -350,4 +350,105 @@ public class PhoneSetupProgressTests
         Assert.Equal($"Passo 2 de {PhoneSetupGuide.Steps.Count}", progress.StepCaption);
         Assert.Equal(IndexOf("bateria"), progress.StepIndex);
     }
+
+    // After "Sim, preparar de novo": on the six taps with the wipe offered.
+    private static PhoneSetupProgress OfferedWipe()
+    {
+        var progress = AtNumber();
+        progress.NumberTaken(online: true);
+        progress.Next();
+        return progress;
+    }
+
+    [Fact]
+    public void A_wipe_offered_is_not_started()
+    {
+        var progress = OfferedWipe();
+
+        Assert.Equal(WipeState.Offered, progress.Wipe);
+        Assert.Null(progress.WipeFailure);
+    }
+
+    [Fact]
+    public void A_wiped_phone_does_not_offer_the_wipe_again_after_waiting_and_going_back()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        progress.WipeSucceeded();
+        progress.QrShown(Shown);
+
+        progress.Next();
+        progress.Back();
+
+        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal(WipeState.Done, progress.Wipe);
+    }
+
+    [Fact]
+    public void A_failed_wipe_keeps_its_reason_and_can_try_again()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        Assert.Equal(WipeState.Wiping, progress.Wipe);
+
+        progress.WipeFailed("o celular não respondeu");
+
+        Assert.Equal(WipeState.Failed, progress.Wipe);
+        Assert.Equal("o celular não respondeu", progress.WipeFailure);
+        progress.WipeStarted();
+        Assert.Null(progress.WipeFailure);
+    }
+
+    [Fact]
+    public void After_a_failed_wipe_the_way_forward_is_the_reset_step_without_the_offer()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        progress.WipeFailed("sem resposta");
+
+        progress.Restart();
+
+        Assert.Equal("restaurar", progress.StepId);
+        Assert.False(progress.OffersWipe);
+        Assert.Equal(WipeState.None, progress.Wipe);
+        Assert.Null(progress.WipeFailure);
+    }
+
+    [Fact]
+    public void The_wipe_state_goes_with_the_phone()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        progress.WipeSucceeded();
+
+        progress.Again();
+        Assert.Equal(WipeState.None, progress.Wipe);
+
+        progress.StartAt("07");
+        Assert.Equal(WipeState.None, progress.Wipe);
+    }
+
+    [Fact]
+    public void Wipe_results_without_an_offer_change_nothing()
+    {
+        var progress = AtNumber();
+
+        progress.WipeStarted();
+        progress.WipeSucceeded();
+
+        Assert.Equal(WipeState.None, progress.Wipe);
+    }
+
+    [Fact]
+    public void Starting_at_a_phone_wiped_from_its_menu_shows_the_wipe_done()
+    {
+        var progress = new PhoneSetupProgress();
+        progress.Start(hasWifi: true);
+
+        progress.StartAt("07", wiped: true);
+
+        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal(WipeState.Done, progress.Wipe);
+        Assert.Equal("Celular 07", progress.Name);
+    }
 }

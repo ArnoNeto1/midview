@@ -530,6 +530,7 @@ public partial class MainWindow : MidviewWindow
         var targets = TargetsOf(tile);
         ShowMenuFor(menu, targets.Count);
         GreyUnsupportedItems(menu.Items, targets);
+        ShowWipePhoneItem(menu.Items, targets);
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));

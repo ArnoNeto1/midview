@@ -64,4 +64,13 @@ public class DeviceSupportTests
         DeviceActions.SetAction(item, "SendFile");
         Assert.Equal(ToolbarAction.SendFile, DeviceActions.Of(item));
     }
+
+    [Fact]
+    public void Wiping_a_phone_is_for_phones_only()
+    {
+        Assert.True(DeviceSupport.Supports(DeviceKind.Android, ToolbarAction.WipePhone));
+        Assert.False(DeviceSupport.Supports(DeviceKind.Windows, ToolbarAction.WipePhone));
+        Assert.True(DeviceSupport.IsEnabled(new[] { Phone("Cel 01"), Pc("PC 01") }, ToolbarAction.WipePhone));
+        Assert.False(DeviceSupport.IsEnabled(new[] { Pc("PC 01") }, ToolbarAction.WipePhone));
+    }
 }

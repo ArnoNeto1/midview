@@ -11,6 +11,17 @@ internal enum SetupPage
     Ready,
 }
 
+// Where "Apagar e preparar de novo" stands on the six taps page of a phone
+// that was already in the class.
+internal enum WipeState
+{
+    None,
+    Offered,
+    Wiping,
+    Done,
+    Failed,
+}
+
 // Where the assistant is for the phone being prepared, without any window:
 // which page, which step of PhoneSetupGuide, the phone's number and when its
 // QR was shown. The window draws the page and calls these as the teacher
@@ -53,7 +64,41 @@ internal sealed class PhoneSetupProgress
 
     // The six taps page offers "Apagar e preparar de novo": the number was
     // already a phone of the class, online, and the teacher confirmed.
-    public bool OffersWipe { get; private set; }
+    public bool OffersWipe => Wipe != WipeState.None;
+
+    // Kept here, not in the window, so that redrawing the page (going Next to
+    // the waiting page and Back) does not offer the wipe again.
+    public WipeState Wipe { get; private set; }
+
+    // Why the wipe failed, for the page; null unless Wipe is Failed.
+    public string? WipeFailure { get; private set; }
+
+    public void WipeStarted()
+    {
+        if (OffersWipe)
+        {
+            Wipe = WipeState.Wiping;
+            WipeFailure = null;
+        }
+    }
+
+    public void WipeSucceeded()
+    {
+        if (OffersWipe)
+        {
+            Wipe = WipeState.Done;
+            WipeFailure = null;
+        }
+    }
+
+    public void WipeFailed(string reason)
+    {
+        if (OffersWipe)
+        {
+            Wipe = WipeState.Failed;
+            WipeFailure = reason;
+        }
+    }
 
     // The Wi-Fi page was opened with "trocar": Back returns to the step.
     public bool ReturnsAfterWifi => Page == SetupPage.Wifi && _afterWifi is not null;
@@ -97,7 +142,7 @@ internal sealed class PhoneSetupProgress
                 _afterWifi = null;
                 break;
             case SetupPage.ConfirmRedo:
-                OffersWipe = _takenOnline;
+                SetWipe(_takenOnline ? WipeState.Offered : WipeState.None);
                 ShowStep(_takenOnline ? SixTapsStep : BatteryStep);
                 break;
             case SetupPage.Step when StepIndex == NumberStep:
@@ -184,11 +229,13 @@ internal sealed class PhoneSetupProgress
         return true;
     }
 
-    // Straight to the six taps for a phone just wiped by "Apagar e preparar de novo".
-    public void StartAt(string number)
+    // Straight to the six taps for a phone just wiped by "Apagar e preparar de
+    // novo" (wiped: the page says so instead of offering the wipe).
+    public void StartAt(string number, bool wiped = false)
     {
         Reset();
         Number = PhoneNumber.Normalize(number) ?? number;
+        SetWipe(wiped ? WipeState.Done : WipeState.None);
         ShowStep(SixTapsStep);
     }
 
@@ -196,7 +243,7 @@ internal sealed class PhoneSetupProgress
     public void Restart()
     {
         QrShownAt = null;
-        OffersWipe = false;
+        SetWipe(WipeState.None);
         ShowStep(ResetStep);
     }
 
@@ -226,9 +273,15 @@ internal sealed class PhoneSetupProgress
     {
         Number = null;
         QrShownAt = null;
-        OffersWipe = false;
+        SetWipe(WipeState.None);
         _takenOnline = false;
         _afterWifi = null;
+    }
+
+    private void SetWipe(WipeState state)
+    {
+        Wipe = state;
+        WipeFailure = null;
     }
 
     private static int IndexOf(string id)

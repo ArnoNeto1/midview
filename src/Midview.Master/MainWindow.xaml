@@ -319,6 +319,8 @@
                                             <MenuItem Header="Painel do laboratório..." local:DeviceActions.Action="LabConfig" Click="OnLabConfigMachineClicked" />
                                             <MenuItem Header="Instalar programa..." local:DeviceActions.Action="Install" Click="OnInstallMachineClicked" />
                                             <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
+                                            <!-- Phones only, and only with the phone setup ready (OnMachineMenuOpening). -->
+                                            <MenuItem Tag="uma" Header="Apagar e preparar de novo..." local:DeviceActions.Action="WipePhone" Click="OnWipePhoneMachineClicked" />
                                             <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
                                             <Separator Tag="uma" />
                                             <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />

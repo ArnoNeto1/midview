@@ -25,14 +25,18 @@ public enum ToolbarAction
     LabConfig,
     ClassFolder,
     Update,
+    // A tile's menu only: erase a school phone so it can be prepared again.
+    WipePhone,
 }
 
-// What each kind of device accepts. A phone supports none of them yet; the
-// plans that teach the Android agent to watch the screen, lock it, block
-// programs and sites and update itself turn those on here.
+// What each kind of device accepts. A phone supports none of them yet, except
+// WipePhone (which only a phone supports); the plans that teach the Android
+// agent to watch the screen, lock it, block programs and sites and update
+// itself turn those on here.
 public static class DeviceSupport
 {
-    public static bool Supports(DeviceKind kind, ToolbarAction action) => kind == DeviceKind.Windows;
+    public static bool Supports(DeviceKind kind, ToolbarAction action) =>
+        action == ToolbarAction.WipePhone ? kind == DeviceKind.Android : kind == DeviceKind.Windows;
 
     // The machines that can do the action, in order: what a feature that
     // phones do not take part in (the class folder, the Windows update) is fed.

@@ -58,10 +58,11 @@ public partial class PreparePhonesWindow : MidviewWindow
     }
 
     // For a phone just wiped: straight to the six taps with its number (the
-    // Wi-Fi first if none is saved yet).
-    public void StartAt(string number)
+    // Wi-Fi first if none is saved yet). wiped: the page says it is being
+    // wiped, as the Master already did it from the phone's menu.
+    public void StartAt(string number, bool wiped = false)
     {
-        _progress.StartAt(number);
+        _progress.StartAt(number, wiped);
         if (_wifi is null)
         {
             _progress.ChangeWifi();
@@ -214,43 +215,10 @@ public partial class PreparePhonesWindow : MidviewWindow
         return true;
     }
 
-    private async void OnWipeClicked(object sender, RoutedEventArgs e)
-    {
-        var name = _progress.Name;
-        if (_wipe is null || name is null)
-        {
-            return;
-        }
-        if (MidviewMessage.Show(this, $"O {name} vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele.",
-                "Apagar e preparar de novo", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
-        {
-            return;
-        }
-        WipeButton.IsEnabled = false;
-        WipeStatus("Apagando...");
-        var (ok, detail) = await _wipe(name);
-        if (ok)
-        {
-            WipeButton.Visibility = Visibility.Collapsed;
-            WipeStatus($"O {name} está sendo apagado. Ele reinicia sozinho e volta à tela \"Bem-vindo\" em alguns minutos; então siga os passos abaixo.");
-        }
-        else
-        {
-            WipeButton.IsEnabled = true;
-            WipeStatus($"Não foi possível apagar o {name}: {detail}");
-        }
-    }
-
     private void NumberError(string text)
     {
         NumberErrorText.Text = text;
         NumberErrorText.Visibility = Shown(text.Length > 0);
-    }
-
-    private void WipeStatus(string text)
-    {
-        WipeStatusText.Text = text;
-        WipeStatusText.Visibility = Shown(text.Length > 0);
     }
 
     // Draws the page PhoneSetupProgress is on.
@@ -347,17 +315,11 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowPrint(step, isQr ? ScreenWidthBesideQr : ScreenWidth);
 
         QrCard.Visibility = Shown(isQr);
-        WipeCard.Visibility = Shown(isQr && _progress.OffersWipe && _wipe is not null);
         if (isQr)
         {
             ShowQr(_wifi!.Value);
-            WipeText.Text = $"O {_progress.Name} ainda está ligado e na turma. Para preparar de novo, o Midview apaga o celular daqui; ele volta à tela \"Bem-vindo\" sozinho.";
-            WipeButton.Visibility = Visibility.Visible;
-            WipeButton.IsEnabled = true;
-            WipeStatus("");
         }
-
-        Footer(back: _progress.StepIndex > 0, next: step.NextText);
+        ShowWipe();
     }
 
     // The phone print at a fixed width, the outline drawn over its Target.
