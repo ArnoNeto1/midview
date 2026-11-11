@@ -18,12 +18,13 @@ class TileDiff(private val tile: Int = 64) {
     }
 
     // The tiles (edge ones clamped to the picture) that differ from the previous
-    // picture, row by row. `previous` null or of another size: every tile (first
-    // frame, rotation). Callers must also pass null when the width and height
-    // change but the pixel count does not (a rotation), since only the sizes of
-    // the arrays are compared.
-    fun changed(previous: IntArray?, current: IntArray, width: Int, height: Int): List<Rect> {
-        val all = previous == null || previous.size != current.size
+    // picture, row by row. `previous` null, or of another width or height
+    // (first frame, rotation): every tile.
+    fun changed(
+        previous: IntArray?, prevWidth: Int, prevHeight: Int,
+        current: IntArray, width: Int, height: Int,
+    ): List<Rect> {
+        val all = previous == null || prevWidth != width || prevHeight != height
         val columns = (width + tile - 1) / tile
         val rows = (height + tile - 1) / tile
         val result = ArrayList<Rect>()
@@ -33,7 +34,7 @@ class TileDiff(private val tile: Int = 64) {
                 val y = row * tile
                 val w = minOf(tile, width - x)
                 val h = minOf(tile, height - y)
-                if (all || !tileEqual(previous, current, width, x, y, w, h)) result.add(Rect(x, y, w, h))
+                if (all || !tileEqual(previous!!, current, width, x, y, w, h)) result.add(Rect(x, y, w, h))
             }
         }
         return result

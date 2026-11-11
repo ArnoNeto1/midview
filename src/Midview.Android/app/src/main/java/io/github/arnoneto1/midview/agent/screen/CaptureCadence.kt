@@ -5,6 +5,7 @@ package io.github.arnoneto1.midview.agent.screen
 // moves on screen or the teacher is clicking and typing, 66 ms once that has
 // stopped for a second. A blinking caret does not count as moving: it changes
 // one capture and not the next.
+// Meant for a single capture thread (restAfter); only activity() may be called from another.
 class CaptureCadence {
     companion object {
         const val ACTIVE_INTERVAL_MS = 33L
