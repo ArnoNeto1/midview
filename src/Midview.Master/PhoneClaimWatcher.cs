@@ -17,6 +17,7 @@ public sealed class PhoneClaimWatcher : IDisposable
     private readonly object _round = new();
     private readonly Timer? _timer;
     private volatile bool _disposed;
+    private volatile bool _again;
 
     // timed: false for tests, which call CheckOnce themselves.
     public PhoneClaimWatcher(
@@ -35,21 +36,42 @@ public sealed class PhoneClaimWatcher : IDisposable
     }
 
     // A QR was just shown: look now instead of waiting for the next round.
-    public void Kick() => _timer?.Change(TimeSpan.Zero, Interval);
+    // A Kick during a round is not lost: Tick finds the round busy and
+    // asks for another one. After Dispose it does nothing.
+    public void Kick()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        try
+        {
+            _timer?.Change(TimeSpan.Zero, Interval);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Disposed between the check and the call.
+        }
+    }
 
     // One round. False when nothing was pending (nothing was searched).
     public bool CheckOnce()
     {
         lock (_round)
         {
-            var pending = PendingPhoneClaimsFile.LoadValid(_now(), _folder);
+            var pending = PendingPhoneClaimsFile.LoadValid(_now(), _folder).ToList();
             if (pending.Count == 0 || _disposed)
             {
                 return false;
             }
 
-            foreach (var found in _search())
+            var seen = _search();
+            foreach (var found in seen)
             {
+                if (_disposed)
+                {
+                    break;
+                }
                 if (found.ClaimId is null)
                 {
                     continue;
@@ -70,6 +92,8 @@ public sealed class PhoneClaimWatcher : IDisposable
                     // Stays pending: the next round tries again.
                     continue;
                 }
+                // One proof works once: no other device in this round gets it.
+                pending.Remove(claim);
                 PendingPhoneClaimsFile.Remove(claim.Token, _folder);
                 _added(machine);
             }
@@ -77,19 +101,35 @@ public sealed class PhoneClaimWatcher : IDisposable
         }
     }
 
+    // A round still running (a phone stalling the TLS step) means this tick
+    // is skipped, not queued behind it; the running round goes again instead.
     private void Tick()
     {
         if (_disposed)
         {
             return;
         }
+        if (!Monitor.TryEnter(_round))
+        {
+            _again = true;
+            return;
+        }
         try
         {
-            CheckOnce();
+            do
+            {
+                _again = false;
+                CheckOnce();
+            }
+            while (_again && !_disposed);
         }
         catch (Exception)
         {
             // A bad round (network down, disk) must not kill the timer.
+        }
+        finally
+        {
+            Monitor.Exit(_round);
         }
     }
 

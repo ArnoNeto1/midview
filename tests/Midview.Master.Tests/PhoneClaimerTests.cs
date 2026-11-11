@@ -47,27 +47,69 @@ public class PhoneClaimerTests : IDisposable
         return (port, done);
     }
 
+    // A phone that knows the token: answers with the proof over the Master's nonce.
+    private static Message Done(SecureChannel channel, string agentThumbprint, string masterThumbprint, string token, PhoneClaimRequest request, Func<string, string>? tamper = null)
+    {
+        var proof = PhoneClaim.Proof(token, request.Nonce, agentThumbprint, masterThumbprint);
+        return new Message(MessageType.PairDone,
+            new PairingResult("Celular 07", Session, null, DeviceKindText.AndroidWire, tamper is null ? proof : tamper(proof)).Encode());
+    }
+
     [Fact]
-    public async Task Claim_sends_token_and_teacher_and_returns_the_phone()
+    public async Task Claim_sends_nonce_never_the_token_and_accepts_the_proof()
     {
         PhoneClaimRequest? seen = null;
+        byte[] raw = Array.Empty<byte>();
         var (port, done) = FakeAgent(channel =>
         {
             var message = channel.Receive();
             Assert.Equal(MessageType.ClaimPhone, message.Type);
+            raw = message.Payload;
             seen = PhoneClaimRequest.Decode(message.Payload);
-            channel.Send(new Message(MessageType.PairDone,
-                new PairingResult("Celular 07", Session, null, DeviceKindText.AndroidWire).Encode()));
+            channel.Send(Done(channel, _agentCert.Thumbprint, _teacher.Thumbprint, "tok-abc", seen!));
         });
 
         var machine = await OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.Equal(new PhoneClaimRequest("tok-abc", "PROF-01"), seen);
+        Assert.Equal("PROF-01", seen!.TeacherName);
+        Assert.DoesNotContain("tok-abc", Encoding.UTF8.GetString(raw));
         Assert.Equal("Celular 07", machine.Name);
         Assert.True(machine.IsPhone);
         Assert.Equal(_agentCert.Thumbprint, machine.AgentThumbprint);
         Assert.Equal(Session, machine.SessionThumbprint);
+    }
+
+    [Fact]
+    public async Task Claim_with_a_wrong_proof_is_refused()
+    {
+        var (port, done) = FakeAgent(channel =>
+        {
+            var request = PhoneClaimRequest.Decode(channel.Receive().Payload)!;
+            channel.Send(Done(channel, _agentCert.Thumbprint, _teacher.Thumbprint, "outro-token", request));
+        });
+
+        var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(PairingSession.InvalidAnswer, ex.Message);
+    }
+
+    [Fact]
+    public async Task Claim_without_a_proof_is_refused()
+    {
+        var (port, done) = FakeAgent(channel =>
+        {
+            channel.Receive();
+            channel.Send(new Message(MessageType.PairDone, new PairingResult("Celular 07", Session, null, DeviceKindText.AndroidWire).Encode()));
+        });
+
+        var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(PairingSession.InvalidAnswer, ex.Message);
     }
 
     [Fact]

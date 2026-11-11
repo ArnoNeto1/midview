@@ -14,8 +14,22 @@ namespace Midview.Protocol;
 public static class PhoneClaim
 {
     // 32 random bytes in URL-safe Base64 without padding: 43 characters.
-    public static string NewToken() =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    public static string NewToken() => Base64Url(RandomNumberGenerator.GetBytes(32));
+
+    // Same shape as a token: a fresh value the Master picks for each claim.
+    public static string NewNonce() => Base64Url(RandomNumberGenerator.GetBytes(32));
+
+    // What the phone answers with, so the Master knows it holds the token
+    // without the token ever going on the wire: HMAC-SHA256 keyed by the
+    // token over the Master's nonce and both thumbprints (upper case),
+    // in URL-safe Base64 without padding.
+    public static string Proof(string token, string nonce, string agentThumbprint, string masterThumbprint) =>
+        Base64Url(HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(token),
+            Encoding.UTF8.GetBytes(nonce + agentThumbprint.Trim().ToUpperInvariant() + masterThumbprint.Trim().ToUpperInvariant())));
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     // The first 16 hex characters (upper case) of SHA-256 of the token's
     // UTF-8 bytes. Short enough for a discovery reply, and it doesn't give
@@ -24,14 +38,18 @@ public static class PhoneClaim
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)))[..16];
 }
 
-// What ClaimPhone carries: the proof from the QR and the teacher's computer
-// name, shown on the phone. Sent over the Android agent's TLS port.
+// What ClaimPhone carries: a fresh nonce (the phone proves it knows the QR's
+// token over it, see PhoneClaim.Proof) and the teacher's computer name,
+// shown on the phone. The token itself is never sent. Sent over the Android agent's TLS port.
 public sealed record PhoneClaimRequest(
-    [property: JsonPropertyName("token")] string Token,
+    [property: JsonPropertyName("nonce")] string Nonce,
     [property: JsonPropertyName("teacher")] string TeacherName)
 {
     // Nothing legitimate comes close to this, so a bigger payload is junk.
     public const int MaxPayloadLength = 4096;
+
+    private static bool IsNonce(string value) =>
+        value.Length == 43 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
     public byte[] Encode() => JsonSerializer.SerializeToUtf8Bytes(this);
 
@@ -45,7 +63,7 @@ public sealed record PhoneClaimRequest(
         try
         {
             var request = JsonSerializer.Deserialize<PhoneClaimRequest>(payload);
-            return request is { Token.Length: > 0, TeacherName: not null } ? request : null;
+            return request is { Nonce: { } nonce, TeacherName: not null } && IsNonce(nonce) ? request : null;
         }
         catch (JsonException)
         {

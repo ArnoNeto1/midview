@@ -160,4 +160,15 @@ public class PairingTests
         Assert.Equal(DeviceKind.Android, decoded.DeviceKind);
         Assert.Contains("\"kind\":\"android\"", Encoding.UTF8.GetString(result.Encode()));
     }
+
+    [Fact]
+    public void PairingResult_decodes_with_and_without_proof()
+    {
+        var withProof = new PairingResult("Cel 01", Agent, null, DeviceKindText.AndroidWire, "p-roof");
+        Assert.Equal(withProof, PairingResult.Decode(withProof.Encode()));
+        var without = new PairingResult("ALUNO-01", Agent, null);
+        Assert.DoesNotContain("proof", Encoding.UTF8.GetString(without.Encode()));
+        Assert.Null(PairingResult.Decode(without.Encode())!.Proof);
+        Assert.Equal("x", PairingResult.Decode(Encoding.UTF8.GetBytes("{\"name\":\"a\",\"session\":\"b\",\"mac\":null,\"proof\":\"x\"}"))!.Proof);
+    }
 }

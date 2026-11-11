@@ -90,4 +90,87 @@ public class PhoneClaimWatcherTests : IDisposable
 
         Assert.Equal(new[] { pcSameName, other, Joined() }, result);
     }
+
+    [Fact]
+    public void One_token_is_claimed_once_per_round_even_if_two_devices_advertise_it()
+    {
+        PendingPhoneClaimsFile.Add(new PendingPhoneClaim("07", "tok-a", Now.AddHours(1)), _folder);
+        var id = PhoneClaim.ClaimId("tok-a");
+        var other = Phone(id) with { AgentThumbprint = new string('B', 40), Address = "10.0.0.8" };
+        var claims = 0;
+        var added = 0;
+        using var watcher = new PhoneClaimWatcher(
+            () => new[] { Phone(id), other }, (_, _) => { claims++; return Joined(); }, _ => added++, () => Now, _folder, timed: false);
+
+        watcher.CheckOnce();
+
+        Assert.Equal(1, claims);
+        Assert.Equal(1, added);
+    }
+
+    [Fact]
+    public void Dispose_during_the_search_stops_the_round_before_any_claim()
+    {
+        PendingPhoneClaimsFile.Add(new PendingPhoneClaim("07", "tok-a", Now.AddHours(1)), _folder);
+        PhoneClaimWatcher? watcher = null;
+        var claims = 0;
+        watcher = new PhoneClaimWatcher(
+            () => { watcher!.Dispose(); return new[] { Phone(PhoneClaim.ClaimId("tok-a")) }; },
+            (_, _) => { claims++; return Joined(); }, _ => { }, () => Now, _folder, timed: false);
+
+        watcher.CheckOnce();
+
+        Assert.Equal(0, claims);
+        Assert.Single(PendingPhoneClaimsFile.LoadValid(Now, _folder));
+    }
+
+    [Fact]
+    public void Kick_after_Dispose_does_nothing()
+    {
+        var watcher = new PhoneClaimWatcher(() => Array.Empty<FoundMachine>(), (_, _) => Joined(), _ => { }, () => Now, _folder);
+        watcher.Dispose();
+
+        watcher.Kick();
+    }
+
+    [Fact]
+    public void Kicks_during_a_slow_round_do_not_overlap_but_ask_for_another_round()
+    {
+        PendingPhoneClaimsFile.Add(new PendingPhoneClaim("07", "tok-a", Now.AddHours(1)), _folder);
+        var inside = 0;
+        var maxInside = 0;
+        var rounds = 0;
+        var release = new ManualResetEventSlim();
+        var secondRound = new ManualResetEventSlim();
+        using var watcher = new PhoneClaimWatcher(
+            () =>
+            {
+                var n = Interlocked.Increment(ref inside);
+                maxInside = Math.Max(maxInside, n);
+                if (Interlocked.Increment(ref rounds) == 1)
+                {
+                    release.Wait(TimeSpan.FromSeconds(20));
+                }
+                else
+                {
+                    secondRound.Set();
+                }
+                Interlocked.Decrement(ref inside);
+                return Array.Empty<FoundMachine>();
+            },
+            (_, _) => Joined(), _ => { }, () => Now, _folder);
+
+        watcher.Kick();
+        SpinWait.SpinUntil(() => Volatile.Read(ref rounds) == 1, TimeSpan.FromSeconds(10));
+        for (var i = 0; i < 5; i++)
+        {
+            watcher.Kick();
+            Thread.Sleep(50);
+        }
+        Assert.Equal(1, Volatile.Read(ref rounds));
+        release.Set();
+
+        Assert.True(secondRound.Wait(TimeSpan.FromSeconds(10)));
+        Assert.Equal(1, maxInside);
+    }
 }
