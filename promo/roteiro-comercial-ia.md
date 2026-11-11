@@ -1,20 +1,25 @@
 # Roteiro de produção: comercial do Midview (ElevenLabs + Higgsfield)
 
 Comercial de cerca de 50 segundos, 16:9, 1080p, em quatro cenas. A locução é
-gerada no ElevenLabs e as cenas cinematográficas no Higgsfield; a interface do
-Midview nunca é gerada por IA: entra por gravação de tela ou pelos renders do
-Remotion desta pasta.
+gerada no ElevenLabs e o ambiente (o laboratório, as partículas, os fundos) no
+Higgsfield.
+
+**Regra do filme: todo quadro em que o Midview aparece é imagem real do
+programa**, gravada da tela. A IA não desenha, não anima e não "melhora" a
+interface. O aplicativo real entra já na Cena 2 e ocupa mais da metade do
+filme. A única exceção possível é o cadeado nos monitores da sala, na Cena 2,
+que não tem texto (a alternativa filmada está lá).
 
 **Conceito: do caos ao comando.** O caos é quente, colorido e barulhento, sem
 nenhum ciano. O Midview chega em preto, cinza e ciano elétrico, e a partir daí
 o ciano é a única cor do filme.
 
-| Cena | Tempo (estimado) | Imagem |
-| --- | --- | --- |
-| 1. A Dor | 0:00 a 0:11 | Higgsfield |
-| 2. A Virada | 0:11 a 0:20 | Higgsfield |
-| 3. A Ação | 0:20 a 0:39 | Tela real do Midview, com apoio do Higgsfield |
-| 4. Call to Action | 0:39 a 0:50 | Higgsfield (fundo) + logo e endereço na edição |
+| Cena | Tempo (estimado) | Imagem | Aplicativo real na tela |
+| --- | --- | --- | --- |
+| 1. A Dor | 0:00 a 0:11 | Higgsfield | nada (o Midview ainda não chegou) |
+| 2. A Virada | 0:11 a 0:20 | Higgsfield, depois a janela real | cerca de 4 s |
+| 3. A Ação | 0:20 a 0:39 | Tela real, com 1 a 2 s de Higgsfield | cerca de 18 s |
+| 4. Call to Action | 0:39 a 0:50 | Fundo do Higgsfield + janela real, logo e endereço | cerca de 6 s |
 
 Os tempos são estimativas pelo número de palavras. Gere a locução primeiro e
 monte a imagem em cima dela, não o contrário.
@@ -43,6 +48,62 @@ lado que sustente isso, e publicidade comparativa precisa ser comprovável
 máquina lenta não segura a turma") e a Cena 3 prova com uma tomada real, sem
 cortes. Se você medir os dois programas no mesmo laboratório, a comparação
 direta pode entrar com o número na tela.
+
+## Imagens reais do aplicativo
+
+### O que gravar
+
+Seis tomadas do Midview 0.0.50, todas a partir do computador do professor.
+Monte a sala para a gravação com máquinas e telas fictícias (nomes como
+ALUNO-01 e uma atividade de aula aberta em cada uma), como nas fotos do site:
+nada de alunos, nomes ou trabalhos de verdade.
+
+| Tomada | O que gravar | Texto real que aparece | Entra em |
+| --- | --- | --- | --- |
+| **R1. A sala** | A janela "Midview - Sala de aula" inteira, com todas as telas ao vivo. 10 segundos parada; depois, mova o controle deslizante de tamanho e clique em **Visualizar todos**. Deixe uma máquina desligada, para aparecer "Sem resposta". | "Midview Sala de aula", "29 de 31 ligadas", os nomes dos botões da barra | Cenas 2, 3 e 4 |
+| **R2. Bloquear telas** | O cursor vai até **Bloquear telas** e clica uma vez. Não corte até a última tela virar cadeado. Uma tomada só, sem edição. | "Bloquear telas" vira "Desbloquear telas"; "🔒 Bloqueada" em cada tela; "Telas bloqueadas: 31 de 31." | Cena 3 |
+| **R3. Fechar programas** | Abra **Fechar programas**, marque "Avisar o aluno e esperar 30 segundos" e clique no botão. Espere o resultado de todas as máquinas. | "Fechar programas", "Avisar o aluno e esperar 30 segundos", "Concluído em 31 de 31" | Cena 3 |
+| **R4. O aviso no aluno** | Durante a R3, a tela de um aluno aberta com **Ver a tela** (dois cliques no quadrado dele): o aviso aparece e os programas fecham. | "O professor vai fechar seus programas em 30 segundos. Salve seu trabalho agora." | Cena 3 |
+| **R5. Bloquear programas** | Abra **Bloquear programas**, marque dois ou três em "Programas abertos" e clique em **Aplicar bloqueio**. | "Bloquear só os programas escolhidos", "Aplicar bloqueio", "ALUNO-01: aplicado" | Cena 3 |
+| **R6. Bloquear sites** | Abra **Bloquear sites** e clique em **Bloquear a internet**. | "Bloquear a internet", "O bloqueio continua valendo se a máquina reiniciar." | Cena 3 |
+
+A R4 mostra a tela do aluno pela janela **Ver a tela** do professor, então
+continua sendo imagem do aplicativo e dispensa gravar na máquina do aluno.
+
+### Como gravar
+
+- **OBS, 60 quadros por segundo, em 4K** (ou com a escala do Windows em 150%
+  ou 200% num monitor de alta resolução). O Midview é desenhado em vetor e
+  fica nítido em qualquer escala; com a gravação maior que o filme, dá para
+  aproximar num botão sem borrar.
+- Grave só a janela do Midview, sem a barra de tarefas nem notificações do
+  Windows.
+- Mouse devagar, em linha reta, um clique por ação. Dois segundos parado antes
+  e depois de cada clique, para ter onde cortar.
+- Grave cada tomada três vezes. A R2 é a mais importante: é a prova de
+  velocidade do filme.
+
+### O que já existe no repositório
+
+`site/img/sala-de-aula.webp`, `bloquear-programas.webp`, `agendar.webp`,
+`pasta-turma.webp` e `maquinas.webp` são fotos das janelas reais, com máquinas
+fictícias. Servem como imagem parada num canto do quadro, mas são pequenas (a
+maior tem 1340×760) para ocupar a tela inteira em 1080p: para o filme, grave de
+novo.
+
+Os vídeos do Remotion desta pasta **não** são imagem real: são a janela
+redesenhada em React. Use-os só como rascunho, para acertar o tempo da
+montagem antes de gravar, e troque todos pelas tomadas reais no corte final.
+
+### A imagem real e o Higgsfield
+
+- **Não envie uma captura do Midview ao Higgsfield** como quadro inicial ou
+  referência de um vídeo. O modelo redesenha cada quadro e as letras deformam
+  em menos de um segundo.
+- O movimento sobre a imagem real é feito na edição: aproximação, inclinação
+  em 3D, deslocamento.
+- O Higgsfield entrega o que fica em volta: o monitor de tela verde onde a
+  gravação é encaixada, o laboratório, as partículas e os fundos.
 
 ## Parte 1: locução (ElevenLabs)
 
@@ -134,15 +195,25 @@ Extreme close-up of a teacher's hand hovering over a computer mouse, hesitating,
 Midview. [pausa curta] O laboratório inteiro, ao vivo, na sua tela... e sob o
 seu comando.
 
-**Prompt Higgsfield** (9 a 10 segundos; o pulso de luz deve cair em "acabou"):
+**Imagem real:** em "Este é o Midview", corte da IA para a tomada **R1**. A
+janela real sobe de dentro das partículas (sobre o fundo da Cena 4), levemente
+inclinada em 3D, e assenta de frente; em "ao vivo, na sua tela" ela ocupa o
+quadro inteiro, com a grade de telas se atualizando. É a primeira vez que o
+produto aparece, e é o produto de verdade.
+
+**Prompt Higgsfield** (6 segundos, só a primeira metade da cena; o pulso de luz
+deve cair em "acabou"):
 
 ```text
 Extreme slow motion, one continuous shot. The same school computer lab, now frozen in time: the overhead lights cut out and the room drops into deep black and charcoal gray. From the teacher's desk in the foreground, a single pulse of electric cyan light, exact color #00BBD4, bursts outward as a thin shockwave ring that sweeps across the room. As the wave crosses each row, the chaotic colors on every monitor are wiped away one by one and replaced by a calm, uniform dark-gray screen showing one simple flat light-gray padlock icon in the center. The students are motionless dark silhouettes seen from behind. Thousands of fine glowing cyan particles and hair-thin threads of light trail behind the wave, linking monitor to monitor like a network, then settle and hang suspended in the air. Camera: perfectly smooth slow dolly forward down the center aisle with a gentle upward crane move, 24mm lens, deep parallax through the floating particles. Lighting: volumetric cyan beams cutting through light haze, soft cyan rim light on desks and chairs, glossy reflections on a dark polished floor, pitch-black shadows. Color palette: strictly black, charcoal gray, electric cyan #00BBD4 and light gray, no other hues. Style: Unreal Engine 5 cinematic render, ray-traced reflections, hyper-detailed, premium technology commercial, 120 fps slow motion. No readable text, no logos, no user interface.
 ```
 
-O cadeado cinza-claro sobre cinza-escuro, sem texto, é exatamente a tela que o
-aluno vê no **Bloquear telas** (`WinFormsScreenLock`): por não ter letras, a IA
-consegue desenhá-la, e o corte para a interface real fica coerente.
+O cadeado nos monitores da sala é o único ponto do filme em que a IA
+representa algo do Midview: é a tela que o aluno vê no **Bloquear telas**
+(`WinFormsScreenLock`), cinza-claro sobre cinza-escuro e sem letras, por isso a
+IA consegue desenhá-la sem errar. Para ter isso também em imagem real, filme
+com o celular, em 4K e na horizontal, o laboratório de verdade no instante do
+bloqueio, e corte do pulso de luz para esse plano.
 
 Se a virada não sair de primeira: gere duas imagens paradas (o laboratório no
 caos e o laboratório com os cadeados) e use-as como quadro inicial e final no
@@ -166,24 +237,17 @@ Plano a plano:
 
 | Fala | Imagem |
 | --- | --- |
-| "Um clique:" | **Real.** Aproximação no botão **Bloquear telas** da barra; o cursor clica. |
-| "todas as telas bloqueadas. Teclado e mouse, travados." | **IA** (1 a 2 segundos, sobra da Cena 2: os monitores virando cadeado) e corte para o **real**: a grade com o cadeado em todas as telas, "🔒 Tela bloqueada" em cada uma e "Telas bloqueadas: 14 de 14." na linha de status. |
-| "Outro clique: os programas fecham, com aviso para o aluno salvar o trabalho." | **Real**, tela dividida. À esquerda, a janela **Fechar programas** com "Avisar o aluno e esperar 30 segundos" marcado e o clique no botão. À direita, a tela do aluno com o aviso "O professor vai fechar seus programas em 30 segundos. Salve seu trabalho agora." |
-| "Jogos e sites fora da aula? Bloqueados. Mesmo depois de reiniciar." | **Real**, dois cortes rápidos: **Bloquear programas** > **Aplicar bloqueio**, e **Bloquear sites** > **Bloquear a internet**. O corte cai na palavra "Bloqueados". |
-| "Tudo fluido: uma máquina lenta não segura a turma." | **Real**, uma tomada sem cortes: a grade inteira ao vivo, o controle deslizante mudando o tamanho das telas, uma máquina "Sem resposta" no meio das outras, que seguem atualizando. |
+| "Um clique:" | **Real (R2).** Aproximação no botão **Bloquear telas** da barra; o cursor clica. |
+| "todas as telas bloqueadas. Teclado e mouse, travados." | **Real (R2)**, a mesma tomada, agora aberta: a grade inteira virando cadeado, "🔒 Bloqueada" em cada tela e "Telas bloqueadas: 31 de 31." na linha de status. No meio, 1 a 2 segundos de **IA** (sobra da Cena 2: os monitores do laboratório virando cadeado), se quiser mostrar a sala. |
+| "Outro clique: os programas fecham, com aviso para o aluno salvar o trabalho." | **Real (R3 e R4)**, tela dividida. À esquerda, a janela **Fechar programas** com "Avisar o aluno e esperar 30 segundos" marcado e o clique no botão. À direita, a tela do aluno com o aviso "O professor vai fechar seus programas em 30 segundos. Salve seu trabalho agora." |
+| "Jogos e sites fora da aula? Bloqueados. Mesmo depois de reiniciar." | **Real (R5 e R6)**, dois cortes rápidos: **Bloquear programas** > **Aplicar bloqueio**, e **Bloquear sites** > **Bloquear a internet**. O corte cai na palavra "Bloqueados". |
+| "Tudo fluido: uma máquina lenta não segura a turma." | **Real (R1)**, sem cortes: a grade inteira ao vivo, o controle deslizante mudando o tamanho das telas, uma máquina "Sem resposta" no meio das outras, que seguem atualizando. |
 
 Como juntar a IA com a tela real:
 
-1. **De onde vem a tela real.** Duas fontes, as duas com o texto certo:
-   - Gravação com o OBS em 1920×1080 a 60 quadros por segundo, do Midview
-     0.0.50, num laboratório montado para a gravação, com máquinas e telas
-     fictícias (como nos vídeos do site). Não grave alunos de verdade nem
-     nomes reais de máquinas.
-   - Render do Remotion desta pasta, que reproduz a janela "Midview - Sala de
-     aula" no visual Painel com os textos reais e o cursor suave:
-     `npx remotion render MidviewPromoPainel out/painel.mp4`. Os trechos
-     `bloquear` (`src/painel/beats/tela.tsx`) e `fechar`, `bloquearProgramas`
-     e `bloquearSites` (`src/painel/beats/programas.tsx`) são os desta cena.
+1. **De onde vem a tela real.** Das tomadas R1 a R6 da seção "Imagens reais
+   do aplicativo", gravadas do programa. Nada de interface gerada ou
+   redesenhada no corte final.
 2. **Troca de tela.** Gere no Higgsfield o plano abaixo, com um monitor de
    tela verde lisa, e encaixe a gravação nele com "corner pin" (After Effects)
    ou o rastreador planar do Fusion (DaVinci Resolve). Com a câmera parada
@@ -234,6 +298,10 @@ cada cor.
 
 Na edição, sobre o fundo:
 
+- **A janela real (R1)**, com a grade ao vivo: ocupa o quadro nos dois
+  primeiros segundos, em "Midview", e depois encolhe para a metade direita,
+  levemente inclinada, onde continua se atualizando até o fim. A logo e o
+  endereço ficam na metade esquerda.
 - A logo: `../assets/midview-logo.jpg` tem fundo preto, então entra no modo de
   mesclagem "Tela" (Screen). `../assets/midview-animado.webp` é a versão
   animada, e a composição `Cena9-Encerramento` do Remotion é a vetorial.
@@ -256,5 +324,6 @@ Efeitos pontuais: o burburinho de sala na Cena 1, cortado a seco em "O caos
 acabou"; um grave no pulso de luz; um clique seco de mouse e um "trava" curto a
 cada bloqueio da Cena 3.
 
-Para Reels e Shorts, gere as cenas de novo em 9:16 em vez de recortar o 16:9;
-a composição `MidviewReels` desta pasta já tem a interface no formato vertical.
+Para Reels e Shorts, gere as cenas de IA de novo em 9:16 em vez de recortar o
+16:9 e, nas tomadas reais, use aproximações nos botões e em parte da grade no
+lugar da janela inteira (a gravação em 4K aguenta o recorte).
