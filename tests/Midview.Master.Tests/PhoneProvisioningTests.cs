@@ -65,4 +65,20 @@ public class PhoneProvisioningTests
         Assert.False(release && PhoneProvisioning.SignatureChecksum == Placeholder,
             "PhoneProvisioning.SignatureChecksum ainda é o texto provisório; fixe o checksum do APK assinado antes de publicar.");
     }
+
+    [Fact]
+    public void Placeholder_checksum_is_not_ready() =>
+        Assert.False(PhoneProvisioning.IsReadyWith("PREENCHER-NA-TASK-9"));
+
+    [Fact]
+    public void Empty_checksum_is_not_ready() =>
+        Assert.False(PhoneProvisioning.IsReadyWith(""));
+
+    [Fact]
+    public void Real_looking_checksum_is_ready() =>
+        Assert.True(PhoneProvisioning.IsReadyWith(new string('A', 43)));
+
+    [Fact]
+    public void IsReady_follows_the_constant() =>
+        Assert.Equal(PhoneProvisioning.IsReadyWith(PhoneProvisioning.SignatureChecksum), PhoneProvisioning.IsReady);
 }

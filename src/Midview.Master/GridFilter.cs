@@ -27,7 +27,8 @@ public static class GridFilter
     // Shown in the grid instead of leaving it blank; null when something
     // shows, or when there are no machines at all (the classroom's own hint).
     public static string? EmptyNotice(
-        IReadOnlyCollection<MachineTile> tiles, bool onlineOnly, DeviceFilter devices = DeviceFilter.All)
+        IReadOnlyCollection<MachineTile> tiles, bool onlineOnly, DeviceFilter devices = DeviceFilter.All,
+        bool phonesReady = true)
     {
         if ((!onlineOnly && devices == DeviceFilter.All) || tiles.Count == 0 || tiles.Any(tile => Shows(tile, onlineOnly, devices)))
         {
@@ -36,7 +37,9 @@ public static class GridFilter
         if (!tiles.Any(tile => ShowsDevice(tile, devices)))
         {
             return devices == DeviceFilter.Phones
-                ? "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\"."
+                ? (phonesReady
+                    ? "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\"."
+                    : "Nenhum celular nesta sala ainda.")
                 : "Nenhum computador nesta sala: só há celulares.";
         }
         return tiles.Any(tile => ShowsDevice(tile, devices) && tile.Presence == TilePresence.Connecting)

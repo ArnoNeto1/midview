@@ -20,6 +20,13 @@ public static class PhoneProvisioning
     // the SHA-256 of the signing certificate, Base64 URL-safe without "=".
     public const string SignatureChecksum = "PREENCHER-NA-TASK-9";
 
+    // The Master's phone preparation is offered only once the real checksum is
+    // in: with the placeholder there is no published app to provision.
+    public static bool IsReady => IsReadyWith(SignatureChecksum);
+
+    public static bool IsReadyWith(string checksum) =>
+        !string.IsNullOrWhiteSpace(checksum) && checksum != "PREENCHER-NA-TASK-9";
+
     // The QR's JSON. Throws ArgumentException when the Wi-Fi name is empty;
     // quotes, accents and ";" in the name or password are escaped by the JSON.
     public static string QrJson(string ssid, string password)

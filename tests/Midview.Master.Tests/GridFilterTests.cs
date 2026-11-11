@@ -105,6 +105,14 @@ public class GridFilterTests
     }
 
     [Fact]
+    public void Empty_notice_for_phones_hides_the_prepare_hint_while_the_phone_app_is_not_ready()
+    {
+        var onlyComputers = new[] { Tile(TilePresence.Online) };
+        Assert.Equal("Nenhum celular nesta sala ainda.",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, phonesReady: false));
+    }
+
+    [Fact]
     public void Empty_notice_when_filter_leaves_no_computers() =>
         Assert.Equal("Nenhum computador nesta sala: só há celulares.",
                      GridFilter.EmptyNotice(new[] { PhoneTile() }, onlineOnly: false, DeviceFilter.Computers));

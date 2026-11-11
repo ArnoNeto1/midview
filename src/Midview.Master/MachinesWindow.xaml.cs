@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Windows;
+using System.Windows.Documents;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -40,6 +41,12 @@ public partial class MachinesWindow : MidviewWindow
         Action openGiveAccess, Action openJoinClass)
     {
         InitializeComponent();
+        if (!PhoneProvisioning.IsReady)
+        {
+            // No phone app published yet: no link to a factory reset that would be for nothing.
+            PreparePhoneSpan.Inlines.Clear();
+            PreparePhoneSpan.Inlines.Add(new Run("  Celulares: em breve."));
+        }
         _openAdvanced = openAdvanced;
         _openGiveAccess = openGiveAccess;
         _openJoinClass = openJoinClass;

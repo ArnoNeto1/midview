@@ -1639,7 +1639,7 @@ public partial class MainWindow : MidviewWindow
     private void UpdateEmptyHint()
     {
         EmptyRosterPanel.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices);
+        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices, PhoneProvisioning.IsReady);
         NoneShownText.Text = notice ?? string.Empty;
         NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
     }

@@ -104,6 +104,8 @@ Em **Máquinas da sala** > **Outro professor**:
 
 ## Celulares
 
+Em breve: o aplicativo do celular ainda não foi publicado.
+
 Nesta primeira versão, o celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celulares**, e é pareado com o código de 6 dígitos, como as máquinas. Ver a tela, bloquear e controlar os aplicativos do celular chegam em versões seguintes.
 
 Para preparar um celular:

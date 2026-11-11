@@ -358,9 +358,25 @@
                                                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="Uniform" />
                                                     </Border.Background>
                                                 </Border>
-                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource TextBrush}" Margin="10" FontSize="13"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           TextAlignment="Center" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding Status}" Foreground="{StaticResource TextBrush}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center">
+                                                    <!-- A phone's tile is narrow: smaller, one line, never cut inside a word. -->
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Margin" Value="10" />
+                                                            <Setter Property="FontSize" Value="13" />
+                                                            <Setter Property="TextWrapping" Value="Wrap" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                                    <Setter Property="Margin" Value="2" />
+                                                                    <Setter Property="FontSize" Value="10" />
+                                                                    <Setter Property="TextWrapping" Value="NoWrap" />
+                                                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <!-- The screen is locked: a red pill over its corner, dark enough to
                                                      read over any screen; a muted "Bloqueando..." one while the lock
                                                      is still being put on. A lock that failed or that the student got

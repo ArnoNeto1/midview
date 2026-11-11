@@ -106,6 +106,8 @@ In **Máquinas da sala** > **Outro professor**:
 
 ## Phones
 
+Coming soon: the phone app hasn't been published yet.
+
 In this first version, an Android phone (Android 10 or newer) shows up in the grid, under the **Celulares** (phones) filter, and is paired with the 6-digit code, like the machines. Viewing the screen, locking and controlling the phone's apps come in later versions.
 
 To prepare a phone:
