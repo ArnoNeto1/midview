@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -32,11 +33,9 @@ class LockActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Hidden again before it came up.
-        if (!wanted) {
-            finish()
-            return
-        }
+        // Always drawn and registered, so a lock that comes back before
+        // onResume still has its padlock and hide() can release it; onResume
+        // lets go if it was hidden again before coming up.
         current = this
         setContentView(PadlockView(this))
     }
@@ -59,6 +58,7 @@ class LockActivity : Activity() {
                 startLockTask()
             } catch (e: RuntimeException) {
                 // Not allowed after all: the padlock still covers the screen.
+                Log.w(TAG, "startLockTask failed; the padlock stays up without lock task", e)
             }
         }
     }
@@ -158,6 +158,7 @@ class LockActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "LockActivity"
         private val BACKGROUND = Color.rgb(64, 64, 64)
         private val PADLOCK = Color.rgb(220, 220, 220)
 

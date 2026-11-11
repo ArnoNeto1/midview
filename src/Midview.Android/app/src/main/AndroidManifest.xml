@@ -49,7 +49,7 @@
              Turning the phone redraws it instead of starting it again. -->
         <activity
             android:name=".lock.LockActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection|fontScale"
             android:excludeFromRecents="true"
             android:exported="false"
             android:launchMode="singleTask"
