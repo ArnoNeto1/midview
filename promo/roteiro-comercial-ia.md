@@ -83,6 +83,20 @@ continua sendo imagem do aplicativo e dispensa gravar na máquina do aluno.
 - Grave cada tomada três vezes. A R2 é a mais importante: é a prova de
   velocidade do filme.
 
+### Sem laboratório à mão: a sala simulada
+
+As seis tomadas também saem de um computador só, pelo mesmo caminho das fotos
+do site: o programa do professor de verdade, numa pasta de dados temporária,
+com 31 máquinas simuladas no próprio computador (`SessionServer`s em 127.0.0.2
+a 127.0.0.32, como no roteiro de fotos da Task 11 de
+`docs/superpowers/plans/2026-11-05-visual-painel.md`). A janela, os botões, os
+textos e os comandos são os do programa; só os alunos são simulados. Nunca o
+programa instalado, nem os dados da sala de verdade.
+
+O que a sala simulada **não** prova é velocidade: não há rede nem 31
+computadores de verdade. Sobre essas tomadas não entra o texto "Gravação real,
+sem cortes"; para usá-lo, a R2 precisa ser gravada num laboratório de verdade.
+
 ### O que já existe no repositório
 
 `site/img/sala-de-aula.webp`, `bloquear-programas.webp`, `agendar.webp`,
@@ -262,7 +276,9 @@ Como juntar a IA com a tela real:
    um anel ciano em volta do cursor no instante do clique.
 5. **Prova de velocidade.** Não acelere o bloqueio das telas. Mostre do clique
    até o último cadeado em tempo real, com o texto "Gravação real, sem
-   cortes" no canto. Ensaie antes: a tomada precisa ser boa de verdade.
+   cortes" no canto. Ensaie antes: a tomada precisa ser boa de verdade. Esse
+   texto só vale para uma R2 gravada num laboratório de verdade, não na sala
+   simulada.
 6. **Saltos de tempo.** Os 30 segundos do aviso de Fechar programas não cabem
    na cena: corte com uma varredura de luz ciano, sem fingir que foi
    instantâneo.
