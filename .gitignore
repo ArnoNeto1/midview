@@ -4,3 +4,11 @@ obj/
 .vs/
 publish/
 dist/
+
+# Android agent
+src/Midview.Android/**/build/
+.gradle/
+.kotlin/
+local.properties
+*.jks
+*.keystore

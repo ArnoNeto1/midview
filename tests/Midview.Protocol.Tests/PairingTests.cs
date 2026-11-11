@@ -18,6 +18,19 @@ public class PairingTests
         Assert.Equal(353409, Pairing.Code(Master, Agent, Bytes(0), Bytes(1)));
     }
 
+    // The same vector is pinned by the Android agent's PairingTest, so both
+    // sides compute the same code.
+    [Fact]
+    public void Code_MatchesTheAndroidAgent()
+    {
+        Assert.Equal(602288, Pairing.Code(
+            "0123456789ABCDEF0123456789ABCDEF01234567",
+            "89ABCDEF0123456789ABCDEF0123456789ABCDEF",
+            Bytes(0),
+            Bytes(32)));
+        Assert.Equal("602 288", Pairing.Format(602288));
+    }
+
     [Fact]
     public void Code_DoesNotCareAboutTheThumbprintsCase()
     {
