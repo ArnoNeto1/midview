@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Midview.Protocol;
 using QRCoder;
@@ -12,39 +13,40 @@ namespace Midview.Master;
 // (PendingPhoneClaimsFile) before it is shown, and sized to the room left.
 public partial class PreparePhonesWindow
 {
-    // The QR as big as the page leaves room for, between these: at 1366x768
-    // it still fits without scrolling, and stays large enough to be read.
-    private const double QrLargest = 320;
-    private const double QrSmallest = 220;
+    // The QR as big as the page leaves room for, up to this; each square a
+    // whole number of screen pixels (at least 2), so all squares are even.
+    private const double QrLargest = 330;
+    private const int QrSmallestSquare = 2;
 
-    // A proof this close to expiring is replaced instead of shown again.
-    private static readonly TimeSpan FreshEnough = TimeSpan.FromMinutes(10);
-
-    // The QR on show: for which number, until when its proof is valid.
-    private (string Number, DateTimeOffset ExpiresAt, BitmapSource Image)? _qr;
+    // The QR on show and its image (one pixel per square, white border included).
+    private (ShownQr Shown, BitmapSource Image)? _qr;
 
     // The QR takes the height left below what is above it on the page.
     private void FitQr()
     {
-        if (QrCard.Visibility != Visibility.Visible || !StepPage.IsVisible)
+        if (QrCard.Visibility != Visibility.Visible || !StepPage.IsVisible || QrImage.Source is not BitmapSource image)
         {
             return;
         }
-        // The card's border and padding, and the light margin around the code.
-        const double around = 2 * (1 + 12) + 2 * 12;
+        // The card's border and padding, and the rounded white frame around the code.
+        const double around = 2 * (1 + 12) + 2 * 4;
         var top = QrCard.TranslatePoint(new Point(0, 0), PageContent).Y;
         // ActualHeight, not ViewportHeight: during SizeChanged the viewport is still the old one
         // (there is never a horizontal bar to take from it).
-        var room = Math.Floor(PageScroll.ActualHeight - top - around - 2);
-        var size = Math.Clamp(room, QrSmallest, QrLargest);
+        var room = Math.Min(PageScroll.ActualHeight - top - around - 2, QrLargest);
+        var scale = VisualTreeHelper.GetDpi(QrImage).DpiScaleY;
+        var squares = image.PixelWidth;
+        var square = Math.Max(QrSmallestSquare, (int)Math.Floor(room * scale / squares));
+        var size = square * squares / scale;
         QrImage.Width = size;
         QrImage.Height = size;
     }
 
-    // The QR of this phone. A proof still fresh for the same number is shown
-    // again (the phone may have scanned it already); otherwise a new one is
-    // stored first, then the watcher is asked to look.
-    private void ShowQr()
+    // The QR of this phone. One still fresh for the same number and Wi-Fi is
+    // shown again (PhoneQrReuse: the phone may have read it already); otherwise
+    // a new token is stored first, then the watcher is asked to look.
+    // The Wi-Fi is known here: ShowPage goes to the Wi-Fi page without one.
+    private void ShowQr((string Ssid, string Password) wifi)
     {
         var number = _progress.Number!;
         QrText.Inlines.Clear();
@@ -53,13 +55,10 @@ public partial class PreparePhonesWindow
         QrText.Inlines.Add(new Run(". Vale por 1 hora, para um celular."));
 
         var now = DateTimeOffset.UtcNow;
-        if (_progress.QrShownAt is not null && _qr is { } shown && shown.Number == number && shown.ExpiresAt - now > FreshEnough)
+        if (_progress.QrShownAt is not null && _qr is { } current
+            && PhoneQrReuse.Reuse(current.Shown, number, wifi.Ssid, wifi.Password, now))
         {
-            QrImage.Source = shown.Image;
-            return;
-        }
-        if (PhoneWifiFile.Load() is not { } wifi)
-        {
+            QrImage.Source = current.Image;
             return;
         }
 
@@ -76,19 +75,20 @@ public partial class PreparePhonesWindow
                                  $"Quando ele terminar, use \"Procurar e parear\". ({ErrorText.Describe(ex)})";
         }
         var image = QrBitmap(PhoneProvisioning.QrJson(wifi.Ssid, wifi.Password, number, token, _masterThumbprint));
-        _qr = (number, expires, image);
+        _qr = (new ShownQr(number, wifi.Ssid, wifi.Password, token, expires), image);
         QrImage.Source = image;
         _progress.QrShown(now);
         _kick();
     }
 
     // Level L: the code is read off a screen, where nothing smudges it, and
-    // the lowest correction gives the fewest (so the biggest) squares.
+    // the lowest correction gives the fewest (so the biggest) squares. One
+    // pixel per square: FitQr enlarges it by a whole number.
     private static BitmapSource QrBitmap(string text)
     {
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(text, QRCodeGenerator.ECCLevel.L);
-        var png = new PngByteQRCode(data).GetGraphic(12);
+        var png = new PngByteQRCode(data).GetGraphic(1);
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;

@@ -64,15 +64,16 @@ public partial class PreparePhonesWindow
         return block;
     }
 
-    // "Deu errado?" for this page: the step's helps (or the Wi-Fi's), and the
-    // fixed helps they point to, so none is a dead end.
+    // "Deu errado?" for this page: the step's helps (the Wi-Fi's; the six
+    // taps' while waiting for the phone), and the fixed helps they point to,
+    // so none is a dead end.
     private void ShowHelp()
     {
         var helps = HelpsOfPage();
-        HelpArea.Visibility = Shown(helps.Count > 0);
+        HelpLink.Visibility = Shown(helps.Count > 0);
         HelpLinkRun.Text = _helpOpen ? "Deu errado? (fechar)" : "Deu errado?";
         HelpList.Children.Clear();
-        HelpList.Visibility = Shown(_helpOpen);
+        HelpArea.Visibility = Shown(_helpOpen && helps.Count > 0);
         if (!_helpOpen)
         {
             return;
@@ -90,6 +91,7 @@ public partial class PreparePhonesWindow
         {
             SetupPage.Wifi => PhoneSetupGuide.WifiHelp.ToList(),
             SetupPage.Step => _progress.Step!.Help.ToList(),
+            SetupPage.Waiting => PhoneSetupGuide.Steps.Single(step => step.Id == "seis-toques").Help.ToList(),
             _ => new List<GuideHelp>(),
         };
         foreach (var fixedHelp in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.ResetWithoutPin })

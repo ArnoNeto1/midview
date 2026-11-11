@@ -75,9 +75,16 @@ internal sealed class PhoneSetupProgress
         return Number is not null;
     }
 
+    // "trocar": while waiting for the phone, the way back is the six taps,
+    // where a QR with the new Wi-Fi is shown.
     public void ChangeWifi()
     {
-        _afterWifi = Page == SetupPage.Step ? StepIndex : NumberStep;
+        _afterWifi = Page switch
+        {
+            SetupPage.Step => StepIndex,
+            SetupPage.Waiting or SetupPage.NotAppeared => SixTapsStep,
+            _ => NumberStep,
+        };
         Page = SetupPage.Wifi;
     }
 
@@ -149,6 +156,15 @@ internal sealed class PhoneSetupProgress
     public void Tick(DateTimeOffset now)
     {
         if (Page == SetupPage.Waiting && QrShownAt is { } shown && now - shown >= NotAppearedAfter)
+        {
+            Page = SetupPage.NotAppeared;
+        }
+    }
+
+    // "Apareceu um erro no celular?" while waiting: the list of what to check, now.
+    public void NotAppearedNow()
+    {
+        if (Page == SetupPage.Waiting)
         {
             Page = SetupPage.NotAppeared;
         }

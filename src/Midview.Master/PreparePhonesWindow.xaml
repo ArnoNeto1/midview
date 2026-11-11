@@ -19,7 +19,12 @@
         </DockPanel>
 
         <DockPanel DockPanel.Dock="Bottom" Margin="0,14,0,0" LastChildFill="False">
-            <Button x:Name="BackButton" DockPanel.Dock="Left" Content="Voltar" Click="OnBackClicked" Padding="16,6" MinWidth="80" />
+            <Button x:Name="BackButton" DockPanel.Dock="Left" Content="Voltar" Click="OnBackClicked" Padding="16,6" MinWidth="80"
+                    Margin="0,0,14,0" />
+            <!-- Fixed here, not in the page: in sight on every page that has helps, whatever the scroll. -->
+            <TextBlock x:Name="HelpLink" DockPanel.Dock="Left" FontSize="13" VerticalAlignment="Center">
+                <Hyperlink Click="OnHelpClicked"><Run x:Name="HelpLinkRun" Text="Deu errado?" /></Hyperlink>
+            </TextBlock>
             <Button x:Name="NextButton" DockPanel.Dock="Right" Click="OnNextClicked" IsDefault="True"
                     Style="{StaticResource PrimaryButton}" Padding="16,6" Margin="8,0,0,0" />
             <Button x:Name="OtherButton" DockPanel.Dock="Right" Click="OnOtherClicked" Padding="16,6" MinWidth="80" />
@@ -100,13 +105,16 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <!-- Light on purpose: a QR code needs a light margin around it to be read. -->
-                            <Border Background="#FFFFFF" CornerRadius="8" Padding="12" VerticalAlignment="Top">
-                                <Image x:Name="QrImage" Width="320" Height="320" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                            <!-- The code's own white border (4 squares) is in the image; this only rounds it.
+                                 Layout rounding keeps the image on whole screen pixels (FitQr). -->
+                            <Border Background="#FFFFFF" CornerRadius="8" Padding="4" VerticalAlignment="Top" UseLayoutRounding="True">
+                                <Image x:Name="QrImage" Width="320" Height="320" RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                       SnapsToDevicePixels="True" />
                             </Border>
                             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="QrText" TextWrapping="Wrap" />
                                 <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0"
-                                           Text="Segure o celular a um braço de distância do monitor." />
+                                           Text="Aproxime o celular da tela, a um palmo de distância." />
                                 <TextBlock x:Name="QrWarningText" Style="{StaticResource WarningText}" FontSize="12" Margin="0,8,0,0" />
                             </StackPanel>
                         </Grid>
@@ -129,6 +137,9 @@
                     <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0"
                                Text="Se o celular mostrar telas pedindo para aceitar, toque em &quot;Aceitar&quot; ou &quot;Continuar&quot; até aparecer a tela do Midview." />
                     <TextBlock x:Name="WaitingJoinText" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
+                    <TextBlock FontSize="13" Margin="0,14,0,0">
+                        <Hyperlink Click="OnNotAppearedNowClicked">Apareceu um erro no celular?</Hyperlink>
+                    </TextBlock>
                 </StackPanel>
 
                 <!-- O Celular 07 ainda não apareceu -->
@@ -157,12 +168,10 @@
 
             </Grid>
 
-            <!-- "Deu errado?" under every page that has helps: a link that opens them. -->
+            <!-- The helps of the page, opened by "Deu errado?" in the footer. -->
             <StackPanel x:Name="HelpArea" Margin="0,16,0,0">
-                <TextBlock FontSize="13">
-                    <Hyperlink Click="OnHelpClicked"><Run x:Name="HelpLinkRun" Text="Deu errado?" /></Hyperlink>
-                </TextBlock>
-                <StackPanel x:Name="HelpList" Margin="0,10,0,0" />
+                <TextBlock Style="{StaticResource CardTitle}" Text="Deu errado?" Margin="0,0,0,8" />
+                <StackPanel x:Name="HelpList" />
             </StackPanel>
             </StackPanel>
         </ScrollViewer>

@@ -116,6 +116,45 @@ public class PhoneSetupProgressTests
         Assert.Equal("conta-mi", progress.StepId);
     }
 
+    // "Apareceu um erro no celular?" on the waiting page: no need to wait 15 minutes.
+    [Fact]
+    public void Waiting_can_go_to_not_appeared_right_away()
+    {
+        var progress = WaitingFor07();
+
+        progress.NotAppearedNow();
+
+        Assert.Equal(SetupPage.NotAppeared, progress.Page);
+    }
+
+    [Fact]
+    public void Not_appeared_now_does_nothing_outside_the_wait()
+    {
+        var progress = AtNumber();
+
+        progress.NotAppearedNow();
+
+        Assert.Equal("numero", progress.StepId);
+    }
+
+    // The Wi-Fi changed after the QR: back to the six taps, for a new QR.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Changing_the_wifi_while_waiting_comes_back_to_the_six_taps(bool late)
+    {
+        var progress = WaitingFor07();
+        if (late)
+        {
+            progress.Tick(Shown + TimeSpan.FromMinutes(15));
+        }
+
+        progress.ChangeWifi();
+        progress.Next();
+
+        Assert.Equal("seis-toques", progress.StepId);
+    }
+
     [Fact]
     public void The_six_taps_need_the_qr_before_waiting()
     {

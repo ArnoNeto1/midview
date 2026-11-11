@@ -30,6 +30,10 @@ public partial class PreparePhonesWindow : MidviewWindow
     private readonly Func<string, Task<(bool Ok, string Detail)>>? _wipe;
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(15) };
 
+    // The lab Wi-Fi for this window: the saved one, or the one typed here
+    // even when it could not be saved (the QR still carries it).
+    private (string Ssid, string Password)? _wifi = PhoneWifiFile.Load();
+
     // phonesInClass: phones in the class now. phoneOnline: for a name, null
     // when the class has no phone with it, else whether it answers now.
     // kick: look for the phone right away. wipe: "Apagar e preparar de novo"
@@ -45,7 +49,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         _phoneOnline = phoneOnline;
         _kick = kick;
         _wipe = wipe;
-        _progress.Start(PhoneWifiFile.Load() is not null);
+        _progress.Start(_wifi is not null);
         _clock.Tick += (_, _) => OnClockTick();
         _clock.Start();
         Closed += (_, _) => _clock.Stop();
@@ -58,7 +62,7 @@ public partial class PreparePhonesWindow : MidviewWindow
     public void StartAt(string number)
     {
         _progress.StartAt(number);
-        if (PhoneWifiFile.Load() is null)
+        if (_wifi is null)
         {
             _progress.ChangeWifi();
         }
@@ -94,6 +98,9 @@ public partial class PreparePhonesWindow : MidviewWindow
                     return;
                 }
                 break;
+            // Only past a QR for this very phone.
+            case SetupPage.Step when _progress.StepId == "seis-toques" && _qr?.Shown.Number != _progress.Number:
+                return;
             case SetupPage.Step when _progress.StepId == "numero":
                 if (!TakeNumber())
                 {
@@ -123,6 +130,12 @@ public partial class PreparePhonesWindow : MidviewWindow
     // The footer's other button: "Terminei" on the ready page.
     private void OnOtherClicked(object sender, RoutedEventArgs e) => Close();
 
+    private void OnNotAppearedNowClicked(object sender, RoutedEventArgs e)
+    {
+        _progress.NotAppearedNow();
+        ShowPage();
+    }
+
     private void OnChangeWifiClicked(object sender, RoutedEventArgs e)
     {
         _progress.ChangeWifi();
@@ -144,16 +157,21 @@ public partial class PreparePhonesWindow : MidviewWindow
             return false;
         }
         WifiErrorText.Text = "";
+        var typed = (Ssid: ssid, Password: PasswordInput.Text);
+        if (_wifi == typed)
+        {
+            return true; // the same: the QR on show (and its token) stays
+        }
+        _wifi = typed; // a new QR is due (PhoneQrReuse compares the Wi-Fi)
         try
         {
-            PhoneWifiFile.Save(ssid, PasswordInput.Text);
+            PhoneWifiFile.Save(typed.Ssid, typed.Password);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
-            WifiErrorText.Text = $"Não foi possível guardar o Wi-Fi neste computador: {ErrorText.Describe(ex)}";
-            return false;
+            // Not remembering the Wi-Fi is not worth refusing the code: this
+            // window keeps it, and the next one asks again.
         }
-        _qr = null; // the next QR carries the new Wi-Fi
         return true;
     }
 
@@ -238,6 +256,10 @@ public partial class PreparePhonesWindow : MidviewWindow
     // Draws the page PhoneSetupProgress is on.
     private void ShowPage()
     {
+        if (_progress.StepId == "seis-toques" && _wifi is null)
+        {
+            _progress.ChangeWifi(); // no QR without the Wi-Fi it carries
+        }
         var page = _progress.Page;
         var step = _progress.Step;
         WifiPage.Visibility = Shown(page == SetupPage.Wifi);
@@ -247,9 +269,10 @@ public partial class PreparePhonesWindow : MidviewWindow
         NotAppearedPage.Visibility = Shown(page == SetupPage.NotAppeared);
         ReadyPage.Visibility = Shown(page == SetupPage.Ready);
 
-        var wifi = PhoneWifiFile.Load();
+        var wifi = _wifi;
         WifiNameRun.Text = wifi?.Ssid ?? "";
-        WifiLine.Visibility = Shown(page == SetupPage.Step && wifi is not null);
+        // Also on "ainda não apareceu": its checks send the teacher to the Wi-Fi.
+        WifiLine.Visibility = Shown((page is SetupPage.Step or SetupPage.NotAppeared) && wifi is not null);
         CaptionText.Text = page switch
         {
             SetupPage.Step => _progress.Name is { } name && _progress.StepId != "numero"
@@ -327,7 +350,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         WipeCard.Visibility = Shown(isQr && _progress.OffersWipe && _wipe is not null);
         if (isQr)
         {
-            ShowQr();
+            ShowQr(_wifi!.Value);
             WipeText.Text = $"O {_progress.Name} ainda está ligado e na turma. Para preparar de novo, o Midview apaga o celular daqui; ele volta à tela \"Bem-vindo\" sozinho.";
             WipeButton.Visibility = Visibility.Visible;
             WipeButton.IsEnabled = true;
