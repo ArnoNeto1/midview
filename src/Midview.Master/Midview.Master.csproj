@@ -13,6 +13,8 @@
     <Resource Include="..\..\assets\animacao\*.png" Link="Animacao\%(Filename)%(Extension)" />
     <!-- The same logo for the classroom window's own title bar (MainWindow.TitleBar.cs). -->
     <Resource Include="..\..\assets\midview.ico" Link="midview.ico" />
+    <!-- The phone screens of the "Preparar celulares" guide (PhoneSetupGuide). -->
+    <Resource Include="Assets\PrepararCelular\*.png" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
