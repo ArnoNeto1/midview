@@ -30,7 +30,8 @@
                 <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                         <StackPanel>
-                            <Border Background="White" CornerRadius="8" Padding="14" HorizontalAlignment="Center">
+                            <!-- Light on purpose: a QR code needs a light margin around it to be read. -->
+                            <Border Background="#FFFFFF" CornerRadius="8" Padding="14" HorizontalAlignment="Center">
                                 <Image x:Name="QrImage" Width="340" Height="340" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                             </Border>
                             <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" HorizontalAlignment="Center"
