@@ -20,6 +20,7 @@ import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
+import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.status.StatusImage
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
@@ -38,6 +39,7 @@ class AgentService : Service() {
     private var tlsServers = emptyList<TlsServer>()
     private var discoverySocket: DatagramSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var stopped = false
     private val stopping = CountDownLatch(1)
 
@@ -45,8 +47,12 @@ class AgentService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // The school phone's locks, again at every start (nothing on a
+        // phone that is not the school's Device Owner).
+        AndroidDevicePolicyGateway.lockDown(this)
         createChannels()
         goForeground(STATUS_TEXT)
+        holdWifi()
         // Making the identity the first time takes a moment (an RSA key).
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
     }
@@ -59,6 +65,8 @@ class AgentService : Service() {
             closeListeners()
         }
         stopping.countDown()
+        wifiLock?.let { if (it.isHeld) it.release() }
+        wifiLock = null
         PairingCodeActivity.hide()
         super.onDestroy()
     }
@@ -75,6 +83,16 @@ class AgentService : Service() {
                 synchronized(lock) { closeListeners() }
                 if (stopping.await(RETRY_MILLIS, TimeUnit.MILLISECONDS)) return
             }
+        }
+    }
+
+    // Many phones put the Wi-Fi to sleep with the screen off, and the
+    // teacher's search and commands would go unanswered.
+    private fun holdWifi() {
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifiLock = wifi.createWifiLock(wifiLockMode(Build.VERSION.SDK_INT), "Midview agent").apply {
+            setReferenceCounted(false)
+            acquire()
         }
     }
 
@@ -220,6 +238,16 @@ class AgentService : Service() {
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1
         private const val PAIRING_NOTIFICATION = 2
+
+        // WifiManager.WIFI_MODE_FULL_HIGH_PERF, deprecated from Android 14 in
+        // favor of WIFI_MODE_FULL_LOW_LATENCY.
+        @Suppress("DEPRECATION")
+        fun wifiLockMode(sdkInt: Int): Int =
+            if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AgentService::class.java))

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Device Owner's locks (user restrictions, blocked uninstall, the
+     app's control) need no policies listed here. -->
+<device-admin>
+    <uses-policies />
+</device-admin>
