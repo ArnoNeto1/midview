@@ -232,3 +232,22 @@
 - Bateria e aquecimento com a captura ligada durante uma aula inteira.
 - O que cada fabricante faz com o pedido do "Iniciar agora" quando a tela apaga ou o aluno vai para o início (no Android 10 a 12 o pedido pode ficar aberto; o agente agora o fecha como sem resposta quando o aluno sai, mas isso só foi visto no Android 13 do emulador).
 - No Android 14 ou mais novo, se o bloqueio da tela para a captura (pede de novo ao liberar).
+
+### Task 7: Ver a tela sem pedir ao aluno (acessibilidade)
+
+Decidido pelo professor em 2026-11-11, depois do teste no Redmi: num aparelho da escola, ver a tela não pode depender do aluno tocar em "Iniciar agora" (ele pode cancelar, e o pedido volta depois de reiniciar ou do "Limpar tudo"). A captura passa a usar um serviço de acessibilidade, ligado uma vez pelo cabo na preparação; o `MediaProjection` fica como reserva (Android 10, ou acessibilidade desligada).
+
+**Files:**
+- Create: `.../screen/AccessibilityCapture.kt` (serviço `AccessibilityService` com `takeScreenshot`, Android 11+), `app/src/main/res/xml/accessibility_capture.xml`
+- Modify: `.../screen/FrameSource.kt` / `ScreenCaptureService.kt` (escolha da fonte), `.../screen/ScreenConsent.kt` (com acessibilidade ligada, nunca pede e o estado é "capturando"), `AndroidManifest.xml` (serviço com `BIND_ACCESSIBILITY_SERVICE`), `.../policy/Lockdown.kt` (`setPermittedAccessibilityServices` inclui o próprio serviço), README "Celulares" (comando pelo cabo)
+- Test: JVM para a escolha da fonte e o estado do pedido
+
+**Interfaces:**
+- `interface FrameSource` continua igual; a fonte de acessibilidade publica quadros no mesmo `LatestFrame`, no ritmo que o Android permitir (`takeScreenshot` tem intervalo mínimo; mirar 2–3 por segundo enquanto alguém olha, e nada quando ninguém olha).
+- Escolha: acessibilidade ligada e Android 11+ → acessibilidade; senão → `MediaProjection` (comportamento atual).
+- Ativação pelo cabo (antes do `dpm set-device-owner`): `adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/<serviço>` e `adb shell settings put secure accessibility_enabled 1`.
+
+- [ ] **Step 1:** Testes JVM falhando (escolha da fonte; com acessibilidade, `ScreenConsent` nunca mostra pedido e não vira "Não permitiu").
+- [ ] **Step 2:** Implementar; o serviço de acessibilidade não lê nem altera nada da tela além das capturas (sem eventos, `canRetrieveWindowContent=false`).
+- [ ] **Step 3:** No Redmi (aparelho da escola, versão de teste): ligar pelo cabo, reiniciar e fazer "Limpar tudo" — a tela volta sem nenhum toque do aluno; medir quadros por segundo na janela grande.
+- [ ] **Step 4:** Commit `feat(android): ver a tela sem pedir ao aluno`.

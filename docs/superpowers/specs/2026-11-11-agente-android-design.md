@@ -115,6 +115,8 @@ Aplicada sozinha na primeira conexão com o professor e repetível por um botão
   celular não é bloqueado por recusar. Com a tela bloqueada, o pedido espera
   o desbloqueio para aparecer.
 - Controle remoto (mexer no celular pelo PC) **não** entra.
+- **Atualização 2026-11-11 (decidido pelo professor, depois do teste no Redmi):** num aparelho da escola a tela é capturada por um serviço de acessibilidade ligado uma vez pelo cabo, sem o aluno tocar em "Iniciar agora" (2–3 imagens por segundo). O "Iniciar agora" fica como reserva para Android 10 ou quando a acessibilidade não está ligada.
+
 
 ### 5. Bloquear a tela
 
