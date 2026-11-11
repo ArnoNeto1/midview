@@ -5,6 +5,8 @@
     <!-- The agent runs all the time, from the phone's start. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Seeing the screen, once the student allows it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The pairing code on the whole screen. -->
@@ -28,6 +30,19 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Classroom management agent: answers the teacher's computer on the school network" />
         </service>
+
+        <!-- The screen's capture, only after the student's "Iniciar agora". -->
+        <service
+            android:name=".screen.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Android's request to see the screen, nothing of its own to show. -->
+        <activity
+            android:name=".screen.ConsentActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <receiver
             android:name=".agent.AgentService$StartAtBoot"

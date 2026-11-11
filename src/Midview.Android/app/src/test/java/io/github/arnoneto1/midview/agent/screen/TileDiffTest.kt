@@ -1,6 +1,7 @@
 package io.github.arnoneto1.midview.agent.screen
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,5 +54,11 @@ class TileDiffTest {
         val tiles = ArrayList<Rect>()
         for (r in 0 until 20) for (c in 0 until 64) tiles.add(Rect(c * 64, r * 64, 64, 64))
         assertEquals(listOf(Rect(0, 0, 4096, 1024), Rect(0, 1024, 4096, 256)), diff.merge(tiles))
+    }
+
+    @Test fun picturesMustHoldTheirSize() {
+        assertThrows(IllegalArgumentException::class.java) { diff.changed(null, 0, 0, IntArray(10), 4, 4) }
+        assertThrows(IllegalArgumentException::class.java) { diff.changed(IntArray(10), 4, 4, IntArray(16), 4, 4) }
+        assertEquals(1, diff.changed(null, 0, 0, IntArray(16), 4, 4).size)
     }
 }

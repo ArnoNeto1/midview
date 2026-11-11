@@ -19,11 +19,17 @@ import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.net.CommandHandler
 import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
+import io.github.arnoneto1.midview.agent.net.ScreenStreamHandler
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.Discovery
+import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
+import io.github.arnoneto1.midview.agent.screen.CaptureCadence
+import io.github.arnoneto1.midview.agent.screen.FrameCredit
+import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
+import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
 import io.github.arnoneto1.midview.agent.status.StatusImage
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
 import java.io.File
@@ -35,7 +41,8 @@ import java.util.concurrent.TimeUnit
 // The Midview agent on the phone: always running (a foreground service with
 // its fixed notification, started again after every restart), it answers
 // the teacher's search (UDP 28901), takes pairing and commands (TLS 28900)
-// and serves the grid's thumbnail (TLS 5901), the same ports as on a PC.
+// and serves the screen (TLS 5901: the grid's thumbnail and the big
+// window), the same ports as on a PC.
 class AgentService : Service() {
     private val lock = Any()
     private var tlsServers = emptyList<TlsServer>()
@@ -51,6 +58,7 @@ class AgentService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannels()
+        ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)
         holdWifi()
         // Making the identity the first time takes a moment (an RSA key).
@@ -132,9 +140,19 @@ class AgentService : Service() {
             deviceName = { DeviceName.read(this) },
         )
         val commands = CommandHandler(trusted, pairing)
-        val thumbnails = ThumbnailHandler(trusted) { width, height ->
-            StatusImage.render(width, height, DeviceName.read(this), THUMBNAIL_STATUS)
-        }
+        val consent = ScreenCaptureService.consent
+        val frames = ScreenCaptureService.frames
+        val picture = ThumbnailPicture(
+            consent, frames,
+            status = { text, width, height -> StatusImage.render(width, height, DeviceName.read(this), text) },
+            jpeg = BitmapJpeg::thumbnail,
+        )
+        val thumbnails = ThumbnailHandler(
+            trusted,
+            render = picture::render,
+            teacherConnected = consent::teacherConnected,
+            stream = { ScreenStreamHandler(it, frames, FrameCredit(), CaptureCadence(), BitmapJpeg).run() },
+        )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
         synchronized(lock) {
@@ -238,7 +256,6 @@ class AgentService : Service() {
         const val STATUS_TEXT = "Celular da escola, gerenciado pelo Midview"
         const val REPLACED_TEXT =
             "Celular da escola, gerenciado pelo Midview. A identificação deste celular foi refeita: os professores precisam parear de novo."
-        const val THUMBNAIL_STATUS = "Online. A tela do celular ainda não aparece aqui."
 
         private const val TAG = "Midview"
         private const val RETRY_MILLIS = 30_000L

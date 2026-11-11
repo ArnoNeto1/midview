@@ -91,6 +91,77 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
             Host!, AgentPort, phone.AgentThumbprint!, stranger, MessageType.UnblockInternet, Array.Empty<byte>()));
     }
 
+    // The big window's stream ("Ver a tela"), as ViewControlWindow opens it.
+    // Needs the capture allowed: the student taps "Iniciar agora" on the
+    // phone, which asks as this connection comes in (if it was not allowed
+    // already). The first update is the whole screen.
+    [AndroidFact]
+    public void Screen_stream_sends_frames_from_phone()
+    {
+        using var teacher = Teacher();
+        var machine = Pair(teacher);
+        using var client = ConnectionClient.Connect(
+            Host!, SessionPort, machine.SessionThumbprint!, teacher, TimeSpan.FromSeconds(10));
+        var sending = new object();
+        lock (sending)
+        {
+            client.SendScreenStream();
+            client.SendHeartbeat();
+        }
+        output.WriteLine("If the phone asks, tap \"Iniciar agora\" on it.");
+
+        var frames = new System.Collections.Concurrent.BlockingCollection<Message>();
+        var receiving = Task.Run(() =>
+        {
+            try
+            {
+                while (true) frames.Add(client.ReceiveNext());
+            }
+            catch (Exception)
+            {
+                frames.CompleteAdding();
+            }
+        });
+        using var heartbeat = new Timer(_ =>
+        {
+            try
+            {
+                lock (sending) client.SendHeartbeat();
+            }
+            catch (Exception)
+            {
+                // The test ends the connection.
+            }
+        }, null, 1000, 1000);
+
+        var watch = Stopwatch.StartNew();
+        Assert.True(frames.TryTake(out var first, StreamWait), $"no ScreenFrame in {StreamWait.TotalSeconds} s");
+        output.WriteLine($"first update after {watch.Elapsed.TotalSeconds:F1} s");
+        Assert.Equal(MessageType.ScreenFrame, first.Type);
+        var frame = ScreenFrame.Decode(first.Payload);
+        Assert.NotNull(frame);
+        Assert.Equal(1, frame!.FrameId);
+        Assert.InRange(Math.Max(frame.ScreenWidth, frame.ScreenHeight), 1, 1280);
+        Assert.Equal((long)frame.ScreenWidth * frame.ScreenHeight, frame.Regions.Sum(r => (long)r.Width * r.Height));
+        foreach (var region in frame.Regions)
+        {
+            Assert.Equal((region.Width, region.Height), JpegSize(region.Jpeg));
+        }
+        output.WriteLine($"screen {frame.ScreenWidth}x{frame.ScreenHeight}, {frame.Regions.Count} regions");
+        lock (sending) client.SendFrameAck(frame.FrameId);
+
+        // Acknowledged and heard from every second, the stream stays open.
+        Thread.Sleep(TimeSpan.FromSeconds(3));
+        Assert.False(frames.IsAddingCompleted, "the phone closed the stream");
+        lock (sending) client.SendStopControl();
+        client.Dispose();
+        receiving.Wait(TimeSpan.FromSeconds(5));
+    }
+
+    // Long enough for the student to tap "Iniciar agora"; with the capture
+    // already allowed the first update comes at once.
+    private static readonly TimeSpan StreamWait = TimeSpan.FromSeconds(90);
+
     [AndroidLanFact]
     public void Search_finds_the_phone()
     {

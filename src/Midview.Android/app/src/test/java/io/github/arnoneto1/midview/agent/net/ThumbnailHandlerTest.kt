@@ -1,6 +1,7 @@
 package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import org.junit.Assert.assertArrayEquals
@@ -18,8 +19,15 @@ class ThumbnailHandlerTest {
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
     private val asked = mutableListOf<Pair<Int, Int>>()
+    private var teachers = 0
+    private val streamed = mutableListOf<Channel>()
     private val handler by lazy {
-        ThumbnailHandler(trusted) { width, height -> asked += width to height; byteArrayOf(width.toByte(), height.toByte()) }
+        ThumbnailHandler(
+            trusted,
+            render = { width, height -> asked += width to height; byteArrayOf(width.toByte(), height.toByte()) },
+            teacherConnected = { teachers++ },
+            stream = { streamed += it },
+        )
     }
 
     private fun request(payload: ByteArray = ByteArray(0)) = Message(MessageType.REQUEST_THUMBNAIL, payload)
@@ -33,6 +41,7 @@ class ThumbnailHandlerTest {
         assertEquals(listOf(83 to 120, 320 to 180), asked)
         assertEquals(listOf(MessageType.THUMBNAIL_FRAME, MessageType.THUMBNAIL_FRAME), channel.sent.map { it.type })
         assertArrayEquals(byteArrayOf(83, 120), channel.sent[0].payload)
+        assertEquals(15_000, channel.timeoutMillis)
     }
 
     @Test fun anUntrustedTeacherGetsNothing() {
@@ -42,6 +51,7 @@ class ThumbnailHandlerTest {
         assertTrue(channel.sent.isEmpty())
         assertTrue(channel.events.isEmpty())
         assertTrue(asked.isEmpty())
+        assertEquals(0, teachers)
     }
 
     @Test fun anythingElseEndsTheConnection() {
@@ -49,5 +59,45 @@ class ThumbnailHandlerTest {
         val channel = FakeChannel(teacher, Message(MessageType.HEARTBEAT, ByteArray(0)), request())
         handler.handle(channel)
         assertTrue(channel.sent.isEmpty())
+    }
+
+    @Test fun aTrustedTeacherOnThisPortAsksToSeeTheScreen() {
+        trusted.add(teacher)
+        handler.handle(FakeChannel(teacher, request()))
+        assertEquals(1, teachers)
+    }
+
+    @Test fun screenStreamGoesToTheStream() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, Message(MessageType.SCREEN_STREAM, ByteArray(0)))
+        handler.handle(channel)
+        assertEquals(listOf<Channel>(channel), streamed)
+        assertTrue(asked.isEmpty())
+        // The first message within the 10 s a connection gets to say what it is.
+        assertEquals(listOf("receive ${MessageType.SCREEN_STREAM}"), channel.events)
+        assertEquals(10_000, channel.timeoutMillis)
+    }
+
+    @Test fun lockScreenIsRefusedForNow() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, Message(MessageType.LOCK_SCREEN, ByteArray(0)))
+        handler.handle(channel)
+        assertEquals(listOf(MessageType.COMMAND_ACK), channel.sent.map { it.type })
+        assertEquals(false to "este celular não bloqueia a tela", CommandResult.decode(channel.sent[0].payload))
+        assertTrue(streamed.isEmpty())
+    }
+
+    @Test fun controlIsNotTakenOnAPhone() {
+        trusted.add(teacher)
+        for (type in listOf(
+            MessageType.START_CONTROL, MessageType.STOP_CONTROL, MessageType.INPUT_EVENT,
+            MessageType.CLIPBOARD_TEXT, MessageType.FILL_ADMIN_PASSWORD,
+        )) {
+            val channel = FakeChannel(teacher, Message(type, ByteArray(0)), request())
+            handler.handle(channel)
+            assertTrue("type $type", channel.sent.isEmpty())
+        }
+        assertTrue(streamed.isEmpty())
+        assertTrue(asked.isEmpty())
     }
 }
