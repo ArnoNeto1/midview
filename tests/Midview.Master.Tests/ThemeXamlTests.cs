@@ -6,7 +6,7 @@ using Xunit;
 public class ThemeXamlTests
 {
     // Keys the code puts into the resources while the app runs.
-    private static readonly HashSet<string> RuntimeKeys = new() { "TileWidth", "TileHeight" };
+    private static readonly HashSet<string> RuntimeKeys = new() { "TileWidth", "TileHeight", "PhoneTileWidth" };
 
     private static string RepoRoot()
     {

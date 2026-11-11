@@ -36,6 +36,9 @@ public sealed class MachineTile : INotifyPropertyChanged
 
     public string Name => Machine.Name;
 
+    // A phone's tile stands up (MainWindow.xaml).
+    public bool IsPhone => Machine.IsPhone;
+
     // Nothing on the tile shows it, and nothing the poller uses changes.
     public void RememberMacAddress(string macAddress) => Machine = Machine with { MacAddress = macAddress };
 

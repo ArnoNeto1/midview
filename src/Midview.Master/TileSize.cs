@@ -103,4 +103,17 @@ public static class TileSize
     public static (int Width, int Height) Request(int width, double dpiScale) =>
         (Math.Min((int)Math.Ceiling(width * dpiScale), ThumbnailRequest.MaxWidth),
          Math.Min((int)Math.Ceiling(HeightOf(width) * dpiScale), ThumbnailRequest.MaxHeight));
+
+    // A phone's tile stands up: as tall as a PC's tile at this width, and
+    // 9:19.5 wide.
+    public static int PhoneWidthOf(int width) => (int)Math.Round(HeightOf(width) * 9 / 19.5);
+
+    // Like Request, for a phone: the box stands up and stays inside what a
+    // Session renders, keeping its shape when the height is the one cut.
+    public static (int Width, int Height) PhoneRequest(int width, double dpiScale)
+    {
+        var height = Math.Min((int)Math.Ceiling(HeightOf(width) * dpiScale), ThumbnailRequest.MaxHeight);
+        var phoneWidth = Math.Min((int)Math.Round(height * 9 / 19.5), ThumbnailRequest.MaxWidth);
+        return (Math.Max(1, phoneWidth), Math.Max(1, height));
+    }
 }

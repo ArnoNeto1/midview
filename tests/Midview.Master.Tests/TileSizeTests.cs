@@ -17,6 +17,29 @@ public class TileSizeTests
         Assert.InRange(TileSize.Default, TileSize.Smallest, TileSize.Largest);
     }
 
+    [Fact]
+    public void Phone_tile_is_portrait_with_the_pc_tile_height()
+    {
+        var w = TileSize.Default;
+        Assert.True(TileSize.PhoneWidthOf(w) < TileSize.HeightOf(w));
+        Assert.Equal((int)Math.Round(TileSize.HeightOf(w) * 9 / 19.5), TileSize.PhoneWidthOf(w));
+    }
+
+    [Fact]
+    public void Phone_request_never_exceeds_thumbnail_request_limits()
+    {
+        foreach (var width in new[] { TileSize.Smallest, TileSize.Default, TileSize.Largest })
+        {
+            foreach (var dpi in new[] { 1.0, 1.5 })
+            {
+                var (w, h) = TileSize.PhoneRequest(width, dpi);
+                Assert.InRange(w, 1, ThumbnailRequest.MaxWidth);
+                Assert.InRange(h, 1, ThumbnailRequest.MaxHeight);
+                Assert.True(w < h);
+            }
+        }
+    }
+
     [Theory]
     [InlineData(160, 90)]
     [InlineData(320, 180)]

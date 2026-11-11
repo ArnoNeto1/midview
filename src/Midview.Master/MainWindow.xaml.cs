@@ -1544,7 +1544,9 @@ public partial class MainWindow : MidviewWindow
             machine, _masterCertificate,
             powerSchedule: () => Volatile.Read(ref _powerSchedule),
             appBlockPolicy: () => Volatile.Read(ref _appBlockPolicy),
-            thumbnailSize: () => TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
+            thumbnailSize: () => machine.IsPhone
+                ? TileSize.PhoneRequest(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale))
+                : TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
             classLesson: LessonForPollers, classHomeClaim: StragglerClaim, classLessonOver: EndOfLessonOver,
             classLessonHeldEnd: IsHeldEnd);
         // Decoded on the poller's own thread (frozen, so the UI thread may

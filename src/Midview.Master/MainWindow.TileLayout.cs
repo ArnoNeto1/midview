@@ -169,6 +169,7 @@ public partial class MainWindow
         Volatile.Write(ref _drawnTileWidth, drawn);
         Resources["TileWidth"] = (double)drawn;
         Resources["TileHeight"] = (double)TileSize.HeightOf(drawn);
+        Resources["PhoneTileWidth"] = (double)TileSize.PhoneWidthOf(drawn);
         if (_arranged && rowWidth > 0)
         {
             PlaceTiles();

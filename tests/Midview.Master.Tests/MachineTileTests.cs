@@ -18,6 +18,13 @@ public class MachineTileTests
     }
 
     [Fact]
+    public void Tile_reports_phone()
+    {
+        Assert.False(NewTile().IsPhone);
+        Assert.True(new MachineTile(NewTile().Machine with { Kind = Midview.Protocol.DeviceKind.Android }).IsPhone);
+    }
+
+    [Fact]
     public void ANewTile_IsStillConnecting() => Assert.Equal(TilePresence.Connecting, NewTile().Presence);
 
     [Fact]

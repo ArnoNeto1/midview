@@ -318,11 +318,42 @@
                                     <!-- As wide as the teacher made the tiles (ShowTilesAt): the screen,
                                          then the machine's line under it, then any warnings. A long
                                          name or status is cut short rather than widening its tile. -->
-                                    <StackPanel Width="{DynamicResource TileWidth}">
-                                        <Border Height="{DynamicResource TileHeight}" Background="{StaticResource BackgroundBrush}" CornerRadius="8">
+                                    <StackPanel>
+                                        <!-- A phone's tile stands up: same height as a PC's, narrower, rounder. -->
+                                        <StackPanel.Style>
+                                            <Style TargetType="StackPanel">
+                                                <Setter Property="Width" Value="{DynamicResource TileWidth}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                        <Setter Property="Width" Value="{DynamicResource PhoneTileWidth}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </StackPanel.Style>
+                                        <Border Height="{DynamicResource TileHeight}" Background="{StaticResource BackgroundBrush}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="CornerRadius" Value="8" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                            <Setter Property="CornerRadius" Value="12" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <Grid>
                                                 <!-- A brush, not an Image: it follows the rounded corners. -->
-                                                <Border CornerRadius="8">
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="CornerRadius" Value="8" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                                    <Setter Property="CornerRadius" Value="12" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Border.Background>
                                                         <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="Uniform" />
                                                     </Border.Background>
