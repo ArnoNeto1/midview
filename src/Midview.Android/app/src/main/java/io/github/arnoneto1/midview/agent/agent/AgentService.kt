@@ -139,8 +139,8 @@ class AgentService : Service() {
             hideCode = { hideCode() },
             deviceName = { DeviceName.read(this) },
         )
-        val commands = CommandHandler(trusted, pairing)
         val consent = ScreenCaptureService.consent
+        val commands = CommandHandler(trusted, pairing, consent)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,

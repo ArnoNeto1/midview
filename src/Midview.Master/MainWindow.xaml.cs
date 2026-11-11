@@ -58,6 +58,7 @@ public partial class MainWindow : MidviewWindow
     private const string OneOnlyTag = "uma";
     // The menu's one item that locks or gives back the screen (OnMachineMenuOpening words it).
     private const string ScreenLockTag = "bloqueio";
+    internal const string PhoneOnlyTag = "celular";
 
     // The machines whose screen is locked, each kept so by its own
     // connection; how each one last answered, for the status line.
@@ -492,10 +493,52 @@ public partial class MainWindow : MidviewWindow
         var targets = TargetsOf(tile);
         ShowMenuFor(menu, targets.Count);
         GreyUnsupportedItems(menu.Items, targets);
+        ShowPhoneItems(menu, targets.Select(target => target.Machine).ToList());
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
         }
+    }
+
+    // The items made for phones show only when a phone is among the machines
+    // the menu acts on; a menu of PCs alone stays as it was.
+    internal static void ShowPhoneItems(ContextMenu menu, IReadOnlyList<KnownMachine> machines)
+    {
+        var phones = machines.Any(machine => machine.IsPhone);
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, PhoneOnlyTag)))
+        {
+            item.Visibility = phones ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    // The phones among the machines ask their students again; the status bar says how each answered.
+    private async void OnAskScreenAgainClicked(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
+        {
+            return;
+        }
+        var phones = MachinesOf(tile).Where(machine => machine.IsPhone).ToList();
+        if (phones.Count == 0)
+        {
+            return;
+        }
+
+        StatusTextBlock.Text = "Pedindo de novo para ver a tela...";
+        var lines = await Task.Run(() => phones.Select(phone =>
+        {
+            try
+            {
+                var (succeeded, detail) = ScreenConsentClient.Ask(phone, _masterCertificate);
+                return ScreenConsentClient.Summary(phone.Name, succeeded, detail);
+            }
+            catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException
+                                           or System.Security.Authentication.AuthenticationException or TimeoutException)
+            {
+                return ScreenConsentClient.Summary(phone.Name, false, ErrorText.Describe(ex));
+            }
+        }).ToList());
+        StatusTextBlock.Text = string.Join(" ", lines);
     }
 
     // With several machines the menu first says how many, and leaves out what

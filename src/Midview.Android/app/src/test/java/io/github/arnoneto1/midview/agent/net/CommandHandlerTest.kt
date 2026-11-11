@@ -6,6 +6,8 @@ import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.screen.ConsentState
+import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -24,7 +26,9 @@ class CommandHandlerTest {
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
     private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }) }
-    private val handler by lazy { CommandHandler(trusted, pairing) }
+    private var shown = 0
+    private val consent = ScreenConsent(clock = { 0L }) { shown++ }
+    private val handler by lazy { CommandHandler(trusted, pairing, consent) }
 
     private fun message(type: Int, payload: ByteArray = ByteArray(0)) = Message(type, payload)
 
@@ -104,6 +108,50 @@ class CommandHandlerTest {
         val channel = FakeChannel(teacher, message(MessageType.HEARTBEAT))
         handler.handle(channel)
         assertEquals(CommandHandler.IDLE_TIMEOUT_MILLIS, channel.timeoutMillis)
+    }
+
+    @Test fun requestScreenConsentAsksAndAcks() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.REQUEST_SCREEN_CONSENT))
+        handler.handle(channel)
+
+        assertEquals(1, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+        assertEquals(true to "pedido mostrado", CommandResult.decode(channel.sent.single().also { assertEquals(MessageType.COMMAND_ACK, it.type) }.payload))
+    }
+
+    @Test fun requestScreenConsentWhileLockedSaysItWaits() {
+        trusted.add(teacher)
+        consent.lockedChanged(true)
+        val channel = FakeChannel(teacher, message(MessageType.REQUEST_SCREEN_CONSENT))
+        handler.handle(channel)
+
+        assertEquals(0, shown)
+        assertEquals(
+            false to "a tela está bloqueada: o pedido aparece quando o celular for desbloqueado",
+            CommandResult.decode(channel.sent.single().payload),
+        )
+        // It comes up at the unlock.
+        consent.lockedChanged(false)
+        assertEquals(1, shown)
+    }
+
+    @Test fun requestScreenConsentWhileCapturingChangesNothing() {
+        trusted.add(teacher)
+        consent.granted()
+        val channel = FakeChannel(teacher, message(MessageType.REQUEST_SCREEN_CONSENT))
+        handler.handle(channel)
+
+        assertEquals(0, shown)
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertEquals(true to "a tela já está liberada", CommandResult.decode(channel.sent.single().payload))
+    }
+
+    @Test fun untrustedTeacherCannotRequestScreenConsent() {
+        trusted.add(teacher)
+        handler.handle(FakeChannel(stranger, message(MessageType.REQUEST_SCREEN_CONSENT)))
+        assertEquals(0, shown)
+        assertEquals(ConsentState.NotAsked, consent.state)
     }
 
     private companion object {

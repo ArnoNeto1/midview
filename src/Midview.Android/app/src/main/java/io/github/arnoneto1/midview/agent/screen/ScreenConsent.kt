@@ -28,6 +28,9 @@ class ScreenConsent(
 
     val state: ConsentState get() = synchronized(lock) { current }
 
+    // The teacher's lock screen is up: a request waits for the unlock.
+    val isLocked: Boolean get() = synchronized(lock) { locked }
+
     // A trusted teacher connected to the screen port: asks unless the
     // student was asked already.
     fun teacherConnected() {
