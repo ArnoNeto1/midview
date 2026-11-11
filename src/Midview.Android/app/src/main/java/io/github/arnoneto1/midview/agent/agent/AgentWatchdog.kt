@@ -13,6 +13,8 @@ import android.os.SystemClock
 // alarm when the app's process is killed, so the agent comes back by itself
 // within seconds. Armed at every start of the agent (after the phone starts,
 // too); only a force stop, which a school phone does not allow, clears it.
+// It wakes the processor every 10 s, also with the screen off: the price of
+// a fast return on a school phone that usually sits charging (WatchdogAlarm).
 class AgentWatchdog : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         AgentService.ensureRunning(context, "watchdog")

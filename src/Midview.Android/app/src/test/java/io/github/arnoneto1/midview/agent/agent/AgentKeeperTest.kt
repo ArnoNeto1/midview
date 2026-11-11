@@ -50,6 +50,22 @@ class AgentKeeperTest {
         assertEquals(2, starts)
     }
 
+    // Asked for but never created (Android stopped the service as an "idle"
+    // app's one before it ran, with no onDestroy): asked for again after
+    // one check without it, and so on until it comes up.
+    @Test fun aStartNeverCreatedIsAskedAgain() {
+        assertTrue(keeper.ensureRunning())
+        assertFalse(keeper.ensureRunning())
+        assertTrue(keeper.ensureRunning())
+        assertFalse(keeper.ensureRunning())
+        assertTrue(keeper.ensureRunning())
+        assertEquals(3, starts)
+        keeper.created()
+        assertFalse(keeper.ensureRunning())
+        assertFalse(keeper.ensureRunning())
+        assertEquals(3, starts)
+    }
+
     // A start Android refused is tried again at the next check.
     @Test fun aRefusedStartIsTriedAgain() {
         failNext = true

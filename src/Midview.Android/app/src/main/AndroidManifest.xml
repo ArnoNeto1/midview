@@ -15,8 +15,13 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Wi-Fi kept awake so the phone answers with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- The watchdog's check every few seconds (AgentWatchdog), on time. -->
+    <!-- The watchdog's check every few seconds (AgentWatchdog), on time.
+         USE_EXACT_ALARM is granted at install from Android 13 and cannot be
+         taken back, so Android 14 and later (where SCHEDULE_EXACT_ALARM
+         starts denied) keep exact alarms; the app is installed by the
+         school phone's provisioning, not by Google Play. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <application
         android:name=".MidviewApplication"
