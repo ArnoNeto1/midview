@@ -1,0 +1,50 @@
+<local:MidviewWindow x:Class="Midview.Master.PreparePhoneWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Preparar celular" Height="860" Width="560" MinHeight="520"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="24,22,24,20">
+        <local:DialogHeader DockPanel.Dock="Top" Icon="&#xE8EA;" Heading="Preparar celular" Accent="{StaticResource ConfigurarBrush}"
+                Content="Põe um celular novo ou restaurado de fábrica na turma: ele escaneia o código abaixo, entra no Wi-Fi do laboratório e instala o Midview sozinho." />
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="Fechar" IsCancel="True" Padding="16,5" MinWidth="80" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,14,0,0">
+            <StackPanel>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="Wi-Fi do laboratório" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,8"
+                                   Text="O celular usa esta rede para baixar o Midview. Fica guardada só neste computador, protegida pelo Windows." />
+                        <TextBlock Style="{StaticResource Hint}" Text="Nome da rede" />
+                        <TextBox x:Name="SsidInput" Margin="0,3,0,8" Padding="6,4" />
+                        <TextBlock Style="{StaticResource Hint}" Text="Senha" />
+                        <TextBox x:Name="PasswordInput" Margin="0,3,0,10" Padding="6,4" />
+                        <TextBlock x:Name="ErrorTextBlock" Style="{StaticResource ErrorText}" Margin="0,0,0,8" />
+                        <Button Content="Gerar código" Click="OnGenerateClicked" IsDefault="True" Style="{StaticResource PrimaryButton}"
+                                Padding="16,6" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="ResultPanel" Visibility="Collapsed">
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <Border Background="White" CornerRadius="8" Padding="14" HorizontalAlignment="Center">
+                                <Image x:Name="QrImage" Width="340" Height="340" RenderOptions.BitmapScalingMode="NearestNeighbor" />
+                            </Border>
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" HorizontalAlignment="Center"
+                                       Text="Segure o celular a um braço de distância do monitor." />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="Passo a passo" Margin="0,0,0,8" />
+                            <StackPanel x:Name="StepsPanel" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</local:MidviewWindow>

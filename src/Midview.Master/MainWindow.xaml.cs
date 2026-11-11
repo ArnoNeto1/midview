@@ -1010,6 +1010,11 @@ public partial class MainWindow : MidviewWindow
         ShowOnce("sites", targets, () => new SiteBlockWindow(targets, IsWholeClass(targets, ToolbarAction.BlockSites), _masterCertificate) { Owner = this });
     }
 
+    private void OnPreparePhoneClicked(object sender, RoutedEventArgs e)
+    {
+        ShowOnce("preparar-celular", Array.Empty<KnownMachine>(), () => new PreparePhoneWindow { Owner = this });
+    }
+
     private void OnLabConfigClassClicked(object sender, RoutedEventArgs e)
     {
         if (_tiles.Count == 0)
