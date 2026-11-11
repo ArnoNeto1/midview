@@ -111,17 +111,21 @@ class ScreenStreamHandler(
                 }
                 previous = frame
 
-                if (regions.isNotEmpty()) {
+                val messages = if (regions.isEmpty()) {
+                    emptyList()
+                } else {
                     val groups = ScreenFrame.split(regions)
                     val firstId = credit.nextId()
-                    val messages = groups.mapIndexed { i, group ->
+                    credit.sent(firstId + groups.size - 1)
+                    groups.mapIndexed { i, group ->
                         Message(MessageType.SCREEN_FRAME, ScreenFrame.encode(firstId + i, frame.width, frame.height, group))
                     }
-                    credit.sent(firstId + groups.size - 1)
-                    messages.forEach { channel.send(it) }
                 }
-
+                // The work is the capture, compare and encode, as the
+                // Session counts it: a slow network is not the phone's work.
                 val workMillis = (System.nanoTime() - started) / 1_000_000
+                messages.forEach { channel.send(it) }
+
                 val rest = cadence.restAfter(workMillis, regions.isNotEmpty(), System.nanoTime() / 1_000_000)
                 if (rest > 0) Thread.sleep(rest)
             }
@@ -130,6 +134,11 @@ class ScreenStreamHandler(
         } catch (e: IOException) {
             // A send failed: the connection is dead, and closing it ends the
             // receive above.
+            channel.close()
+        } catch (e: Throwable) {
+            // Anything else (out of memory, say) ends this stream only, never
+            // the agent: an exception left on this thread would end the app.
+            System.err.println("Midview screen stream stopped: $e")
             channel.close()
         }
     }

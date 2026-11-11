@@ -104,4 +104,34 @@ class ScreenConsentTest {
         assertEquals("Não permitiu ver a tela", ScreenConsent.statusText(ConsentState.Denied))
         assertNull(ScreenConsent.statusText(ConsentState.Capturing))
     }
+
+    @Test fun deniedWhileCapturingKeepsCapturing() {
+        val consent = consent()
+        consent.ask()
+        consent.granted()
+        // A second request (activity and notification both opened) answered "no".
+        consent.denied()
+        assertEquals(ConsentState.Capturing, consent.state)
+    }
+
+    @Test fun aCaptureThatKeepsFailingStopsBeingAskedFor() {
+        val consent = consent(askAgainWhenStopped = true)
+        consent.ask()
+        assertEquals(1, shown)
+
+        consent.captureFailed()
+        assertEquals(2, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        consent.captureFailed()
+        assertEquals(2, shown)
+        assertEquals(ConsentState.Denied, consent.state)
+
+        // The teacher asks again; a capture that starts resets the count.
+        consent.ask()
+        consent.granted()
+        consent.captureFailed()
+        assertEquals(4, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+    }
 }

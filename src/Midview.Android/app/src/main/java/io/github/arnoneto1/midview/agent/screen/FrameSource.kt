@@ -21,33 +21,63 @@ interface FrameSource {
     fun awaitNew(afterSeq: Long, timeoutMs: Long): Frame?
 }
 
-// The newest picture the capture made, for everyone who wants it (the
-// thumbnails and the big window of every teacher).
+// A picture just turned into pixels (what the capture's convert gives).
+class Picture(val pixels: IntArray, val width: Int, val height: Int)
+
+// The newest picture of the screen, for everyone who wants it (the
+// thumbnails and the big window of every teacher). The capture only says
+// that the screen changed (changed); its newest picture is turned into
+// pixels (convert, a few MB and some milliseconds each time) only when
+// someone asks for it: a big window as often as its pace allows, a
+// thumbnail every few seconds, nobody: never.
 class LatestFrame : FrameSource {
     // java.lang.Object, for wait and notifyAll.
     @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
     private val lock = Object()
     private var frame: Frame? = null
     private var seq = 0L
+    private var convert: (() -> Picture?)? = null
+    private var dirty = false
 
+    // The capture started: convert turns its newest picture into pixels
+    // (null: none to be had). Called by whoever asks, one at a time.
+    fun attach(convert: () -> Picture?) = synchronized(lock) {
+        this.convert = convert
+        frame = null
+        dirty = true
+        lock.notifyAll()
+    }
+
+    // The capture has a newer picture.
+    fun changed() = synchronized(lock) {
+        dirty = true
+        lock.notifyAll()
+    }
+
+    // A picture already in pixels (tests).
     fun publish(pixels: IntArray, width: Int, height: Int) = synchronized(lock) {
-        seq++
-        frame = Frame(pixels, width, height, seq)
+        keep(Picture(pixels, width, height))
         lock.notifyAll()
     }
 
     // The capture stopped: no picture until it starts again.
     fun clear() = synchronized(lock) {
+        convert = null
+        dirty = false
         frame = null
     }
 
-    override fun latest(): Frame? = synchronized(lock) { frame }
+    override fun latest(): Frame? = synchronized(lock) {
+        refresh()
+        frame
+    }
 
     // An interrupted wait throws InterruptedException (the stream is ending).
     override fun awaitNew(afterSeq: Long, timeoutMs: Long): Frame? {
         val deadline = System.nanoTime() + timeoutMs * 1_000_000
         synchronized(lock) {
             while (true) {
+                refresh()
                 val newest = frame
                 if (newest != null && newest.seq > afterSeq) return newest
                 val leftMs = (deadline - System.nanoTime()) / 1_000_000
@@ -55,6 +85,18 @@ class LatestFrame : FrameSource {
                 lock.wait(leftMs)
             }
         }
+    }
+
+    // Under the lock.
+    private fun refresh() {
+        if (!dirty) return
+        dirty = false
+        convert?.invoke()?.let { keep(it) }
+    }
+
+    private fun keep(picture: Picture) {
+        seq++
+        frame = Frame(picture.pixels, picture.width, picture.height, seq)
     }
 }
 

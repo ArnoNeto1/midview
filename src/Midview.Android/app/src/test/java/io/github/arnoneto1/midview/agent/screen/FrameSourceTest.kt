@@ -62,4 +62,39 @@ class FrameSourceTest {
         frames.clear()
         assertNull(frames.latest())
     }
+
+    @Test fun picturesAreTurnedIntoPixelsOnlyWhenAskedFor() {
+        val frames = LatestFrame()
+        var conversions = 0
+        frames.attach { conversions++; Picture(IntArray(4) { conversions }, 2, 2) }
+
+        // The screen changes a lot with nobody watching: nothing converted.
+        repeat(100) { frames.changed() }
+        assertEquals(0, conversions)
+
+        // A thumbnail asks: one conversion, the newest picture.
+        val first = frames.latest()!!
+        assertEquals(1, conversions)
+        // Asked again with no change: the same picture.
+        assertSame(first, frames.latest())
+        assertNull(frames.awaitNew(first.seq, 10))
+        assertEquals(1, conversions)
+
+        // A big window waiting for a change gets it converted once.
+        val waiter = thread { Thread.sleep(50); frames.changed() }
+        val second = frames.awaitNew(first.seq, 2_000)!!
+        waiter.join()
+        assertEquals(2, conversions)
+        assertEquals(2, second.pixels[0])
+
+        // A new capture with nothing to give yet (convert gives null): no picture.
+        frames.attach { conversions++; null }
+        assertNull(frames.latest())
+        assertEquals(3, conversions)
+
+        frames.clear()
+        frames.changed()
+        assertNull(frames.latest())
+        assertEquals(3, conversions)
+    }
 }

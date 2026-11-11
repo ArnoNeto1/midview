@@ -21,11 +21,22 @@ import android.os.Bundle
 // phone Android may hold the start back, so a notification that opens it
 // goes up too.
 class ConsentActivity : Activity() {
+    private val token = Any()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        open = true
         // Recreated (the phone turned, say): the system's request is already up.
-        if (savedInstanceState != null) return
+        if (savedInstanceState != null) {
+            open = token
+            return
+        }
+        // Opened twice (the agent's start and the notification both got
+        // through): the first one asks, this one goes.
+        if (open != null) {
+            finish()
+            return
+        }
+        open = token
         val manager = getSystemService(MediaProjectionManager::class.java)
         val request = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // The whole screen, never a single app.
@@ -47,7 +58,7 @@ class ConsentActivity : Activity() {
     }
 
     override fun onDestroy() {
-        open = false
+        if (open === token) open = null
         super.onDestroy()
     }
 
@@ -70,11 +81,13 @@ class ConsentActivity : Activity() {
         private const val CHANNEL = "consent"
         private const val NOTICE_ID = 4
 
-        @Volatile private var open = false
+        // The token of the request on the screen now, if any (not the
+        // activity itself, which must not outlive its screen).
+        @Volatile private var open: Any? = null
 
         // Asks the student, unless the request is already on the screen.
         fun show(context: Context) {
-            if (open) return
+            if (open != null) return
             try {
                 context.startActivity(intent(context))
             } catch (e: RuntimeException) {

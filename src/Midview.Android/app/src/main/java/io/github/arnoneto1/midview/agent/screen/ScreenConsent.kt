@@ -23,6 +23,7 @@ class ScreenConsent(
 
     // Asked while locked: shown at the unlock.
     private var pending = false
+    private var failures = 0
     private var shownAtMillis: Long? = null
 
     val state: ConsentState get() = synchronized(lock) { current }
@@ -41,11 +42,33 @@ class ScreenConsent(
     fun granted() = synchronized(lock) {
         current = ConsentState.Capturing
         pending = false
+        failures = 0
     }
 
+    // A "no" while capturing (a second request answered late) changes nothing.
     fun denied() = synchronized(lock) {
-        current = ConsentState.Denied
-        pending = false
+        if (current != ConsentState.Capturing) {
+            current = ConsentState.Denied
+            pending = false
+        }
+    }
+
+    // The student said yes but the capture would not start. Treated as a
+    // stop the first time; again right after, the phone stops asking (the
+    // teacher reads "Não permitiu ver a tela" and may ask again) instead of
+    // asking over and over for a capture that fails.
+    fun captureFailed() {
+        val giveUp = synchronized(lock) {
+            failures++
+            if (failures >= FAILURES_BEFORE_GIVING_UP) {
+                current = ConsentState.Denied
+                pending = false
+                true
+            } else {
+                false
+            }
+        }
+        if (!giveUp) stopped()
     }
 
     // The capture ended (the student stopped it, or the system did).
@@ -89,6 +112,7 @@ class ScreenConsent(
 
     companion object {
         const val ASK_AGAIN_AFTER_MILLIS = 60_000L
+        const val FAILURES_BEFORE_GIVING_UP = 2
 
         const val WAITING_TEXT = "Aguardando o aluno permitir"
         const val DENIED_TEXT = "Não permitiu ver a tela"

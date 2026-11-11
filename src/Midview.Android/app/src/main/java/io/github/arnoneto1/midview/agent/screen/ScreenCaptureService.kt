@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.Image
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -25,11 +26,13 @@ import android.view.Display
 
 // The capture of the screen, once the student tapped "Iniciar agora"
 // (ConsentActivity): a foreground service of type mediaProjection, as
-// Android 10 and newer require, mirroring the screen into an ImageReader
-// whose pictures go to frames, at most MAX_CAPTURE_SIDE on the long side.
+// Android 10 and newer require, mirroring the screen into an ImageReader,
+// at most MAX_CAPTURE_SIDE on the long side. Only the newest picture is
+// kept, as Android gives it; frames turns it into pixels when a thumbnail
+// or a big window asks for it, never just because the screen changed.
 // When the phone turns, the capture takes the new shape. When the capture
-// stops (the student or the system ends it), consent hears of it. All the
-// capture's work runs on one thread of its own.
+// stops (the student or the system ends it), consent hears of it. The
+// capture's own work runs on one thread of its own.
 class ScreenCaptureService : Service() {
     private lateinit var thread: HandlerThread
     private lateinit var handler: Handler
@@ -39,8 +42,12 @@ class ScreenCaptureService : Service() {
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
     private var size = 0 to 0
-    private var converting = false
-    private var lastConvertedMillis = 0L
+
+    // The newest picture, held until a newer one comes; read (converted) by
+    // whoever asks frames, so under imageLock. Never take frames' lock while
+    // holding imageLock: frames calls convert holding its own.
+    private val imageLock = Any()
+    private var held: Image? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,22 +58,26 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // First, as Android wants of a service started in the foreground;
-        // the consent is already given, as Android 14 wants of this type.
-        goForeground()
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
         val data = intent?.let { consentData(it) }
         if (data == null) {
-            consent.stopped()
+            // Nothing to capture with: never in the foreground as a capture.
+            consent.captureFailed()
             stopSelf()
             return START_NOT_STICKY
         }
+        // Before the projection, as Android wants of a service started in the
+        // foreground; the consent is already given, as Android 14 wants of
+        // this type.
+        goForeground()
         handler.post {
             try {
                 begin(resultCode, data)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "The screen capture could not start", e)
-                end()
+                release()
+                consent.captureFailed()
+                stopSelf()
             }
         }
         return START_NOT_STICKY
@@ -76,7 +87,6 @@ class ScreenCaptureService : Service() {
         handler.post {
             if (projection != null) {
                 release()
-                frames.clear()
                 consent.stopped()
             }
         }
@@ -103,6 +113,7 @@ class ScreenCaptureService : Service() {
             "Midview", width, height, dpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, images.surface, null, handler,
         )
         displays().registerDisplayListener(displayListener, handler)
+        frames.attach { convertHeld() }
         consent.granted()
         Log.i(TAG, "Screen capture started at ${width}x$height.")
     }
@@ -110,12 +121,13 @@ class ScreenCaptureService : Service() {
     // The projection ended by the student or the system: no picture any more.
     private fun end() {
         release()
-        frames.clear()
         consent.stopped()
         stopSelf()
     }
 
     private fun release() {
+        frames.clear()
+        dropHeld()
         displays().unregisterDisplayListener(displayListener)
         projection?.unregisterCallback(stopCallback)
         display?.release()
@@ -125,8 +137,11 @@ class ScreenCaptureService : Service() {
         reader = null
         projection?.stop()
         projection = null
-        handler.removeCallbacks(convert)
-        converting = false
+    }
+
+    private fun dropHeld() = synchronized(imageLock) {
+        held?.close()
+        held = null
     }
 
     private val stopCallback = object : MediaProjection.Callback() {
@@ -147,9 +162,9 @@ class ScreenCaptureService : Service() {
             size = width to height
             val old = reader
             old?.setOnImageAvailableListener(null, null)
+            dropHeld()
             val images = newReader(width, height)
             reader = images
-            converting = false
             virtual.resize(width, height, dpi)
             virtual.surface = images.surface
             old?.close()
@@ -163,34 +178,39 @@ class ScreenCaptureService : Service() {
 
     private fun newReader(width: Int, height: Int): ImageReader =
         ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, MAX_IMAGES).apply {
-            setOnImageAvailableListener({ convertSoon() }, handler)
+            setOnImageAvailableListener({ keepNewest(it) }, handler)
         }
 
-    // Pictures come as often as the screen changes; one is turned into
-    // pixels at most every ACTIVE_INTERVAL_MS, always the newest, so the last
-    // change before the screen goes still is never lost.
-    private fun convertSoon() {
-        if (converting) return
-        converting = true
-        val wait = CaptureCadence.ACTIVE_INTERVAL_MS - (SystemClock.uptimeMillis() - lastConvertedMillis)
-        handler.postDelayed(convert, maxOf(0L, wait))
+    // Takes Android's newest picture at once (so its queue never fills and
+    // the last change before the screen goes still is never lost) and lets
+    // the one before go. Cheap: no pixels are copied here.
+    private fun keepNewest(images: ImageReader) {
+        try {
+            synchronized(imageLock) {
+                val newest = images.acquireLatestImage() ?: return
+                held?.close()
+                held = newest
+            }
+            frames.changed()
+        } catch (e: Throwable) {
+            // A picture lost, never the agent.
+            Log.w(TAG, "A screen picture could not be taken", e)
+        }
     }
 
-    private val convert = Runnable {
-        converting = false
-        val image = try {
-            reader?.acquireLatestImage()
-        } catch (e: IllegalStateException) {
-            null
-        } ?: return@Runnable
-        try {
+    // The held picture in pixels, for frames (on the asking thread).
+    private fun convertHeld(): Picture? = try {
+        synchronized(imageLock) {
+            val image = held ?: return null
             val plane = image.planes[0]
-            val pixels = RgbaPixels.toArgb(plane.buffer, image.width, image.height, plane.pixelStride, plane.rowStride)
-            frames.publish(pixels, image.width, image.height)
-        } finally {
-            image.close()
-            lastConvertedMillis = SystemClock.uptimeMillis()
+            Picture(
+                RgbaPixels.toArgb(plane.buffer, image.width, image.height, plane.pixelStride, plane.rowStride),
+                image.width, image.height,
+            )
         }
+    } catch (e: Throwable) {
+        Log.w(TAG, "A screen picture could not be read", e)
+        null
     }
 
     private data class Screen(val width: Int, val height: Int, val dpi: Int)
@@ -223,7 +243,8 @@ class ScreenCaptureService : Service() {
         private const val TAG = "Midview"
         private const val CHANNEL = "screen"
         private const val NOTIFICATION_ID = 3
-        private const val MAX_IMAGES = 2
+        // One held, two for Android to fill meanwhile.
+        private const val MAX_IMAGES = 3
         private const val EXTRA_RESULT_CODE = "resultCode"
         private const val EXTRA_DATA = "data"
 
