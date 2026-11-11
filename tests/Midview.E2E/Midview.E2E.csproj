@@ -2,23 +2,26 @@
   <!-- The teacher's side of the real-Windows check of the network update
        (installer/tests/Testar-Atualizacao.ps1). Built from the Master's own
        update code, without its window. Not part of the product or of
-       Midview.sln. -->
+       Midview.sln. Also holds the tests against a real Android agent
+       (AndroidAgentInteropTests, run with dotnet test and
+       MIDVIEW_ANDROID_HOST); Program.cs stays the program's entry point. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Midview.Protocol\Midview.Protocol.csproj" />
-    <Compile Include="..\..\src\Midview.Master\KnownMachine.cs" Link="Master\KnownMachine.cs" />
-    <Compile Include="..\..\src\Midview.Master\ConnectionClient.cs" Link="Master\ConnectionClient.cs" />
-    <Compile Include="..\..\src\Midview.Master\TcpConnect.cs" Link="Master\TcpConnect.cs" />
-    <Compile Include="..\..\src\Midview.Master\PairingSession.cs" Link="Master\PairingSession.cs" />
-    <Compile Include="..\..\src\Midview.Master\UpdatePackage.cs" Link="Master\UpdatePackage.cs" />
-    <Compile Include="..\..\src\Midview.Master\UpdateClient.cs" Link="Master\UpdateClient.cs" />
-    <Compile Include="..\..\src\Midview.Master\CommandClient.cs" Link="Master\CommandClient.cs" />
-    <Compile Include="..\..\src\Midview.Master\AppBlockClient.cs" Link="Master\AppBlockClient.cs" />
+    <!-- The Master's own code (pairing, the update, commands, the
+         thumbnail poller), without its window. -->
+    <ProjectReference Include="..\..\src\Midview.Master\Midview.Master.csproj" />
   </ItemGroup>
 </Project>
