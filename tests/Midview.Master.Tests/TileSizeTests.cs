@@ -22,7 +22,26 @@ public class TileSizeTests
     {
         var w = TileSize.Default;
         Assert.True(TileSize.PhoneWidthOf(w) < TileSize.HeightOf(w));
-        Assert.Equal((int)Math.Round(TileSize.HeightOf(w) * 9 / 19.5), TileSize.PhoneWidthOf(w));
+        Assert.True(TileSize.PhoneWidthOf(w) >= TileSize.PhoneMinWidth);
+    }
+
+    [Fact]
+    public void Phone_tile_is_never_narrower_than_the_floor()
+    {
+        Assert.Equal(72, TileSize.PhoneMinWidth);
+        Assert.Equal(72, TileSize.PhoneWidthOf(TileSize.Smallest));
+        // Above the floor the width is the plain 9:19.5 one.
+        Assert.Equal((int)Math.Round(TileSize.HeightOf(640) * 9 / 19.5), TileSize.PhoneWidthOf(640));
+        Assert.True(TileSize.PhoneWidthOf(640) > TileSize.PhoneMinWidth);
+    }
+
+    [Fact]
+    public void Phone_request_at_the_smallest_is_portrait_and_within_limits()
+    {
+        var (w, h) = TileSize.PhoneRequest(TileSize.Smallest, 1.0);
+        Assert.True(w < h);
+        Assert.InRange(w, 1, ThumbnailRequest.MaxWidth);
+        Assert.InRange(h, 1, ThumbnailRequest.MaxHeight);
     }
 
     [Fact]

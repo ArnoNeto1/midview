@@ -429,7 +429,18 @@
                                                        VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="6,0,0,0"
                                                        HorizontalAlignment="Right" TextAlignment="Right" TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center" />
+                                                       VerticalAlignment="Center">
+                                                <!-- A phone's tile is narrow: the screen already says it, the name gets the line. -->
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </DockPanel>
                                         <TextBlock Text="{Binding ScreenLockBadge}" FontSize="11" HorizontalAlignment="Center" Margin="4,3,4,2"
                                                    TextAlignment="Center" TextWrapping="Wrap" Foreground="{StaticResource ErrorBrush}" FontWeight="SemiBold">

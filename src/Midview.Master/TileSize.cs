@@ -104,16 +104,25 @@ public static class TileSize
         (Math.Min((int)Math.Ceiling(width * dpiScale), ThumbnailRequest.MaxWidth),
          Math.Min((int)Math.Ceiling(HeightOf(width) * dpiScale), ThumbnailRequest.MaxHeight));
 
-    // A phone's tile stands up: as tall as a PC's tile at this width, and
-    // 9:19.5 wide.
-    public static int PhoneWidthOf(int width) => (int)Math.Round(HeightOf(width) * 9 / 19.5);
+    // A phone's screen is 9:19.5.
+    private const double PhoneAspect = 9 / 19.5;
 
-    // Like Request, for a phone: the box stands up and stays inside what a
-    // Session renders, keeping its shape when the height is the one cut.
+    // No phone tile is narrower than this, so its name and status stay
+    // readable at the smallest sizes.
+    public const int PhoneMinWidth = 72;
+
+    // A phone's tile stands up: as tall as a PC's tile at this width, and
+    // 9:19.5 wide, but never narrower than PhoneMinWidth.
+    public static int PhoneWidthOf(int width) =>
+        Math.Max(PhoneMinWidth, (int)Math.Round(HeightOf(width) * PhoneAspect));
+
+    // Like Request, for a phone: the box stands up (the screen's own 9:19.5,
+    // which the tile shows whole, however wide the floor makes it) and stays
+    // inside what a Session renders.
     public static (int Width, int Height) PhoneRequest(int width, double dpiScale)
     {
         var height = Math.Min((int)Math.Ceiling(HeightOf(width) * dpiScale), ThumbnailRequest.MaxHeight);
-        var phoneWidth = Math.Min((int)Math.Round(height * 9 / 19.5), ThumbnailRequest.MaxWidth);
+        var phoneWidth = Math.Min((int)Math.Round(height * PhoneAspect), ThumbnailRequest.MaxWidth);
         return (Math.Max(1, phoneWidth), Math.Max(1, height));
     }
 }
