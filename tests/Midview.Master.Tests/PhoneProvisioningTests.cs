@@ -40,4 +40,28 @@ public class PhoneProvisioningTests
     {
         Assert.Throws<ArgumentException>(() => PhoneProvisioning.QrJson(ssid, "x"));
     }
+
+    private const string Placeholder = "PREENCHER-NA-TASK-9";
+
+    // The signing checksum is a SHA-256: 32 bytes in Base64 URL-safe without
+    // "=" are 43 characters. Skipped while the value is still the placeholder.
+    [Fact]
+    public void Signature_checksum_is_base64_url_safe_sha256()
+    {
+        if (PhoneProvisioning.SignatureChecksum == Placeholder)
+        {
+            return;
+        }
+        Assert.Matches("^[A-Za-z0-9_-]{43}$", PhoneProvisioning.SignatureChecksum);
+    }
+
+    // The release workflow sets MIDVIEW_RELEASE=1 on a v* tag: a placeholder
+    // checksum would make every prepared phone refuse the app, so it can't ship.
+    [Fact]
+    public void Placeholder_checksum_does_not_ship_in_a_release_build()
+    {
+        var release = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIDVIEW_RELEASE"));
+        Assert.False(release && PhoneProvisioning.SignatureChecksum == Placeholder,
+            "PhoneProvisioning.SignatureChecksum ainda é o texto provisório; fixe o checksum do APK assinado antes de publicar.");
+    }
 }

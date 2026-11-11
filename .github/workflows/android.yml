@@ -1,0 +1,114 @@
+# Phone app (src/Midview.Android): runs its JVM unit tests on every push or
+# pull request that touches it. For a pushed v* tag, and only then, it also
+# builds the release APK signed with the release key from the repository
+# secrets, names it MidviewAgent.apk and attaches it to that tag's GitHub
+# Release, next to MidviewSetup.exe (pacote.yml attaches that one). Missing
+# secrets fail the tag build: an unsigned or debug APK is never published,
+# because phones prepared with it could not be updated later. An APK already
+# attached to the Release is refused, never overwritten.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   ANDROID_KEYSTORE_BASE64    the .jks keystore, Base64 encoded
+#   ANDROID_KEYSTORE_PASSWORD  the keystore's password
+#   ANDROID_KEY_ALIAS          the key's alias in the keystore
+# The key is assumed to use the keystore's password (keytool's default).
+name: Android
+
+on:
+  push:
+    branches: [master]
+    # GitHub ignores the path filters below for tag pushes.
+    tags: ['v*']
+    paths:
+      - 'src/Midview.Android/**'
+      - 'Directory.Build.props'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'src/Midview.Android/**'
+      - 'Directory.Build.props'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Testes e APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Attaching the APK to a release needs write access to the contents.
+    permissions:
+      contents: write
+    env:
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Testes
+        working-directory: src/Midview.Android
+        run: ./gradlew testDebugUnitTest
+
+      # A tag build fails here, before anything is built, when something would
+      # make the phone app unusable or unsigned.
+      - name: Conferir os segredos e o checksum (tag v*)
+        if: env.IS_RELEASE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          missing=""
+          [ -z "$KEYSTORE_BASE64" ] && missing="$missing ANDROID_KEYSTORE_BASE64"
+          [ -z "$KEYSTORE_PASSWORD" ] && missing="$missing ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && missing="$missing ANDROID_KEY_ALIAS"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltam os segredos do GitHub:$missing. Sem eles o APK não é assinado, e um APK sem assinatura ou de teste não é publicado."
+            exit 1
+          fi
+          if grep -q 'PREENCHER-NA-TASK-9' src/Midview.Master/PhoneProvisioning.cs; then
+            echo "::error::PhoneProvisioning.SignatureChecksum ainda é o texto provisório. Calcule o checksum do APK assinado e fixe-o antes de publicar."
+            exit 1
+          fi
+
+      - name: Gerar o APK assinado (tag v*)
+        if: env.IS_RELEASE == 'true'
+        working-directory: src/Midview.Android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MIDVIEW_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MIDVIEW_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/midview-android.jks"
+          export MIDVIEW_KEYSTORE_PATH="$RUNNER_TEMP/midview-android.jks"
+          ./gradlew assembleRelease
+          rm -f "$RUNNER_TEMP/midview-android.jks"
+          apk=app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || { echo "::error::O build não gerou o APK assinado ($apk)."; exit 1; }
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
+          "$apksigner" verify --print-certs "$apk"
+          cp "$apk" "$RUNNER_TEMP/MidviewAgent.apk"
+
+      # overwrite_files: false makes the upload fail if the Release already has
+      # a MidviewAgent.apk, instead of replacing it.
+      - name: Anexar o APK à versão (tag v*)
+        if: env.IS_RELEASE == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ runner.temp }}/MidviewAgent.apk
+          overwrite_files: false
+          fail_on_unmatched_files: true

@@ -104,6 +104,17 @@ In **Máquinas da sala** > **Outro professor**:
 - **Dar acesso a um colega...** (give a colleague access) shows a 9-character code, valid for 10 minutes. The colleague types the code in **Entrar na sala de um colega...** (join a colleague's classroom) and sees the same machines.
 - **Permitir novo professor (10 minutos)** (allow a new teacher) lets the machines accept another teacher's pairing for 10 minutes.
 
+## Phones
+
+In this first version, an Android phone (Android 10 or newer) shows up in the grid, under the **Celulares** (phones) filter, and is paired with the 6-digit code, like the machines. Viewing the screen, locking and controlling the phone's apps come in later versions.
+
+To prepare a phone:
+
+1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). A QR with the lab's Wi-Fi appears.
+2. On the phone, first sign out of the Mi account (Xiaomi) in **Settings**, if there is one, and factory reset the phone.
+3. On the first screen after it restarts, tap 6 times anywhere on the screen and scan the QR. The phone downloads the Midview app and becomes a school device.
+4. In **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.
+
 ## Uninstalling
 
 In **Settings** > **Apps**, uninstall "Midview Professor" or "Midview Aluno". On a student machine, the uninstaller releases whatever was blocked, unlocks the desktop, gives back the download and save folders if a lesson is in progress, and asks whether to delete the paired teachers too.

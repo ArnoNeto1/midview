@@ -102,6 +102,17 @@ Em **Máquinas da sala** > **Outro professor**:
 - **Dar acesso a um colega...** mostra um código de 9 caracteres, válido por 10 minutos. O colega digita o código em **Entrar na sala de um colega...** e passa a ver as mesmas máquinas.
 - **Permitir novo professor (10 minutos)** deixa as máquinas aceitarem o pareamento de outro professor por 10 minutos.
 
+## Celulares
+
+Nesta primeira versão, o celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celulares**, e é pareado com o código de 6 dígitos, como as máquinas. Ver a tela, bloquear e controlar os aplicativos do celular chegam em versões seguintes.
+
+Para preparar um celular:
+
+1. No Midview, abra **Máquinas da sala** > **Procurar e parear** > **Preparar celular**. Aparece um QR com o Wi-Fi do laboratório.
+2. No celular, saia antes da conta Mi (Xiaomi) em **Configurações**, se houver uma, e restaure o celular para o padrão de fábrica.
+3. Na primeira tela depois de reiniciar, toque 6 vezes em qualquer lugar da tela e escaneie o QR. O celular baixa o aplicativo do Midview e vira um aparelho da escola.
+4. Em **Procurar e parear** > **Procurar na rede**, selecione o celular e confira o código de 6 dígitos que aparece nele.
+
 ## Desinstalação
 
 Em **Configurações** > **Aplicativos**, desinstale "Midview Professor" ou "Midview Aluno". Na máquina do aluno, o desinstalador libera o que estava bloqueado, destrava a Área de Trabalho, devolve as pastas de downloads e de salvar se uma aula estiver em andamento e pergunta se deve apagar também os professores pareados.
