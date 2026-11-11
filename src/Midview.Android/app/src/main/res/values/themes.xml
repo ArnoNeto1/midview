@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The lock screen: the whole screen dark grey from the first moment,
+         coming and going without any animation. -->
+    <style name="Theme.Midview.Lock" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/lock_background</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+    <!-- WinFormsScreenLock's background, (64, 64, 64). -->
+    <color name="lock_background">#FF404040</color>
+</resources>

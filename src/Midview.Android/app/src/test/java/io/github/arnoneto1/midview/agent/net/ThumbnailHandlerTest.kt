@@ -1,7 +1,6 @@
 package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
-import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import org.junit.Assert.assertArrayEquals
@@ -21,12 +20,14 @@ class ThumbnailHandlerTest {
     private val asked = mutableListOf<Pair<Int, Int>>()
     private var teachers = 0
     private val streamed = mutableListOf<Channel>()
+    private val locks = mutableListOf<Channel>()
     private val handler by lazy {
         ThumbnailHandler(
             trusted,
             render = { width, height -> asked += width to height; byteArrayOf(width.toByte(), height.toByte()) },
             teacherConnected = { teachers++ },
             stream = { streamed += it },
+            lockScreen = { locks += it },
         )
     }
 
@@ -76,15 +77,25 @@ class ThumbnailHandlerTest {
         // The first message within the 10 s a connection gets to say what it is.
         assertEquals(listOf("receive ${MessageType.SCREEN_STREAM}"), channel.events)
         assertEquals(10_000, channel.timeoutMillis)
+        assertEquals(1, teachers)
     }
 
-    @Test fun lockScreenIsRefusedForNow() {
+    // The lock does not ask to see the screen: a request would only wait
+    // under the padlock (the grid's thumbnails ask anyway).
+    @Test fun lockScreenGoesToTheLock() {
         trusted.add(teacher)
         val channel = FakeChannel(teacher, Message(MessageType.LOCK_SCREEN, ByteArray(0)))
         handler.handle(channel)
-        assertEquals(listOf(MessageType.COMMAND_ACK), channel.sent.map { it.type })
-        assertEquals(false to "este celular não bloqueia a tela", CommandResult.decode(channel.sent[0].payload))
+        assertEquals(listOf<Channel>(channel), locks)
+        assertTrue(channel.sent.isEmpty())
         assertTrue(streamed.isEmpty())
+        assertEquals(0, teachers)
+    }
+
+    @Test fun anUntrustedTeacherCannotLock() {
+        trusted.add(teacher)
+        handler.handle(FakeChannel("B".repeat(40), Message(MessageType.LOCK_SCREEN, ByteArray(0))))
+        assertTrue(locks.isEmpty())
     }
 
     @Test fun controlIsNotTakenOnAPhone() {
@@ -98,6 +109,7 @@ class ThumbnailHandlerTest {
             assertTrue("type $type", channel.sent.isEmpty())
         }
         assertTrue(streamed.isEmpty())
+        assertTrue(locks.isEmpty())
         assertTrue(asked.isEmpty())
     }
 }

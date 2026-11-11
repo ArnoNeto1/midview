@@ -17,8 +17,11 @@ import android.os.Looper
 import android.util.Log
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.lock.LockActivity
+import io.github.arnoneto1.midview.agent.lock.ScreenLock
 import io.github.arnoneto1.midview.agent.net.CommandHandler
 import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
+import io.github.arnoneto1.midview.agent.net.LockScreenHandler
 import io.github.arnoneto1.midview.agent.net.ScreenStreamHandler
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
@@ -41,8 +44,8 @@ import java.util.concurrent.TimeUnit
 // The Midview agent on the phone: always running (a foreground service with
 // its fixed notification, started again after every restart), it answers
 // the teacher's search (UDP 28901), takes pairing and commands (TLS 28900)
-// and serves the screen (TLS 5901: the grid's thumbnail and the big
-// window), the same ports as on a PC.
+// and serves the screen (TLS 5901: the grid's thumbnail, the big window and
+// "Bloquear telas"), the same ports as on a PC.
 class AgentService : Service() {
     private val lock = Any()
     private var tlsServers = emptyList<TlsServer>()
@@ -147,11 +150,14 @@ class AgentService : Service() {
             status = { text, width, height -> StatusImage.render(width, height, DeviceName.read(this), text) },
             jpeg = BitmapJpeg::thumbnail,
         )
+        val screenLock = ScreenLock(show = { LockActivity.show(this) }, hide = { LockActivity.hide() })
+        val policy = AndroidDevicePolicyGateway(this)
         val thumbnails = ThumbnailHandler(
             trusted,
             render = picture::render,
             teacherConnected = consent::teacherConnected,
             stream = { ScreenStreamHandler(it, frames, FrameCredit(), CaptureCadence(), BitmapJpeg).run() },
+            lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 

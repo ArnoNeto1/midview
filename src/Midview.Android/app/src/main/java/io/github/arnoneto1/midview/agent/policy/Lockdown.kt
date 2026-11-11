@@ -7,6 +7,12 @@ interface DevicePolicyGateway {
     fun setUninstallBlocked(pkg: String, blocked: Boolean)
     fun setUserControlDisabled(pkgs: List<String>)
     fun grantPermission(pkg: String, permission: String)
+
+    // The apps allowed to hold the phone in lock task mode.
+    fun setLockTaskPackages(pkgs: List<String>)
+
+    // What the system keeps in lock task mode (DevicePolicyManager.LOCK_TASK_FEATURE_*).
+    fun setLockTaskFeatures(features: Int)
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
 
@@ -17,7 +23,10 @@ interface DevicePolicyGateway {
 // The locks of a school phone, so a student cannot remove the agent or get
 // around it: no factory reset, no developer options or USB debugging, no
 // safe mode, no other users, no files over USB, the app cannot be
-// uninstalled, force-stopped nor have its data cleared. Only a Device Owner
+// uninstalled, force-stopped nor have its data cleared. The teacher's
+// "Bloquear telas" is allowed too: this app alone may hold the phone in lock
+// task mode, with nothing of the system's left to reach (no home, recents,
+// notifications nor power menu). Only a Device Owner
 // can set these; on any other phone it does nothing. Every call sets a
 // state, so applying again changes nothing.
 //
@@ -58,6 +67,8 @@ class Lockdown(
         if (gw.sdkInt >= ANDROID_13) {
             step { gw.grantPermission(packageName, POST_NOTIFICATIONS) }
         }
+        step { gw.setLockTaskPackages(listOf(packageName)) }
+        step { gw.setLockTaskFeatures(LOCK_TASK_FEATURE_NONE) }
         refused?.let { throw it }
         return true
     }
@@ -85,6 +96,9 @@ class Lockdown(
 
         // Manifest.permission.POST_NOTIFICATIONS.
         const val POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS"
+
+        // DevicePolicyManager.LOCK_TASK_FEATURE_NONE.
+        const val LOCK_TASK_FEATURE_NONE = 0
 
         private const val ANDROID_11 = 30
         private const val ANDROID_13 = 33

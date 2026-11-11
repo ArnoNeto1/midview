@@ -17,6 +17,8 @@ class LockdownTest {
         val uninstallBlocked = mutableMapOf<String, Boolean>()
         var controlDisabledPackages: List<String>? = null
         val granted = mutableSetOf<Pair<String, String>>()
+        var lockTaskAllowed: List<String>? = null
+        var lockTaskFeatureFlags: Int? = null
         var calls = 0
 
         override fun addUserRestriction(r: String) {
@@ -38,6 +40,16 @@ class LockdownTest {
         override fun grantPermission(pkg: String, permission: String) {
             calls++
             granted += pkg to permission
+        }
+
+        override fun setLockTaskPackages(pkgs: List<String>) {
+            calls++
+            lockTaskAllowed = pkgs
+        }
+
+        override fun setLockTaskFeatures(features: Int) {
+            calls++
+            lockTaskFeatureFlags = features
         }
 
         override fun isDeviceOwner(): Boolean = owner
@@ -129,6 +141,20 @@ class LockdownTest {
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), android13.granted)
     }
 
+    // "Bloquear telas": only this app may hold the phone in lock task mode,
+    // with nothing of the system's (home, recents, notifications, the power
+    // menu) left to reach. On debug builds too.
+    @Test fun lockdownAllowsLockTaskForOwnPackage() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 29, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertEquals(listOf(pkg), gw.lockTaskAllowed)
+            assertEquals(0, gw.lockTaskFeatureFlags)
+        }
+    }
+
     @Test fun doesNothingWhenNotDeviceOwner() {
         val gw = FakeGateway(sdkInt = 34, owner = false)
 
@@ -165,5 +191,6 @@ class LockdownTest {
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
+        assertEquals(listOf(pkg), gw.lockTaskAllowed)
     }
 }

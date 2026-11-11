@@ -44,6 +44,20 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- The teacher's "Bloquear telas": a padlock over the whole screen,
+             held in lock task mode (a task of its own, allowed by Lockdown).
+             Turning the phone redraws it instead of starting it again. -->
+        <activity
+            android:name=".lock.LockActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:lockTaskMode="if_whitelisted"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.lock"
+            android:theme="@style/Theme.Midview.Lock" />
+
         <receiver
             android:name=".agent.AgentService$StartAtBoot"
             android:exported="true">

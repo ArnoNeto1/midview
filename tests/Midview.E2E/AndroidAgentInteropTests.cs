@@ -162,6 +162,27 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
     // already allowed the first update comes at once.
     private static readonly TimeSpan StreamWait = TimeSpan.FromSeconds(90);
 
+    // "Bloquear telas" as the Master keeps it (ScreenLockKeeper). Only a
+    // phone made Device Owner by the Master's QR code can be locked; a test
+    // phone that is not one answers why, and nothing on it changes.
+    [AndroidFact]
+    public void Lock_on_a_phone_that_is_not_device_owner_is_refused()
+    {
+        using var teacher = Teacher();
+        var machine = Pair(teacher);
+        var status = new TaskCompletionSource<(bool Locked, string Detail)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (var keeper = new ScreenLockKeeper(machine, teacher, SessionPort))
+        {
+            keeper.StatusChanged += (locked, detail) => status.TrySetResult((locked, detail));
+            keeper.Start();
+            Assert.True(status.Task.Wait(TimeSpan.FromSeconds(15)), "no answer to LockScreen in 15 s");
+        }
+
+        output.WriteLine($"lock: {status.Task.Result}");
+        Assert.Equal((false, "este celular não bloqueia a tela"), status.Task.Result);
+    }
+
     [AndroidLanFact]
     public void Search_finds_the_phone()
     {
