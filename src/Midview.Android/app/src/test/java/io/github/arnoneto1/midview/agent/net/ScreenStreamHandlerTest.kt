@@ -211,10 +211,7 @@ class ScreenStreamHandlerTest {
     }
 
     @Test fun controlMessagesCloseTheConnection() {
-        for (type in listOf(
-            MessageType.START_CONTROL, MessageType.INPUT_EVENT,
-            MessageType.CLIPBOARD_TEXT, MessageType.FILL_ADMIN_PASSWORD,
-        )) {
+        for (type in listOf(MessageType.START_CONTROL, MessageType.INPUT_EVENT, MessageType.FILL_ADMIN_PASSWORD)) {
             val channel = LiveChannel()
             val handler = ScreenStreamHandler(
                 channel, frames, FrameCredit(), CaptureCadence(), encoder = { _, _, _ -> ByteArray(1) },
@@ -225,5 +222,19 @@ class ScreenStreamHandlerTest {
             assertFalse("type $type", stream.isAlive)
             assertTrue("type $type", channel.closed)
         }
+    }
+
+    @Test fun clipboardTextMidStreamKeepsFramesFlowing() {
+        frames.publish(IntArray(64 * 64) { 1 }, 64, 64)
+        val stream = start()
+        assertEquals(1, decode(channel.next()).id)
+
+        // The teacher copied something while watching: dropped, even a long one.
+        channel.deliver(Message(MessageType.CLIPBOARD_TEXT, ByteArray(200_000) { 'a'.code.toByte() }))
+        channel.deliver(ack(1))
+        frames.publish(IntArray(64 * 64) { 2 }, 64, 64)
+        assertEquals(2, decode(channel.next()).id)
+        assertTrue(stream.isAlive)
+        assertFalse(channel.closed)
     }
 }

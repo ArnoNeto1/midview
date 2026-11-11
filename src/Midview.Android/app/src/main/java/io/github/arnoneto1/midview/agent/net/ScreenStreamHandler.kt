@@ -2,6 +2,7 @@ package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.protocol.FrameAck
 import io.github.arnoneto1.midview.agent.protocol.Message
+import io.github.arnoneto1.midview.agent.protocol.MessageFramer
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.ScreenFrame
 import io.github.arnoneto1.midview.agent.protocol.ScreenRegion
@@ -27,8 +28,9 @@ fun interface RegionEncoder {
 // stopped) the stream stays open and nothing is sent. The teacher's window
 // sends a Heartbeat every second and a FrameAck per update; StopControl (the
 // window closing), the connection ending or silenceMillis without a word end
-// the stream. A phone takes no control: StartControl, InputEvent,
-// ClipboardText or FillAdminPassword end the connection.
+// the stream. A phone takes no control: StartControl, InputEvent or
+// FillAdminPassword end the connection. The window's clipboard (ClipboardText,
+// sent whenever the teacher copies something) is read and dropped.
 class ScreenStreamHandler(
     private val channel: Channel,
     private val source: FrameSource,
@@ -72,7 +74,6 @@ class ScreenStreamHandler(
                 MessageType.STOP_CONTROL,
                 MessageType.START_CONTROL,
                 MessageType.INPUT_EVENT,
-                MessageType.CLIPBOARD_TEXT,
                 MessageType.FILL_ADMIN_PASSWORD,
                 -> return
                 // Anything else is ignored, as the Session does.
@@ -149,8 +150,9 @@ class ScreenStreamHandler(
         // How long one wait for a new picture lasts before looking again.
         private const val NEW_PICTURE_WAIT_MILLIS = 500L
 
-        // FrameAck and Heartbeat are tiny; nothing a phone acts on is big.
-        private const val MAX_MESSAGE_LENGTH = 64 * 1024
+        // Any message, as the Session: a ClipboardText can be long and is
+        // only dropped; MessageFramer.MAX still holds.
+        private const val MAX_MESSAGE_LENGTH = MessageFramer.MAX
 
         private const val JOIN_MILLIS = 2_000L
     }
