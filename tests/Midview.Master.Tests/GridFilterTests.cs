@@ -100,7 +100,7 @@ public class GridFilterTests
     public void Empty_notice_when_filter_leaves_no_phones()
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
-        Assert.Equal("Nenhum celular nesta sala ainda. Use \"Preparar celular\" para colocar o primeiro.",
+        Assert.Equal("Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\".",
                      GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
     }
 

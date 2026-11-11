@@ -36,7 +36,7 @@ public static class GridFilter
         if (!tiles.Any(tile => ShowsDevice(tile, devices)))
         {
             return devices == DeviceFilter.Phones
-                ? "Nenhum celular nesta sala ainda. Use \"Preparar celular\" para colocar o primeiro."
+                ? "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\"."
                 : "Nenhum computador nesta sala: só há celulares.";
         }
         return tiles.Any(tile => ShowsDevice(tile, devices) && tile.Presence == TilePresence.Connecting)
