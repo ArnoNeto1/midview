@@ -89,7 +89,7 @@ internal static class PhoneSetupGuide
     public static IReadOnlyList<GuideStep> Steps { get; } = new GuideStep[]
     {
         new("numero",
-            "Qual é o número deste celular?",
+            "Qual número está escrito atrás deste celular?",
             Array.Empty<string>(),
             null, null, null,
             "Próximo passo",
@@ -206,7 +206,7 @@ internal static class PhoneSetupGuide
             new GuideHelp[]
             {
                 new("A câmera não abriu",
-                    "Toque mais rápido, 6 vezes em menos de 3 segundos, sempre no mesmo lugar, numa parte vazia da tela (longe de botões)."),
+                    "Toque mais rápido, 6 vezes seguidas, sempre no mesmo lugar, numa parte vazia da tela (longe de botões)."),
                 new("A câmera abriu mas não lê o código",
                     "Chegue o celular mais perto da tela do computador, sem reflexo, e espere 5 segundos parado."),
                 new("Apareceu uma mensagem de erro",

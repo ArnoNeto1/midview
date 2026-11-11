@@ -24,12 +24,24 @@ public static class GridFilter
         _ => true,
     };
 
+    // "Celulares" with no phone in the class: the empty grid offers the big
+    // "Preparar celulares" button, even with no machine at all (it then takes
+    // the place of the classroom's own hint). Not while the phone app is not
+    // published (phonesReady false).
+    public static bool OffersPhoneSetup(IReadOnlyCollection<MachineTile> tiles, DeviceFilter devices, bool phonesReady) =>
+        phonesReady && devices == DeviceFilter.Phones && !tiles.Any(tile => tile.Machine.IsPhone);
+
     // Shown in the grid instead of leaving it blank; null when something
-    // shows, or when there are no machines at all (the classroom's own hint).
+    // shows, or when there are no machines at all (the classroom's own hint),
+    // except with the phone setup offered.
     public static string? EmptyNotice(
         IReadOnlyCollection<MachineTile> tiles, bool onlineOnly, DeviceFilter devices = DeviceFilter.All,
         bool phonesReady = true)
     {
+        if (OffersPhoneSetup(tiles, devices, phonesReady))
+        {
+            return "Nenhum celular nesta sala ainda.";
+        }
         if ((!onlineOnly && devices == DeviceFilter.All) || tiles.Count == 0 || tiles.Any(tile => Shows(tile, onlineOnly, devices)))
         {
             return null;
@@ -37,9 +49,7 @@ public static class GridFilter
         if (!tiles.Any(tile => ShowsDevice(tile, devices)))
         {
             return devices == DeviceFilter.Phones
-                ? (phonesReady
-                    ? "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\"."
-                    : "Nenhum celular nesta sala ainda.")
+                ? "Nenhum celular nesta sala ainda."
                 : "Nenhum computador nesta sala: só há celulares.";
         }
         return tiles.Any(tile => ShowsDevice(tile, devices) && tile.Presence == TilePresence.Connecting)

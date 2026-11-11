@@ -1379,7 +1379,8 @@ public partial class MainWindow : MidviewWindow
         {
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddresses,
-                () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow) { Owner = this };
+                () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
+                () => OpenPreparePhonesWindow()) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);
@@ -1676,10 +1677,13 @@ public partial class MainWindow : MidviewWindow
     // the grid instead of leaving it blank.
     private void UpdateEmptyHint()
     {
-        EmptyRosterPanel.Visibility = _tiles.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var offersPhones = GridFilter.OffersPhoneSetup(_tiles, _devices, PhoneProvisioning.IsReady);
+        EmptyRosterPanel.Visibility = _tiles.Count == 0 && !offersPhones ? Visibility.Visible : Visibility.Collapsed;
         var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices, PhoneProvisioning.IsReady);
         NoneShownText.Text = notice ?? string.Empty;
         NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
+        PreparePhonesButton.Visibility = offersPhones ? Visibility.Visible : Visibility.Collapsed;
+        NoneShownIcon.Text = offersPhones ? "\uE8EA" : "\uE7F8"; // a phone, or a computer
     }
 
     private void OnWindowClosed(object sender, EventArgs e)

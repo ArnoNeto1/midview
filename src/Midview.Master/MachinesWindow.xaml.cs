@@ -28,6 +28,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly Action _openAdvanced;
     private readonly Action _openGiveAccess;
     private readonly Action _openJoinClass;
+    private readonly Action _openPreparePhones;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
     private readonly AdminPasswordStore _adminPasswords = new(MasterData.Folder);
@@ -38,7 +39,7 @@ public partial class MachinesWindow : MidviewWindow
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
         Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced,
-        Action openGiveAccess, Action openJoinClass)
+        Action openGiveAccess, Action openJoinClass, Action openPreparePhones)
     {
         InitializeComponent();
         if (!PhoneProvisioning.IsReady)
@@ -50,6 +51,7 @@ public partial class MachinesWindow : MidviewWindow
         _openAdvanced = openAdvanced;
         _openGiveAccess = openGiveAccess;
         _openJoinClass = openJoinClass;
+        _openPreparePhones = openPreparePhones;
         _masterCertificate = masterCertificate;
         _roster = roster;
         _addPaired = addPaired;
@@ -94,12 +96,10 @@ public partial class MachinesWindow : MidviewWindow
             : "Nenhuma senha salva ainda.";
     }
 
-    // The QR code that turns a factory-reset phone into a Midview phone; it is
-    // here, not on the toolbar, which would wrap onto a second row at 1340 px.
-    private void OnPreparePhoneClicked(object sender, RoutedEventArgs e)
-    {
-        new PreparePhoneWindow { Owner = this }.ShowDialog();
-    }
+    // The "Preparar celulares" assistant (PreparePhonesWindow, owned by the
+    // classroom window); it is here, not on the toolbar, which would wrap onto
+    // a second row at 1340 px.
+    private void OnPreparePhoneClicked(object sender, RoutedEventArgs e) => _openPreparePhones();
 
     private void OnSetAdminPasswordClicked(object sender, RoutedEventArgs e)
     {

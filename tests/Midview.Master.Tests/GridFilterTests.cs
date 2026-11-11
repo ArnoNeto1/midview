@@ -96,13 +96,46 @@ public class GridFilterTests
     public void Device_filter_and_online_only_both_apply() =>
         Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: true, DeviceFilter.Phones)); // a phone not heard from yet is still connecting
 
+    // The big "Preparar celulares" button beside it says the rest.
     [Fact]
     public void Empty_notice_when_filter_leaves_no_phones()
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
-        Assert.Equal("Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\".",
+        Assert.Equal("Nenhum celular nesta sala ainda.",
                      GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
     }
+
+    [Fact]
+    public void Empty_notice_for_phones_shows_even_with_no_machines_at_all()
+    {
+        Assert.Equal("Nenhum celular nesta sala ainda.",
+                     GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones));
+        Assert.Null(GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones, phonesReady: false));
+    }
+
+    [Fact]
+    public void Offers_phone_setup_with_no_machines_or_only_computers()
+    {
+        Assert.True(GridFilter.OffersPhoneSetup(Array.Empty<MachineTile>(), DeviceFilter.Phones, phonesReady: true));
+        Assert.True(GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online), Tile(TilePresence.Offline) }, DeviceFilter.Phones, phonesReady: true));
+    }
+
+    [Fact]
+    public void Does_not_offer_phone_setup_while_the_phone_app_is_not_ready() =>
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online) }, DeviceFilter.Phones, phonesReady: false));
+
+    [Fact]
+    public void Does_not_offer_phone_setup_with_a_phone_in_the_class()
+    {
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online), PhoneTile() }, DeviceFilter.Phones, phonesReady: true));
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { PhoneTile() }, DeviceFilter.Phones, phonesReady: true));
+    }
+
+    [Theory]
+    [InlineData(DeviceFilter.All)]
+    [InlineData(DeviceFilter.Computers)]
+    public void Offers_phone_setup_only_in_the_phones_filter(DeviceFilter devices) =>
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online) }, devices, phonesReady: true));
 
     [Fact]
     public void Empty_notice_for_phones_hides_the_prepare_hint_while_the_phone_app_is_not_ready()

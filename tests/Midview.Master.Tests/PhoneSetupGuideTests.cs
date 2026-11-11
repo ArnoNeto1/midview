@@ -118,6 +118,15 @@ public class PhoneSetupGuideTests
     }
 
     [Fact]
+    public void The_number_step_asks_with_the_spec_words() =>
+        Assert.Equal("Qual número está escrito atrás deste celular?", PhoneSetupGuide.Steps.Single(s => s.Id == "numero").Title);
+
+    // No timing that nobody measured.
+    [Fact]
+    public void The_six_taps_help_has_no_made_up_time_limit() =>
+        Assert.DoesNotContain(PhoneSetupGuide.Steps.Single(s => s.Id == "seis-toques").Help, h => h.Answer.Contains("menos de 3 segundos"));
+
+    [Fact]
     public void Fixed_helps_are_filled()
     {
         Assert.False(string.IsNullOrWhiteSpace(PhoneSetupGuide.UnknownAccount.Answer));

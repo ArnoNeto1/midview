@@ -30,21 +30,11 @@ public static class PhoneProvisioning
     // How long the one-use proof in a QR stays valid.
     public static readonly TimeSpan ClaimLifetime = TimeSpan.FromHours(1);
 
-    // The QR's JSON. Throws ArgumentException when the Wi-Fi name is empty;
-    // quotes, accents and ";" in the name or password are escaped by the JSON.
-    public static string QrJson(string ssid, string password) => BuildJson(ssid, password, null);
-
-    // The same QR plus the phone's number, the one-use token and the Master's
-    // certificate thumbprint, handed to the phone app as admin extras.
-    public static string QrJson(string ssid, string password, string number, string token, string masterThumbprint) =>
-        BuildJson(ssid, password, new JsonObject
-        {
-            ["midview.number"] = number,
-            ["midview.token"] = token,
-            ["midview.master"] = masterThumbprint.ToUpperInvariant(),
-        });
-
-    private static string BuildJson(string ssid, string password, JsonObject? adminExtras)
+    // The QR's JSON, with the phone's number, the one-use token and the
+    // Master's certificate thumbprint handed to the phone app as admin extras.
+    // Throws ArgumentException when the Wi-Fi name is empty; quotes, accents
+    // and ";" in the name or password are escaped by the JSON.
+    public static string QrJson(string ssid, string password, string number, string token, string masterThumbprint)
     {
         if (string.IsNullOrWhiteSpace(ssid))
         {
@@ -59,11 +49,13 @@ public static class PhoneProvisioning
             [Extra + "PROVISIONING_WIFI_PASSWORD"] = password ?? "",
             [Extra + "PROVISIONING_WIFI_SECURITY_TYPE"] = "WPA",
             [Extra + "PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED"] = true,
+            [Extra + "PROVISIONING_ADMIN_EXTRAS_BUNDLE"] = new JsonObject
+            {
+                ["midview.number"] = number,
+                ["midview.token"] = token,
+                ["midview.master"] = masterThumbprint.ToUpperInvariant(),
+            },
         };
-        if (adminExtras is not null)
-        {
-            root[Extra + "PROVISIONING_ADMIN_EXTRAS_BUNDLE"] = adminExtras;
-        }
         return root.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
     }
 }

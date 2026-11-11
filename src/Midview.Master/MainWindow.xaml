@@ -222,13 +222,23 @@
                     <Button Content="Entrar na sala de um colega" Click="OnJoinClassClicked" Padding="16,7" Margin="8,0,0,0" />
                 </StackPanel>
             </StackPanel>
-            <!-- "Só online" hiding every machine (GridFilter.EmptyNotice). -->
+            <!-- "Só online" or the device filter hiding every machine (GridFilter.EmptyNotice);
+                 with "Celulares" and no phone, the big "Preparar celulares" (GridFilter.OffersPhoneSetup). -->
             <StackPanel x:Name="NoneShownPanel" Visibility="Collapsed" Panel.ZIndex="1"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="&#xE7F8;" FontFamily="{StaticResource IconFont}" FontSize="40" HorizontalAlignment="Center"
+                <TextBlock x:Name="NoneShownIcon" Text="&#xE7F8;" FontFamily="{StaticResource IconFont}" FontSize="40" HorizontalAlignment="Center"
                            Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" />
                 <TextBlock x:Name="NoneShownText" FontSize="14" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"
                            Foreground="{StaticResource TextMutedBrush}" />
+                <Button x:Name="PreparePhonesButton" Click="OnPreparePhonesClicked" Visibility="Collapsed"
+                        Style="{StaticResource PrimaryButton}" Padding="28,12" Margin="0,16,0,0" FontSize="16"
+                        HorizontalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8EA;" FontFamily="{StaticResource IconFont}" FontSize="18" VerticalAlignment="Center"
+                                   Margin="0,0,10,0" />
+                        <TextBlock Text="Preparar celulares" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button Content="Mostrar todas as máquinas" Click="OnShowAllMachinesClicked" Padding="16,7" Margin="0,12,0,0"
                         HorizontalAlignment="Center" />
             </StackPanel>

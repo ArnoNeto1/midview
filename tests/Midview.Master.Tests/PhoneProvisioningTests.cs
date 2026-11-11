@@ -9,7 +9,7 @@ public class PhoneProvisioningTests
     [Fact]
     public void Qr_json_has_every_provisioning_key()
     {
-        using var doc = JsonDocument.Parse(PhoneProvisioning.QrJson("Lab", "senha123"));
+        using var doc = JsonDocument.Parse(PhoneProvisioning.QrJson("Lab", "senha123", "07", "tok", "AB"));
         var root = doc.RootElement;
 
         Assert.Equal("io.github.arnoneto1.midview.agent/.AdminReceiver", root.GetProperty(Prefix + "PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME").GetString());
@@ -48,7 +48,7 @@ public class PhoneProvisioningTests
     {
         const string password = "a\"b;ç";
 
-        using var doc = JsonDocument.Parse(PhoneProvisioning.QrJson("Lab ç", password));
+        using var doc = JsonDocument.Parse(PhoneProvisioning.QrJson("Lab ç", password, "07", "tok", "AB"));
 
         Assert.Equal(password, doc.RootElement.GetProperty(Prefix + "PROVISIONING_WIFI_PASSWORD").GetString());
         Assert.Equal("Lab ç", doc.RootElement.GetProperty(Prefix + "PROVISIONING_WIFI_SSID").GetString());
@@ -59,7 +59,7 @@ public class PhoneProvisioningTests
     [InlineData("   ")]
     public void Empty_ssid_is_refused(string ssid)
     {
-        Assert.Throws<ArgumentException>(() => PhoneProvisioning.QrJson(ssid, "x"));
+        Assert.Throws<ArgumentException>(() => PhoneProvisioning.QrJson(ssid, "x", "07", "tok", "AB"));
     }
 
     private const string Placeholder = "PREENCHER-NA-TASK-9";
