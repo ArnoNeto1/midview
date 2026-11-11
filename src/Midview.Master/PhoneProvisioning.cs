@@ -27,6 +27,19 @@ public static class PhoneProvisioning
     public static bool IsReadyWith(string checksum) =>
         !string.IsNullOrWhiteSpace(checksum) && checksum != "PREENCHER-NA-TASK-9";
 
+    // Second gate: the phone app that answers ClaimPhone (joins the class) and
+    // WipePhone (erases the phone) is released. The Android agent plan's
+    // claim and wipe tasks flip this to true when that APK ships; until then
+    // a phone prepared here could never join the class.
+    public const bool ClaimsReady = false;
+
+    // The wizard button, the "Preparar celular..." link and the "Apagar e
+    // preparar de novo" menu item need both gates.
+    public static bool WizardReady => WizardReadyWith(SignatureChecksum, ClaimsReady);
+
+    public static bool WizardReadyWith(string checksum, bool claimsReady) =>
+        claimsReady && IsReadyWith(checksum);
+
     // How long the one-use proof in a QR stays valid.
     public static readonly TimeSpan ClaimLifetime = TimeSpan.FromHours(1);
 

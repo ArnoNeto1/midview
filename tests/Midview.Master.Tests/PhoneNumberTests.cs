@@ -8,6 +8,9 @@ public class PhoneNumberTests
     [InlineData(" 12 ", "12")]
     [InlineData("105", "105")]
     [InlineData("0", "00")]
+    [InlineData("007", "07")]
+    [InlineData("000", "00")]
+    [InlineData("010", "10")]
     public void Normalize_pads_to_two_digits(string typed, string expected) =>
         Assert.Equal(expected, PhoneNumber.Normalize(typed));
 

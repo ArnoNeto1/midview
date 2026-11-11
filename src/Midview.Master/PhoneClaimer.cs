@@ -15,7 +15,8 @@ public static class PhoneClaimer
     private const int StepTimeoutMs = 15_000;
 
     public static KnownMachine Claim(
-        string address, X509Certificate2 masterCertificate, string teacherName, string token, int port = ConnectionClient.AgentPort)
+        string address, X509Certificate2 masterCertificate, string teacherName, string token, string number,
+        int port = ConnectionClient.AgentPort)
     {
         using var tcpClient = TcpConnect.WithTimeout(address, port, ConnectTimeout);
         tcpClient.ReceiveTimeout = StepTimeoutMs;
@@ -38,8 +39,11 @@ public static class PhoneClaimer
                 {
                     throw new PairingRefusedException(PairingSession.InvalidAnswer);
                 }
+                // The name comes from the claim's number, never from the phone:
+                // a device holding the token for 07 must not be able to name
+                // itself "Celular 03" and take that tile.
                 return new KnownMachine(
-                    result.Name, address, result.SessionThumbprint.Trim().ToUpperInvariant(), channel.RemoteThumbprint,
+                    PhoneNumber.NameOf(number), address, result.SessionThumbprint.Trim().ToUpperInvariant(), channel.RemoteThumbprint,
                     WakeOnLan.NormalizeMacAddress(result.MacAddress), result.DeviceKind);
             case MessageType.PairRefused:
                 throw new PairingRefusedException(Pairing.RefusalText(answer.Payload));

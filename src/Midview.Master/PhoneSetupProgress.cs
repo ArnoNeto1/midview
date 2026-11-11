@@ -247,6 +247,14 @@ internal sealed class PhoneSetupProgress
         ShowStep(ResetStep);
     }
 
+    // After a failed wipe, the teacher restored the phone by hand (recovery
+    // mode): the same six taps page, now with the steps and a new QR.
+    public void RestoredByHand()
+    {
+        QrShownAt = null;
+        SetWipe(WipeState.None);
+    }
+
     // "Preparar o próximo": a new phone, from its number.
     public void Again()
     {

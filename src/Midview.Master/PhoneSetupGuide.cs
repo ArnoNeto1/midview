@@ -2,8 +2,11 @@ using System.Windows;
 
 namespace Midview.Master;
 
-/// <summary>One "Deu errado?" entry: what the teacher sees, and what to do.</summary>
-internal sealed record GuideHelp(string Problem, string Answer);
+/// <summary>
+/// One "Deu errado?" entry: what the teacher sees, and what to do. <c>Links</c> are the fixed
+/// helps this answer points to by name; the window lists them beside it, so none is a dead end.
+/// </summary>
+internal sealed record GuideHelp(string Problem, string Answer, IReadOnlyList<GuideHelp>? Links = null);
 
 /// <summary>
 /// One screen of the "Preparar celulares" guide. <c>Target</c> is the spot to outline in red,
@@ -137,9 +140,9 @@ internal static class PhoneSetupGuide
                 new("Não aparece \"Conta Mi\" no topo",
                     "Então não há conta Mi neste celular. Siga para o próximo passo."),
                 new("Ninguém sabe a senha da conta",
-                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado."),
+                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
                 new("Não achei o item no meu celular",
-                    "Em celulares com MIUI 12 ou 13, a conta fica em Configurações, \"Conta Mi\" ou \"Mi Account\", e \"Encontrar dispositivo\" fica dentro dela. " + SearchTip),
+                    "Em celulares mais antigos, a conta fica em Configurações, \"Conta Mi\" ou \"Mi Account\", e \"Encontrar dispositivo\" fica dentro dela. " + SearchTip),
             }),
 
         new("conta-google",
@@ -161,9 +164,9 @@ internal static class PhoneSetupGuide
                 new("Não aparece \"Google\"",
                     "Então não há conta Google neste celular. Siga para o próximo passo."),
                 new("Pediu a senha e ninguém sabe",
-                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado."),
+                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
                 new("Não achei o item no meu celular",
-                    "Em celulares com MIUI 12 ou 13, procure \"Contas e sincronização\" em Configurações, ou \"Contas\" em \"Configurações adicionais\". " + SearchTip),
+                    "Em celulares mais antigos, procure \"Contas e sincronização\" em Configurações, ou \"Contas\" em \"Configurações adicionais\". " + SearchTip),
             }),
 
         new("restaurar",
@@ -182,11 +185,15 @@ internal static class PhoneSetupGuide
             new GuideHelp[]
             {
                 new("Não achei \"Redefinição de fábrica\"",
-                    "Em celulares com MIUI 12 ou 13, vá em Configurações, \"Configurações adicionais\" e \"Backup e redefinição\". " + SearchTip),
+                    "Em celulares mais antigos, vá em Configurações, \"Configurações adicionais\" e \"Backup e redefinição\". " + SearchTip),
+                new("O celular já era um celular da escola",
+                    "Um celular que já foi preparado antes não deixa restaurar pelo menu: a \"Redefinição de fábrica\" fica bloqueada. " +
+                    "Use a ajuda \"Restaurar sem o PIN\" (modo de recuperação do celular).",
+                    new[] { ResetWithoutPin }),
                 new("Pediu um PIN ou senha de tela que ninguém sabe",
-                    "Veja a ajuda \"Restaurar sem o PIN\" (modo de recuperação do celular)."),
+                    "Veja a ajuda \"Restaurar sem o PIN\" (modo de recuperação do celular).", new[] { ResetWithoutPin }),
                 new("Pediu a senha de uma conta",
-                    "Faltou tirar a conta Mi ou Google. Veja a ajuda \"Celular com conta desconhecida\"."),
+                    "Faltou tirar a conta Mi ou Google. Veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
                 new("Passou de 10 minutos e a tela não muda",
                     "Espere mais 5 minutos. Se continua parado, segure Ligar por 15 segundos até desligar e ligue de novo."),
             }),

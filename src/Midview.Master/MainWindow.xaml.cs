@@ -128,7 +128,7 @@ public partial class MainWindow : MidviewWindow
         _phoneClaims = new PhoneClaimWatcher(
             () => DiscoveryClient.Search(
                 thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime),
-            (found, pending) => PhoneClaimer.Claim(found.Address, _masterCertificate, Environment.MachineName, pending.Token),
+            (found, pending) => PhoneClaimer.Claim(found.Address, _masterCertificate, Environment.MachineName, pending.Token, pending.Number),
             machine => Dispatcher.Invoke(() => AddJoinedPhone(machine)),
             () => DateTimeOffset.UtcNow);
     }
@@ -147,7 +147,11 @@ public partial class MainWindow : MidviewWindow
                 RemoveTileAt(i);
             }
         }
-        AddMachines(new[] { machine });
+        if (PhoneJoinRoster.AddAndSave(() => AddMachines(new[] { machine })) is { } saveError)
+        {
+            // The phone is in the grid and trusts this PC; only the file failed.
+            StatusTextBlock.Text = saveError;
+        }
         PhoneJoined?.Invoke(machine);
     }
 
@@ -1678,9 +1682,9 @@ public partial class MainWindow : MidviewWindow
     // the grid instead of leaving it blank.
     private void UpdateEmptyHint()
     {
-        var offersPhones = GridFilter.OffersPhoneSetup(_tiles, _devices, PhoneProvisioning.IsReady);
+        var offersPhones = GridFilter.OffersPhoneSetup(_tiles, _devices, PhoneProvisioning.WizardReady);
         EmptyRosterPanel.Visibility = _tiles.Count == 0 && !offersPhones ? Visibility.Visible : Visibility.Collapsed;
-        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices, PhoneProvisioning.IsReady);
+        var notice = GridFilter.EmptyNotice(_tiles, _onlineOnly, _devices, PhoneProvisioning.WizardReady);
         NoneShownText.Text = notice ?? string.Empty;
         NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
         PreparePhonesButton.Visibility = offersPhones ? Visibility.Visible : Visibility.Collapsed;

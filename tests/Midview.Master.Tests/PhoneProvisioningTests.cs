@@ -102,4 +102,18 @@ public class PhoneProvisioningTests
     [Fact]
     public void IsReady_follows_the_constant() =>
         Assert.Equal(PhoneProvisioning.IsReadyWith(PhoneProvisioning.SignatureChecksum), PhoneProvisioning.IsReady);
+
+    [Theory]
+    [InlineData("PREENCHER-NA-TASK-9", false, false)]
+    [InlineData("PREENCHER-NA-TASK-9", true, false)]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", false, false)]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true, true)]
+    public void Wizard_needs_the_checksum_and_the_claims(string checksum, bool claimsReady, bool expected) =>
+        Assert.Equal(expected, PhoneProvisioning.WizardReadyWith(checksum, claimsReady));
+
+    [Fact]
+    public void WizardReady_follows_both_constants() =>
+        Assert.Equal(
+            PhoneProvisioning.WizardReadyWith(PhoneProvisioning.SignatureChecksum, PhoneProvisioning.ClaimsReady),
+            PhoneProvisioning.WizardReady);
 }

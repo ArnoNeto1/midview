@@ -42,7 +42,7 @@ public partial class MachinesWindow : MidviewWindow
         Action openGiveAccess, Action openJoinClass, Action openPreparePhones)
     {
         InitializeComponent();
-        if (!PhoneProvisioning.IsReady)
+        if (!PhoneProvisioning.WizardReady)
         {
             // No phone app published yet: no link to a factory reset that would be for nothing.
             PreparePhoneSpan.Inlines.Clear();

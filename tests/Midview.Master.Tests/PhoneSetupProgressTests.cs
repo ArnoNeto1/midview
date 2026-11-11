@@ -415,6 +415,21 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
+    public void A_phone_restored_by_hand_after_a_failed_wipe_stays_on_the_six_taps_with_a_new_qr()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        progress.WipeFailed("sem resposta");
+
+        progress.RestoredByHand();
+
+        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal(WipeState.None, progress.Wipe);
+        Assert.Null(progress.WipeFailure);
+        Assert.Null(progress.QrShownAt);
+    }
+
+    [Fact]
     public void The_wipe_state_goes_with_the_phone()
     {
         var progress = OfferedWipe();

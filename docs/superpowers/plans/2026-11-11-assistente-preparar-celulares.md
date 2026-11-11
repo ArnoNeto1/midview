@@ -4,7 +4,7 @@
 
 **Goal:** Qualquer professor prepara sozinho os celulares Xiaomi da escola por um assistente de um passo por vez no Midview do professor; cada celular escaneia um QR com o seu número, entra na turma sozinho como "Celular 07" (sem código de 6 dígitos) e pode ser apagado e preparado de novo por um botão.
 
-**Architecture:** O QR de provisionamento ganha um `PROVISIONING_ADMIN_EXTRAS_BUNDLE` com o número, um segredo de uso único (`token`) e o thumbprint do PC. O agente guarda isso, se chama "Celular 07" e, enquanto ninguém o reivindicou, anuncia na busca um `claim` (hash curto do token). O Master guarda as reivindicações pendentes (DPAPI, 1 hora) e, enquanto houver alguma, procura na rede a cada 10 s; ao achar o `claim`, abre o TLS, manda `ClaimPhone` com o token e recebe `PairDone`, como num pareamento. O celular só aceita o `ClaimPhone` do PC cujo thumbprint veio no QR. `WipePhone` (só de PC confiável) apaga o aparelho pela política de Device Owner. A janela nova `PreparePhonesWindow` (páginas, como `MachinesWindow`) mostra o roteiro de `PhoneSetupGuide` com os prints e substitui a `PreparePhoneWindow`.
+**Architecture:** O QR de provisionamento ganha um `PROVISIONING_ADMIN_EXTRAS_BUNDLE` com o número, um segredo de uso único (`token`) e o thumbprint do PC. O agente guarda isso, se chama "Celular 07" e, enquanto ninguém o reivindicou, anuncia na busca um `claim` (hash curto do token). O Master guarda as reivindicações pendentes (DPAPI, 1 hora) e, enquanto houver alguma, procura na rede a cada 10 s; ao achar o `claim`, abre o TLS e manda `ClaimPhone` com um **nonce** novo (o token nunca trafega). O celular só aceita o `ClaimPhone` do PC cujo thumbprint veio no QR e responde `PairDone` com uma **prova**: `proof = Base64Url(HMAC-SHA256(chave = token, nonce + thumbprint do agente + thumbprint do Master))`, que só quem tem o token faz para esta conexão. O Master confere a prova (comparação de tempo fixo) com o thumbprint do canal e o seu próprio antes de aceitar, e dá ao celular o nome do número da reivindicação, nunca o nome que o celular disser (Ruling F e L do ledger). `WipePhone` (só de PC confiável) apaga o aparelho pela política de Device Owner. A janela nova `PreparePhonesWindow` (páginas, como `MachinesWindow`) mostra o roteiro de `PhoneSetupGuide` com os prints e substitui a `PreparePhoneWindow`.
 
 **Tech Stack:** .NET 8 + WPF + xUnit (Master, Protocol); Kotlin + JUnit 4 (agente, `src/Midview.Android`); `QRCoder` (já usado).
 
@@ -22,7 +22,7 @@
 - `token`: 32 bytes aleatórios em Base64 URL sem `=`; `claim` na busca = 16 primeiros caracteres hex maiúsculos de `SHA-256(UTF-8 do token)`.
 - Mensagens novas: `ClaimPhone` e `WipePhone`, com os **dois próximos números livres** de `MessageType` no momento da implementação, iguais em `src/Midview.Protocol/MessageType.cs` e `.../agent/protocol/MessageType.kt` (o plano 2 também acrescenta números; conferir os dois arquivos).
 - Campos novos são opcionais: Master antigo ignora `claim`; agente antigo responde `CommandAck` com `NOT_ON_PHONE`/desconhecido a `ClaimPhone`/`WipePhone`, e o Master trata como "Midview antigo neste celular".
-- `PhoneProvisioning.IsReady` falso esconde o botão, o link e o item "Apagar e preparar de novo" (como hoje).
+- `PhoneProvisioning.WizardReady` (= `IsReady` **e** `ClaimsReady`) falso esconde o botão, o link e o item "Apagar e preparar de novo". `ClaimsReady` é uma constante que nasce `false`; as Tasks 4/5 a viram para `true` quando o APK do agente com reivindicação e apagar for publicado (Ruling J).
 - Textos em português, sem jargão (nada de Device Owner, APK, provisionamento, adb para o professor); nunca citar produto concorrente. Commits sem `Co-Authored-By`.
 - .NET pelo SDK em `C:\Users\Neto\AppData\Local\Microsoft\dotnet\dotnet.exe`; Android por `src/Midview.Android/gradlew -p src/Midview.Android testDebugUnitTest`.
 - Verificação visual só pelo harness do Master (`MasterData.Folder` temporário, `new Application()` com os recursos do `App.xaml`, nunca `new App()`, `RenderTargetBitmap`); nunca abrir o Midview do professor real nem falar com máquinas do laboratório.
@@ -48,8 +48,9 @@
 **Interfaces:**
 - Produces:
   - `MessageType.ClaimPhone`, `MessageType.WipePhone`
-  - `static class PhoneClaim { string NewToken(); string ClaimId(string token); }`
-  - `sealed record PhoneClaimRequest(string Token, string TeacherName) { byte[] Encode(); static PhoneClaimRequest? Decode(byte[] payload); }` — JSON `{"token":..,"teacher":..}`; `Decode` devolve null para JSON inválido, token vazio ou payload maior que 4096 bytes.
+  - `static class PhoneClaim { string NewToken(); string NewNonce(); string ClaimId(string token); string Proof(string token, string nonce, string agentThumbprint, string masterThumbprint); }` — `NewNonce()` tem a forma do token (43 caracteres Base64 URL).
+  - `sealed record PhoneClaimRequest(string Nonce, string TeacherName) { byte[] Encode(); static PhoneClaimRequest? Decode(byte[] payload); }` — JSON `{"nonce":..,"teacher":..}`, nonce = 43 caracteres Base64 URL; `Decode` devolve null para JSON inválido, nonce que não tem esse formato, professor ausente ou payload maior que 4096 bytes. O token nunca vai nesse pedido.
+  - `PairingResult` ganha o campo opcional `"proof"` (só escrito quando não nulo); só um celular que responde `ClaimPhone` o manda.
   - `DiscoveryReply(..., DeviceKind Kind = Windows, string? ClaimId = null)`; JSON `"claim"` só escrito quando não nulo.
 
 - [ ] **Step 1: Testes que falham**
@@ -61,10 +62,14 @@
 [Fact] public void Claim_id_is_first_16_upper_hex_of_sha256()
     => Assert.Equal(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("abc")))[..16], PhoneClaim.ClaimId("abc"));
 
-[Fact] public void Claim_request_round_trips_and_rejects_empty_token()
-{ Assert.Equal(new PhoneClaimRequest("t", "PROF"), PhoneClaimRequest.Decode(new PhoneClaimRequest("t", "PROF").Encode()));
-  Assert.Null(PhoneClaimRequest.Decode(Encoding.UTF8.GetBytes("{\"token\":\"\",\"teacher\":\"x\"}")));
+[Fact] public void Claim_request_round_trips_and_rejects_a_bad_nonce()
+{ var nonce = PhoneClaim.NewNonce();
+  Assert.Equal(new PhoneClaimRequest(nonce, "PROF"), PhoneClaimRequest.Decode(new PhoneClaimRequest(nonce, "PROF").Encode()));
+  Assert.Null(PhoneClaimRequest.Decode(new PhoneClaimRequest("curto", "PROF").Encode()));
   Assert.Null(PhoneClaimRequest.Decode(Encoding.UTF8.GetBytes("não é json"))); }
+
+[Fact] public void Proof_matches_the_fixed_vector()
+{ Assert.Equal("WSiEijnq4JkvauANCY9jxAA-15IWfTZOg00j1DJWdLE", PhoneClaim.Proof("token-123", "nonce-abc", "aa11", "BB22")); }
 
 // DiscoveryTests
 [Fact] public void Reply_claim_round_trips_and_is_absent_when_null()
@@ -112,19 +117,19 @@
 - Test: `tests/Midview.Master.Tests/PhoneClaimerTests.cs`, `PhoneClaimWatcherTests.cs`, `DiscoveryClientTests.cs`
 
 **Interfaces:**
-- Consumes: `PhoneClaimRequest`, `MessageType.ClaimPhone`, `DiscoveryReply.ClaimId` (Task 1); `PendingPhoneClaimsFile`, `PhoneNumber` (Task 2).
+- Consumes: `PhoneClaimRequest`, `PhoneClaim.NewNonce`/`Proof`, `PairingResult.Proof`, `MessageType.ClaimPhone`, `DiscoveryReply.ClaimId` (Task 1); `PendingPhoneClaimsFile`, `PhoneNumber` (Task 2).
 - Produces:
-  - `static class PhoneClaimer { KnownMachine Claim(string address, X509Certificate2 masterCertificate, string teacherName, string token, int port = ConnectionClient.AgentPort); }` — TLS como `PairingSession.Start` (`AuthenticateAsClientAcceptingAnyServer`), manda `ClaimPhone`, espera `PairDone`; `PairRefused` → `PairingRefusedException(texto)`; `CommandAck` → `PairingRefusedException(PairingSession.OldAgent)`. Devolve `KnownMachine` como `PairingSession.Confirm` (Kind do `PairingResult`, `AgentThumbprint` do canal).
+  - `static class PhoneClaimer { KnownMachine Claim(string address, X509Certificate2 masterCertificate, string teacherName, string token, string number, int port = ConnectionClient.AgentPort); }` — TLS como `PairingSession.Start` (`AuthenticateAsClientAcceptingAnyServer`), manda `ClaimPhone` com `PhoneClaim.NewNonce()` (o token fica aqui), espera `PairDone`; recusa (`PairingRefusedException(PairingSession.InvalidAnswer)`) se `PairingResult.Proof` faltar ou diferir de `PhoneClaim.Proof(token, nonce, thumbprint do canal, thumbprint do Master)` (`FixedTimeEquals`); `PairRefused` → `PairingRefusedException(texto)`; `CommandAck` → `PairingRefusedException(PairingSession.OldAgent)`. Devolve `KnownMachine` com o nome `PhoneNumber.NameOf(number)` (nunca o nome do `PairingResult`: um aparelho com o token do 07 não pode se chamar "Celular 03"), `Kind` do `PairingResult` e `AgentThumbprint` do canal.
   - `sealed class PhoneClaimWatcher : IDisposable` — `PhoneClaimWatcher(Func<IReadOnlyList<FoundMachine>> search, Func<FoundMachine, PendingPhoneClaim, KnownMachine> claim, Action<KnownMachine> added, Func<DateTimeOffset> now, string? folder = null)`; `void Kick()` (o assistente chama ao mostrar um QR); `bool CheckOnce()` faz uma rodada: carrega as pendentes válidas, se não houver devolve false sem buscar; para cada `FoundMachine` cujo `ClaimId == PhoneClaim.ClaimId(token)`, chama `claim`; sucesso → `PendingPhoneClaimsFile.Remove(token)` e `added(machine)`; falha → fica pendente para a próxima rodada. Um timer de 10 s chama `CheckOnce` no thread pool; `added` é despachado para a UI pelo `MainWindow`.
   - `event Action<KnownMachine>? PhoneJoined` no `MainWindow` (o assistente da Task 7 escuta).
 
 - [ ] **Step 1: Testes que falham**
-  - `PhoneClaimerTests` (com um agente falso no estilo de `HonestAgent` de `PairingSessionTests`): o agente recebe `ClaimPhone` com o token e o nome do professor e responde `PairDone` com `{"name":"Celular 07","session":<thumb>,"kind":"android"}` → `KnownMachine` com `Name=="Celular 07"`, `IsPhone`, `AgentThumbprint` do agente; `PairRefused("Este celular não espera este computador.")` → `PairingRefusedException` com esse texto; `CommandAck` → `PairingSession.OldAgent`.
+  - `PhoneClaimerTests` (com um agente falso no estilo de `HonestAgent` de `PairingSessionTests`): o agente recebe `ClaimPhone` com o nonce (o corpo não contém o token) e o nome do professor e responde `PairDone` com `{"name":"Celular 03","session":<thumb>,"kind":"android","proof":<PhoneClaim.Proof(token, nonce, thumbprint do agente, thumbprint do Master)>}` para a reivindicação do 07 → `KnownMachine` com `Name=="Celular 07"` (o número da reivindicação, não o nome que o celular disse; um roster com "Celular 03" fica intacto), `IsPhone`, `AgentThumbprint` do agente; `PairRefused("Este celular não espera este computador.")` → `PairingRefusedException` com esse texto; `CommandAck` → `PairingSession.OldAgent`.
   - `PhoneClaimWatcherTests`: sem pendentes, `search` não é chamado; uma pendente e um `FoundMachine` com o `ClaimId` certo → `claim` chamado uma vez, `added` recebe a máquina e a pendente some; `ClaimId` de outro token → nada; `claim` lançando → pendente fica.
   - `DiscoveryClientTests.Merge_keeps_claim_id`.
   - `MainWindow` (helper puro testável, em `PhoneClaimWatcher` ou `KnownMachinesMerge`): `ReplacingSameName(IReadOnlyList<KnownMachine> roster, KnownMachine joined)` tira as entradas celular com o mesmo `Name` e acrescenta a nova; computador com o mesmo nome não é tocado.
 - [ ] **Step 2:** `dotnet test tests/Midview.Master.Tests --filter "FullyQualifiedName~PhoneClaim|FullyQualifiedName~DiscoveryClient"` → FAIL.
-- [ ] **Step 3:** Implementar; no `MainWindow`, o watcher nasce depois de o roster carregar, `search` = `DiscoveryClient.Search(thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime)` (como `MachinesWindow.SearchAsync`), `claim` = `PhoneClaimer.Claim(found.Address, cert, Environment.MachineName, pending.Token)`, `added` = `Dispatcher.Invoke` → roster com `ReplacingSameName` → salvar → `PhoneJoined`. Watcher descartado no fechamento.
+- [ ] **Step 3:** Implementar; no `MainWindow`, o watcher nasce depois de o roster carregar, `search` = `DiscoveryClient.Search(thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime)` (como `MachinesWindow.SearchAsync`), `claim` = `PhoneClaimer.Claim(found.Address, cert, Environment.MachineName, pending.Token, pending.Number)`, `added` = `Dispatcher.Invoke` → roster com `ReplacingSameName` → salvar → `PhoneJoined`. Watcher descartado no fechamento.
 - [ ] **Step 4:** Mesmo comando → PASS; `dotnet test tests/Midview.Master.Tests` inteiro verde.
 - [ ] **Step 5:** Commit `feat(master): celular preparado entra na turma sozinho`.
 
@@ -140,19 +145,19 @@
 - Consumes: formato de `PhoneClaimRequest`, `claim` e os números de `ClaimPhone`/`WipePhone` (Task 1).
 - Produces:
   - `data class SetupClaim(val number: String, val token: String, val master: String)`; `class ProvisioningSetup(file: File) { fun save(extras: Map<String, String?>): Boolean; fun load(): SetupClaim?; fun consumeToken(); fun number(): String? }` — `save` só grava com as três chaves preenchidas e número de 1 a 3 dígitos; `consumeToken` apaga o token e mantém número e master.
-  - `class ClaimFlow(setup: ProvisioningSetup, trusted: TrustedMasters, deviceName: () -> String, sessionThumbprint: String, onClaimed: (String) -> Unit) { fun claimId(): String?; fun run(channel: Channel, request: Message) }` — `claimId()` = hash do token só se há token e `trusted.count() == 0`. `run`: recusa (`PairRefused`) se não há token ("Este celular já entrou numa turma."), se `channel.remoteThumbprint` difere de `master` ("Este celular não espera este computador.") ou se o `nonce` do pedido não tem 43 caracteres Base64 URL ("Código de preparação inválido."); senão `trusted.add(master)`, `consumeToken()`, `PairDone` com o resultado de `Pairing.encodeResult(deviceName(), sessionThumbprint, mac = null)` mais `"proof"` = Base64 URL sem `=` de HMAC-SHA256(chave = UTF-8 do token, mensagem = UTF-8 de `nonce + thumbprint do agente + thumbprint do master`, ambos em maiúsculas) — o mesmo `PhoneClaim.Proof` do C# (Ruling F do ledger: o token nunca trafega) — e `onClaimed(deviceName())`.
+  - `class ClaimFlow(setup: ProvisioningSetup, trusted: TrustedMasters, deviceName: () -> String, sessionThumbprint: String, onClaimed: (String) -> Unit) { fun claimId(): String?; fun run(channel: Channel, request: Message) }` — `claimId()` = hash do token só se há token e `trusted.count() == 0`. O celular se chama `"Celular " + número` (o número do QR; o Master também usa o número da reivindicação e ignora o nome que o celular mandar). `run`: recusa (`PairRefused`) se não há token ("Este celular já entrou numa turma."), se `channel.remoteThumbprint` difere de `master` ("Este celular não espera este computador.") ou se o `nonce` do pedido não tem 43 caracteres Base64 URL ("Código de preparação inválido."); senão `trusted.add(master)`, `consumeToken()`, `PairDone` com o resultado de `Pairing.encodeResult(deviceName(), sessionThumbprint, mac = null)` mais `"proof"` = Base64 URL sem `=` de HMAC-SHA256(chave = UTF-8 do token, mensagem = UTF-8 de `nonce + thumbprint do agente + thumbprint do master`, ambos em maiúsculas) — o mesmo `PhoneClaim.Proof` do C#, onde o thumbprint do agente é `identity.thumbprint` (o do certificado TLS do agente, o mesmo que o Master vê no canal) e o do master é o do QR (Ruling F do ledger: o token nunca trafega). Vetor fixo, copiado de `tests/Midview.Protocol.Tests/PhoneClaimTests.cs`: `proof(token = "token-123", nonce = "nonce-abc", agente = "aa11", master = "BB22") == "WSiEijnq4JkvauANCY9jxAA-15IWfTZOg00j1DJWdLE"` (os thumbprints entram aparados e em maiúsculas) — e `onClaimed(deviceName())`.
   - `CommandHandler(trusted, pairing, claim: ClaimFlow)`: primeira mensagem `CLAIM_PHONE` (de qualquer um, com o limite `UNTRUSTED_MAX_LENGTH`) vai para `claim.run` e encerra.
 
 - [ ] **Step 1: Testes que falham** (`./gradlew testDebugUnitTest --tests '*ClaimFlowTest*'` etc.)
   - `ProvisioningSetupTest`: salva e lê; recusa sem token, sem master, número `"1234"`; `consumeToken` deixa `number()=="07"` e `load()` sem token.
-  - `ClaimFlowTest` (com `FakeChannel`): thumbprint certo → `PAIR_DONE` com nome "Celular 07" e `proof` igual ao vetor calculado pelo C# `PhoneClaim.Proof`, professor confiável, token consumido, `onClaimed("Celular 07")`; segunda vez → `PAIR_REFUSED "Este celular já entrou numa turma."`; thumbprint de outro PC → recusa e nada confiável; `claimId()` null depois de reivindicado e quando já há professor.
+  - `ClaimFlowTest` (com `FakeChannel`): thumbprint certo → `PAIR_DONE` com nome "Celular 07" e `proof` igual ao vetor fixo acima (`token-123`, `nonce-abc`, `aa11`, `BB22` → `WSiEijnq4JkvauANCY9jxAA-15IWfTZOg00j1DJWdLE`), professor confiável, token consumido, `onClaimed("Celular 07")`; segunda vez → `PAIR_REFUSED "Este celular já entrou numa turma."`; thumbprint de outro PC → recusa e nada confiável; `claimId()` null depois de reivindicado e quando já há professor.
   - `DeviceNameTest`: número `"07"` → `"Celular 07"`; sem número, comportamento de hoje.
   - `DiscoveryResponderTest`: com `ClaimFlow` pendente, a resposta tem `"claim"`; sem, não tem.
   - `CommandHandlerTest`: `CLAIM_PHONE` de não confiável chega ao `ClaimFlow`.
 - [ ] **Step 2:** Rodar → FAIL.
 - [ ] **Step 3:** Implementar. Arquivo do setup em `filesDir/provisioning-setup.json` com `AtomicWrite`; `AgentService` monta `ProvisioningSetup`, usa `number()` no nome (inclusive no CN do `AgentIdentity` criado depois do provisionamento) e passa `ClaimFlow` ao `CommandHandler` e ao `DiscoveryResponder`.
 - [ ] **Step 4:** `gradlew -p src/Midview.Android testDebugUnitTest` inteiro → PASS.
-- [ ] **Step 5:** Commit `feat(android): celular preparado aceita o PC do QR sem código`.
+- [ ] **Step 5:** Commit `feat(android): celular preparado aceita o PC do QR sem código`. Quando o APK do agente com a reivindicação (esta Task) e o apagar (Task 5) for publicado, as Tasks 4/5 viram `PhoneProvisioning.ClaimsReady` para `true` no Master (Ruling J); antes disso o assistente fica escondido.
 
 ### Task 5: Agente apaga o aparelho a pedido e mostra "Pronto"
 
@@ -171,7 +176,7 @@
 - [ ] **Step 2:** Rodar → FAIL.
 - [ ] **Step 3:** Implementar (o atraso e o executor são injetáveis no `CommandHandler`).
 - [ ] **Step 4:** `testDebugUnitTest` inteiro → PASS; `assembleDebug` → BUILD SUCCESSFUL.
-- [ ] **Step 5:** Commit `feat(android): apagar e preparar de novo, tela de pronto`.
+- [ ] **Step 5:** Commit `feat(android): apagar e preparar de novo, tela de pronto`. Com esta Task e a Task 4 no APK publicado, vire `PhoneProvisioning.ClaimsReady` para `true` (Ruling J).
 
 ### Task 6: Roteiro do assistente e imagens
 

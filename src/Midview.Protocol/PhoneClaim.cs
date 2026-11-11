@@ -10,7 +10,10 @@ namespace Midview.Protocol;
 // while it is still searching, only its ClaimId (a fingerprint of the token)
 // in the discovery reply. The Master that made the QR knows the token behind
 // each ClaimId it is waiting for, so it can tell "my phone" from any other
-// device on the network, then sends ClaimPhone with the token as proof.
+// device on the network, then sends ClaimPhone with a fresh nonce. The token
+// itself is never sent: the phone answers PairDone with a Proof, an HMAC keyed
+// by the token over the nonce and both certificate thumbprints (see Proof),
+// which only a holder of the token can make for this very connection.
 public static class PhoneClaim
 {
     // 32 random bytes in URL-safe Base64 without padding: 43 characters.

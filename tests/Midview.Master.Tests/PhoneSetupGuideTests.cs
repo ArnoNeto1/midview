@@ -134,4 +134,38 @@ public class PhoneSetupGuideTests
         Assert.NotEmpty(PhoneSetupGuide.NotAppeared);
         Assert.NotEmpty(PhoneSetupGuide.WifiHelp);
     }
+
+    [Fact]
+    public void An_answer_that_quotes_a_fixed_help_links_to_it()
+    {
+        foreach (var fixedHelp in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.ResetWithoutPin })
+        {
+            foreach (var help in PhoneSetupGuide.Steps.SelectMany(s => s.Help))
+            {
+                if (help.Answer.Contains('"' + fixedHelp.Problem + '"'))
+                {
+                    Assert.Contains(fixedHelp, help.Links ?? Array.Empty<GuideHelp>());
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void The_restore_step_says_a_phone_that_was_already_a_school_phone_needs_recovery_mode()
+    {
+        var help = PhoneSetupGuide.Steps.Single(s => s.Id == "restaurar").Help
+            .Single(h => h.Problem.Contains("já era um celular da escola"));
+
+        Assert.Contains("Restaurar sem o PIN", help.Answer);
+        Assert.Contains(PhoneSetupGuide.ResetWithoutPin, help.Links!);
+    }
+
+    [Fact]
+    public void No_text_names_old_miui_versions()
+    {
+        foreach (var text in AllTexts())
+        {
+            Assert.DoesNotContain("MIUI 12", text);
+        }
+    }
 }

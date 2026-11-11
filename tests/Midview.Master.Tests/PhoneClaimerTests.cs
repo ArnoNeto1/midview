@@ -69,7 +69,7 @@ public class PhoneClaimerTests : IDisposable
             channel.Send(Done(channel, _agentCert.Thumbprint, _teacher.Thumbprint, "tok-abc", seen!));
         });
 
-        var machine = await OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        var machine = await OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", "07", port)).WaitAsync(TimeSpan.FromSeconds(30));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal("PROF-01", seen!.TeacherName);
@@ -78,6 +78,46 @@ public class PhoneClaimerTests : IDisposable
         Assert.True(machine.IsPhone);
         Assert.Equal(_agentCert.Thumbprint, machine.AgentThumbprint);
         Assert.Equal(Session, machine.SessionThumbprint);
+    }
+
+    [Fact]
+    public async Task Claim_names_the_machine_from_the_claim_number_not_from_the_phone()
+    {
+        var (port, done) = FakeAgent(channel =>
+        {
+            var request = PhoneClaimRequest.Decode(channel.Receive().Payload)!;
+            var proof = PhoneClaim.Proof("tok-abc", request.Nonce, _agentCert.Thumbprint, _teacher.Thumbprint);
+            // A device with the token for 07 names itself after another phone of the class.
+            channel.Send(new Message(MessageType.PairDone,
+                new PairingResult("Celular 03", Session, null, DeviceKindText.AndroidWire, proof).Encode()));
+        });
+
+        var machine = await OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", "07", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal("Celular 07", machine.Name);
+
+        // And in the roster, "Celular 03" is untouched.
+        var roster = new[] { new KnownMachine("Celular 03", "10.0.0.3", Session, "AA", null, DeviceKind.Android) };
+        var after = PhoneJoinRoster.ReplacingSameName(roster, machine);
+        Assert.Equal(new[] { "Celular 03", "Celular 07" }, after.Select(m => m.Name).ToArray());
+    }
+
+    [Fact]
+    public async Task Claim_with_a_proof_made_for_another_agent_thumbprint_is_refused()
+    {
+        // A relay: the proof is good for the real phone's certificate, but the
+        // channel the Master is talking to has another one.
+        var (port, done) = FakeAgent(channel =>
+        {
+            var request = PhoneClaimRequest.Decode(channel.Receive().Payload)!;
+            channel.Send(Done(channel, "0123456789ABCDEF0123456789ABCDEF01234567", _teacher.Thumbprint, "tok-abc", request));
+        });
+
+        var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", "07", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(PairingSession.InvalidAnswer, ex.Message);
     }
 
     [Fact]
@@ -90,7 +130,7 @@ public class PhoneClaimerTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", "07", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(PairingSession.InvalidAnswer, ex.Message);
@@ -106,7 +146,7 @@ public class PhoneClaimerTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok-abc", "07", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(PairingSession.InvalidAnswer, ex.Message);
@@ -122,7 +162,7 @@ public class PhoneClaimerTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", "07", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal("Este celular não espera este computador.", ex.Message);
@@ -138,7 +178,7 @@ public class PhoneClaimerTests : IDisposable
         });
 
         var ex = await Assert.ThrowsAsync<PairingRefusedException>(() =>
-            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", port)).WaitAsync(TimeSpan.FromSeconds(30)));
+            OwnThread(() => PhoneClaimer.Claim("127.0.0.1", _teacher, "PROF-01", "tok", "07", port)).WaitAsync(TimeSpan.FromSeconds(30)));
         await done.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(PairingSession.OldAgent, ex.Message);

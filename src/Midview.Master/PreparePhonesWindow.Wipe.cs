@@ -38,8 +38,9 @@ public partial class PreparePhonesWindow
             WipeState.Offered => $"O {name} ainda está ligado e na turma. O Midview apaga o celular daqui e ele volta ao \"Bem-vindo\" sozinho.",
             WipeState.Wiping => $"Apagando o {name}...",
             WipeState.Done => $"O {name} está sendo apagado e volta sozinho ao \"Bem-vindo\" em alguns minutos. Então siga os passos.",
-            WipeState.Failed => $"Não deu para apagar pelo Midview: {_progress.WipeFailure?.TrimEnd('.', ' ')}. " +
-                                "Restaure o celular pelo menu (passo 5) ou use \"Restaurar sem o PIN\".",
+            WipeState.Failed => $"Não deu para apagar o {name} daqui: {_progress.WipeFailure?.TrimEnd('.', ' ')}. " +
+                                "Um celular que já foi da escola não deixa restaurar pelo menu das Configurações. " +
+                                "Restaure-o pelo modo de recuperação (\"Restaurar sem o PIN\") e depois toque em \"Já restaurei\".",
             _ => "",
         };
         WipeButton.Visibility = Shown(state == WipeState.Offered);
@@ -50,7 +51,9 @@ public partial class PreparePhonesWindow
         WipeButtons.Margin = failed ? new Thickness(0, 10, 0, 0) : new Thickness(12, 0, 0, 0);
         WipeButtons.Visibility = Shown(state is WipeState.Offered or WipeState.Failed);
 
-        Footer(back: _progress.StepIndex > 0, next: failed ? null : step.NextText);
+        // After a failed wipe the footer's button says the phone was restored by hand.
+        Footer(back: _progress.StepIndex > 0, next: failed ? "Já restaurei, apareceu o Bem-vindo" : step.NextText, primary: !failed);
+        ShowHelp(); // the failure adds "Restaurar sem o PIN" to the helps
         // The card got shorter or longer: the QR takes what is left.
         Dispatcher.BeginInvoke(FitQr, DispatcherPriority.Loaded);
     }
@@ -96,10 +99,14 @@ public partial class PreparePhonesWindow
         ShowWipe();
     }
 
-    // After a failed wipe: the reset step, the way that needs no Agent on the phone.
+    // After a failed wipe: "Restaurar sem o PIN" (recovery mode), the way that needs
+    // nothing from the phone's own menu or agent. Opens that help.
     private void OnWipeRestoreClicked(object sender, RoutedEventArgs e)
     {
-        _progress.Restart();
-        ShowPage();
+        _helpOpen = true;
+        ShowHelp();
+        Dispatcher.BeginInvoke(
+            () => PageScroll.ScrollToVerticalOffset(HelpArea.TranslatePoint(new Point(0, 0), PageContent).Y),
+            DispatcherPriority.Loaded);
     }
 }

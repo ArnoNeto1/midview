@@ -58,7 +58,7 @@ public partial class MainWindow
             return;
         }
         var phone = targets is [{ Machine.IsPhone: true } only] ? only : null;
-        item.Visibility = PhoneProvisioning.IsReady && phone is not null ? Visibility.Visible : Visibility.Collapsed;
+        item.Visibility = PhoneProvisioning.WizardReady && phone is not null ? Visibility.Visible : Visibility.Collapsed;
         item.IsEnabled = phone is not null && PhoneWipe.CanWipe(phone.Machine, phone.Presence == TilePresence.Online);
     }
 
@@ -68,6 +68,13 @@ public partial class MainWindow
             || !PhoneWipe.CanWipe(tile.Machine, tile.Presence == TilePresence.Online)
             || PhoneWipe.NumberOf(tile.Machine.Name) is not { } number
             || !PhoneWipe.Confirm(this, tile.Machine.Name))
+        {
+            return;
+        }
+        // The open assistant is waiting for another phone: StartAt would drop it.
+        if (_preparePhonesWindow?.WaitingForName is { } waiting
+            && !string.Equals(waiting, tile.Machine.Name, StringComparison.OrdinalIgnoreCase)
+            && !PhoneWipe.ConfirmSwitch(this, waiting, tile.Machine.Name))
         {
             return;
         }

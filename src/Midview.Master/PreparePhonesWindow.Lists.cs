@@ -94,11 +94,21 @@ public partial class PreparePhonesWindow
             SetupPage.Waiting => PhoneSetupGuide.Steps.Single(step => step.Id == "seis-toques").Help.ToList(),
             _ => new List<GuideHelp>(),
         };
-        foreach (var fixedHelp in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.ResetWithoutPin })
+        if (_progress.Page == SetupPage.ConfirmRedo
+            || (_progress.Page == SetupPage.Step && _progress.Wipe == WipeState.Failed))
         {
-            if (helps.Any(help => help.Answer.Contains('"' + fixedHelp.Problem + '"')))
+            // The way out of a wipe that failed (and of redoing an offline phone): first in the list.
+            helps.Insert(0, PhoneSetupGuide.ResetWithoutPin);
+        }
+        // The fixed helps an answer points to come after it, once each.
+        foreach (var help in helps.ToList())
+        {
+            foreach (var link in help.Links ?? Array.Empty<GuideHelp>())
             {
-                helps.Add(fixedHelp);
+                if (!helps.Contains(link))
+                {
+                    helps.Add(link);
+                }
             }
         }
         return helps;

@@ -70,6 +70,11 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowPage();
     }
 
+    // The phone this window is waiting to see join the class, or null. Moving
+    // the window to another phone (StartAt) would stop waiting for it.
+    public string? WaitingForName =>
+        _progress.Page is SetupPage.Waiting or SetupPage.NotAppeared ? _progress.Name : null;
+
     // MainWindow.PhoneJoined: a prepared phone entered the class.
     public void PhoneJoined(string name)
     {
@@ -99,6 +104,11 @@ public partial class PreparePhonesWindow : MidviewWindow
                     return;
                 }
                 break;
+            // A wipe that failed and the phone restored by hand: on to the steps and the QR.
+            case SetupPage.Step when _progress.Wipe == WipeState.Failed:
+                _progress.RestoredByHand();
+                ShowPage();
+                return;
             // Only past a QR for this very phone.
             case SetupPage.Step when _progress.StepId == "seis-toques" && _qr?.Shown.Number != _progress.Number:
                 return;
@@ -143,7 +153,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowPage();
     }
 
-    // Same rules as before the assistant: a name, and a WPA password of 8 or more.
+    // Same rules as before the assistant: a name, and a password of 8 or more.
     private bool SaveWifi()
     {
         var ssid = SsidInput.Text.Trim();
@@ -154,7 +164,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         }
         if (PasswordInput.Text.Length < 8)
         {
-            WifiErrorText.Text = "A senha de um Wi-Fi WPA tem pelo menos 8 caracteres.";
+            WifiErrorText.Text = "A senha do Wi-Fi tem pelo menos 8 caracteres.";
             return false;
         }
         WifiErrorText.Text = "";
@@ -267,7 +277,8 @@ public partial class PreparePhonesWindow : MidviewWindow
                 ConfirmRedoTitle.Text = _progress.ConfirmRedoText;
                 ConfirmRedoHint.Text = _phoneOnline(_progress.Name!) == true && _wipe is not null
                     ? $"O {_progress.Name} está ligado agora: no próximo passo, o Midview pode apagá-lo daqui, sem mexer nos menus do celular."
-                    : $"Siga os passos com o celular na mão. O {_progress.Name} antigo sai da turma quando este aparecer.";
+                    : $"Siga os passos com o celular na mão. O {_progress.Name} antigo sai da turma quando este aparecer. " +
+                      "Um celular que já era da escola não deixa restaurar pelo menu das Configurações: no passo de restaurar, use \"Restaurar sem o PIN\" (veja em \"Deu errado?\").";
                 Footer(back: true, next: $"Sim, preparar de novo o {_progress.Number}", backText: "Não, trocar o número");
                 break;
             case SetupPage.Waiting:

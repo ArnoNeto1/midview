@@ -55,7 +55,7 @@
                             <StackPanel x:Name="WipeButtons" Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0">
                                 <Button x:Name="WipeButton" Content="Apagar e preparar de novo" Click="OnWipeClicked"
                                         Style="{StaticResource DangerButton}" Padding="12,6" />
-                                <Button x:Name="WipeRestoreButton" Content="Restaurar pelo menu do celular" Click="OnWipeRestoreClicked"
+                                <Button x:Name="WipeRestoreButton" Content="Restaurar sem o PIN" Click="OnWipeRestoreClicked"
                                         Style="{StaticResource PrimaryButton}" Padding="12,6" />
                                 <Button x:Name="WipeRetryButton" Content="Tentar apagar de novo" Click="OnWipeClicked"
                                         Padding="12,6" Margin="8,0,0,0" />

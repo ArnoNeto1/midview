@@ -336,17 +336,19 @@ public enum MessageType : byte
     RequestScreenConsent = 92,
 
     // Master -> Android agent, over TLS, from a teacher it doesn't trust yet:
-    // the QR code's proof (a PhoneClaimRequest) that this phone was prepared
-    // for that teacher's class, matching the claim in its discovery reply.
-    // Answered with PairDone (a PairingResult), the phone now trusting the
-    // Master, or PairRefused (why, in Portuguese). The proof works once.
+    // a PhoneClaimRequest with a fresh nonce and the teacher's name, sent to
+    // the phone whose discovery reply carried the claim id of this Master's QR.
+    // The QR's token is never sent. The phone answers PairDone (a PairingResult)
+    // whose Proof is HMAC-SHA256 keyed by the token over the nonce and both
+    // thumbprints (PhoneClaim.Proof), and now trusts the Master; or it answers
+    // PairRefused (why, in Portuguese). The token works once.
     ClaimPhone = 93,
 
     // Master -> Android agent, from a trusted teacher only: erase the phone
     // and set it up again ("Apagar e preparar de novo"), no payload. Answered
     // with one CommandAck carrying a CommandResult. An agent from before this
-    // answers CommandAck with a refusal, which the Master shows as "Midview
-    // antigo neste celular".
+    // answers CommandAck with a refusal, which the Master shows as a phone that
+    // cannot be erased from here yet.
     WipePhone = 94,
 }
 

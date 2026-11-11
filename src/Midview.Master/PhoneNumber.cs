@@ -4,7 +4,8 @@ namespace Midview.Master;
 // name the phone gets from it.
 public static class PhoneNumber
 {
-    // Null unless the text, once spaces are removed, is 1 to 3 digits.
+    // Null unless the text, once spaces are removed, is 1 to 3 digits. The
+    // number is what counts, so "007" and "7" are both "07" (and "0" is "00").
     public static string? Normalize(string typed)
     {
         var digits = (typed ?? "").Trim();
@@ -12,7 +13,7 @@ public static class PhoneNumber
         {
             return null;
         }
-        return digits.PadLeft(2, '0');
+        return int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture).ToString("D2", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public static string NameOf(string number) => "Celular " + number;

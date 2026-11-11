@@ -80,6 +80,19 @@ public class PhoneClaimWatcherTests : IDisposable
     }
 
     [Fact]
+    public void AddAndSave_says_nothing_when_it_works() =>
+        Assert.Null(PhoneJoinRoster.AddAndSave(() => { }));
+
+    [Fact]
+    public void AddAndSave_turns_a_save_failure_into_a_status_text()
+    {
+        var text = PhoneJoinRoster.AddAndSave(() => throw new IOException("disco cheio"));
+        Assert.NotNull(text);
+        Assert.Contains("entrou na turma", text);
+        Assert.Contains("disco cheio", text);
+    }
+
+    [Fact]
     public void ReplacingSameName_swaps_the_phone_but_not_a_computer()
     {
         var oldPhone = new KnownMachine("Celular 07", "10.0.0.1", new string('1', 40), Agent, null, DeviceKind.Android);

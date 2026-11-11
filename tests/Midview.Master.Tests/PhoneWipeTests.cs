@@ -52,8 +52,8 @@ public class PhoneWipeTests
     [Theory]
     [InlineData("")]
     [InlineData("Ainda não funciona em celular.")]
-    public void An_old_agent_is_told_to_update(string answer) =>
-        Assert.Equal((false, "Midview antigo neste celular: atualize-o pela rede."),
+    public void An_old_agent_gets_a_plain_text_without_an_update_hint(string answer) =>
+        Assert.Equal((false, PhoneWipe.OldAgent),
                      PhoneWipe.SendWith(Phone("AB12"), _ => (false, answer)));
 
     [Fact]
