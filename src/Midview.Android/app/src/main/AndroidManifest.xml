@@ -15,8 +15,11 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Wi-Fi kept awake so the phone answers with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The watchdog's check every few seconds (AgentWatchdog), on time. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
+        android:name=".MidviewApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -66,6 +69,11 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Starts the agent again if it is not running, every few seconds. -->
+        <receiver
+            android:name=".agent.AgentWatchdog"
+            android:exported="false" />
 
         <activity
             android:name=".ui.PairingCodeActivity"

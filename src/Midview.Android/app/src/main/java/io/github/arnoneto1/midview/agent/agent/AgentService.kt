@@ -63,6 +63,8 @@ class AgentService : Service() {
         createChannels()
         ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)
+        keeper(this).created()
+        AgentWatchdog.arm(this)
         holdWifi()
         // Making the identity the first time takes a moment (an RSA key).
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
@@ -73,7 +75,12 @@ class AgentService : Service() {
     // `dpm set-device-owner`, the app is told (and starts the agent) before
     // it really is one: the locks are tried once more a little later.
     // Applying them twice changes nothing.
+    //
+    // No intent: Android started the service again after killing the app
+    // (START_STICKY). onCreate already put it back in the foreground.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) Log.i(TAG, "Agent started again by Android.")
+        AgentWatchdog.arm(this)
         AndroidDevicePolicyGateway.lockDown(this)
         main.removeCallbacks(lockAgain)
         main.postDelayed(lockAgain, LOCK_AGAIN_MILLIS)
@@ -88,6 +95,7 @@ class AgentService : Service() {
             closeListeners()
         }
         stopping.countDown()
+        keeper(this).destroyed()
         main.removeCallbacks(lockAgain)
         wifiLock?.let { if (it.isHeld) it.release() }
         wifiLock = null
@@ -288,6 +296,24 @@ class AgentService : Service() {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AgentService::class.java))
+        }
+
+        @Volatile private var keeper: AgentKeeper? = null
+
+        private fun keeper(context: Context): AgentKeeper =
+            keeper ?: synchronized(this) {
+                keeper ?: AgentKeeper { start(context.applicationContext) }.also { keeper = it }
+            }
+
+        // Starts the agent unless it already runs in this process (the
+        // watchdog and every start of the process). Never fails its caller:
+        // a start Android refuses is logged and tried at the next check.
+        fun ensureRunning(context: Context, reason: String) {
+            try {
+                if (keeper(context).ensureRunning()) Log.i(TAG, "Agent started ($reason).")
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "Agent could not be started ($reason)", e)
+            }
         }
     }
 }

@@ -115,6 +115,13 @@ Para preparar um celular:
 3. Na primeira tela depois de reiniciar, toque 6 vezes em qualquer lugar da tela e escaneie o QR. O celular baixa o aplicativo do Midview e vira um aparelho da escola.
 4. Em **Procurar e parear** > **Procurar na rede**, selecione o celular e confira o código de 6 dígitos que aparece nele.
 
+Se o aluno fechar todos os apps recentes ("Limpar tudo" na Xiaomi), o Midview do celular volta sozinho em até uns 10 segundos. Num celular preparado pelo cabo USB, com a depuração USB ligada, rode também estes comandos, para o celular não pôr o Midview para economizar bateria e deixá-lo iniciar sozinho:
+
+```
+adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
+adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
+```
+
 ## Desinstalação
 
 Em **Configurações** > **Aplicativos**, desinstale "Midview Professor" ou "Midview Aluno". Na máquina do aluno, o desinstalador libera o que estava bloqueado, destrava a Área de Trabalho, devolve as pastas de downloads e de salvar se uma aula estiver em andamento e pergunta se deve apagar também os professores pareados.
