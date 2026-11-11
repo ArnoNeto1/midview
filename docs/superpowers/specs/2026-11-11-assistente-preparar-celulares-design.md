@@ -1,33 +1,49 @@
-# Assistente "Preparar celulares" (desenho)
+# Assistente "Preparar celulares" (desenho, revisão 2: pelo cabo USB)
 
 Data: 2026-11-11. Mudanças no `src/Midview.Master` (programa do professor) e
 no agente Android (`src/Midview.Android`). Continua o desenho
 `2026-11-11-agente-android-design.md` e depende do plano 1 dele
 (`docs/superpowers/plans/2026-11-11-agente-android-1-base.md`).
 
+**Por que a revisão.** A primeira versão (aprovada) preparava o celular pelo
+QR dos 6 toques, sem cabo. Em 2025 o Google passou a aceitar no QR só apps de
+gerenciamento de uma lista aprovada por ele; o agente do Midview não está
+nela, e nos celulares com Play Store o QR recusa instalar. O professor
+escolheu o caminho pelo cabo USB ("Sim, pelo cabo"). O que não depende do QR
+continua como estava: um passo por vez, prints reais, "Deu errado?", o
+número de trás vira o nome, entrar na turma sem código, "Apagar e preparar de
+novo".
+
 ## Intenção
 
-Hoje, para pôr um celular da escola no Midview, o professor precisa saber de
-cor uma sequência que nenhum programa faz por ele: sair da conta Mi, restaurar
-o celular, tocar 6 vezes na tela de boas-vindas, escanear o QR de "Preparar
-celular" (escondido em Máquinas da sala → Procurar e parear) e, quando o
-celular termina, parear com o código de 6 dígitos. Quem não conhece Android
-trava em qualquer um desses pontos.
+Hoje, para pôr um celular da escola no Midview, alguém precisa saber de cor
+uma sequência que nenhum programa faz por ele. Quem não conhece Android trava
+em qualquer ponto.
 
 O professor quer que **qualquer outro professor, mesmo quem não sabe nada de
 celular, prepare os celulares da escola sozinho**, só com o Midview aberto no
-PC do professor, sem ajuda e sem cabo USB.
+PC do professor e um cabo USB, sem ajuda.
 
 ## Decidido pelo professor
 
 - **Quem usa:** professores que podem não saber nada de celular nem de
   computador. Estão sozinhos na frente do Midview do PC do professor, sem
   vídeo, folha impressa ou alguém para perguntar.
-- **Os celulares:** da escola, da mesma marca (Xiaomi), modelos diferentes:
-  Redmi 10C, Redmi Note 10S, Redmi Note 9 Pro ("até onde eu sei"). **Todos
-  podem ser apagados.** Cada um tem **um número escrito atrás**.
+- **Os celulares:** da escola, todos Xiaomi, modelos diferentes: Redmi 10C,
+  Redmi Note 10S, Redmi Note 9 Pro ("até onde eu sei"). **Todos podem ser
+  apagados.** Cada um tem **um número escrito atrás**. **Não têm chip.**
 - **Um PC só:** os celulares ficam sempre com a mesma turma e o mesmo PC de
   professor.
+- **Pelo cabo USB:** o professor faz à mão só o que a Xiaomi exige que seja
+  feito no celular; o resto o Midview faz sozinho pelo cabo.
+- **Conta Mi e chip só por alguns minutos:** a escola não tem conta Mi (só
+  Google) e os celulares não têm chip. Testado pelo professor no Redmi 10C em
+  2026-11-11: a chave "Depuração USB (configurações de segurança)" **só liga
+  com chip no celular** e conta Mi entrada; depois de ligada, ela **continua
+  ligada sem a conta Mi e sem o chip** (conferido pelo cabo:
+  `persist.security.adbinput=1`, `gsm.sim.state=ABSENT`, nenhuma conta).
+  Então: a conta Mi entrada pelo Google da escola e um chip emprestado (pode ser o do celular do próprio professor), usados em
+  cada celular e tirados em seguida.
 - **Formato:** um **assistente de um passo por vez** (mockup "A · Um passo por
   vez", em `.superpowers/brainstorm/2043-1794420649/content/passo-a-passo.html`),
   **bem detalhado**, "pois tem professor que não vai achar direito".
@@ -37,286 +53,317 @@ PC do professor, sem ajuda e sem cabo USB.
   errado?"** com os problemas comuns daquele passo e a saída de cada um
   (mockup aprovado:
   `.superpowers/brainstorm/2043-1794420649/content/passos-com-prints.html`).
-- **Imagens:** prints reais do Redmi 10C, tirados pelo `adb` sem tocar em nada
-  (feito nesta conversa, com o nome do Wi-Fi borrado). As telas que só existem
-  depois de restaurar (boas-vindas, leitor de QR) e a tela da conta Mi (bloqueia
-  print) começam como **desenho** e são trocadas pelo print real depois da
-  primeira preparação de verdade.
-- **O número de trás vira o nome:** o assistente pergunta o número no início,
-  o número vai dentro do QR e o celular aparece no Midview como **"Celular 07"**
-  sem precisar renomear.
+- **Imagens:** prints reais do Redmi 10C, tirados pelo `adb` sem tocar em
+  nada, com nomes de rede e contas borrados. A tela de login da conta Mi
+  bloqueia print e começa como **desenho**.
+- **O número de trás vira o nome:** o assistente pergunta o número no início
+  e o celular aparece no Midview como **"Celular 07"** sem precisar renomear.
 - **Sem código de 6 dígitos:** o celular preparado pelo assistente **entra na
   turma sozinho**, já pareado com este PC.
-- **Onde fica:** quando o filtro **Celulares** está vazio, o espaço vazio mostra
-  um **botão grande "Preparar celulares"**. O link "Preparar celular..." em
-  Máquinas da sala → Procurar e parear continua, para os celulares seguintes.
-- **Fora do assistente:** a otimização por cabo USB e o script
-  `celulares/otimizar-celulares.ps1`. Como todos os celulares podem ser
-  apagados, o caminho do QR cobre tudo; o script fica só como ferramenta do
-  professor que o escreveu.
+- **Onde fica:** quando o filtro **Celulares** está vazio, o espaço vazio
+  mostra um **botão grande "Preparar celulares"**. O link "Preparar
+  celular..." em Máquinas da sala → Procurar e parear continua, para os
+  celulares seguintes.
 - **Anti-objetivo principal:** o professor **travar no meio e não saber o que
   fazer**, mesmo que no fim o celular fique pronto.
-- **Preparar de novo um celular que já é da escola** (o agente bloqueia a
-  Redefinição de fábrica nas Configurações): um **botão no Midview, "Apagar e
-  preparar de novo"**, que só o PC em que o celular confia pode usar (não o
-  modo de recuperação).
-- **O Redmi 10C pode ser apagado durante a construção** para uma preparação de
-  verdade, com a qual se tiram os prints das telas que aparecem depois do QR.
+- **Preparar de novo um celular que já é da escola:** um **botão no Midview,
+  "Apagar e preparar de novo"**, que só o PC em que o celular confia pode
+  usar.
+- **O Redmi 10C pode ser usado e apagado durante a construção** para uma
+  preparação de verdade e para os prints que faltam.
+- **Só o Redmi 10C é testado por ora.** O assistente é feito a partir dele;
+  o Note 10S e o Note 9 Pro são conferidos na primeira preparação de verdade
+  de cada um, e o que for diferente neles entra depois no "Deu errado?".
 
 ## Objetivos
 
 ### 1. Abrir o assistente
 
-- Filtro **Celulares** vazio: em vez do texto de hoje (`GridFilter`, "Nenhum
-  celular nesta sala ainda. Para colocar o primeiro, abra..."), um botão
-  grande **"Preparar celulares"** e uma frase curta ("Nenhum celular nesta sala
+- Filtro **Celulares** vazio: em vez do texto de hoje, um botão grande
+  **"Preparar celulares"** e uma frase curta ("Nenhum celular nesta sala
   ainda.").
-- O link de Máquinas da sala → Procurar e parear abre o mesmo assistente (a
-  `PreparePhoneWindow` de hoje é substituída por ele).
-- Enquanto o agente Android não estiver publicado (`PhoneProvisioning.IsReady`
-  falso), o botão e o link não aparecem, como hoje.
+- O link de Máquinas da sala → Procurar e parear abre o mesmo assistente.
+- Enquanto o agente Android não estiver publicado, o botão e o link não
+  aparecem.
 
-### 2. Wi-Fi do laboratório (só na primeira vez)
+### 2. Antes do primeiro celular (só uma vez)
 
-- Se não há Wi-Fi guardado (`PhoneWifiFile`), a primeira tela pede o nome e a
-  senha, com as mesmas regras de hoje (nome obrigatório, senha WPA com 8
-  caracteres ou mais) e o aviso de que fica guardado só neste PC.
-- Com Wi-Fi guardado, o assistente pula essa tela e mostra, discreto, "Wi-Fi:
-  <nome> · trocar".
-- Dica no "Deu errado?": o Wi-Fi tem de ser de senha comum (WPA2); rede com
-  usuário e senha (empresarial) ou com página de login não funciona.
+- **Wi-Fi do laboratório:** se não há Wi-Fi guardado (`PhoneWifiFile`), pede
+  o nome e a senha, com as mesmas regras de hoje e o aviso de que fica guardado
+  só neste PC. Com Wi-Fi guardado, mostra discreto "Wi-Fi: <nome> · trocar".
+  "Deu errado?": rede com usuário e senha (empresarial) ou com página de login
+  não funciona.
+- **O que separar:** uma tela "Antes de começar, separe:" com o cabo USB do
+  celular, um chip qualquer (pode ser o do seu celular) e a agulha da gaveta
+  do chip (ou um clipe), e o e-mail e a senha da conta Google da escola.
+- **Conta Mi da escola:** a conta Mi entra **pelo Google** (botão do Google
+  na tela de login da conta Mi), com a conta Google da escola; não é preciso
+  criar outra conta (conferido no Redmi 10C pela sessão do agente Android). O
+  Midview **não guarda** e-mail nem senha.
 
-### 3. Os passos, para cada celular
+### 3. Os passos à mão, para cada celular
 
 Um passo por tela, com **Voltar** e um botão de avançar escrito como o
-professor confirma ("Já tirei, próximo passo", "Apareceu o Bem-vindo"). Na
-ordem:
+professor confirma ("Já tirei, próximo passo"). Na ordem:
 
-1. **Número do celular.** "Qual número está escrito atrás deste celular?"
-   Campo para o número. Se o número já existe na turma, avisa ("Já existe um
-   Celular 07. Vai preparar de novo o 07?"). Se o professor confirmar e o
-   Celular 07 está online, o assistente oferece **"Apagar e preparar de novo"**
-   (objetivo 6) e pula para o passo 6; se está desligado, segue os passos
-   normais e o antigo é trocado pelo novo quando este aparecer.
-2. **Bateria.** Ligar o celular na tomada ou conferir que tem bateria (a
-   preparação leva uns 10 a 15 minutos).
-3. **Tirar a conta Mi.** Configurações → Conta Mi (no topo) → desligar
-   "Encontrar dispositivo" → Sair (pede a senha da conta). "Deu errado?":
-   "Não aparece Conta Mi no topo" → não há conta, siga; "Ninguém sabe a senha"
-   → ver a ajuda "Celular com conta desconhecida".
-4. **Tirar a conta Google.** Configurações → Contas e sincronização → Google →
-   a conta → Mais → Remover conta. "Deu errado?": "Não aparece Google" → não há
-   conta, siga; "Pediu a senha e ninguém sabe" → ajuda "Celular com conta
+1. **Número do celular.** "Qual número está escrito atrás deste celular?" Se o
+   número já existe na turma, avisa ("Já existe um Celular 07. Vai preparar
+   de novo o 07?"); o antigo é trocado pelo novo quando este entrar.
+2. **Ligar o celular.** Ligado, desbloqueado, com bateria, conectado ao Wi-Fi
+   (para entrar na conta Mi). "Deu errado?": "Apareceu Bem-vindo" → o celular
+   está apagado: escolha o idioma e o Wi-Fi e **pule** a conta Google e a
+   conta Mi até chegar à tela inicial; "Pede um PIN que ninguém sabe" → ajuda
+   "Celular travado com PIN".
+3. **Tirar a conta Google.** Configurações → Contas e sincronização → Google →
+   a conta → Mais → Remover conta. "Deu errado?": "Não aparece Google" → não
+   há conta, siga; "Pede a senha e ninguém sabe" → ajuda "Celular com conta
    desconhecida".
-5. **Restaurar de fábrica.** Configurações → Sobre o telefone → descer até o
-   fim → Redefinição de fábrica → Limpar todos os dados → confirmar. Leva de 3
-   a 7 minutos; acaba na tela "Bem-vindo". "Deu errado?": "Pediu um PIN que
-   ninguém sabe" → ajuda "Restaurar sem o PIN".
-6. **Seis toques e o código.** Na tela "Bem-vindo", tocar 6 vezes seguidas numa
-   parte vazia; abre a câmera; apontar para o QR (que já leva o Wi-Fi e o
-   número). "Deu errado?": "A câmera não abriu" → tocar mais rápido, sempre no
-   mesmo lugar; "Apareceu uma mensagem de erro" → lista das mensagens
-   conhecidas e o que fazer (ver objetivo 5).
+4. **Ligar o modo de desenvolvedor.** Configurações → Sobre o telefone →
+   tocar **7 vezes** em "Versão da MIUI" até aparecer "Você agora é um
+   desenvolvedor". "Deu errado?": "Diz que já é desenvolvedor" → siga.
+5. **Colocar o chip e entrar na conta Mi.** Abrir a gaveta com a agulha,
+   colocar o chip, fechar. Configurações → no topo, "Conta Mi" → tocar no
+   botão do Google e entrar com a conta Google da escola. "Deu errado?": "Já tem outra conta Mi" → sair dela (pede a
+   senha dela; se ninguém sabe, ajuda "Celular com conta desconhecida");
+   "Fica carregando no 'não sou robô'" → conferir data e hora automáticas e o
+   Wi-Fi.
+6. **Ligar as três chaves.** Configurações → Configurações adicionais →
+   Opções do desenvolvedor → ligar **"Depuração USB"**, **"Instalar via
+   USB"** e **"Depuração USB (configurações de segurança)"**. Cada uma mostra
+   um aviso; esperar o contador e tocar em "Aceitar"/"Próximo". "Deu errado?":
+   "A chave volta a desligar" → o chip não está bem colocado ou a conta Mi
+   não entrou; "Pede para inserir um cartão SIM" → passo 5.
+7. **Sair das contas e tirar o chip.** Configurações → Conta Mi → desligar
+   "Encontrar dispositivo" se estiver ligado → Sair da conta. Depois, se o
+   login pelo Google deixou uma conta Google no celular, tirá-la como no
+   passo 3. Por fim abrir a gaveta e tirar o chip, sem desligar o celular. As
+   chaves do passo 6 continuam ligadas.
+8. **Ligar o cabo.** Ligar o celular no PC do professor pelo cabo USB. No
+   celular aparece "Permitir depuração USB?": marcar "Sempre permitir deste
+   computador" e tocar em **Permitir**. O assistente **avança sozinho** quando
+   vê o celular no cabo. "Deu errado?": "Não aparece a pergunta" → trocar de
+   porta USB ou de cabo (cabo só de carregar não serve), desbloquear a tela;
+   "Toquei em Cancelar" → desligar e ligar o cabo de novo.
 
-Os passos 3 e 4 vêm **antes** de restaurar e o assistente insiste nisso: um
-celular restaurado com a conta Mi ou Google ainda dentro trava na volta e pede
-a senha da conta; com conta Google sobrando, o QR não passa (ver Pesquisa).
+O assistente insiste nos passos 3 e 7: com qualquer conta no celular, o
+Android não deixa o Midview terminar.
 
-**Telas depois do QR.** Depois do scan o celular mostra telas próprias (o
-consentimento "Aceitar e continuar" do Android e o resto da configuração da
-MIUI). Elas ganham passos no assistente, com print real, tirados numa
-preparação de verdade do Redmi 10C durante a construção (decidido pelo
-professor). Até essa preparação, o passo 6 tem um texto genérico ("toque em
-Aceitar/Continuar até aparecer a tela do Midview").
+**Outras versões do MIUI.** *(Escolha minha.)* Os textos e prints são do MIUI
+14. Em vez de perguntar o modelo, cada passo de menu traz no "Deu errado?" o
+caminho do MIUI 12/13 e a dica de usar a busca das Configurações com a palavra
+do item ("desenvolvedor", "depuração").
 
-**Outras versões do MIUI.** *(Escolha minha, o professor não sabia a versão
-dos outros modelos.)* Os textos e prints são do MIUI 14. Em vez de perguntar o
-modelo, cada passo de menu traz no "Deu errado?" o caminho do MIUI 12/13
-("Não achei Redefinição de fábrica" → Configurações → Configurações adicionais
-→ Backup e redefinição) e a dica de usar a busca das Configurações com a
-palavra do item.
+### 4. O Midview termina sozinho pelo cabo
 
-### 4. Esperar o celular e entrar na turma sozinho
+Com o celular no cabo e autorizado, o assistente mostra uma lista que vai
+sendo marcada, em linguagem simples, e leva cerca de 1 minuto:
 
-- Depois do QR, a tela vira **"Esperando o Celular 07 terminar…"**, com o que
-  está acontecendo no celular em linguagem simples ("o celular está entrando
-  no Wi-Fi e baixando o Midview; isso leva alguns minutos").
-- Quando o celular aparece na rede, o Midview o **adiciona sozinho** à turma
-  com o nome "Celular 07", sem código de 6 dígitos, e ele aparece no filtro
-  Celulares. A otimização roda sozinha, como já está no desenho do agente.
-- *(Escolha minha.)* Isso vale **mesmo com o assistente fechado**, depois dos
-  15 minutos de espera ou com o Midview reiniciado: as provas de QR ainda
-  válidas ficam guardadas no PC (protegidas pelo Windows, como o Wi-Fi) e a
-  janela principal adiciona sozinha o celular que aparecer com uma delas. Se a
-  prova venceu, o celular continua aceitando o pareamento com código de hoje
-  (ainda não confia em ninguém), e o "ainda não apareceu" ensina esse caminho.
-- O celular mostra, ao terminar, uma tela **"Pronto. Este é o Celular 07 da
-  escola."**, para quem está com ele na mão saber que acabou.
-- O assistente mostra **"Celular 07 pronto ✓ (3 de 11)"** com **"Preparar o
-  próximo"** (volta ao passo 1, com o Wi-Fi já guardado) e **"Terminei"**. A
-  contagem é de celulares na turma; o "de 11" vem do total que o professor
-  disser *(escolha minha: perguntado uma vez, opcional; sem ele, mostra só
-  "3 celulares na turma")*.
+1. **Conferindo o celular**: Android 10 ou mais novo, nenhuma conta, nenhum
+   segundo usuário ("Segundo espaço" ou "Apps duplos" da MIUI), as chaves do
+   passo 6 ligadas, ainda não é celular da escola. Cada falha vira uma frase
+   que manda de volta ao passo certo ("Ainda há uma conta neste celular. Volte
+   ao passo 3.").
+2. **Instalando o Midview no celular.** A MIUI pergunta no celular se pode
+   instalar: o assistente avisa para tocar em **Instalar**. Em seguida, ainda
+   pelo cabo, libera o agente da limpeza da MIUI (`cmd appops set <pacote>
+   10008 allow` e `cmd deviceidle whitelist +<pacote>`): o "Limpar tudo" dos
+   recentes mata o agente, e isso o ajuda a voltar sozinho.
+3. **Entregando o Wi-Fi do laboratório** (o agente o põe ao virar celular
+   da escola).
+4. **Dando o número e pareando com este PC** (sem código de 6 dígitos).
+5. **Transformando em celular da escola.** É o último, porque a partir daqui o
+   agente desliga a depuração pelo cabo (os alunos não conseguem religar).
+
+Depois: **"Pronto. Pode tirar o cabo."** O celular mostra **"Pronto. Este é o
+Celular 07 da escola."** e aparece no filtro Celulares quando entrar no Wi-Fi.
+O assistente mostra **"Celular 07 pronto ✓ (3 de 11)"** com **"Preparar o
+próximo"** (volta ao passo 1, pulando as telas do objetivo 2) e
+**"Terminei"**. *(Escolha minha: o "de 11" é perguntado uma vez e é
+opcional; sem ele, mostra "3 celulares na turma".)*
+
+Se o celular não aparece no Midview em **5 minutos** *(escolha minha)* depois
+de pronto, o assistente diz que é problema de rede (mesmo Wi-Fi do PC,
+celular perto do roteador), não de preparação: o celular já confia neste PC.
 
 ### 5. Nunca deixar o professor travado
 
 - Todo passo tem o "Deu errado?" com as saídas daquele passo.
-- Se o celular não aparece em **15 minutos** *(escolha minha)* depois do QR, o
-  assistente troca a espera por **"O Celular 07 ainda não apareceu"** e uma
-  lista do que conferir, na ordem: a mensagem na tela do celular (com as
-  mensagens conhecidas e o que fazer), o Wi-Fi certo, o celular perto do
-  roteador, e por fim "Recomeçar este celular" (volta ao passo 5). Se o
-  celular já mostra a tela do Midview mas não aparece no PC, o problema é de
-  rede (mesmo Wi-Fi do PC), não de preparação, e o assistente diz isso em vez
-  de mandar restaurar (o agente já bloqueou a Redefinição de fábrica).
+- Se um item do objetivo 4 falha, o assistente diz o que aconteceu em
+  português simples, para qual passo voltar, e oferece **"Tentar de novo"**.
+  Nada fica pela metade de um jeito que impeça recomeçar: até o item 5 o
+  celular ainda não é da escola.
 - Ajudas fixas, abertas a partir dos "Deu errado?":
-  - **Celular com conta desconhecida:** sem a senha da conta Mi ou Google, o
-    celular não pode ser preparado pelo professor; separe-o e procure quem
-    tem a senha (ou a assistência Xiaomi com a nota fiscal).
-  - **Restaurar sem o PIN:** desligar; segurar Ligar + Volume para cima até
-    aparecer o menu; Wipe Data → Wipe All Data → Confirm → Reboot to System.
-    Só funciona se as contas já foram tiradas.
+  - **Celular com conta desconhecida:** sem a senha da conta Mi ou Google,
+    separe o celular e procure quem tem a senha (ou a assistência Xiaomi com
+    a nota fiscal).
+  - **Celular travado com PIN:** desligar; segurar Ligar + Volume para cima
+    até aparecer o menu; Wipe Data → Wipe All Data → Confirm → Reboot to
+    System. Só funciona se as contas já foram tiradas. Depois, passo 2
+    ("Apareceu Bem-vindo").
 - O professor sempre pode **fechar** o assistente; os celulares que já
   entraram continuam na turma, e reabrir começa pelo passo 1.
 
 ### 6. "Apagar e preparar de novo"
 
 - No menu do quadradinho de um celular (e no passo 1, quando o número já
-  existe), **"Apagar e preparar de novo"**.
+  existe e o celular está online), **"Apagar e preparar de novo"**.
 - Pede confirmação clara ("O Celular 07 vai ser apagado e voltar de fábrica.
   Os alunos perdem o que estiver nele.") e só funciona com o celular online.
 - O comando só é aceito pelo celular vindo de um PC em que ele confia (o mesmo
   canal TLS dos outros comandos). O agente apaga o aparelho pela política do
-  Android de dono do aparelho, limpando também a proteção de fábrica, para
-  que o celular volte à tela "Bem-vindo" sem pedir conta.
-- Em seguida o assistente abre direto no passo 6 com o mesmo número, e o
-  celular antigo sai da turma quando o novo entra.
-- Celular da escola que **não aparece** no Midview não pode ser apagado pelo
-  botão; para ele, a ajuda "Restaurar sem o PIN" (modo de recuperação) continua
-  sendo a saída.
+  Android de dono do aparelho, limpando também a proteção de fábrica, para que
+  o celular volte à tela "Bem-vindo" sem pedir conta.
+- Em seguida o assistente abre no passo 2 ("Apareceu Bem-vindo") com o mesmo
+  número.
+- Celular da escola que **não aparece** no Midview: ajuda "Celular travado
+  com PIN" (modo de recuperação).
 
 ## Não-objetivos
 
-- Preparar celulares sem restaurar (o caminho do cabo USB).
-- Instalar o agente, ativar administrador ou ligar notificações à mão.
-- Zero-touch de revendedor ou qualquer caminho que pule os 6 toques (o Android
-  não permite sem revendedor).
-- Celulares de outras marcas: o texto e as imagens são da Xiaomi/MIUI. Outra
-  marca funciona pelo mesmo QR, mas sem imagens próprias.
-- Vários PCs de professor para os mesmos celulares (cada celular confia só no
-  PC onde foi preparado; "Permitir novo professor" do agente continua sendo o
-  caminho para trocar de PC).
-- Preparar vários celulares ao mesmo tempo (forma B, não escolhida).
+- O QR dos 6 toques (bloqueado pelo Google para o agente).
+- Ligar as chaves da Xiaomi pelo Midview (a MIUI exige toques no celular, com
+  chip e conta Mi).
+- Celulares de outras marcas: texto e imagens são da Xiaomi/MIUI.
+- Vários PCs de professor para os mesmos celulares ("Permitir novo professor"
+  do agente continua sendo o caminho para trocar de PC).
+- Preparar vários celulares ao mesmo tempo.
+- Restaurar de fábrica antes de preparar: não é preciso; basta não ter contas.
 
 ## Anti-objetivos (seria fracasso mesmo funcionando)
 
 - O professor travar no meio sem saber o que fazer.
-- Um celular restaurado com conta dentro e travado por isso, por o assistente
-  não ter insistido nos passos 3 e 4.
-- Outro aparelho (de aluno, por exemplo) entrar na turma sozinho por ter
-  fotografado o QR.
+- Um aluno ligar a depuração pelo cabo num celular da escola e mexer nele.
+- Outro aparelho entrar na turma sozinho sem ter passado pelo cabo deste PC.
 - Qualquer piora para quem já usa o Midview só com computadores, ou para o
-  pareamento com código de hoje (que continua valendo para PCs e para
-  celulares preparados antes).
-- Texto técnico para o professor (Device Owner, APK, provisionamento, adb).
+  pareamento com código de hoje.
+- Texto técnico para o professor (Device Owner, APK, adb). Os nomes de menu
+  da MIUI ("Depuração USB") aparecem porque são o que está escrito na tela.
 
 ## Restrições
 
-- **Depende do plano 1 do agente Android**, em especial da parte que espera o
-  professor (Task 9B): a chave de assinatura, o `SignatureChecksum` real e o
-  APK publicado na versão do GitHub. Sem isso o QR não instala nada.
-- **O QR carrega o Wi-Fi em texto aberto** (já é assim hoje) e passa a
-  carregar o número e uma prova de que veio deste PC; o QR fica na tela do
-  professor, que pode estar projetada. A prova precisa valer **uma vez** e
-  **por pouco tempo** *(escolha minha: até 1 hora)*, ligada àquele número.
-- **Entrar sozinho na turma** precisa manter as garantias do pareamento de
-  hoje: o celular só confia no thumbprint deste PC (`TrustedMasters`), e o
-  Master só aceita o certificado daquele celular, guardado como num
-  pareamento normal (`KnownMachinesFile`). Compatível com o protocolo e com
-  Masters antigos (um Master antigo ignora o que não conhece).
-- **Android:** o número e a prova chegam ao agente pelo
-  `PROVISIONING_ADMIN_EXTRAS_BUNDLE` do QR, que o Android entrega ao
-  `ProvisioningModeActivity`/`PolicyComplianceActivity` e ao `AdminReceiver`.
+- **Depende do plano 1 do agente Android**, em especial da Task 9B: a chave de
+  assinatura e o APK publicado na versão do GitHub.
+- **O `adb` vai junto com o Midview do professor** (`adb.exe`,
+  `AdbWinApi.dll`, `AdbWinUsbApi.dll`), com o `NOTICE.txt` do platform-tools
+  (Apache 2.0) ao lado. O Windows reconhece o Redmi 10C com o
+  driver próprio (`winusb.inf`, Microsoft), sem instalar driver: conferido
+  neste PC (Windows 11). Num PC com Windows 10 confirma-se na primeira
+  preparação de verdade, nunca num PC do laboratório durante a construção.
+- **O APK:** o Midview baixa o APK da versão publicada, confere o
+  SHA-256/assinatura esperados e guarda em `MasterData`; sem internet e sem
+  APK guardado, o assistente diz isso antes do passo 1.
+- **Pareamento pelo cabo** substitui a prova do QR. O Midview entrega ao
+  agente, pelo `adb`, o número do celular e o thumbprint deste PC; o agente
+  devolve o thumbprint do certificado dele, e o Midview o guarda como num
+  pareamento normal (`KnownMachinesFile`). As garantias de hoje continuam: o
+  celular só confia no thumbprint deste PC (`TrustedMasters`) e o Master só
+  aceita o certificado daquele celular.
+- **A porta de entrada do agente para o cabo** só aceita quem fala pelo
+  `adb` (usuário do shell do Android, uid 2000), só enquanto o agente **não é
+  dono do aparelho e não confia em nenhum PC**. Nenhum outro app do celular
+  consegue usá-la.
+- **Ordem no celular:** tudo o que usa o cabo acontece antes de tornar o
+  agente dono do aparelho (`dpm set-device-owner`), porque o agente, ao virar
+  dono, liga a restrição que desliga a depuração (`no_debugging_features`,
+  já em `Lockdown`).
 - **Textos** em português, no tom do Midview, sem jargão; nunca citar produto
   concorrente.
 - **Testes de interface** pelo harness do Master (`MasterData.Folder`
-  temporário, roteiro falso, capturas com `RenderTargetBitmap`); nunca abrir o
-  Midview do professor real nem testar contra máquinas do laboratório.
+  temporário, roteiro falso, capturas com `RenderTargetBitmap`); nunca abrir
+  o Midview do professor real nem testar contra máquinas do laboratório. Os
+  comandos `adb` ficam atrás de uma interface, para testar o assistente com
+  um celular falso.
 - **Prints:** os do Redmi 10C ficam em
-  `.superpowers/brainstorm/2043-1794420649/content/` (fora do git:
-  `01-configuracoes.png`, `03-contas.png`, `04-sobre.png`,
-  `06-redefinicao.png`). Para refazer com o celular no cabo:
-  `am start -a android.settings.SETTINGS`, `-a android.settings.SYNC_SETTINGS`,
-  `-a android.settings.DEVICE_INFO_SETTINGS`,
-  `-a com.android.settings.action.FACTORY_RESET` e `adb exec-out screencap -p`;
-  a MIUI bloqueia `input` (toques e rolagem) pelo `adb`, então só dá para
-  capturar o topo de cada tela, e a tela de login da conta Xiaomi sai vazia
-  (bloqueia print). Depois de capturar, fechar as telas abertas
-  (`am stack remove <id>`), para a tela de apagar não ficar aberta no celular.
-  Borrar nomes de rede e contas antes de pôr no programa.
+  `.superpowers/brainstorm/2043-1794420649/content/` (fora do git). Para
+  refazer com o celular no cabo: `am start -a <ação de Configurações>` e
+  `adb exec-out screencap -p`; a MIUI bloqueia `input` pelo `adb`, então só dá
+  para capturar o topo de cada tela, e a tela de login da conta Mi sai vazia.
+  Depois, fechar as telas abertas (`am stack remove <id>`). Borrar nomes de
+  rede e contas.
 
 ## Escolhas minhas (a revisar pelo professor)
 
-- O assistente **substitui** a janela `PreparePhoneWindow` de hoje (o mesmo
-  ponto de entrada passa a abrir o assistente).
-- Espera de **15 minutos** antes de "ainda não apareceu"; prova do QR válida
-  por **1 hora**.
+- Sem restaurar de fábrica antes: o celular só precisa estar sem contas.
+- Pareamento pelo cabo em vez de prova pela rede. O código já feito no ramo
+  `feat/assistente-celulares` para a prova do QR (mensagem `ClaimPhone`, campo
+  `claim` da busca, provas guardadas no PC, entrada automática pela janela
+  principal, montagem do QR) **sai inteiro**: caminho que ninguém usa não
+  fica no programa. Fica o que serve ao cabo: número → nome, assistente,
+  passos com prints, `WipePhone`, Wi-Fi guardado.
+- **Quem pode parear pelo cabo:** basta a pergunta "Permitir depuração USB?"
+  no celular, aceita por quem está com ele na mão, e as chaves da Xiaomi, que
+  só ligam com toques no celular, chip e conta Mi. Não há confirmação extra
+  no celular. Só um celular que ainda não confia em nenhum PC aceita.
+- **Wi-Fi posto pelo agente** (política de dono do aparelho), igual em todas
+  as versões do Android, em vez de `cmd wifi` (que exige Android 11).
+- **MIUI 12/13:** o "Deu errado?" não inventa caminhos de menu sem print ou
+  fonte; traz a dica da busca das Configurações ("desenvolvedor",
+  "depuração", "conta"). Caminhos próprios entram quando alguém conferir num
+  aparelho com essa versão.
+- **Depois de "Apagar e preparar de novo"** as chaves da Xiaomi voltam
+  desligadas (o modo de desenvolvedor é apagado junto): chip e conta Mi de
+  novo. O assistente diz isso na confirmação.
+- **O botão aparece** pelo mesmo controle de hoje no código
+  (`PhoneProvisioning.IsReady`, ligado quando o APK é publicado), não pela
+  internet.
+- **O trabalho do agente** (porta do cabo, Wi-Fi, tela "Pronto", apagar)
+  entra neste mesmo plano.
+- O `adb` e o APK ficam com o Midview do professor; nada é instalado no PC
+  além disso.
+- Espera de **5 minutos** depois de pronto antes de "ainda não apareceu".
 - O total "de 11" é opcional e perguntado uma vez.
-- Preparar de novo um número que já existe troca o celular antigo pelo novo
-  quando o novo aparecer.
+- Preparar de novo um número que já existe troca o celular antigo pelo novo.
 - Imagens empacotadas no Master como recursos (PNG), com o contorno vermelho
-  desenhado pelo programa por coordenadas relativas, para trocar um print
-  sem redesenhar o contorno à mão.
-- A tela "Pronto. Este é o Celular 07 da escola." no celular é do agente; fica
-  aberta até alguém tocar em "OK" ou por alguns minutos.
-- Provas de QR guardadas no PC e entrada automática feita pela janela
-  principal, com o pareamento por código como reserva (objetivo 4).
+  desenhado pelo programa por coordenadas relativas.
+- A tela "Pronto. Este é o Celular 07 da escola." no celular é do agente;
+  fica aberta até alguém tocar em "OK" ou por alguns minutos.
 - MIUI 12/13 tratado no "Deu errado?" de cada passo, sem perguntar o modelo.
 - **Ordem:** este trabalho vem depois do plano 1 do agente (inclusive a Task
   9B) e não corre ao mesmo tempo que outro plano que mexa nos mesmos arquivos
-  do agente (`AdminReceiver`, `PairingFlow`, `CommandHandler`, `Lockdown`):
-  um de cada vez.
+  do agente: um de cada vez.
 
 ## Deixado para quem constrói
 
-- O formato da prova no QR e como o Master e o celular a conferem (por
-  exemplo, um segredo de uso único gerado pelo Master, guardado em memória
-  enquanto o assistente espera, e apresentado pelo celular numa mensagem nova
-  depois do TLS), desde que respeite as Restrições.
-- Como o Master percebe o celular novo (busca periódica enquanto o assistente
-  espera é o caminho natural, reaproveitando `Discovery`).
-- A organização da janela (uma `MidviewWindow` com páginas, como
-  `MachinesWindow`/`MachinesPage`, é o caminho natural).
-- Os textos finais de cada passo e das ajudas, a partir dos deste documento.
-- O que o agente faz contra a MIUI matando o serviço em segundo plano (início
-  automático, economia de bateria, limpar recentes): é do agente, não do
-  assistente, mas aparece na primeira preparação de verdade. Ver Pesquisa.
+- Como o agente recebe o número e o thumbprint pelo cabo (um
+  `ContentProvider` chamado por `adb shell content call`, que confere
+  `Binder.getCallingUid()`, é o caminho natural), incluindo o Wi-Fi, que o
+  agente guarda e põe ao virar dono do aparelho.
+- Como o Midview fala com o `adb` (processo `adb.exe` com saída lida pelo
+  programa é o caminho natural) e percebe o celular chegando no cabo.
+- Como cada erro do `adb`/`dpm` vira a frase do objetivo 4 (por exemplo
+  `INSTALL_FAILED_USER_RESTRICTED` → "Instalar via USB" desligado;
+  `MANAGE_DEVICE_ADMINS` → chave de segurança desligada; "already some
+  accounts" → passo 3 ou 7; "already several users" → Segundo espaço/Apps
+  duplos).
+- A organização da janela, os textos finais de cada passo e das ajudas.
 
-## Pesquisa (2026-11-11, fontes na web)
+## Pesquisa (2026-11-11)
 
-- **Versões:** os três modelos param no MIUI 14, sem HyperOS. Redmi 10C:
-  MIUI 13/Android 11 → MIUI 14.0.9/Android 13 (o da escola está em
-  14.0.9.0.TGEMIXM, Android 13, confirmado no aparelho). Redmi Note 10S: MIUI
-  12.5/Android 11 → MIUI 14.0.11/Android 13. Redmi Note 9 Pro: MIUI 11/Android
-  10 → MIUI 14.0.3/Android 12. Todos atendem ao mínimo Android 10 do agente.
-- **QR:** em Android 9 ou mais novo o leitor dos 6 toques é embutido e não
-  precisa de internet antes; o Wi-Fi do QR basta (rede WPA2 com senha comum).
-  Não foram achados relatos de falha do QR nesses três modelos. O Redmi Note 9
-  Pro foi certificado Android Enterprise Recommended (2020); os outros dois,
-  incerto. Falhas relatadas em Xiaomi são de modelos mais novos com HyperOS.
-- **Contas antes de restaurar:** com "Encontrar dispositivo" ligado, o celular
-  restaurado fica travado pela conta Mi até digitar a senha dela; com conta
-  Google, a proteção de fábrica (FRP) pede a conta e impede o QR. Por isso os
-  passos 3 e 4.
+- **QR bloqueado:** desde 2025 o Google só aceita no QR de provisionamento
+  apps de gerenciamento de uma lista aprovada quando o celular tem Play
+  Store/Play Protect; o agente do Midview não está nela.
+- **Xiaomi e o cabo:** sem "Depuração USB (configurações de segurança)", a
+  MIUI recusa `dpm set-device-owner` (`SecurityException`
+  `MANAGE_DEVICE_ADMINS`) e mexer em permissões pelo `adb`; sem "Instalar via
+  USB", recusa `adb install`. As duas chaves exigem conta Mi e, segundo os
+  guias e o teste do professor, chip no celular na hora de ligar. Fontes:
+  [AirDroid](https://help.airdroid.com/hc/articles/360045329413),
+  [PhoneCheck](https://support.phonecheck.com/en/articles/3609501-xiaomi-devices-are-not-being-read-by-phonecheck-it-stays-on-a-red-square),
+  [OwnDroid](https://github.com/BinTianqi/OwnDroid),
+  [Kaspersky](https://support.kaspersky.com/help/KSMM/4.1/en-US/254349.htm).
+- **Testado no Redmi 10C da escola (MIUI 14, Android 13):** chaves ligadas sem
+  chip e sem conta Mi depois de ligadas; o agente já foi feito dono do
+  aparelho pelo cabo (`dpm list-owners`: `DeviceOwner,Affiliated`); driver USB
+  `winusb.inf` da Microsoft.
+- **Versões:** os três modelos param no MIUI 14. Redmi 10C → Android 13;
+  Redmi Note 10S → Android 13; Redmi Note 9 Pro → Android 12. Todos atendem ao
+  mínimo Android 10 do agente.
+- **Contas:** o Android só deixa um app virar dono do aparelho sem nenhuma
+  conta e sem segundo usuário; a conta Mi conta como conta.
 - **Modo de recuperação:** Ligar + Volume para cima com o celular desligado;
-  Wipe Data → Wipe All Data → Confirm; primeiro boot de 3 a 7 minutos.
-- **Menus (MIUI 14, Redmi 10C, em português, conferidos nos prints):**
-  "Configurações", "Sobre o telefone" (primeiro item), "Contas e
-  sincronização" com a seção "GOOGLE", e a tela "Limpar todos os dados
-  (redefinir para a configuração original)" com o botão "Limpar todos os
-  dados". O caminho da conta Mi e o item "Redefinição de fábrica" no fim de
-  "Sobre o telefone" vêm da pesquisa, não de print.
-- **MIUI e o agente:** a MIUI tem limites próprios de segundo plano (início
-  automático, economia de bateria, limpar recentes mata o processo), sem API
-  pública para desligar; não verificado se ser Device Owner já protege o
-  agente.
+  Wipe Data → Wipe All Data → Confirm.
+- **MIUI e o agente:** ser dono do aparelho não protege. O "Limpar tudo" dos
+  recentes da MIUI (OneKeyClean) mata o agente; o commit `b0931e0` o faz
+  voltar sozinho em 3 a 12 s, e os dois comandos do objetivo 4, item 2,
+  ajudam. Detalhes em
+  `.superpowers/sdd/2026-11-11-agente-android-2-tela/miui-kill-report.md`.
