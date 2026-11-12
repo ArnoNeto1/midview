@@ -9,9 +9,8 @@
             <local:DialogHeader Icon="&#xE711;" Heading="Fechar programas" Accent="{StaticResource ProgramasBrush}">
                 <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
             </local:DialogHeader>
-            <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
-                       Text="Fecha os programas abertos pelo aluno. A área de trabalho, a barra de tarefas e o Midview nunca são fechados." />
-            <Border Style="{StaticResource Card}" Margin="0,12,0,10">
+            <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}" Margin="0,12,0,0" TextWrapping="Wrap" />
+            <Border x:Name="ModeCard" Style="{StaticResource Card}" Margin="0,12,0,10">
                 <StackPanel>
                     <RadioButton x:Name="AskRadioButton" GroupName="Mode" IsChecked="True" Margin="0,0,0,8">
                         <TextBlock TextWrapping="Wrap"
@@ -23,13 +22,14 @@
                     </RadioButton>
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <Border x:Name="DelayCard" Style="{StaticResource Card}" Margin="0,0,0,14">
                 <StackPanel>
                     <RadioButton x:Name="OneMinuteRadioButton" GroupName="Delay" IsChecked="True" Content="Avisar o aluno e esperar 1 minuto" Margin="0,0,0,4" />
                     <RadioButton x:Name="ThirtySecondsRadioButton" GroupName="Delay" Content="Avisar o aluno e esperar 30 segundos" Margin="0,0,0,4" />
                     <RadioButton x:Name="NowRadioButton" GroupName="Delay" Content="Agora, sem esperar (o aluno é avisado na hora)" />
                 </StackPanel>
             </Border>
+            <TextBlock x:Name="PhoneNoteTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,0,0,12" Visibility="Collapsed" />
             <Button x:Name="CloseButton" Content="Fechar programas" Click="OnCloseClicked"
                     Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,0,10" HorizontalAlignment="Left" />
         </StackPanel>

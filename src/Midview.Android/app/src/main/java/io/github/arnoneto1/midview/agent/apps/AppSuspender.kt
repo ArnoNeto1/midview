@@ -60,6 +60,35 @@ class AppSuspender(
         }
     }
 
+    // "Fechar programas" (AppCloser): the apps the student can open that are
+    // not suspended now (AppCloser.toClose) are suspended, which makes
+    // Android close their screens at once; held (what the closer does
+    // meanwhile) and then let go. Only what this suspended is let go, so the
+    // teacher's block and anyone else's suspension stay; under the same lock
+    // as apply, so a block applied meanwhile waits for the let-go. Throws
+    // what Android throws, after letting go of what it held.
+    @Synchronized
+    fun suspendBriefly(self: String, held: (List<String>) -> Unit): Brief {
+        val targets = AppCloser.toClose(catalog.launchable(), catalog.protected(), catalog.suspended(), self)
+        if (targets.isEmpty()) return Brief(emptyList(), emptyList())
+        val notSuspended = gw.setPackagesSuspended(targets, true)
+        val closed = targets - notSuspended.toSet()
+        // An app removed in the meantime has nothing left to close.
+        val refused = notSuspended.filter { catalog.isInstalled(it) }
+        try {
+            held(closed)
+        } finally {
+            if (closed.isNotEmpty()) {
+                val stuck = gw.setPackagesSuspended(closed, false)
+                if (stuck.isNotEmpty()) log("Apps still suspended after closing: $stuck", null)
+            }
+        }
+        return Brief(closed, refused)
+    }
+
+    // What suspendBriefly did: the apps it closed, and those Android would not suspend.
+    data class Brief(val closed: List<String>, val refused: List<String>)
+
     companion object {
         const val NOT_DEVICE_OWNER = "este celular não bloqueia apps"
         const val NOT_APPLIED = "os apps não puderam ser bloqueados"

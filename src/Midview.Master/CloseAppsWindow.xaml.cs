@@ -8,7 +8,9 @@ namespace Midview.Master;
 // Closes the student's programs on one machine or on the whole class (the
 // Session's WindowsAppCloser), after warning the student for the time the
 // teacher picks. Forcing goes ahead without asking the teacher: the choice
-// itself says that unsaved work is lost.
+// itself says that unsaved work is lost. A phone closes all its apps at once
+// (CloseAppsTargets): for phones alone the choices are not shown, and with
+// PCs a line says they are for the PCs.
 public partial class CloseAppsWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -20,7 +22,23 @@ public partial class CloseAppsWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
+        TargetsTextBlock.Text = CloseAppsTargets.Describe(targets, wholeClass);
+        HintTextBlock.Text = CloseAppsTargets.Hint(targets);
+        CloseButton.Content = CloseAppsTargets.Button(targets);
+        if (CloseAppsTargets.OnlyPhones(targets))
+        {
+            ModeCard.Visibility = Visibility.Collapsed;
+            DelayCard.Visibility = Visibility.Collapsed;
+            CloseButton.Margin = new Thickness(0, 14, 0, 10);
+            // Without the choices, a shorter window: one line per phone below.
+            MinHeight = 360;
+            Height = 440;
+        }
+        if (CloseAppsTargets.Note(targets) is { } note)
+        {
+            PhoneNoteTextBlock.Text = note;
+            PhoneNoteTextBlock.Visibility = Visibility.Visible;
+        }
     }
 
     private async void OnCloseClicked(object sender, RoutedEventArgs e)
@@ -31,16 +49,14 @@ public partial class CloseAppsWindow : MidviewWindow
             : 0;
         CloseButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
-        ProgressTextBlock.Text = delaySeconds == 0 ? "Fechando..." : "Avisando os alunos...";
+        ProgressTextBlock.Text = CloseAppsTargets.Progress(_targets, delaySeconds);
 
         // All machines at once: an offline one must not hold up the rest.
         var payload = CloseAppsCommand.Encode(mode, delaySeconds);
         var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => CloseOn(machine, payload))));
 
-        var failures = results.Count(result => !result.Succeeded);
-        ProgressTextBlock.Text = failures == 0
-            ? results.Length == 1 ? "Concluído." : $"Concluído nas {results.Length} máquinas."
-            : $"Concluído em {results.Length - failures} de {results.Length}.";
+        ProgressTextBlock.Text = CloseAppsTargets.Done(
+            results.Length, results.Count(result => !result.Succeeded), CloseAppsTargets.OnlyPhones(_targets));
         ResultTextBlock.Text = string.Join("\n", results.Select(result =>
             $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
         CloseButton.IsEnabled = true;
@@ -48,16 +64,7 @@ public partial class CloseAppsWindow : MidviewWindow
 
     private (string Name, bool Succeeded, string Detail) CloseOn(KnownMachine machine, byte[] payload)
     {
-        try
-        {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate,
-                MessageType.CloseApps, payload);
-            return (machine.Name, succeeded, detail);
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, FailureText.Describe(ex));
-        }
+        var (succeeded, detail) = CloseAppsTargets.Send(machine, payload, _masterCertificate);
+        return (machine.Name, succeeded, detail);
     }
 }

@@ -31,12 +31,12 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_screen_lock_blocking_closing_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
-                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.WipePhone
+                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps or ToolbarAction.WipePhone
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }

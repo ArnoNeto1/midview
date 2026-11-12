@@ -23,6 +23,10 @@ object MessageType {
     // Sending a file in chunks (the update's APK too).
     const val FILE_CHUNK = 18
 
+    // "Fechar programas", as on a PC (CloseAppsCommand's payload), from a
+    // trusted teacher only; answered with a CommandAck (CommandResult).
+    const val CLOSE_APPS = 19
+
     // Updating the agent over the network, from a trusted teacher only (see
     // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
     // GET_UPDATE_STATUS -> UPDATE_STATUS.

@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.agent
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,6 +17,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.apps.AppCloser
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
@@ -228,9 +230,25 @@ class AgentService : Service() {
             log = log,
         )
         val lockScreen = LockScreenKeeper.get(this)
+        lateinit var closer: AppCloser
+        // A closing asked for under the lock is done when it goes.
+        val screenLock = ScreenLock(show = { LockActivity.show(this) }, hide = { LockActivity.hide(); closer.unlocked() })
+        // "Fechar programas": the home screen in front, the student's apps
+        // closed by suspending them for a moment, and the app block applied
+        // again; under the teacher's lock screen, once it goes.
+        closer = AppCloser(
+            suspender, policyGateway, packageName,
+            reapplyBlock = appBlock::reapply,
+            isScreenLocked = { screenLock.locked },
+            goHome = {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            },
+            killBackground = { getSystemService(ActivityManager::class.java).killBackgroundProcesses(it) },
+            log = log,
+        )
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
-            log = log, screenPin = lockScreen::setTeacherPin, listApps = installedApps::list,
+            log = log, screenPin = lockScreen::setTeacherPin, closeApps = closer::close, listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
@@ -238,7 +256,6 @@ class AgentService : Service() {
             status = { text, width, height -> StatusImage.render(width, height, DeviceName.read(this), text) },
             jpeg = BitmapJpeg::thumbnail,
         )
-        val screenLock = ScreenLock(show = { LockActivity.show(this) }, hide = { LockActivity.hide() })
         val policy = AndroidDevicePolicyGateway(this)
         val thumbnails = ThumbnailHandler(
             trusted,

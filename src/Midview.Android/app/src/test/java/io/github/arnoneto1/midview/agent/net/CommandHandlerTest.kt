@@ -425,6 +425,71 @@ class CommandHandlerTest {
         assertEquals(false to "chave de redefinição ainda não ativa: desbloqueie o celular uma vez", CommandResult.decode(channel.sent[0].payload))
     }
 
+    // "Fechar programas": the PC's payload (mode, then the warning's time);
+    // the phone closes at once and answers with the closer's result.
+    private var closes = 0
+    private val closing by lazy {
+        CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway, closeApps = {
+            closes++
+            true to "apps fechados; tela inicial na frente"
+        }) { phoneApps }
+    }
+
+    @Test fun closeAppsFromATrustedTeacherClosesAndAnswers() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.CLOSE_APPS, byteArrayOf(1, 0, 60)),
+            // A Master from before the warning: the mode alone.
+            message(MessageType.CLOSE_APPS, byteArrayOf(0)),
+        )
+        closing.handle(channel)
+
+        assertEquals(2, closes)
+        assertEquals(2, channel.sent.size)
+        channel.sent.forEach {
+            assertEquals(MessageType.COMMAND_ACK, it.type)
+            assertEquals(true to "apps fechados; tela inicial na frente", CommandResult.decode(it.payload))
+        }
+    }
+
+    @Test fun closeAppsFromAnUntrustedTeacherClosesNothing() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.CLOSE_APPS, byteArrayOf(1, 0, 0)))
+        closing.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertEquals(0, closes)
+    }
+
+    @Test fun anInvalidCloseAppsRequestClosesNothing() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.CLOSE_APPS),
+            message(MessageType.CLOSE_APPS, byteArrayOf(2, 0, 0)),
+            message(MessageType.CLOSE_APPS, byteArrayOf(0, 0x02, 0x59)),
+            message(MessageType.CLOSE_APPS, byteArrayOf(0, 0)),
+        )
+        closing.handle(channel)
+        assertEquals(0, closes)
+        assertEquals(4, channel.sent.size)
+        channel.sent.forEach { assertEquals(false to CommandHandler.INVALID_REQUEST, CommandResult.decode(it.payload)) }
+    }
+
+    @Test fun theLongestWarningIsStillAValidRequest() {
+        assertTrue(CommandHandler.isValidCloseApps(byteArrayOf(1, 0x02, 0x58)))
+        assertFalse(CommandHandler.isValidCloseApps(byteArrayOf(1, 0x02, 0x59)))
+        assertFalse(CommandHandler.isValidCloseApps(byteArrayOf(-1)))
+    }
+
+    // Without a closer (as a JVM test builds it), the phone says it doesn't yet.
+    @Test fun withoutACloserThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.CLOSE_APPS, byteArrayOf(0, 0, 0)))
+        handler.handle(channel)
+        assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+    }
+
     @Test fun untrustedTeacherCannotSetThePin() {
         trusted.add(teacher)
         var asked = 0

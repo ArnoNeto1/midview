@@ -94,6 +94,7 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.ScreenLock, true)]
     [InlineData(ToolbarAction.BlockPrograms, true)]
     [InlineData(ToolbarAction.BlockSites, true)]
+    [InlineData(ToolbarAction.CloseApps, true)]
     [InlineData(ToolbarAction.Message, false)]
     [InlineData(ToolbarAction.Chat, false)]
     [InlineData(ToolbarAction.Power, false)]
@@ -106,7 +107,6 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.OpenProgram, false)]
     [InlineData(ToolbarAction.Install, false)]
     [InlineData(ToolbarAction.Uninstall, false)]
-    [InlineData(ToolbarAction.CloseApps, false)]
     [InlineData(ToolbarAction.LabConfig, false)]
     public void Phones_filter_greys_what_a_phone_cannot_do(ToolbarAction action, bool enabled)
     {
