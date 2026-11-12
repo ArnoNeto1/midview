@@ -118,4 +118,17 @@ public class PhoneOptimizeReportTests
         Assert.Null(none.Attempt);
         Assert.Equal(StatusNullJson, Encoding.UTF8.GetString(none.Encode()));
     }
+
+    [Fact]
+    public void Status_KotlinEscapedDetail_IsDecoded()
+    {
+        // What UpdateStatusReport on the Android agent writes for a detail with
+        // a quote, a backslash, a control character and a non-ASCII letter.
+        // .NET writes the non-ASCII letter as \u00E7; decoding accepts both.
+        const string json =
+            "{\"fingerprint\":null,\"build\":null,\"ready\":false,\"attempt\":{\"id\":\"00\",\"state\":\"failed\","
+            + "\"detail\":\"a\\\"b\\\\c\\u0001\u00e7\",\"updatedAt\":\"2026-11-12T15:30:45+00:00\"}}";
+        Assert.True(UpdateStatusReport.TryDecode(Encoding.UTF8.GetBytes(json), out var report));
+        Assert.Equal("a\"b\\c\u0001\u00e7", report.Attempt!.Detail);
+    }
 }

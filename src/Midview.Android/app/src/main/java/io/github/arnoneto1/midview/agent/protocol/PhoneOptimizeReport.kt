@@ -6,6 +6,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
+import java.util.Locale
 
 // How the ad-free DNS stands on the phone, as src/Midview.Protocol/PhoneOptimizeReport.cs.
 object PhoneDnsStates {
@@ -84,8 +85,8 @@ object PhoneUpdate {
 internal object IsoTime {
     fun format(instant: Instant): String {
         val z = instant.atOffset(ZoneOffset.UTC)
-        val base = "%04d-%02d-%02dT%02d:%02d:%02d".format(z.year, z.monthValue, z.dayOfMonth, z.hour, z.minute, z.second)
-        val fraction = "%09d".format(z.nano).substring(0, 7).trimEnd('0')
+        val base = String.format(Locale.ROOT, "%04d-%02d-%02dT%02d:%02d:%02d", z.year, z.monthValue, z.dayOfMonth, z.hour, z.minute, z.second)
+        val fraction = String.format(Locale.ROOT, "%09d", z.nano).substring(0, 7).trimEnd('0')
         return base + (if (fraction.isEmpty()) "" else ".$fraction") + "+00:00"
     }
 

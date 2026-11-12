@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.util.Locale
 
 class NetworkUpdateCodecTest {
     // Same literals as PhoneOptimizeReportTests.cs: the offer is what
@@ -75,5 +76,37 @@ class NetworkUpdateCodecTest {
         val json = String(NetworkUpdateCodec.encodeStatus(report), Charsets.UTF_8)
         assertTrue(json.contains("\"updatedAt\":\"2026-11-12T15:30:45.12+00:00\""))
         assertTrue(json.contains("\"build\":\"a\\\"b\""))
+    }
+
+    @Test
+    fun encodeStatus_usesAsciiDigitsInAnyLocale() {
+        val old = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("ar"))
+            val report = UpdateStatusReport(
+                null, null, false,
+                UpdateAttemptReport("00", "failed", "x", Instant.parse("2026-11-12T15:30:45.5Z")),
+            )
+            val json = String(NetworkUpdateCodec.encodeStatus(report), Charsets.UTF_8)
+            assertTrue(json, json.contains("\"updatedAt\":\"2026-11-12T15:30:45.5+00:00\""))
+            val optimized = PhoneOptimizeReport(Instant.parse("2026-11-12T15:30:45Z"), emptyList(), emptyList(), "on", "")
+            assertTrue(String(optimized.encode(), Charsets.UTF_8).contains("\"optimizedAt\":\"2026-11-12T15:30:45+00:00\""))
+        } finally {
+            Locale.setDefault(old)
+        }
+    }
+
+    // Same literal as PhoneOptimizeReportTests.cs, which decodes it.
+    @Test
+    fun encodeStatus_escapesQuoteBackslashControlAndKeepsNonAscii() {
+        val report = UpdateStatusReport(
+            null, null, false,
+            UpdateAttemptReport("00", "failed", "a\"b\\c\u0001\u00e7", Instant.parse("2026-11-12T15:30:45Z")),
+        )
+        assertEquals(
+            "{\"fingerprint\":null,\"build\":null,\"ready\":false,\"attempt\":{\"id\":\"00\",\"state\":\"failed\"," +
+                "\"detail\":\"a\\\"b\\\\c\\u0001\u00e7\",\"updatedAt\":\"2026-11-12T15:30:45+00:00\"}}",
+            String(NetworkUpdateCodec.encodeStatus(report), Charsets.UTF_8),
+        )
     }
 }
