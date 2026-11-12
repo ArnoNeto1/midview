@@ -118,6 +118,7 @@ The app and website blocks stay in effect if the phone restarts.
 These act on the selected phones or, with nothing selected, on every phone in the room:
 
 - **Telas** > **Otimizar celulares e tablets...** (optimize phones and tablets) hides the ad apps that come preinstalled (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
+- **Telas** > **Senha dos celulares e tablets...** (phone and tablet password) puts a 4-digit PIN on the lock screen that the student can't change or remove. The PIN isn't saved on the computer.
 - **Máquinas da sala** > **Atualizações** > **Atualizar os celulares pela rede...** (update the phones over the network) sends the new version of the phone app: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
 
 ### To prepare a phone

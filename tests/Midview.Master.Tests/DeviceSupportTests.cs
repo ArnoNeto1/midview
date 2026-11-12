@@ -37,7 +37,7 @@ public class DeviceSupportTests
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.WipePhone
-                or ToolbarAction.Optimize or ToolbarAction.UpdatePhones;
+                or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
     }
@@ -46,6 +46,7 @@ public class DeviceSupportTests
     [Theory]
     [InlineData(ToolbarAction.Optimize)]
     [InlineData(ToolbarAction.UpdatePhones)]
+    [InlineData(ToolbarAction.PhonePin)]
     public void Phone_actions_are_for_phones_only(ToolbarAction action)
     {
         Assert.False(DeviceSupport.Supports(DeviceKind.Windows, action));
@@ -53,12 +54,14 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.IsEnabled(new[] { Pc("PC 01"), Phone("Cel 01") }, action));
     }
 
-    // "Otimizar celulares e tablets..." (Telas menu): the selected Android
+    // "Otimizar celulares e tablets..." and "Senha dos celulares e tablets..."
+    // (Telas menu): the selected Android
     // devices, or every one of the room when none is selected (a selection of
     // PCs alone included).
     [Theory]
     [InlineData(ToolbarAction.Optimize)]
     [InlineData(ToolbarAction.UpdatePhones)]
+    [InlineData(ToolbarAction.PhonePin)]
     public void Phone_actions_reach_the_selected_phones_or_every_phone(ToolbarAction action)
     {
         var pc = Pc("PC 01");

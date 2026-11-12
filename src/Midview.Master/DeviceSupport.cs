@@ -29,9 +29,11 @@ public enum ToolbarAction
     WipePhone,
     // Made for phones only: "Otimizar celulares..." in the "Telas" menu and
     // on a phone's tile menu, and updating the phones' Midview ("Atualizações"
-    // in "Máquinas da sala", and the tile menu).
+    // in "Máquinas da sala", and the tile menu), and the lock screen PIN
+    // ("Senha dos celulares e tablets..." in the "Telas" menu).
     Optimize,
     UpdatePhones,
+    PhonePin,
 }
 
 // What each kind of device accepts. A phone can have its screen watched and
@@ -52,7 +54,8 @@ public static class DeviceSupport
     };
 
     // The actions made for phones only.
-    public static bool IsPhoneOnly(ToolbarAction action) => action is ToolbarAction.Optimize or ToolbarAction.UpdatePhones;
+    public static bool IsPhoneOnly(ToolbarAction action) =>
+        action is ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
 
     // "Celulares" in the "Telas" menu, and the "Atualizar os celulares" card
     // of "Máquinas da sala", are for a room with at least one phone.

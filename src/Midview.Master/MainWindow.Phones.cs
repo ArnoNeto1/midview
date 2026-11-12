@@ -5,7 +5,8 @@ namespace Midview.Master;
 // Optimizing and updating the phones: "Otimizar..." and "Atualizar o Midview
 // do celular..." on a phone's tile menu, "Otimizar celulares e tablets..." in
 // the "Telas" menu (MainWindow.Screens.cs; the selected Android devices, or
-// every one of the room when none is selected) and "Atualizar os celulares" in
+// every one of the room when none is selected), "Senha dos celulares e
+// tablets..." next to it (the same devices) and "Atualizar os celulares" in
 // "Máquinas da sala" (every phone of the room).
 public partial class MainWindow
 {
@@ -50,6 +51,17 @@ public partial class MainWindow
             return;
         }
         ShowOnce("otimizar", phones, () => new PhoneOptimizeWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
+    }
+
+    // The PIN is typed in the window each time: the Master never keeps it.
+    private void OpenPhonePinWindow(IReadOnlyList<KnownMachine> phones)
+    {
+        if (phones.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhum celular ou tablet na lista da sala para pôr o PIN.";
+            return;
+        }
+        ShowOnce("pin-celulares", phones, () => new PhonePinWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
     }
 
     // The APK of this Master's version, from GitHub, kept in

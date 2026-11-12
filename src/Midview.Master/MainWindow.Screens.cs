@@ -6,10 +6,11 @@ namespace Midview.Master;
 
 // "Telas" (group Configurar): a menu with which screens the grid shows
 // (DeviceFilter: Todos, Computadores, Celulares; Tablets later) and
-// "Otimizar celulares e tablets..." (every Android device). Celulares is
+// "Otimizar celulares e tablets..." and "Senha dos celulares e tablets..."
+// (every Android device, or the selected ones). Celulares is
 // greyed in a room with no phone (unless the "Preparar celulares" assistant
 // is out: its button is on the empty Celulares), and the optimizing is left
-// out of a room with no Android device. While the grid leaves machines out,
+// out of a room with no Android device, and so is the PIN. While the grid leaves machines out,
 // the button carries a filter badge so the teacher sees why.
 public partial class MainWindow
 {
@@ -21,7 +22,8 @@ public partial class MainWindow
         var room = _tiles.Select(tile => tile.Machine).ToList();
         var menu = ScreensMenu(
             _devices, DeviceSupport.HasPhones(room), DeviceSupport.HasAndroid(room),
-            ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)), PhoneProvisioning.Setup);
+            ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)),
+            () => OpenPhonePinWindow(ToolbarReach(ToolbarAction.PhonePin)), PhoneProvisioning.Setup);
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -43,7 +45,7 @@ public partial class MainWindow
     // Built at each click, so it follows the room as it is then. phoneSetup
     // decides what the greyed Celulares says about getting the first phone.
     internal static ContextMenu ScreensMenu(
-        DeviceFilter shown, bool hasPhones, bool hasAndroid, Action<DeviceFilter> show, Action optimize,
+        DeviceFilter shown, bool hasPhones, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
         PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon)
     {
         var menu = new ContextMenu();
@@ -86,6 +88,13 @@ public partial class MainWindow
             };
             optimizeItem.Click += (_, _) => optimize();
             menu.Items.Add(optimizeItem);
+            var pinItem = new MenuItem
+            {
+                Header = "Senha dos celulares e tablets...",
+                ToolTip = "Põe ou tira o PIN de 4 números da tela de bloqueio dos celulares e tablets; o aluno não consegue trocá-lo. Com alguns selecionados, só neles.",
+            };
+            pinItem.Click += (_, _) => phonePin();
+            menu.Items.Add(pinItem);
         }
         return menu;
     }

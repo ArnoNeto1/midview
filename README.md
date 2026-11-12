@@ -116,6 +116,7 @@ Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 Valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
 
 - **Telas** > **Otimizar celulares e tablets...** esconde os apps de propaganda que vêm de fábrica (eles não são apagados) e liga um DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps, quando a rede deixa. Se o DNS sem anúncios não funcionar na rede, o celular volta sozinho ao DNS de sempre e continua com internet. Com a internet bloqueada, ele liga sozinho ao desbloquear.
+- **Telas** > **Senha dos celulares e tablets...** põe na tela de bloqueio um PIN de 4 números que o aluno não consegue trocar nem tirar. O PIN não fica guardado no computador.
 - **Máquinas da sala** > **Atualizações** > **Atualizar os celulares pela rede...** manda a versão nova do aplicativo do celular, a mesma versão do Midview do professor, baixada do GitHub. Um celular é atualizado primeiro, e os outros só depois que ele confirmar a versão nova. O aluno não precisa tocar em nada, e os bloqueios continuam valendo; o Android mostra ao aluno o aviso "Atualizado pelo seu administrador".
 
 ### Para preparar um celular
