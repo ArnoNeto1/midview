@@ -108,6 +108,42 @@ public class DeviceSupportTests
         Assert.Equal(new[] { "PC 01", "PC 02" }, DeviceSupport.Only(machines, action).Select(machine => machine.Name));
     }
 
+    // The toolbar's "Bloquear programas" and "Bloquear sites" reach the whole
+    // room, as every toolbar button does, except a selection of phones only,
+    // or the "Celulares" filter with nothing selected: then those phones.
+    [Theory]
+    [InlineData(ToolbarAction.BlockPrograms)]
+    [InlineData(ToolbarAction.BlockSites)]
+    public void Toolbar_blocking_reaches_the_room_unless_only_phones_are_chosen(ToolbarAction action)
+    {
+        var pc = Pc("PC 01");
+        var cel1 = Phone("Cel 01");
+        var cel2 = Phone("Cel 02");
+        var room = new[] { pc, cel1, cel2 };
+
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.All));
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { pc }, room, DeviceFilter.All));
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { pc, cel1 }, room, DeviceFilter.All));
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
+        Assert.Equal(new[] { cel2 }, DeviceSupport.ToolbarReach(action, new[] { cel2 }, room, DeviceFilter.All));
+        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Phones));
+        Assert.Equal(new[] { cel1 }, DeviceSupport.ToolbarReach(action, new[] { cel1 }, room, DeviceFilter.Phones));
+    }
+
+    // Every other toolbar button (locking the screens among them) keeps
+    // reaching the whole room.
+    [Theory]
+    [InlineData(ToolbarAction.ScreenLock)]
+    [InlineData(ToolbarAction.Power)]
+    [InlineData(ToolbarAction.CloseApps)]
+    public void Other_toolbar_buttons_reach_the_whole_room(ToolbarAction action)
+    {
+        var room = new[] { Pc("PC 01"), Phone("Cel 01") };
+
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { room[1] }, room, DeviceFilter.All));
+        Assert.Equal(room, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Phones));
+    }
+
     [Fact]
     public void Action_names_in_the_xaml_parse_to_actions()
     {

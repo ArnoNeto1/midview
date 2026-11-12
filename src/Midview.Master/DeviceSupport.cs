@@ -63,6 +63,28 @@ public static class DeviceSupport
         };
     }
 
+    // Whom a toolbar button reaches: the whole room, as always, except for
+    // blocking programs and sites when only phones are selected, or nothing is
+    // selected and the grid shows only phones: then those phones ("Bloquear
+    // programas" then opens the phones' window). PCs are reached as before.
+    public static IReadOnlyList<KnownMachine> ToolbarReach(
+        ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
+    {
+        if (action is not (ToolbarAction.BlockPrograms or ToolbarAction.BlockSites))
+        {
+            return room;
+        }
+        if (selected.Count > 0 && selected.All(machine => machine.IsPhone))
+        {
+            return selected;
+        }
+        if (selected.Count == 0 && shown == DeviceFilter.Phones && room.Any(machine => machine.IsPhone))
+        {
+            return room.Where(machine => machine.IsPhone).ToList();
+        }
+        return room;
+    }
+
     // For an action made for phones only: said after it when PCs were among the targets; null when none.
     public static string? PhoneOnlyLeftOutNotice(IReadOnlyCollection<KnownMachine> targets)
     {

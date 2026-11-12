@@ -497,9 +497,20 @@ public partial class MainWindow : MidviewWindow
         ShowMenuFor(menu, targets.Count);
         GreyUnsupportedItems(menu.Items, targets);
         ShowPhoneItems(menu, targets.Select(target => target.Machine).ToList());
+        NameBlockProgramsItem(menu, targets.Select(target => target.Machine).ToList());
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
+        }
+    }
+
+    // "Bloquear apps..." when the menu acts on phones alone (the phones'
+    // window opens); "Bloquear programas..." otherwise.
+    internal static void NameBlockProgramsItem(ContextMenu menu, IReadOnlyList<KnownMachine> machines)
+    {
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.BlockPrograms))
+        {
+            item.Header = PhoneAppBlockText.BlockProgramsMenuItem(machines);
         }
     }
 
@@ -1003,8 +1014,7 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
             return;
         }
-        OpenAppBlockWindow(PhoneAppBlockText.ToolbarReach(
-            _selection.Selected.Select(tile => tile.Machine).ToList(), _tiles.Select(tile => tile.Machine).ToList(), _devices));
+        OpenAppBlockWindow(ToolbarReach(ToolbarAction.BlockPrograms));
     }
 
     // The block is remembered and resent (onClassPolicyApplied) only for the
@@ -1044,6 +1054,11 @@ public partial class MainWindow : MidviewWindow
         });
     }
 
+    // The machines a toolbar button acts on (DeviceSupport.ToolbarReach).
+    private IReadOnlyList<KnownMachine> ToolbarReach(ToolbarAction action) =>
+        DeviceSupport.ToolbarReach(
+            action, _selection.Selected.Select(tile => tile.Machine).ToList(), _tiles.Select(tile => tile.Machine).ToList(), _devices);
+
     // Remembered and resent to phones that were off only when it is for every phone of the room.
     private void OpenPhoneAppBlockWindow(IReadOnlyList<KnownMachine> phones)
     {
@@ -1069,7 +1084,7 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear sites.";
             return;
         }
-        OpenSiteBlockWindow(_tiles.Select(tile => tile.Machine).ToList());
+        OpenSiteBlockWindow(ToolbarReach(ToolbarAction.BlockSites));
     }
 
     private void OnSiteBlockMachineClicked(object sender, RoutedEventArgs e)

@@ -92,12 +92,14 @@ public class PhoneAppBlockTextTests
     }
 
     [Fact]
+    // The phone's own words ("permitindo só o essencial").
     public void Summarize_AllowOnly_SaysTheEssentialAndTheListed()
     {
         var text = PhoneAppBlockText.Summarize(new[] { State("Cel 01", Allow(1_700_000_000, Chrome)), State("Cel 02", Allow(1_700_000_000)) });
 
-        Assert.Contains($"Liberando só o essencial e {Chrome} em 1 celular", text);
-        Assert.Contains("Liberando só o essencial em 1 celular", text);
+        Assert.Contains($"Permitindo só o essencial e {Chrome} em 1 celular", text);
+        Assert.Contains("Permitindo só o essencial em 1 celular", text);
+        Assert.DoesNotContain("Liberando", text);
     }
 
     [Fact]
@@ -171,6 +173,8 @@ public class PhoneAppBlockTextTests
         Assert.Equal(string.Empty, PhoneAppBlockText.RowDetail(1, 1));
         Assert.Equal("em 2 de 3 celulares", PhoneAppBlockText.RowDetail(2, 3));
         Assert.Equal("não está na lista dos celulares", PhoneAppBlockText.RowDetail(0, 3));
+        Assert.Equal("não está na lista do celular", PhoneAppBlockText.RowDetail(0, 1));
+        Assert.Equal(string.Empty, PhoneAppBlockText.RowDetail(0, 0));
     }
 
     [Fact]
@@ -178,8 +182,70 @@ public class PhoneAppBlockTextTests
     {
         Assert.Equal("Apps que o aluno pode abrir neste celular.", PhoneAppBlockText.ListLine(1, 1));
         Assert.Equal("Apps de todos os 4 celulares.", PhoneAppBlockText.ListLine(4, 4));
-        Assert.Equal("Apps de 3 de 4 celulares (os outros não responderam).", PhoneAppBlockText.ListLine(3, 4));
+        Assert.Equal("Apps de 2 de 4 celulares (os outros não responderam).", PhoneAppBlockText.ListLine(2, 4));
+        Assert.Equal("Apps de 3 de 4 celulares (o outro não respondeu).", PhoneAppBlockText.ListLine(3, 4));
         Assert.Equal("Nenhum celular mandou a lista de apps. Confira se estão ligados e use \"Atualizar lista\".", PhoneAppBlockText.ListLine(0, 2));
+        Assert.Equal("O celular não mandou a lista de apps. Confira se está ligado e use \"Atualizar lista\".", PhoneAppBlockText.ListLine(0, 1));
+    }
+
+    [Fact]
+    public void Titles_FollowHowManyPhones()
+    {
+        Assert.Equal("Bloquear apps no celular", PhoneAppBlockText.Heading(1));
+        Assert.Equal("Bloquear apps nos celulares", PhoneAppBlockText.Heading(3));
+        Assert.Equal("Apps do celular", PhoneAppBlockText.ListTitle(1));
+        Assert.Equal("Apps dos celulares", PhoneAppBlockText.ListTitle(3));
+    }
+
+    [Fact]
+    public void KeptNewerLine_FollowsHowManyPhones()
+    {
+        Assert.StartsWith("O celular já tinha um bloqueio mais novo", PhoneAppBlockText.KeptNewerLine(1));
+        Assert.StartsWith("Algum celular já tinha um bloqueio mais novo", PhoneAppBlockText.KeptNewerLine(2));
+    }
+
+    // On a tile's menu: what opens for the machines it acts on.
+    [Fact]
+    public void MenuItem_IsAppsForPhonesOnly_ProgramsOtherwise()
+    {
+        var pc = new KnownMachine("PC 01", "192.0.2.1", "s", "a");
+        var cel = new KnownMachine("Cel 01", "192.0.2.2", "s", "a", Kind: DeviceKind.Android);
+
+        Assert.Equal("Bloquear apps...", PhoneAppBlockText.BlockProgramsMenuItem(new[] { cel }));
+        Assert.Equal("Bloquear programas...", PhoneAppBlockText.BlockProgramsMenuItem(new[] { pc }));
+        Assert.Equal("Bloquear programas...", PhoneAppBlockText.BlockProgramsMenuItem(new[] { cel, pc }));
+    }
+
+    // The block the phones follow is ticked as soon as their state is read,
+    // before the lists arrive: "Aplicar" never sees its mode with nothing ticked.
+    [Fact]
+    public void InForce_TicksTheAppsOfTheBlockThePhonesFollow()
+    {
+        var allowed = PhoneAppBlockText.InForce(Allow(1, Chrome, Calculator), package => package == Chrome ? "Chrome" : package);
+
+        Assert.Equal(new[] { Chrome, Calculator }, allowed.Select(choice => choice.Package));
+        Assert.All(allowed, choice => Assert.True(choice.Checked));
+        Assert.All(allowed, choice => Assert.Equal("liberado agora", choice.Detail));
+        Assert.Equal("Chrome", allowed[0].Name);
+        Assert.Equal("bloqueado agora", Assert.Single(PhoneAppBlockText.InForce(Block(1, YouTube), p => p)).Detail);
+    }
+
+    // Once the lists arrive: every listed app, ticked if it was, then the
+    // ticked apps no phone listed.
+    [Fact]
+    public void Choices_KeepTheTicks_AndTheTickedAppsNoPhoneListed()
+    {
+        var union = PhoneAppBlockText.Union(new IReadOnlyList<PhoneApp>?[]
+        {
+            new[] { new PhoneApp(Chrome, "Chrome", IconA), new PhoneApp(YouTube, "YouTube", IconA) },
+        });
+
+        var choices = PhoneAppBlockText.Choices(union, answered: 1, ticked: new[] { YouTube, Calculator }, nameOf: package => package);
+
+        Assert.Equal(new[] { Chrome, YouTube, Calculator }, choices.Select(choice => choice.Package));
+        Assert.Equal(new[] { false, true, true }, choices.Select(choice => choice.Checked));
+        Assert.Equal("não está na lista do celular", choices[2].Detail);
+        Assert.Equal("Chrome", choices[0].Name);
     }
 
     [Fact]
@@ -190,31 +256,12 @@ public class PhoneAppBlockTextTests
         Assert.Equal("Em 2 celulares: Cel 01, Cel 02", PhoneAppBlockText.Targets(new[] { "Cel 01", "Cel 02" }, allPhones: false));
     }
 
-    // The toolbar's "Bloquear programas" reaches the whole class, as it always
-    // did, except a selection of phones only, or the "Celulares" filter: then
-    // the phones (and so the phones' window).
-    [Fact]
-    public void ToolbarReach_IsTheClass_UnlessOnlyPhonesAreChosen()
-    {
-        var pc = new KnownMachine("PC 01", "192.0.2.1", "s", "a");
-        var cel1 = new KnownMachine("Cel 01", "192.0.2.2", "s", "a", Kind: DeviceKind.Android);
-        var cel2 = new KnownMachine("Cel 02", "192.0.2.3", "s", "a", Kind: DeviceKind.Android);
-        var room = new[] { pc, cel1, cel2 };
-
-        Assert.Equal(room, PhoneAppBlockText.ToolbarReach(Array.Empty<KnownMachine>(), room, DeviceFilter.All));
-        Assert.Equal(room, PhoneAppBlockText.ToolbarReach(new[] { pc }, room, DeviceFilter.All));
-        Assert.Equal(room, PhoneAppBlockText.ToolbarReach(new[] { pc, cel1 }, room, DeviceFilter.All));
-        Assert.Equal(room, PhoneAppBlockText.ToolbarReach(Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
-        Assert.Equal(new[] { cel2 }, PhoneAppBlockText.ToolbarReach(new[] { cel2 }, room, DeviceFilter.All));
-        Assert.Equal(new[] { cel1, cel2 }, PhoneAppBlockText.ToolbarReach(Array.Empty<KnownMachine>(), room, DeviceFilter.Phones));
-    }
-
     // "Bloquear programas" with PCs and phones together opens the PCs' window.
     [Fact]
     public void LeftOutNotice_TellsHowToReachThePhones()
     {
         Assert.Null(PhoneAppBlockText.LeftOutNotice(0));
-        Assert.Equal("1 celular ficou de fora: para bloquear apps no celular, selecione só os celulares.", PhoneAppBlockText.LeftOutNotice(1));
+        Assert.Equal("1 celular ficou de fora: para bloquear apps no celular, selecione só o celular.", PhoneAppBlockText.LeftOutNotice(1));
         Assert.Equal("3 celulares ficaram de fora: para bloquear apps nos celulares, selecione só os celulares.", PhoneAppBlockText.LeftOutNotice(3));
     }
 }

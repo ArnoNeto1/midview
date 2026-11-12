@@ -14,6 +14,9 @@ public sealed record PhoneAppRow(PhoneApp App, int Phones)
     public string Name => App.Label.Length > 0 ? App.Label : App.Package;
 }
 
+// One app of the window's list, ticked or not (its icon is the window's).
+public sealed record PhoneAppChoice(string Package, string Name, string Detail, bool Checked);
+
 // How the phones' block-apps window and the phone tiles word things, kept
 // apart so it can be tested. The phone's own answers ("bloqueando N app(s)",
 // "mantido o bloqueio mais novo...") are shown as they come.
@@ -82,8 +85,8 @@ public static class PhoneAppBlockText
             {
                 AppBlockMode.BlockList => $"Bloqueando {names} {where} {saved}",
                 AppBlockMode.AllowOnly => policy.Packages.Count == 0
-                    ? $"Liberando só o essencial {where} {saved}"
-                    : $"Liberando só o essencial e {names} {where} {saved}",
+                    ? $"Permitindo só o essencial {where} {saved}"
+                    : $"Permitindo só o essencial e {names} {where} {saved}",
                 _ => $"Nenhum app bloqueado {where}",
             });
         }
@@ -154,17 +157,69 @@ public static class PhoneAppBlockText
 
     // Beside an app in the list: on how many of the phones that answered it
     // is, said only when not on all of them.
-    public static string RowDetail(int phones, int answered) =>
-        phones == 0 ? "não está na lista dos celulares"
-        : phones >= answered ? string.Empty
-        : $"em {phones} de {answered} celulares";
+    public static string RowDetail(int phones, int answered) => phones switch
+    {
+        0 => answered switch
+        {
+            0 => string.Empty,
+            1 => "não está na lista do celular",
+            _ => "não está na lista dos celulares",
+        },
+        _ when phones >= answered => string.Empty,
+        _ => $"em {phones} de {answered} celulares",
+    };
 
     // Above the list: whose apps it shows.
     public static string ListLine(int answered, int asked) =>
-        answered == 0 ? "Nenhum celular mandou a lista de apps. Confira se estão ligados e use \"Atualizar lista\"."
+        answered == 0
+            ? asked == 1
+                ? "O celular não mandou a lista de apps. Confira se está ligado e use \"Atualizar lista\"."
+                : "Nenhum celular mandou a lista de apps. Confira se estão ligados e use \"Atualizar lista\"."
         : asked == 1 ? "Apps que o aluno pode abrir neste celular."
         : answered == asked ? $"Apps de todos os {asked} celulares."
+        : asked - answered == 1 ? $"Apps de {answered} de {asked} celulares (o outro não respondeu)."
         : $"Apps de {answered} de {asked} celulares (os outros não responderam).";
+
+    // The window's heading and the title over its list.
+    public static string Heading(int phones) => phones == 1 ? "Bloquear apps no celular" : "Bloquear apps nos celulares";
+
+    public static string ListTitle(int phones) => phones == 1 ? "Apps do celular" : "Apps dos celulares";
+
+    // Said after applying when a phone kept a newer block than the one sent.
+    public static string KeptNewerLine(int phones) =>
+        (phones == 1
+            ? "O celular já tinha um bloqueio mais novo (de outro professor, ou salvo com o relógio adiantado) e o seu não valeu nele. "
+            : "Algum celular já tinha um bloqueio mais novo (de outro professor, ou salvo com o relógio adiantado) e o seu não valeu nele. ")
+        + "Veja o estado atual acima e aplique de novo se quiser trocar.";
+
+    // A tile's menu item: the phones' window opens only for phones alone.
+    public static string BlockProgramsMenuItem(IReadOnlyCollection<KnownMachine> targets) =>
+        targets.Count > 0 && targets.All(machine => machine.IsPhone) ? "Bloquear apps..." : "Bloquear programas...";
+
+    // The apps of the block the phones follow, ticked, shown as soon as their
+    // state is read: the mode it preselects is never shown with nothing ticked
+    // while the lists are still on their way.
+    public static IReadOnlyList<PhoneAppChoice> InForce(PhoneAppPolicy policy, Func<string, string> nameOf) =>
+        policy.Packages
+            .Select(package => new PhoneAppChoice(
+                package, nameOf(package), policy.Mode == AppBlockMode.AllowOnly ? "liberado agora" : "bloqueado agora", true))
+            .ToList();
+
+    // The list once phones sent theirs (answered of them): every app they
+    // listed, ticked when it was, then each ticked app none of them listed.
+    public static IReadOnlyList<PhoneAppChoice> Choices(
+        IReadOnlyList<PhoneAppRow> union, int answered, IReadOnlyCollection<string> ticked, Func<string, string> nameOf)
+    {
+        var left = new HashSet<string>(ticked, StringComparer.Ordinal);
+        var choices = union
+            .Select(row => new PhoneAppChoice(row.App.Package, row.Name, RowDetail(row.Phones, answered), left.Remove(row.App.Package)))
+            .ToList();
+        choices.AddRange(ticked
+            .Where(left.Contains)
+            .Distinct(StringComparer.Ordinal)
+            .Select(package => new PhoneAppChoice(package, nameOf(package), RowDetail(0, answered), true)));
+        return choices;
+    }
 
     // The line under the window's title. allPhones: every phone in the
     // classroom list.
@@ -181,29 +236,12 @@ public static class PhoneAppBlockText
         return $"Em {names.Count} celulares: {Names(names)}";
     }
 
-    // Whom the toolbar's "Bloquear programas" reaches: the whole room, as for
-    // every toolbar button, unless only phones are selected or the grid shows
-    // only phones; then those phones, which opens the phones' window.
-    public static IReadOnlyList<KnownMachine> ToolbarReach(
-        IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
-    {
-        if (selected.Count > 0 && selected.All(machine => machine.IsPhone))
-        {
-            return selected;
-        }
-        if (selected.Count == 0 && shown == DeviceFilter.Phones && room.Any(machine => machine.IsPhone))
-        {
-            return room.Where(machine => machine.IsPhone).ToList();
-        }
-        return room;
-    }
-
     // "Bloquear programas" on PCs and phones together opens the PCs' window;
     // null when no phone was among them.
     public static string? LeftOutNotice(int phones) => phones switch
     {
         <= 0 => null,
-        1 => "1 celular ficou de fora: para bloquear apps no celular, selecione só os celulares.",
+        1 => "1 celular ficou de fora: para bloquear apps no celular, selecione só o celular.",
         _ => $"{phones} celulares ficaram de fora: para bloquear apps nos celulares, selecione só os celulares.",
     };
 

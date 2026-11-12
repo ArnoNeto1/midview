@@ -28,6 +28,10 @@ public partial class PhoneAppBlockWindow : MidviewWindow
     private bool _loading;
     private bool _applying;
 
+    // "Aplicar" waits for the first list (or for it to fail): before it, the
+    // teacher hasn't seen what would be blocked or allowed.
+    private bool _firstListDone;
+
     // allPhones: phones is every phone in the classroom list; only then is
     // onClassPolicyApplied set, so the Master remembers the block and resends
     // it to phones that were off. classPolicy: the block it remembers now, which
@@ -41,6 +45,8 @@ public partial class PhoneAppBlockWindow : MidviewWindow
         _masterCertificate = masterCertificate;
         _classPolicy = classPolicy;
         _onClassPolicyApplied = onClassPolicyApplied;
+        Title = DialogHeading.Heading = PhoneAppBlockText.Heading(phones.Count);
+        ListTitleTextBlock.Text = PhoneAppBlockText.ListTitle(phones.Count);
         TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones);
         AppsList.ItemsSource = _rows;
         Loaded += async (_, _) => await LoadAsync();
@@ -103,13 +109,15 @@ public partial class PhoneAppBlockWindow : MidviewWindow
         {
             _states = await ReadStatesAsync();
             StateTextBlock.Text = PhoneAppBlockText.Summarize(_states, NameOf);
-            var preselect = !_preselected ? PhoneAppBlockText.CommonActivePolicy(_states) : null;
             if (!_preselected)
             {
                 _preselected = true;
-                if (preselect is not null)
+                // What every phone follows is chosen to begin with, its mode and
+                // its apps together, so that changing the block is editing it.
+                if (PhoneAppBlockText.CommonActivePolicy(_states) is { } inForce)
                 {
-                    (preselect.Mode == AppBlockMode.AllowOnly ? AllowOnlyRadioButton : BlockListRadioButton).IsChecked = true;
+                    (inForce.Mode == AppBlockMode.AllowOnly ? AllowOnlyRadioButton : BlockListRadioButton).IsChecked = true;
+                    Show(PhoneAppBlockText.InForce(inForce, NameOf), NoIcons);
                 }
             }
 
@@ -117,13 +125,18 @@ public partial class PhoneAppBlockWindow : MidviewWindow
             var asked = _phones.Where((_, index) => _states[index].Status is { OldAgent: false }).ToList();
             var answers = await Task.WhenAll(asked.Select(phone => Task.Run(() => ReadApps(phone))));
             var answered = answers.Count(answer => answer is not null);
-            ShowApps(PhoneAppBlockText.Union(answers.Select(answer => answer?.Apps)), answers, answered, preselect);
+            // No list at all keeps what is shown (and ticked) as it is.
+            if (answered > 0)
+            {
+                ShowApps(answers, answered);
+            }
             ListTextBlock.Text = PhoneAppBlockText.ListLine(answered, _phones.Count);
             StateTextBlock.Text = PhoneAppBlockText.Summarize(_states, NameOf);
         }
         finally
         {
             _loading = false;
+            _firstListDone = true;
             UpdateButtons();
         }
     }
@@ -202,43 +215,47 @@ public partial class PhoneAppBlockWindow : MidviewWindow
         }
     }
 
+    private static readonly IReadOnlyDictionary<string, ImageSource> NoIcons = new Dictionary<string, ImageSource>();
+
     // A new list keeps what the teacher ticked; an app ticked (or already
     // blocked) that no phone listed stays, named by its package.
-    private void ShowApps(IReadOnlyList<PhoneAppRow> union, PhoneAnswer?[] answers, int answered, PhoneAppPolicy? preselect)
+    private void ShowApps(PhoneAnswer?[] answers, int answered)
     {
-        var ticked = _rows.Where(row => row.Checked).Select(row => row.Package)
-            .Concat(preselect?.Packages ?? Array.Empty<string>())
-            .ToHashSet(StringComparer.Ordinal);
-
-        _rows.Clear();
+        var union = PhoneAppBlockText.Union(answers.Select(answer => answer?.Apps));
+        var icons = new Dictionary<string, ImageSource>(StringComparer.Ordinal);
+        foreach (var answer in answers.Where(answer => answer is not null))
+        {
+            foreach (var (package, icon) in answer!.Icons)
+            {
+                icons.TryAdd(package, icon);
+            }
+        }
         foreach (var app in union)
         {
             _names[app.App.Package] = app.Name;
-            var icon = answers.Select(answer => answer?.Icons.GetValueOrDefault(app.App.Package)).FirstOrDefault(found => found is not null);
-            _rows.Add(new AppRow
-            {
-                Package = app.App.Package,
-                Name = app.Name,
-                Icon = icon,
-                Detail = PhoneAppBlockText.RowDetail(app.Phones, answered),
-                Checked = ticked.Remove(app.App.Package),
-            });
         }
-        foreach (var package in ticked.OrderBy(package => package, StringComparer.Ordinal))
+
+        var ticked = _rows.Where(row => row.Checked).Select(row => row.Package).ToList();
+        Show(PhoneAppBlockText.Choices(union, answered, ticked, NameOf), icons);
+    }
+
+    private void Show(IReadOnlyList<PhoneAppChoice> choices, IReadOnlyDictionary<string, ImageSource> icons)
+    {
+        _rows.Clear();
+        foreach (var choice in choices)
         {
-            _rows.Add(new AppRow
+            var row = new AppRow
             {
-                Package = package,
-                Name = NameOf(package),
-                Detail = PhoneAppBlockText.RowDetail(0, answered),
-                Checked = true,
-            });
+                Package = choice.Package,
+                Name = choice.Name,
+                Icon = icons.GetValueOrDefault(choice.Package),
+                Detail = choice.Detail,
+                Checked = choice.Checked,
+            };
+            row.PropertyChanged += (_, _) => UpdateChosen();
+            _rows.Add(row);
         }
         UpdateChosen();
-        foreach (var row in _rows)
-        {
-            row.PropertyChanged += (_, _) => UpdateChosen();
-        }
     }
 
     private void UpdateChosen()
@@ -301,8 +318,7 @@ public partial class PhoneAppBlockWindow : MidviewWindow
             var keptNewer = results.Any(result => result.KeptNewer);
             if (keptNewer)
             {
-                lines.Add("Algum celular já tinha um bloqueio mais novo (de outro professor, ou salvo com o relógio adiantado) e o seu não valeu nele. "
-                          + "Veja o estado atual acima e aplique de novo se quiser trocar.");
+                lines.Add(PhoneAppBlockText.KeptNewerLine(_phones.Count));
             }
             ResultTextBlock.Text = string.Join("\n", lines);
 
@@ -343,7 +359,8 @@ public partial class PhoneAppBlockWindow : MidviewWindow
 
     private void UpdateButtons()
     {
-        ApplyButton.IsEnabled = LiftButton.IsEnabled = !_applying;
+        ApplyButton.IsEnabled = !_applying && _firstListDone;
+        LiftButton.IsEnabled = !_applying;
         RefreshButton.IsEnabled = !_applying && !_loading;
     }
 }

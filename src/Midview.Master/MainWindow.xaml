@@ -137,9 +137,9 @@
                             <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" local:DeviceActions.Action="CloseApps" Click="OnCloseAppsClassClicked" OpensOptions="True"
                                                  ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
                             <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsClassClicked" OpensOptions="True"
-                                                 ToolTip="Impede programas de abrir nas máquinas da turma." />
+                                                 ToolTip="Impede programas de abrir nas máquinas da turma. Com só celulares selecionados, ou no filtro Celulares, bloqueia apps nos celulares." />
                             <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" local:DeviceActions.Action="BlockSites" Click="OnSiteBlockClassClicked" OpensOptions="True"
-                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma." />
+                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma, celulares também. Com só celulares selecionados, ou no filtro Celulares, vale só para eles." />
                         </StackPanel>
                         <ContentControl Content="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
