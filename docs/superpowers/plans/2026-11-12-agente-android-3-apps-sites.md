@@ -1,0 +1,85 @@
+# Agente Android, plano 3 de 4: bloquear apps e sites Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** O professor bloqueia apps e sites nos celulares da escola pelo Midview, com os mesmos modos dos PCs ("Bloquear só estes" / "Liberar só estes") e a mesma janela de sites.
+
+**Architecture:** Apps: uma política só de celular (nomes de pacote Android, não `.exe`), mensagens novas na porta `28900`, o celular informa a lista de apps com ícone, o Device Owner suspende os apps bloqueados (`setPackagesSuspended`). Sites: o celular aceita as mesmas mensagens 7–10 dos PCs; os domínios viram a lista de bloqueio do Chrome (configuração gerenciada) e "Bloquear a internet" corta o DNS do aparelho inteiro; outros navegadores ficam escondidos. No Master: janela de apps para celulares, envio e observação pelo `ThumbnailPoller`, selo no quadradinho, e as ações liberadas para celular.
+
+**Tech Stack:** Kotlin (Android 10+, `DevicePolicyManager.setPackagesSuspended`, `setApplicationRestrictions`, `setApplicationHidden`, `setGlobalPrivateDnsModeSpecifiedHost`), JUnit 4 JVM; .NET 8 / WPF / xUnit; E2E em `tests/Midview.E2E`.
+
+**Spec:** `docs/superpowers/specs/2026-11-11-agente-android-design.md` (seções 6, 7 e 8).
+
+## Global Constraints
+
+- Tudo na porta `28900` (`ConnectionClient.AgentPort`), só professor confiável; quadro e `CommandAck` como hoje (`CommandResult`: 1 byte + UTF-8; para as mensagens 7–10 o ack é só `[1]` ou `[0]`, como no Windows).
+- Mensagens novas (C# e Kotlin): `SetPhoneAppBlock = 93` → `CommandAck`; `GetPhoneAppBlock = 94` → `PhoneAppBlockStatus = 95`; `GetPhoneApps = 96` → `PhoneApps = 97`.
+- `PhoneAppPolicy` = mesmo leiaute de `AppBlockPolicy` (`ver(1)=1 | SavedAt int64 BE | modo(1) | count u16 BE | [len(1) + UTF-8]*`), modos 0 Nenhum / 1 Bloquear só estes / 2 Liberar só estes, no máximo 200 nomes de até 255 bytes; nomes = pacote Android (`^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+)+$`), sem repetição; o mais novo (`SavedAt`) vence, com as mesmas respostas do `AppBlockCommandHandler` do Windows ("mantido o bloqueio mais novo, salvo em …", "outro bloqueio foi salvo no mesmo segundo…").
+- Nunca suspensos (protegidos): o próprio Midview, a interface do sistema, a tela inicial em uso, Serviços do Google Play, WebView do Android, instalador de pacotes, configurações (já travadas pelo Device Owner), discador/emergência.
+- `PhoneApps` = `ver(1)=1 | count u16 BE | [pkgLen(1) pkg | labelLen(1) rótulo UTF-8 (≤ 64 chars) | iconLen u16 BE | PNG 48×48]*`, no máximo 300 apps; só apps que o aluno consegue abrir (com ícone na tela inicial), sem os protegidos.
+- Sites: `BlockDomain`/`UnblockDomain` com o texto que o professor digitou, normalizado como o `DomainNormalizer` do Windows (tirar `scheme://`, cortar em `/ ? # :`, minúsculas, nome DNS válido; inválido → `[0]`); bloquear o domínio e o `www.`; desbloquear algo ausente → `[1]`. O conjunto fica guardado no celular e volta ao ligar.
+- "Bloquear a internet" no celular: Chrome com `URLBlocklist = ["*"]` e o DNS do aparelho em modo estrito para um nome que não existe (`bloqueado.invalid`), o que corta a internet de todos os apps sem afetar o Midview (que fala por IP na rede local); desbloquear volta o DNS ao valor anterior (o do plano 4, se houver).
+- Outros navegadores (todo app que abre `http/https`, menos o Chrome) ficam escondidos (`setApplicationHidden`) enquanto o celular for aparelho da escola.
+- Textos em português, no tom do Midview; nenhum produto concorrente citado; commits sem `Co-Authored-By`.
+
+## Review Focus
+
+- Professor bloqueia um app que o aluno está usando: o app fecha/fica cinza na hora; desbloquear volta a abrir. (Task 2)
+- "Liberar só estes" com lista vazia: só o Midview e o essencial do sistema funcionam; o celular não trava. (Task 2)
+- App instalado depois do bloqueio em "Liberar só estes": já entra suspenso. (Task 2)
+- Celular reinicia ou é encerrado pela MIUI: bloqueios de apps e sites continuam valendo. (Tasks 2 e 3)
+- "Bloquear a internet" e depois desbloquear: Midview continua falando com o celular o tempo todo e a internet volta. (Task 3)
+
+---
+
+### Task 1: Protocolo dos apps do celular (C# e Kotlin)
+
+**Files:**
+- Create: `src/Midview.Protocol/PhoneAppPolicy.cs`, `src/Midview.Protocol/PhoneAppList.cs`; Kotlin `.../protocol/PhoneAppPolicy.kt`, `.../protocol/PhoneAppList.kt`
+- Modify: `src/Midview.Protocol/MessageType.cs` e `MessageType.kt` (93–97)
+- Test: `tests/Midview.Protocol.Tests/PhoneAppPolicyTests.cs`, `PhoneAppListTests.cs`; JVM `PhoneAppPolicyTest.kt`, `PhoneAppListTest.kt` (mesmos vetores dourados nos dois lados)
+
+**Interfaces:**
+- `PhoneAppPolicy(long SavedAt, AppBlockMode Mode, IReadOnlyList<string> Packages)` com `Encode()`, `Decode(byte[]) -> PhoneAppPolicy?`, `IsValidPackageName`, `Lifted(savedAt)`, `SameRulesAs`; Kotlin igual.
+- `PhoneAppList.Encode(IReadOnlyList<PhoneApp>)`/`Decode` com `PhoneApp(string Package, string Label, byte[] IconPng)`.
+
+- [ ] Testes (vetores dourados idênticos C#/Kotlin; limites; nomes inválidos; ordem de bytes BE) → falham → implementar → passam → commit `feat(protocol): apps do celular no protocolo`.
+
+### Task 2: Bloqueio de apps no celular
+
+**Files:**
+- Create: `.../apps/AppBlockStore.kt` (política guardada), `.../apps/AppSuspender.kt` (decide o que suspender), `.../apps/InstalledApps.kt` (lista com ícones), `.../apps/PackageWatcher.kt` (app instalado/removido)
+- Modify: `.../net/CommandHandler.kt` (93, 94, 96), `.../policy/DevicePolicyGateway.kt` (`setPackagesSuspended`), `AgentService.kt` (reaplicar ao iniciar)
+- Test: JVM para `AppSuspender` (modos, protegidos, app novo), `AppBlockStore` (mais novo vence, mesmas respostas do Windows), handler
+
+**Interfaces:**
+- `AppSuspender.toSuspend(policy, launchable: Set<String>, protected: Set<String>) -> Set<String>`; o celular suspende o conjunto e tira a suspensão do resto.
+- Respostas de `SetPhoneAppBlock`: "bloqueando N app(s)", "permitindo só o essencial [e N app(s)]", "nenhum app bloqueado", e as do "mais novo vence".
+
+- [ ] Testes → falham → implementar → passam.
+- [ ] No Redmi (aparelho da escola, versão de teste): bloquear um app aberto → some/fica cinza; "Liberar só estes" vazio; instalar um app depois → suspenso; "Limpar tudo" e reiniciar → bloqueio continua. Commit `feat(android): bloquear apps no celular`.
+
+### Task 3: Bloqueio de sites no celular
+
+**Files:**
+- Create: `.../sites/SiteBlockStore.kt`, `.../sites/DomainNormalizer.kt`, `.../sites/ChromePolicy.kt` (monta a configuração gerenciada), `.../sites/InternetBlock.kt` (DNS estrito e volta), `.../sites/OtherBrowsers.kt`
+- Modify: `.../net/CommandHandler.kt` (7–10), `DevicePolicyGateway` (`setApplicationRestrictions`, `setApplicationHidden`, `setGlobalPrivateDnsModeSpecifiedHost`/modo), `AgentService.kt`, `Lockdown.kt` (esconder outros navegadores)
+- Test: JVM para normalização (vetores do `DomainNormalizer.cs`), conjunto guardado, montagem da política do Chrome (`URLBlocklist` com domínio e `www.`; `["*"]` na internet bloqueada), escolha do DNS a restaurar
+
+- [ ] Testes → falham → implementar → passam.
+- [ ] No Redmi: bloquear `youtube.com` → Chrome mostra a página de bloqueio; desbloquear → abre; "Bloquear a internet" → nenhum app navega, Midview continua vendo a tela; desbloquear → internet volta; reiniciar → estado mantido. Commit `feat(android): bloquear sites no celular`.
+
+### Task 4: Master — apps e sites para celular
+
+**Files:**
+- Create: `src/Midview.Master/PhoneAppBlockClient.cs`, `PhoneAppBlockFile.cs` (política da turma para celulares), `PhoneAppBlockWindow.xaml(.cs)` (lista com ícone e marcação, os dois modos), `PhoneAppBlockText.cs` (textos e selo)
+- Modify: `DeviceSupport.cs` (celular passa a aceitar `BlockPrograms` e `BlockSites`), `MainWindow.xaml.cs` ("Bloquear programas" abre a janela de celular quando a seleção só tem celulares; mista → janela dos PCs + aviso de celulares de fora), `ThumbnailPoller.cs` (para celular: enviar a política da turma quando mudar e observar a cada 30 s, como o `SendAppBlockIfChanged`/`ObserveAppBlock`), `SiteBlockWindow` (já manda 7–10 a todos os alvos — conferir que inclui celulares)
+- Test: `PhoneAppBlockClientTests` (agente roteirizado), `PhoneAppBlockFileTests`, `PhoneAppBlockTextTests` (selo "🔒 N apps bloqueados" / "🔒 só N apps liberados"), `DeviceSupportTests`, `ThumbnailPollerTests` (celular recebe a política)
+
+- [ ] Testes → falham → implementar → passam; solução inteira verde (fora as falhas conhecidas de ambiente).
+- [ ] Prévia da janela com o harness de UI (pasta de dados temporária, sala falsa, nunca o Master real), capturas em `.superpowers/sdd/.../screens/`. Commit `feat(master): bloquear apps e sites nos celulares`.
+
+### Task 5: Prova no celular de verdade e README
+
+- [ ] Com a cópia de teste do Master e o Redmi: bloquear apps pela janela nova (lista com ícones do Redmi), "Liberar só estes", sites e internet; conferir selos e avisos. Anotar o resultado no fim deste plano.
+- [ ] README "Celulares": o que o professor consegue bloquear. Commit `docs: resultado do bloqueio de apps e sites no celular`.
