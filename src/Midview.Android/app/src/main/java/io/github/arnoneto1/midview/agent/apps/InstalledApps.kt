@@ -32,7 +32,8 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog {
         pm.queryIntentActivities(launcherIntent(), 0).map { it.activityInfo.packageName }.toSet()
 
     // ProtectedApps plus what this phone resolves (ProtectedApps.resolve):
-    // of the apps for the home screen, dialing, the settings, installing and
+    // of the apps for the home screen, dialing, the settings, picking a file
+    // (the system's file picker, which other apps open), installing and
     // verifying packages (Android refuses to suspend the verifier) and the
     // keyboards, those that came with the phone; and the ones in use: the
     // default home screen, dialer and keyboard, and the WebView.
@@ -45,6 +46,7 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog {
         all(Intent(Intent.ACTION_DIAL))
         all(Intent(Intent.ACTION_DIAL, Uri.parse("tel:190")))
         all(Intent(Settings.ACTION_SETTINGS))
+        all(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"))
         @Suppress("DEPRECATION")
         all(Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(Uri.parse("content://x/y.apk"), APK_TYPE))
         pm.queryBroadcastReceivers(Intent(Intent.ACTION_PACKAGE_NEEDS_VERIFICATION).setType(APK_TYPE), 0)

@@ -14,15 +14,25 @@ object ChromePolicy {
     // its "www." form.
     const val MAX_DOMAINS = 500
 
+    // A site saved with a final dot ("youtube.com.", which the Windows agent
+    // accepts and keeps as typed) goes to Chrome without it: Chrome would block
+    // nothing with the dot.
     fun urlBlocklist(state: SiteBlockState): List<String> =
         if (state.internetBlocked) {
             listOf("*")
         } else {
-            state.domains.flatMap { listOfNotNull(it, wwwForm(it)) }.distinct().sorted()
+            state.domains
+                .flatMap { listOfNotNull(it, wwwForm(it)) }
+                .map { it.removeSuffix(".") }
+                .distinct()
+                .sorted()
         }
 
-    // A list policy goes as an array of texts (checked on the Redmi in
-    // chrome://policy).
+    // A list policy goes as an array of texts. Chrome's restrictions schema
+    // declares URLBlocklist as a text (a JSON list), but Chrome's own reader
+    // of the managed configuration also takes an array of texts as the list:
+    // this was read in Chrome's APK, not yet seen in chrome://policy on a
+    // phone (Chrome's first run there is still to be done).
     fun restrictions(state: SiteBlockState): Map<String, Any> {
         val blocklist = urlBlocklist(state)
         return if (blocklist.isEmpty()) emptyMap() else mapOf(URL_BLOCKLIST to blocklist.toTypedArray())

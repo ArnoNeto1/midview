@@ -87,9 +87,9 @@ class AppSuspender(
 // The apps never suspended, so the phone stays usable and managed: the agent
 // itself, Android's own pieces, the home screen, Google Play services, the
 // WebView, the package installer, the settings (locked by the Device Owner),
-// the phone and emergency calls, the keyboard, and MIUI's power, security and
-// notification apps. What a phone resolves (its home screen, dialer,
-// keyboards) is added by InstalledApps.
+// the file picker, the phone and emergency calls, the keyboard, and MIUI's
+// power, security and notification apps. What a phone resolves (its home
+// screen, dialer, keyboards, file picker) is added by InstalledApps.
 object ProtectedApps {
     val ALWAYS: Set<String> = setOf(
         "io.github.arnoneto1.midview.agent",
@@ -114,6 +114,10 @@ object ProtectedApps {
         "com.google.android.permissioncontroller",
         "com.lbe.security.miui",
         "com.android.settings",
+        // The system's file picker (DocumentsUI), which apps open to pick or
+        // save a file; it has a home-screen icon on some phones.
+        "com.android.documentsui",
+        "com.google.android.documentsui",
         // Calls and emergency.
         "com.android.phone",
         "com.android.server.telecom",

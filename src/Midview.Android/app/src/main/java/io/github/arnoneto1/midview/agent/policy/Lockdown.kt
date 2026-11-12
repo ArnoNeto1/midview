@@ -43,7 +43,10 @@ interface DevicePolicyGateway {
 // The locks of a school phone, so a student cannot remove the agent or get
 // around it: no factory reset, no developer options or USB debugging, no
 // safe mode, no other users, no files over USB, no changing the private DNS
-// or the VPN (the internet block is the agent's VPN), the app cannot be
+// or the VPN (the internet block is the agent's VPN), no installing apps from
+// outside a store (an APK downloaded in Chrome) and no adding or removing
+// accounts (a Google account would open the Play Store, and a Google or Mi
+// account would tie the phone to the student after a reset), the app cannot be
 // uninstalled, force-stopped nor have its data cleared. The teacher's
 // "Bloquear telas" is allowed too: this app alone may hold the phone in lock
 // task mode, with nothing of the system's left to reach (no home, recents,
@@ -103,10 +106,18 @@ class Lockdown(
 
         // The values of UserManager.DISALLOW_FACTORY_RESET,
         // DISALLOW_DEBUGGING_FEATURES, DISALLOW_SAFE_BOOT, DISALLOW_ADD_USER,
-        // DISALLOW_USB_FILE_TRANSFER, DISALLOW_CONFIG_PRIVATE_DNS and
-        // DISALLOW_CONFIG_VPN. The last one keeps the student out of the VPN
-        // settings, where the agent's VPN is while the internet is blocked;
-        // Android still starts an always-on VPN the Device Owner sets.
+        // DISALLOW_USB_FILE_TRANSFER, DISALLOW_CONFIG_PRIVATE_DNS,
+        // DISALLOW_CONFIG_VPN, DISALLOW_INSTALL_UNKNOWN_SOURCES,
+        // DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY (Android 10, the oldest
+        // the agent runs on) and DISALLOW_MODIFY_ACCOUNTS. no_config_vpn keeps
+        // the student out of the VPN settings, where the agent's VPN is while
+        // the internet is blocked; Android still starts an always-on VPN the
+        // Device Owner sets. The unknown sources ones grey "Instalar apps
+        // desconhecidos" for every app, so an APK a student downloads cannot
+        // be installed (an app the block does not know, such as another
+        // YouTube client). adb is not an unknown source, so debug builds keep
+        // them too: `adb install -r` of a debug build still works with them
+        // on (checked on the Redmi 10C).
         val RESTRICTIONS = listOf(
             "no_factory_reset",
             "no_debugging_features",
@@ -115,6 +126,9 @@ class Lockdown(
             "no_usb_file_transfer",
             "disallow_config_private_dns",
             "no_config_vpn",
+            "no_install_unknown_sources",
+            "no_install_unknown_sources_globally",
+            "no_modify_accounts",
         )
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,

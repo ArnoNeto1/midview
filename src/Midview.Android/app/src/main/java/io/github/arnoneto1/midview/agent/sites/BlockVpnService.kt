@@ -8,9 +8,12 @@ import android.util.Log
 import java.io.IOException
 
 // The agent's VPN while the internet is blocked (InternetBlock): every
-// address of every app goes into it and nothing comes out, with no DNS
-// server, so names do not even resolve. IPv6 is blocked too, since only IPv4
-// is configured. The agent itself is left out, so it keeps talking to the
+// address of every app goes into it and nothing comes out. IPv6 is blocked
+// too, since only IPv4 is configured. Its DNS server is its own address: a
+// VPN with none would leave the phone asking the Wi-Fi's DNS server (Android
+// lets those lookups out around the VPN), so names would still resolve. On
+// its own address nothing answers port 53, so every lookup fails at once, as
+// in airplane mode. The agent itself is left out, so it keeps talking to the
 // teacher over the school's network. Android starts it as the phone's
 // always-on VPN (after a restart too); the agent starts it again whenever it
 // starts. Nothing is read from it: what apps send is dropped by the system.
@@ -50,6 +53,7 @@ class BlockVpnService : VpnService() {
                     .setSession("Midview: internet bloqueada")
                     .addAddress(ADDRESS, 32)
                     .addRoute("0.0.0.0", 0)
+                    .addDnsServer(ADDRESS)
                     .addDisallowedApplication(packageName)
                     .establish()
             } catch (e: Exception) {
@@ -76,7 +80,8 @@ class BlockVpnService : VpnService() {
         private const val ACTION_STOP = "io.github.arnoneto1.midview.agent.STOP_BLOCK_VPN"
 
         // An address of the VPN's own: any private one does, since every
-        // other app's traffic goes into the VPN anyway.
+        // other app's traffic goes into the VPN anyway. It is the DNS server
+        // too: the phone's own address, where nothing listens.
         private const val ADDRESS = "10.233.233.233"
 
         private val lock = Any()

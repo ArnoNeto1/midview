@@ -106,6 +106,34 @@ class AppSuspenderTest {
         assertTrue("com.android.vending" in ProtectedApps.ALWAYS)
     }
 
+    // The system's file picker (DocumentsUI), which apps open to pick or save a
+    // file: where it has a home-screen icon, "Liberar só estes" would suspend
+    // it and no allowed app could open a file. Another brand's picker that
+    // came with the phone is kept too (InstalledApps resolves it); a file
+    // manager the student installs is not.
+    @Test fun theSystemFilePickerIsProtected() {
+        assertTrue("com.android.documentsui" in ProtectedApps.ALWAYS)
+        assertTrue("com.google.android.documentsui" in ProtectedApps.ALWAYS)
+
+        val all = ProtectedApps.resolve(
+            candidates = listOf(
+                ProtectedApps.Candidate("com.brand.filepicker", system = true),
+                ProtectedApps.Candidate("com.files.manager", system = false),
+            ),
+            inUse = emptyList(),
+        )
+        assertTrue("com.brand.filepicker" in all)
+        assertFalse("com.files.manager" in all)
+        assertEquals(
+            setOf("com.files.manager", "com.android.chrome"),
+            AppSuspender.toSuspend(
+                policy(AppBlockMode.ALLOW_ONLY, "com.whatsapp"),
+                setOf("com.google.android.documentsui", "com.brand.filepicker", "com.files.manager", "com.android.chrome", "com.whatsapp"),
+                all,
+            ),
+        )
+    }
+
     // Only the phone's own home screens, dialers, keyboards and installers are
     // kept from the block, and the ones in use: an app the student installs
     // that says it is a home screen, a dialer or a keyboard is not.

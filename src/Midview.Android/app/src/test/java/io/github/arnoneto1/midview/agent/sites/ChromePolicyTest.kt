@@ -23,7 +23,23 @@ class ChromePolicyTest {
     @Test fun aWwwDomainAlsoBlocksTheBareOne() {
         assertEquals(listOf("g1.com", "www.g1.com"), ChromePolicy.urlBlocklist(state("www.g1.com")))
         assertEquals(listOf("g1.com", "www.g1.com"), ChromePolicy.urlBlocklist(state("www.g1.com", "g1.com")))
-        assertEquals(listOf("www."), ChromePolicy.urlBlocklist(state("www.")))
+        assertEquals(listOf("www"), ChromePolicy.urlBlocklist(state("www.")))
+    }
+
+    // The teacher may type the site with a final dot ("youtube.com.", a valid
+    // name the phone keeps as typed, as the Windows agent does), but Chrome
+    // blocks nothing with it: Chrome gets the site without that dot.
+    @Test fun aTrailingDotIsLeftOutForChrome() {
+        assertEquals(listOf("www.youtube.com", "youtube.com"), ChromePolicy.urlBlocklist(state("youtube.com.")))
+        assertEquals(listOf("g1.com", "www.g1.com"), ChromePolicy.urlBlocklist(state("www.g1.com.")))
+        assertEquals(
+            listOf("www.youtube.com", "youtube.com"),
+            ChromePolicy.urlBlocklist(state("youtube.com.", "youtube.com")),
+        )
+        assertArrayEquals(
+            arrayOf("www.youtube.com", "youtube.com"),
+            ChromePolicy.restrictions(state("youtube.com."))["URLBlocklist"] as Array<*>,
+        )
     }
 
     @Test fun theBlockedInternetBlocksEveryAddress() {

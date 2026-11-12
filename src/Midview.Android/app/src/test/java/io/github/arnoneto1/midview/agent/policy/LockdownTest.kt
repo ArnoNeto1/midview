@@ -81,6 +81,9 @@ class LockdownTest {
         "no_usb_file_transfer",
         "disallow_config_private_dns",
         "no_config_vpn",
+        "no_install_unknown_sources",
+        "no_install_unknown_sources_globally",
+        "no_modify_accounts",
     )
 
     @Test fun appliesAllRestrictionsWhenDeviceOwner() {
@@ -211,6 +214,25 @@ class LockdownTest {
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
         assertEquals(listOf(pkg), gw.lockTaskAllowed)
+    }
+
+    // A student cannot install an app the teacher's block does not know (an
+    // APK downloaded in Chrome, with "Instalar apps desconhecidos" turned on
+    // in Settings) nor add an account (a Google one would open the Play
+    // Store; a Google or Mi one would tie the phone to the student after a
+    // reset). On debug builds too: adb still installs them.
+    @Test fun studentsCannotInstallAppsNorAddAccounts() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 29, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertTrue(
+                gw.restrictions.containsAll(
+                    setOf("no_install_unknown_sources", "no_install_unknown_sources_globally", "no_modify_accounts"),
+                ),
+            )
+        }
     }
 
     // The screen is seen through the app's accessibility service: only it
