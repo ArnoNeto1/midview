@@ -5,20 +5,40 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using Midview.Protocol;
 
 namespace Midview.Master;
 
+// What the assistant needs from the main window. PhonesInClass: phones in
+// the class now. PhoneOnline: for a name, null when the class has no phone
+// with it, else whether it answers now. Adb: the cable tool, made when the
+// cable step first needs it. GetApp: the phone app, downloaded and checked.
+// AddPhone: puts a phone prepared over the cable in the class (and saves).
+// IsOnline: whether that phone answers now. SearchNetwork: a search of the
+// network that moves the class's phones to the addresses found. Wipe:
+// "Apagar e preparar de novo" for a phone of the class by name; without it,
+// a number already taken is prepared again by the normal steps.
+internal sealed record PreparePhonesHost(
+    Func<int> PhonesInClass,
+    Func<string, bool?> PhoneOnline,
+    Func<IAdb> Adb,
+    Func<CancellationToken, Task<(AgentApkResult Result, string ApkPath)>> GetApp,
+    string MasterThumbprint,
+    Action<KnownMachine> AddPhone,
+    Func<KnownMachine, bool> IsOnline,
+    Func<Task> SearchNetwork,
+    Func<string, Task<(bool Ok, string Detail)>>? Wipe = null);
+
 // "Preparar celulares": one step per page, so a teacher who knows nothing of
-// phones prepares a school phone that then joins the class by itself. The
-// pages and their order are PhoneSetupProgress; the texts and prints are
-// PhoneSetupGuide.
+// phones prepares a school phone; the Midview then finishes it over the USB
+// cable and it joins the class by itself. The pages and their order are
+// PhoneSetupProgress; the texts and prints are PhoneSetupGuide.
 public partial class PreparePhonesWindow : MidviewWindow
 {
     // The phone print in the step pages: a Redmi screen at this width.
     private const double ScreenWidth = 160;
 
     private readonly PhoneSetupProgress _progress = new();
+    private readonly PreparePhonesHost _host;
     private readonly Func<int> _phonesInClass;
     private readonly Func<string, bool?> _phoneOnline;
     private readonly Func<string, Task<(bool Ok, string Detail)>>? _wipe;
@@ -27,26 +47,22 @@ public partial class PreparePhonesWindow : MidviewWindow
     // even when it could not be saved.
     private (string Ssid, string Password)? _wifi = PhoneWifiFile.Load();
 
-    // phonesInClass: phones in the class now. phoneOnline: for a name, null
-    // when the class has no phone with it, else whether it answers now.
-    // wipe: "Apagar e preparar de novo"
-    // for a phone of the class by name; without it, a number already taken is
-    // prepared again by the normal steps.
-    internal PreparePhonesWindow(
-        Func<int> phonesInClass, Func<string, bool?> phoneOnline,
-        Func<string, Task<(bool Ok, string Detail)>>? wipe = null)
+    internal PreparePhonesWindow(PreparePhonesHost host)
     {
         InitializeComponent();
-        _phonesInClass = phonesInClass;
-        _phoneOnline = phoneOnline;
-        _wipe = wipe;
-        _progress.Start(_wifi is not null);
+        _host = host;
+        _phonesInClass = host.PhonesInClass;
+        _phoneOnline = host.PhoneOnline;
+        _wipe = host.Wipe;
+        // "Antes de começar, separe:" only before the first phone of the class.
+        _progress.Start(_wifi is not null, gathered: _phonesInClass() > 0 || PhoneTotalFile.Asked());
+        InitializeCable();
         ShowPage();
     }
 
-    // For a phone just wiped: straight to the six taps with its number (the
-    // Wi-Fi first if none is saved yet). wiped: the page says it is being
-    // wiped, as the Master already did it from the phone's menu.
+    // For a phone just wiped: straight to turning it on, "Apareceu Bem-vindo"
+    // open (the Wi-Fi first if none is saved yet). wiped: the page says it is
+    // being wiped, as the Master already did it from the phone's menu.
     public void StartAt(string number, bool wiped = false)
     {
         _progress.StartAt(number, wiped);
@@ -79,9 +95,18 @@ public partial class PreparePhonesWindow : MidviewWindow
                 }
                 ShowPage();
                 return;
-            case SetupPage.Ready:
-                _progress.Again();
+            // "Liguei o cabo e toquei em Permitir": look at the cable now.
+            case SetupPage.Step when _progress.StepId == "cabo":
+                CheckCableNow();
+                return;
+            // "Tentar de novo": the list again, from the start.
+            case SetupPage.CableFailed:
+                _progress.Next();
                 ShowPage();
+                Prepare();
+                return;
+            // Nothing to click while the Midview finishes the phone.
+            case SetupPage.Cable:
                 return;
         }
         _progress.Next();
@@ -94,8 +119,18 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowPage();
     }
 
-    // The footer's other button: "Terminei" on the ready page.
-    private void OnOtherClicked(object sender, RoutedEventArgs e) => Close();
+    // The footer's other button: "Terminei" on the ready pages, "Preparar
+    // outro celular" when no step fixes what the cable found.
+    private void OnOtherClicked(object sender, RoutedEventArgs e)
+    {
+        if (_progress.Page == SetupPage.CableFailed)
+        {
+            _progress.Again();
+            ShowPage();
+            return;
+        }
+        Close();
+    }
 
     private void OnChangeWifiClicked(object sender, RoutedEventArgs e)
     {
@@ -118,15 +153,10 @@ public partial class PreparePhonesWindow : MidviewWindow
             return false;
         }
         WifiErrorText.Text = "";
-        var typed = (Ssid: ssid, Password: PasswordInput.Text);
-        if (_wifi == typed)
-        {
-            return true;
-        }
-        _wifi = typed;
+        _wifi = (ssid, PasswordInput.Text);
         try
         {
-            PhoneWifiFile.Save(typed.Ssid, typed.Password);
+            PhoneWifiFile.Save(ssid, PasswordInput.Text);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
@@ -185,11 +215,14 @@ public partial class PreparePhonesWindow : MidviewWindow
     private void ShowPage()
     {
         var page = _progress.Page;
-        var step = _progress.Step;
         WifiPage.Visibility = Shown(page == SetupPage.Wifi);
+        GatherPage.Visibility = Shown(page == SetupPage.Gather);
         StepPage.Visibility = Shown(page == SetupPage.Step);
         ConfirmRedoPage.Visibility = Shown(page == SetupPage.ConfirmRedo);
+        CablePage.Visibility = Shown(page == SetupPage.Cable);
+        CableFailedPage.Visibility = Shown(page == SetupPage.CableFailed);
         ReadyPage.Visibility = Shown(page == SetupPage.Ready);
+        NotAppearedPage.Visibility = Shown(page == SetupPage.NotAppeared);
 
         var wifi = _wifi;
         WifiNameRun.Text = wifi?.Ssid ?? "";
@@ -200,6 +233,8 @@ public partial class PreparePhonesWindow : MidviewWindow
                 ? $"{_progress.StepCaption} · {name}"
                 : _progress.StepCaption,
             SetupPage.Wifi => _progress.ReturnsAfterWifi ? "Trocar o Wi-Fi" : "Antes de começar",
+            SetupPage.Gather => "Antes de começar",
+            SetupPage.Cable or SetupPage.CableFailed => $"{_progress.Name} · no cabo",
             _ => _progress.Name ?? "",
         };
 
@@ -213,27 +248,48 @@ public partial class PreparePhonesWindow : MidviewWindow
                 }
                 Footer(back: _progress.ReturnsAfterWifi, next: "Guardar e continuar");
                 break;
+            case SetupPage.Gather:
+                ShowGather();
+                break;
             case SetupPage.Step:
-                ShowStep(step!);
+                ShowStep(_progress.Step!);
                 break;
             case SetupPage.ConfirmRedo:
                 ConfirmRedoTitle.Text = _progress.ConfirmRedoText;
                 ConfirmRedoHint.Text = _phoneOnline(_progress.Name!) == true && _wipe is not null
                     ? $"O {_progress.Name} está ligado agora: no próximo passo, o Midview pode apagá-lo daqui, sem mexer nos menus do celular."
-                    : $"Siga os passos com o celular na mão. O {_progress.Name} antigo sai da turma quando este aparecer. " +
-                      "Um celular que já era da escola não deixa restaurar pelo menu das Configurações: no passo de restaurar, use \"Restaurar sem o PIN\" (veja em \"Deu errado?\").";
+                    : $"Siga os passos com o celular na mão. O {_progress.Name} antigo é trocado por este quando este ficar pronto. " +
+                      $"Se for o mesmo celular, ele já é da escola e precisa ser apagado antes; como não está ligado agora, " +
+                      "apague-o pelo modo de recuperação (veja \"Celular travado com PIN\" em \"Deu errado?\").";
                 Footer(back: true, next: $"Sim, preparar de novo o {_progress.Number}", backText: "Não, trocar o número");
                 break;
+            case SetupPage.Cable:
+            case SetupPage.CableFailed:
             case SetupPage.Ready:
-                ReadyTitle.Text = _progress.ReadyText(_phonesInClass(), PhoneTotalFile.Load());
-                ReadyHint.Text = $"Ele já está na turma, no filtro Celulares. Na tela do celular aparece \"Pronto. Este é o {_progress.Name} da escola.\"";
-                Footer(back: false, next: "Preparar o próximo", other: "Terminei");
+            case SetupPage.NotAppeared:
+                ShowCablePage();
                 break;
         }
 
-        _helpOpen = false;
+        ShowApp();
+        // "Apareceu Bem-vindo" right after a wipe: open under the steps, the
+        // page kept at its top so the wipe's card stays in sight.
+        _helpOpen = _progress.OpensWelcomeHelp;
         ShowHelp();
         PageScroll.ScrollToTop();
+        UpdateCableWatch();
+    }
+
+    private void ShowGather()
+    {
+        var gather = PhoneSetupGuide.Gather;
+        GatherTitle.Text = gather.Title;
+        GatherList.Children.Clear();
+        for (var i = 0; i < gather.Items.Count; i++)
+        {
+            GatherList.Children.Add(NumberedRow(i + 1, new TextBlock { Text = gather.Items[i], TextWrapping = TextWrapping.Wrap, FontSize = 13 }));
+        }
+        Footer(back: false, next: "Já separei tudo, começar");
     }
 
     private void ShowStep(GuideStep step)
@@ -251,6 +307,11 @@ public partial class PreparePhonesWindow : MidviewWindow
             NumberError("");
             TotalInputs.Visibility = Shown(!PhoneTotalFile.Asked());
             Dispatcher.BeginInvoke(() => NumberInput.Focus(), DispatcherPriority.Input);
+        }
+        CableWaitCard.Visibility = Shown(step.Id == "cabo");
+        if (step.Id == "cabo")
+        {
+            CableWaitText.Text = _cableWait;
         }
 
         ShowPrint(step, ScreenWidth);
@@ -296,6 +357,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         NextButton.Content = next ?? "";
         NextButton.Style = (Style)FindResource(primary ? "PrimaryButton" : typeof(Button));
         NextButton.IsDefault = primary;
+        NextButton.IsEnabled = true;
         OtherButton.Visibility = Shown(other is not null);
         OtherButton.Content = other ?? "";
     }

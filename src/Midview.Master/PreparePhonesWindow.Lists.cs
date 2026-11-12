@@ -16,12 +16,15 @@ public partial class PreparePhonesWindow
         ShowHelp();
         if (_helpOpen)
         {
-            // The helps open below the fold on a small screen: scroll them up into view.
-            Dispatcher.BeginInvoke(
-                () => PageScroll.ScrollToVerticalOffset(HelpArea.TranslatePoint(new Point(0, 0), PageContent).Y),
-                DispatcherPriority.Loaded);
+            ScrollToHelp();
         }
     }
+
+    // The helps open below the fold on a small screen: scroll them up into view.
+    private void ScrollToHelp() =>
+        Dispatcher.BeginInvoke(
+            () => PageScroll.ScrollToVerticalOffset(HelpArea.TranslatePoint(new Point(0, 0), PageContent).Y),
+            DispatcherPriority.Loaded);
 
     private void FillTaps(IReadOnlyList<string> taps)
     {
@@ -61,7 +64,8 @@ public partial class PreparePhonesWindow
     {
         var helps = HelpsOfPage();
         HelpLink.Visibility = Shown(helps.Count > 0);
-        HelpLinkRun.Text = _helpOpen ? "Deu errado? (fechar)" : "Deu errado?";
+        // Short when open: the footer also holds the long "próximo passo" buttons.
+        HelpLinkRun.Text = _helpOpen ? "Fechar a ajuda" : "Deu errado?";
         HelpList.Children.Clear();
         HelpArea.Visibility = Shown(_helpOpen && helps.Count > 0);
         if (!_helpOpen)
@@ -81,8 +85,16 @@ public partial class PreparePhonesWindow
         {
             SetupPage.Wifi => PhoneSetupGuide.WifiHelp.ToList(),
             SetupPage.Step => _progress.Step!.Help.ToList(),
+            // What the cable found: the helps of the step that fixes it.
+            SetupPage.CableFailed when _progress.ProblemStepId is { } id =>
+                PhoneSetupGuide.Steps.First(step => step.Id == id).Help.ToList(),
             _ => new List<GuideHelp>(),
         };
+        if (_progress.Page == SetupPage.CableFailed && _progress.Problem == CableProblem.AlreadySchool)
+        {
+            // A school phone that does not show up in the Midview cannot be wiped from it.
+            helps.Add(PhoneSetupGuide.LockedWithPin);
+        }
         if (_progress.Page == SetupPage.ConfirmRedo
             || (_progress.Page == SetupPage.Step && _progress.Wipe == WipeState.Failed))
         {

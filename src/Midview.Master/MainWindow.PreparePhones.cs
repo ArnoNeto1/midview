@@ -1,5 +1,9 @@
+using System.IO;
+using System.Net.Http;
+using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Controls;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -7,6 +11,9 @@ namespace Midview.Master;
 // empty "Celulares" filter and by the link in "Máquinas da sala".
 public partial class MainWindow
 {
+    // The phone app is a few MB: a slow school connection still gets it.
+    private static readonly HttpClient PhoneAppHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
+
     private PreparePhonesWindow? _preparePhonesWindow;
 
     private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) => OpenPreparePhonesWindow();
@@ -21,8 +28,16 @@ public partial class MainWindow
             return open;
         }
 
-        var window = new PreparePhonesWindow(
-            () => _tiles.Count(tile => tile.Machine.IsPhone), PhoneOnline, WipePhoneNamed)
+        var window = new PreparePhonesWindow(new PreparePhonesHost(
+            () => _tiles.Count(tile => tile.Machine.IsPhone),
+            PhoneOnline,
+            () => new AdbProcess(),
+            GetPhoneAppAsync,
+            _masterCertificate.Thumbprint,
+            AddPreparedPhone,
+            IsPreparedPhoneOnline,
+            SearchForPreparedPhoneAsync,
+            WipePhoneNamed))
         {
             Owner = this,
         };
@@ -31,6 +46,58 @@ public partial class MainWindow
         OwnedWindow.ReturnToOwnerWhenClosed(window);
         window.Show();
         return window;
+    }
+
+    private static async Task<(AgentApkResult Result, string ApkPath)> GetPhoneAppAsync(CancellationToken token)
+    {
+        var apk = new AgentApk(PhoneAppHttp, MasterData.Folder, PhoneProvisioning.SignatureChecksum);
+        return (await apk.GetAsync(token), apk.ApkPath);
+    }
+
+    // A phone the assistant prepared over the cable: in the class (a phone
+    // with the same name, the same one prepared again, is replaced), saved,
+    // and shown off until a search of the network finds its address.
+    private void AddPreparedPhone(KnownMachine phone)
+    {
+        var problem = PhoneJoinRoster.AddAndSave(() =>
+        {
+            var kept = PhoneJoinRoster.ReplacingSameName(_tiles.Select(tile => tile.Machine).ToList(), phone);
+            for (var i = _tiles.Count - 1; i >= 0; i--)
+            {
+                if (!kept.Any(machine => ReferenceEquals(machine, _tiles[i].Machine)))
+                {
+                    RemoveTileAt(i);
+                }
+            }
+            InsertTile(_tiles.Count, phone);
+            UpdateEmptyHint();
+            SaveRoster();
+        });
+        if (problem is not null)
+        {
+            StatusTextBlock.Text = problem;
+        }
+    }
+
+    private bool IsPreparedPhoneOnline(KnownMachine phone) =>
+        _tiles.Any(tile => tile.Machine.IsPhone && tile.Presence == TilePresence.Online
+                           && string.Equals(tile.Machine.AgentThumbprint, phone.AgentThumbprint, StringComparison.OrdinalIgnoreCase));
+
+    // A search of the network, as "Procurar máquinas na rede" does: the
+    // phone prepared answers it from the address it got on the Wi-Fi.
+    private async Task SearchForPreparedPhoneAsync()
+    {
+        var thumbprint = _masterCertificate.Thumbprint;
+        try
+        {
+            var found = await Task.Run(() => DiscoveryClient.Search(
+                thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime));
+            RefreshAddresses(found);
+        }
+        catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException)
+        {
+            // The next search, 10 s later, tries again.
+        }
     }
 
     // Null when the class has no phone with that name; else whether it answers now.

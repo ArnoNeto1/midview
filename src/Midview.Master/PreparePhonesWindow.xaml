@@ -33,6 +33,14 @@
         <ScrollViewer x:Name="PageScroll" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Focusable="False">
             <StackPanel x:Name="PageContent">
+            <!-- The phone app could not be fetched: said before step 1, and nothing starts without it. -->
+            <Border x:Name="AppCard" Style="{StaticResource Card}" Margin="0,0,0,12">
+                <DockPanel>
+                    <Button x:Name="AppRetryButton" DockPanel.Dock="Right" Content="Tentar de novo" Click="OnAppRetryClicked"
+                            Padding="12,6" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="AppText" Style="{StaticResource WarningText}" FontSize="13" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
             <Grid>
                 <!-- Wi-Fi do laboratório (only the first time, or "trocar") -->
                 <StackPanel x:Name="WifiPage">
@@ -46,6 +54,12 @@
                     <TextBlock x:Name="WifiErrorText" Style="{StaticResource ErrorText}" />
                 </StackPanel>
 
+                <!-- Antes de começar, separe: (only before the first phone) -->
+                <StackPanel x:Name="GatherPage">
+                    <TextBlock x:Name="GatherTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,12" />
+                    <StackPanel x:Name="GatherList" />
+                </StackPanel>
+
                 <!-- One step of PhoneSetupGuide -->
                 <StackPanel x:Name="StepPage">
                     <!-- "Apagar e preparar de novo": the number is a phone of the class, online. Kept to a few
@@ -55,7 +69,7 @@
                             <StackPanel x:Name="WipeButtons" Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0">
                                 <Button x:Name="WipeButton" Content="Apagar e preparar de novo" Click="OnWipeClicked"
                                         Style="{StaticResource DangerButton}" Padding="12,6" />
-                                <Button x:Name="WipeRestoreButton" Content="Restaurar sem o PIN" Click="OnWipeRestoreClicked"
+                                <Button x:Name="WipeRestoreButton" Content="Ver &quot;Celular travado com PIN&quot;" Click="OnWipeRestoreClicked"
                                         Style="{StaticResource PrimaryButton}" Padding="12,6" />
                                 <Button x:Name="WipeRetryButton" Content="Tentar apagar de novo" Click="OnWipeClicked"
                                         Padding="12,6" Margin="8,0,0,0" />
@@ -86,6 +100,11 @@
                             <StackPanel x:Name="TapsPanel" Margin="0,12,0,0" />
                             <TextBlock x:Name="TimingText" Style="{StaticResource Hint}" FontSize="13" Margin="0,4,0,0" />
 
+                            <!-- cabo: what the cable sees now, checked every second -->
+                            <Border x:Name="CableWaitCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                                <TextBlock x:Name="CableWaitText" FontSize="13" TextWrapping="Wrap" />
+                            </Border>
+
                             <!-- numero: the phone's number, and once the school's total -->
                             <StackPanel x:Name="NumberInputs">
                                 <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,0,0,10"
@@ -110,12 +129,44 @@
                     <TextBlock x:Name="ConfirmRedoHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
                 </StackPanel>
 
+                <!-- The Midview finishes the phone over the cable: the list of objective 4 -->
+                <StackPanel x:Name="CablePage">
+                    <TextBlock x:Name="CableTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,14"
+                               Text="Não tire o cabo. Leva cerca de 1 minuto, e o Midview faz tudo sozinho." />
+                    <StackPanel x:Name="CableList" />
+                </StackPanel>
+
+                <!-- An item of the list failed: what happened, and the step that fixes it -->
+                <StackPanel x:Name="CableFailedPage">
+                    <TextBlock Text="&#xE7BA;" FontFamily="{StaticResource IconFont}" FontSize="36" Foreground="{StaticResource WarningBrush}"
+                               Margin="0,4,0,10" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="FailedTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="FailedText" FontSize="14" TextWrapping="Wrap" Margin="0,10,0,0" />
+                    <TextBlock x:Name="FailedHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
+                </StackPanel>
+
                 <!-- Celular 07 pronto -->
                 <StackPanel x:Name="ReadyPage">
                     <TextBlock Text="&#xE930;" FontFamily="{StaticResource IconFont}" FontSize="40" Foreground="{StaticResource OnlineBrush}"
                                Margin="0,4,0,12" HorizontalAlignment="Left" />
-                    <TextBlock x:Name="ReadyTitle" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="Pronto. Pode tirar o cabo." FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="ReadyTitle" FontSize="15" TextWrapping="Wrap" Margin="0,8,0,0" />
                     <TextBlock x:Name="ReadyHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
+                    <Border Style="{StaticResource Card}" Margin="0,14,0,0">
+                        <TextBlock x:Name="ReadyStatus" FontSize="13" TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Ready, but not in the class after 5 minutes: the network, not the preparation -->
+                <StackPanel x:Name="NotAppearedPage">
+                    <TextBlock x:Name="NotAppearedTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="NotAppearedHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,14" />
+                    <StackPanel x:Name="NotAppearedList" />
+                    <DockPanel Margin="0,4,0,0">
+                        <Button x:Name="SearchAgainButton" DockPanel.Dock="Left" Content="Procurar de novo" Click="OnSearchAgainClicked" Padding="12,6" />
+                        <TextBlock x:Name="SearchAgainText" Style="{StaticResource Hint}" FontSize="13" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    </DockPanel>
                 </StackPanel>
 
             </Grid>

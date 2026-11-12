@@ -4,12 +4,16 @@ namespace Midview.Master;
 internal enum SetupPage
 {
     Wifi,
+    Gather,
     Step,
     ConfirmRedo,
+    Cable,
+    CableFailed,
     Ready,
+    NotAppeared,
 }
 
-// Where "Apagar e preparar de novo" stands on the six taps page of a phone
+// Where "Apagar e preparar de novo" stands on the "ligar" page of a phone
 // that was already in the class.
 internal enum WipeState
 {
@@ -21,16 +25,23 @@ internal enum WipeState
 }
 
 // Where the assistant is for the phone being prepared, without any window:
-// which page, which step of PhoneSetupGuide and the phone's number. The
-// window draws the page and calls these as the teacher clicks.
+// which page, which step of PhoneSetupGuide, the phone's number and how the
+// cable part goes. The window draws the page and calls these as the teacher
+// clicks, as the cable answers and as a timer ticks.
 internal sealed class PhoneSetupProgress
 {
+    // How long after "Pronto" the assistant waits before "ainda não apareceu".
+    public static readonly TimeSpan NotAppearedAfter = TimeSpan.FromMinutes(5);
+
     private static readonly int NumberStep = IndexOf("numero");
-    private static readonly int BatteryStep = IndexOf("ligar");
-    private static readonly int SixTapsStep = IndexOf("cabo");
+    private static readonly int TurnOnStep = IndexOf("ligar");
+    private static readonly int CableStep = IndexOf("cabo");
 
     // The step to come back to after the Wi-Fi page ("trocar").
     private int? _afterWifi;
+
+    // "Antes de começar, separe:" was shown (or the teacher did it before).
+    private bool _gathered;
 
     // After "Já existe um Celular 07": whether that one was online and can be wiped.
     private bool _takenOnline;
@@ -51,7 +62,30 @@ internal sealed class PhoneSetupProgress
 
     public string? Name => Number is null ? null : PhoneNumber.NameOf(Number);
 
-    // The six taps page offers "Apagar e preparar de novo": the number was
+    // The last item of the cable list reached (null before the first).
+    public CableStage? Stage { get; private set; }
+
+    // Why the cable part stopped (on SetupPage.CableFailed), in plain words,
+    // and the step that fixes it (null: none does).
+    public CableProblem? Problem { get; private set; }
+
+    public string? ProblemText { get; private set; }
+
+    public string? ProblemStepId { get; private set; }
+
+    public int? ProblemStepNumber => ProblemStepId is { } id ? IndexOf(id) + 1 : null;
+
+    // When the phone was ready ("Pronto. Pode tirar o cabo."), and whether it
+    // showed up in the class since.
+    public DateTimeOffset? ReadyAt { get; private set; }
+
+    public bool HasAppeared { get; private set; }
+
+    // The "ligar" page opens with "Apareceu Bem-vindo" in sight: the phone was
+    // just wiped (or restored by hand) and is on that screen.
+    public bool OpensWelcomeHelp { get; private set; }
+
+    // The "ligar" page offers "Apagar e preparar de novo": the number was
     // already a phone of the class, online, and the teacher confirmed.
     public bool OffersWipe => Wipe != WipeState.None;
 
@@ -77,6 +111,7 @@ internal sealed class PhoneSetupProgress
         {
             Wipe = WipeState.Done;
             WipeFailure = null;
+            OpensWelcomeHelp = true;
         }
     }
 
@@ -94,11 +129,24 @@ internal sealed class PhoneSetupProgress
 
     public string ConfirmRedoText => $"Já existe um {Name}. Vai preparar de novo o {Number}?";
 
-    public void Start(bool hasWifi)
+    // hasWifi: the lab Wi-Fi is saved. gathered: the teacher already went
+    // through "Antes de começar, separe:" (it is shown only once).
+    public void Start(bool hasWifi, bool gathered)
     {
         Reset();
-        Page = hasWifi ? SetupPage.Step : SetupPage.Wifi;
-        StepIndex = NumberStep;
+        _gathered = gathered;
+        if (!hasWifi)
+        {
+            Page = SetupPage.Wifi;
+        }
+        else if (!gathered)
+        {
+            ShowGather();
+        }
+        else
+        {
+            ShowStep(NumberStep);
+        }
     }
 
     // What the teacher typed on the number page; false (and no number) when
@@ -120,13 +168,20 @@ internal sealed class PhoneSetupProgress
     {
         switch (Page)
         {
-            case SetupPage.Wifi:
-                ShowStep(_afterWifi ?? NumberStep);
+            case SetupPage.Wifi when _afterWifi is { } step:
+                ShowStep(step);
                 _afterWifi = null;
+                break;
+            case SetupPage.Wifi when !_gathered:
+                ShowGather();
+                break;
+            case SetupPage.Wifi:
+            case SetupPage.Gather:
+                ShowStep(NumberStep);
                 break;
             case SetupPage.ConfirmRedo:
                 SetWipe(_takenOnline ? WipeState.Offered : WipeState.None);
-                ShowStep(_takenOnline ? SixTapsStep : BatteryStep);
+                ShowStep(TurnOnStep);
                 break;
             case SetupPage.Step when StepIndex == NumberStep:
                 if (Number is not null)
@@ -134,11 +189,19 @@ internal sealed class PhoneSetupProgress
                     ShowStep(StepIndex + 1);
                 }
                 break;
-            case SetupPage.Step when StepIndex == SixTapsStep:
-                Page = SetupPage.Ready;
+            // The cable step moves on by itself, when the cable sees the phone.
+            case SetupPage.Step when StepIndex == CableStep:
                 break;
             case SetupPage.Step:
                 ShowStep(StepIndex + 1);
+                break;
+            // "Tentar de novo".
+            case SetupPage.CableFailed:
+                ShowCable();
+                break;
+            // "Preparar o próximo".
+            case SetupPage.Ready or SetupPage.NotAppeared:
+                Again();
                 break;
         }
     }
@@ -157,6 +220,10 @@ internal sealed class PhoneSetupProgress
             case SetupPage.Step when StepIndex > NumberStep:
                 ShowStep(StepIndex - 1);
                 break;
+            // "Voltar ao passo 7": the step that fixes what the cable found.
+            case SetupPage.CableFailed when ProblemStepId is { } id:
+                ShowStep(IndexOf(id));
+                break;
         }
     }
 
@@ -172,21 +239,90 @@ internal sealed class PhoneSetupProgress
         Page = SetupPage.ConfirmRedo;
     }
 
-    // Straight to the six taps for a phone just wiped by "Apagar e preparar de
-    // novo" (wiped: the page says so instead of offering the wipe).
+    // The cable step saw one phone, allowed ("Permitir"): the Midview finishes
+    // it now. False (nothing changes) on any other page.
+    public bool CableSeen()
+    {
+        if (Page != SetupPage.Step || StepIndex != CableStep)
+        {
+            return false;
+        }
+        ShowCable();
+        return true;
+    }
+
+    public void CableStageReached(CableStage stage)
+    {
+        if (Page == SetupPage.Cable)
+        {
+            Stage = stage;
+        }
+    }
+
+    public void CableFailed(CableProblem problem)
+    {
+        if (Page != SetupPage.Cable)
+        {
+            return;
+        }
+        var (text, step) = PhoneCable.Describe(problem);
+        Problem = problem;
+        ProblemText = text;
+        ProblemStepId = step;
+        Page = SetupPage.CableFailed;
+    }
+
+    // The phone is the school's own: "Pronto. Pode tirar o cabo."
+    public void CablePrepared(DateTimeOffset at)
+    {
+        if (Page != SetupPage.Cable)
+        {
+            return;
+        }
+        ReadyAt = at;
+        HasAppeared = false;
+        Page = SetupPage.Ready;
+    }
+
+    // Five minutes after ready with no sign of the phone: a network problem.
+    public void Tick(DateTimeOffset now)
+    {
+        if (Page == SetupPage.Ready && !HasAppeared && ReadyAt is { } ready && now - ready >= NotAppearedAfter)
+        {
+            Page = SetupPage.NotAppeared;
+        }
+    }
+
+    // The phone just prepared answers in the class.
+    public void Appeared()
+    {
+        if (Page is not (SetupPage.Ready or SetupPage.NotAppeared))
+        {
+            return;
+        }
+        HasAppeared = true;
+        Page = SetupPage.Ready;
+    }
+
+    // Straight to turning the phone on, for a phone just wiped by "Apagar e
+    // preparar de novo": it is on "Bem-vindo", so that help opens. wiped: the
+    // page also says the wipe was sent.
     public void StartAt(string number, bool wiped = false)
     {
         Reset();
+        _gathered = true;
         Number = PhoneNumber.Normalize(number) ?? number;
         SetWipe(wiped ? WipeState.Done : WipeState.None);
-        ShowStep(SixTapsStep);
+        ShowStep(TurnOnStep);
+        OpensWelcomeHelp = true;
     }
 
     // After a failed wipe, the teacher restored the phone by hand (recovery
-    // mode): the same six taps page, now with the steps.
+    // mode): the same page, now with the steps and "Apareceu Bem-vindo".
     public void RestoredByHand()
     {
         SetWipe(WipeState.None);
+        OpensWelcomeHelp = true;
     }
 
     // "Preparar o próximo": a new phone, from its number.
@@ -209,6 +345,22 @@ internal sealed class PhoneSetupProgress
     {
         Page = SetupPage.Step;
         StepIndex = index;
+        OpensWelcomeHelp = false;
+    }
+
+    private void ShowGather()
+    {
+        Page = SetupPage.Gather;
+        _gathered = true;
+    }
+
+    private void ShowCable()
+    {
+        Stage = null;
+        Problem = null;
+        ProblemText = null;
+        ProblemStepId = null;
+        Page = SetupPage.Cable;
     }
 
     private void Reset()
@@ -217,6 +369,13 @@ internal sealed class PhoneSetupProgress
         SetWipe(WipeState.None);
         _takenOnline = false;
         _afterWifi = null;
+        Stage = null;
+        Problem = null;
+        ProblemText = null;
+        ProblemStepId = null;
+        ReadyAt = null;
+        HasAppeared = false;
+        OpensWelcomeHelp = false;
     }
 
     private void SetWipe(WipeState state)
