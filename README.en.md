@@ -108,7 +108,12 @@ In **Máquinas da sala** > **Outro professor**:
 
 Coming soon: the phone app hasn't been published yet.
 
-In this first version, an Android phone (Android 10 or newer) shows up in the grid, under the **Celulares** (phones) filter, and is paired with the 6-digit code, like the machines. Viewing the screen, locking and controlling the phone's apps come in later versions.
+An Android phone (Android 10 or newer) shows up in the grid, under the **Celulares** (phones) filter, and is paired with the 6-digit code, like the machines. The teacher sees the phone's screen, locks it with the padlock and blocks apps and websites:
+
+- **Block programs** (Bloquear programas), with only phones selected (or under the **Celulares** filter), shows the phone's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
+- **Block websites** (Bloquear sites) is the same window as for the PCs. On the phone, blocked websites don't open in Chrome, and the other browsers are hidden. **Bloquear a internet** (block the internet) cuts the internet for every app, and Midview keeps seeing the phone.
+
+The app and website blocks stay in effect if the phone restarts.
 
 To prepare a phone:
 

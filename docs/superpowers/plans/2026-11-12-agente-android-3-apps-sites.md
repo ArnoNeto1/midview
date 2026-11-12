@@ -83,3 +83,56 @@
 
 - [ ] Com a cópia de teste do Master e o Redmi: bloquear apps pela janela nova (lista com ícones do Redmi), "Liberar só estes", sites e internet; conferir selos e avisos. Anotar o resultado no fim deste plano.
 - [ ] README "Celulares": o que o professor consegue bloquear. Commit `docs: resultado do bloqueio de apps e sites no celular`.
+
+---
+
+## Resultado (Task 5)
+
+Prova feita em 11/11/2026, das 23:40 às 23:52, no Redmi 10C da escola (Android 13, MIUI 14, Device Owner, versão de teste do agente), pela rede Wi-Fi.
+
+- **Como:** um programa de teste abriu a `MainWindow` do Master fora da tela, com uma cópia da pasta de teste `Midview-teste-celular` (identidade de teste e sala só com o celular).
+- Ele clicou nos botões da barra, da `PhoneAppBlockWindow` e da `SiteBlockWindow` como o professor faria.
+- O Master instalado e a sala de verdade não foram usados.
+- As capturas estão em `.superpowers/sdd/2026-11-12-agente-android-3-apps-sites/screens/task5-*.png`.
+
+### Provado no celular
+
+- **Lista de apps:** "Bloquear programas" (sala só com o celular) abriu "Bloquear apps no celular" em 4 s, com os 63 apps que o aluno pode abrir, todos com ícone.
+- **Bloquear só estes, com a Calculadora:** a Calculadora estava aberta no celular.
+  - "Aplicar bloqueio" respondeu "✓ Celular 35F7: bloqueando 1 app(s)" em 0,7 s.
+  - A Calculadora fechou na hora e ficou cinza (`suspended=true`). Ao tocar nela aparece "Não é possível abrir este app".
+  - Só ela ficou suspensa.
+- **Liberar só estes, com a Calculadora:** a resposta foi "permitindo só o essencial e 1 app(s)".
+  - 62 apps ficaram suspensos e cinza na tela inicial, e a Calculadora abre.
+  - As Configurações, o telefone, a tela inicial, a Play Store e a Segurança continuam abrindo.
+  - O Midview não foi suspenso e continuou respondendo e mandando a tela.
+- **Selo no quadradinho:** "🔒 1 app bloqueado" e depois "🔒 só 1 app liberado" apareceram menos de 1 s depois de aplicar, e sumiram com "Liberar tudo". O `ThumbnailPoller` reenviou o bloqueio da turma e leu o estado do celular.
+- **Sites:** "Bloquear sites", a mesma janela dos PCs, bloqueou `youtube.com` ("✓ Celular 35F7: youtube.com bloqueado").
+  - O celular guardou `internet=0` e `youtube.com` e registrou "Site block applied: 1 site(s), internet free.".
+  - A configuração que o agente passa ao Chrome não pode ser lida pelo cabo sem root.
+- **Bloquear a internet:** a resposta foi "✓ Celular 35F7: internet bloqueada", em 0,4 s.
+  - A VPN do Midview ligou como "sempre ativa", com bloqueio (`tun0` e o ícone VPN na barra).
+  - O ping para 8.8.8.8 ficou sem resposta, e HTTP e HTTPS não conectaram.
+  - O Midview continuou vendo o celular: 42 telas em 2 min 16 s, com no máximo 3,6 s entre elas. O estado foi lido em 179 ms, e a busca na rede achou o celular.
+- **Liberar a internet:** a VPN desligou e a VPN "sempre ativa" voltou a nenhuma. O DNS privado não foi mexido, e o ping e o HTTP (204) voltaram.
+- **Volta ao normal:** "Liberar o site" e "Liberar tudo". No fim: nenhum app suspenso, nenhum site bloqueado, internet livre e sem VPN.
+
+### Achado
+
+Durante "Bloquear a internet", os nomes dos sites ainda são resolvidos, mas nenhuma conexão sai.
+
+- O Android consulta o DNS pela rede Wi-Fi quando a VPN não tem servidor de DNS.
+- A internet fica cortada; só a consulta de nomes passa.
+- Fica para a revisão final decidir se vale pôr um DNS dentro da VPN.
+
+### Pendente
+
+- **Página de bloqueio do Chrome.** O Chrome do celular nunca foi aberto, e a primeira tela dele pede para aceitar os termos do Google. Aceitar fica com o usuário. Passos:
+  1. No celular, abrir o Chrome uma vez e aceitar a primeira tela, sem entrar em conta.
+  2. No Midview, abrir "Bloquear sites", escrever `youtube.com` e clicar em "Bloquear o site".
+  3. No Chrome do celular, abrir youtube.com. Deve aparecer a página de bloqueio do Chrome.
+  4. Clicar em "Bloquear a internet". Qualquer site deve mostrar a página de bloqueio.
+  5. Liberar a internet e o site.
+  - Se o Chrome não bloquear, ver `chrome://policy`. Se a `URLBlocklist` aparecer com erro, a correção é trocar uma linha no `ChromePolicy`.
+- **Bateria e calor numa aula de verdade:** não medidos. O celular ficou na tomada, com 100 % de bateria e 27–28 °C.
+- **Celular que não é Device Owner** (selo sem nada suspenso): não deu para conferir, porque o único celular de teste é Device Owner.

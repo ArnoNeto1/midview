@@ -106,7 +106,12 @@ Em **Máquinas da sala** > **Outro professor**:
 
 Em breve: o aplicativo do celular ainda não foi publicado.
 
-Nesta primeira versão, o celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celulares**, e é pareado com o código de 6 dígitos, como as máquinas. Ver a tela, bloquear e controlar os aplicativos do celular chegam em versões seguintes.
+O celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celulares**, e é pareado com o código de 6 dígitos, como as máquinas. O professor vê a tela do celular, bloqueia a tela com o cadeado e bloqueia apps e sites:
+
+- **Bloquear programas**, com só celulares selecionados (ou no filtro **Celulares**), mostra os apps do celular com os ícones. **Bloquear só estes** deixa os apps marcados cinza, sem abrir; **Liberar só estes** deixa abrir só os marcados (o Midview, a tela inicial, o telefone e as Configurações continuam funcionando).
+- **Bloquear sites** é a mesma janela dos PCs. No celular, os sites bloqueados não abrem no Chrome, e os outros navegadores ficam escondidos. **Bloquear a internet** corta a internet de todos os apps, e o Midview continua vendo o celular.
+
+Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 
 Para preparar um celular:
 
