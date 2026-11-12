@@ -1014,7 +1014,14 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
             return;
         }
-        OpenAppBlockWindow(ToolbarReach(ToolbarAction.BlockPrograms));
+        var targets = ToolbarReach(ToolbarAction.BlockPrograms);
+        if (targets.Count == 0)
+        {
+            // The "Computadores" filter in a room of phones only.
+            StatusTextBlock.Text = "Nenhum computador na lista da sala para bloquear programas.";
+            return;
+        }
+        OpenAppBlockWindow(targets);
     }
 
     // The block is remembered and resent (onClassPolicyApplied) only for the
@@ -1084,7 +1091,14 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear sites.";
             return;
         }
-        OpenSiteBlockWindow(ToolbarReach(ToolbarAction.BlockSites));
+        var targets = ToolbarReach(ToolbarAction.BlockSites);
+        if (targets.Count == 0)
+        {
+            // The "Computadores" filter in a room of phones only.
+            StatusTextBlock.Text = "Nenhum computador na lista da sala para bloquear sites.";
+            return;
+        }
+        OpenSiteBlockWindow(targets);
     }
 
     private void OnSiteBlockMachineClicked(object sender, RoutedEventArgs e)

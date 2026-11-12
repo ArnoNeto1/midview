@@ -353,7 +353,7 @@ public partial class PhoneAppBlockWindow : MidviewWindow
         }
         catch (Exception ex)
         {
-            return (phone.Name, false, false, FailureText.DescribeAgent(ex));
+            return (phone.Name, false, false, FailureText.DescribePhoneAgent(ex));
         }
     }
 

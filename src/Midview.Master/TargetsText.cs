@@ -18,7 +18,9 @@ public static class TargetsText
     // Names this many machines of a few picked on the grid, then counts the rest.
     private const int Named = 5;
 
-    public static string Describe(TargetsPreposition preposition, IReadOnlyList<string> names, bool wholeClass)
+    // noun: what the machines are called when counted ("máquinas"; the sites
+    // window says "celulares" or "aparelhos" when phones are among them).
+    public static string Describe(TargetsPreposition preposition, IReadOnlyList<string> names, bool wholeClass, string noun = "máquinas")
     {
         var (single, whole) = preposition switch
         {
@@ -33,14 +35,14 @@ public static class TargetsText
         }
         if (wholeClass)
         {
-            return $"{whole} ({names.Count} máquinas)";
+            return $"{whole} ({names.Count} {noun})";
         }
 
         var named = string.Join(", ", names.Take(Named));
         var rest = names.Count > Named ? $" e mais {names.Count - Named}" : string.Empty;
-        return $"{single} {names.Count} máquinas: {named}{rest}";
+        return $"{single} {names.Count} {noun}: {named}{rest}";
     }
 
-    public static string Describe(TargetsPreposition preposition, IReadOnlyList<KnownMachine> targets, bool wholeClass) =>
-        Describe(preposition, targets.Select(machine => machine.Name).ToList(), wholeClass);
+    public static string Describe(TargetsPreposition preposition, IReadOnlyList<KnownMachine> targets, bool wholeClass, string noun = "máquinas") =>
+        Describe(preposition, targets.Select(machine => machine.Name).ToList(), wholeClass, noun);
 }

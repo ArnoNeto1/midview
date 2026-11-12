@@ -26,6 +26,10 @@ public static class FailureText
     public static string DescribeAgent(Exception ex) =>
         Known(ex, refused: "O Midview não está rodando nessa máquina") ?? Technical(ex);
 
+    // The same for a phone's agent, on the same port.
+    public static string DescribePhoneAgent(Exception ex) =>
+        Known(ex, refused: "O Midview não está rodando neste celular") ?? Technical(ex);
+
     // The grid's tile status: always one of the short ones.
     public static string Status(Exception ex) => Known(ex, refused: NobodyLoggedIn) ?? "Sem resposta";
 
