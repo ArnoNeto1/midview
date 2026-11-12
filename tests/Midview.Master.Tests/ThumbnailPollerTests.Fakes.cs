@@ -93,6 +93,7 @@ public partial class ThumbnailPollerTests
         private readonly List<long> _blocksReceived = new();
         private readonly List<long> _phoneBlocksReceived = new();
         private readonly List<long> _lessonsReceived = new();
+        private readonly List<MessageType> _typesReceived = new();
         private readonly bool _ownsCertificate;
         private int _questions;
 
@@ -127,6 +128,10 @@ public partial class ThumbnailPollerTests
                         {
                             using var channel = SecureChannel.AuthenticateAsServer(client, _certificate, masters);
                             var message = channel.Receive();
+                            lock (_typesReceived)
+                            {
+                                _typesReceived.Add(message.Type);
+                            }
                             if (message.Type == MessageType.GetWakeAddress)
                             {
                                 Interlocked.Increment(ref _questions);
@@ -190,6 +195,18 @@ public partial class ThumbnailPollerTests
         public Message? PhoneStatusReply { get; set; }
 
         public int Questions => Volatile.Read(ref _questions);
+
+        // The type of every message received, in order.
+        public MessageType[] TypesReceived
+        {
+            get
+            {
+                lock (_typesReceived)
+                {
+                    return _typesReceived.ToArray();
+                }
+            }
+        }
 
         // The SavedAt of each SetPhoneAppBlock received, in order.
         public long[] PhoneBlocksReceived

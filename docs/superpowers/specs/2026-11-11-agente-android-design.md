@@ -213,6 +213,9 @@ Aplicada sozinha na primeira conexão com o professor e repetível por um botão
     celular ela fica em Download/Midview/Pasta da turma – <turma>; o Chrome
     continua baixando em Download (o Android não tem política de pasta de
     downloads), e o aluno move o download para a pasta no app Arquivos.
+    O celular não guarda o "PC das pastas": aceita a aula mais nova de
+    qualquer professor em quem confia (um celular da escola passa de sala em
+    sala), e o Master pergunta só aos PCs qual PC guarda as pastas.
 - Instalar apps novos, Play Store, contas Google nos celulares.
 - Os tablets da SED-SC (são gerenciados pela Secretaria; ficam de fora).
 - iPhone.

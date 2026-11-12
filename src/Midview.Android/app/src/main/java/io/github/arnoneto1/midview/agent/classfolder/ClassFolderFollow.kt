@@ -17,9 +17,15 @@ import java.util.concurrent.locks.ReentrantLock
 //   such protection), its files coming back with the Master's next round;
 // - a lesson over: the files a listing shows moved aside to
 //   Download/Midview/.midview-turmas/<lesson> (the teacher's Master brings in
-//   what it doesn't have, then clears them), and the folder removed with
-//   whatever else is in it (a half-downloaded file, say). When the next
-//   lesson is of the same turma the folder stays, as the new lesson's.
+//   what it doesn't have, then clears them), and the folder removed when
+//   all that is left in it is junk (ClassFolderRules.isJunk: a download
+//   Chrome never finished, Midview's own temp). Anything else (a file over
+//   the size or depth a listing takes, a name it can't carry) is the
+//   student's: a PC would send it to the Recycle Bin, and a phone has none,
+//   so the folder stays where it is, with it. When the next lesson is of the
+//   same turma the folder stays, as the new lesson's.
+// - after a restart (the phone's, or the agent's): the notice of the lesson
+//   on comes back if it is gone (remind), once.
 // What this phone last followed, and the lessons over whose folder isn't
 // settled yet, are kept in the app's storage, so a restart repeats nothing.
 // Never throws.
@@ -30,6 +36,8 @@ class ClassFolderFollow(
     private val canSee: () -> Boolean,
     // The student's notice of a new lesson; null when the lesson is over (its notice goes).
     private val notice: (ClassLesson?) -> Unit = {},
+    // The notice of the lesson still on, shown again if it is not there any more.
+    private val remind: (ClassLesson) -> Unit = {},
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
 ) {
     data class Followed(val lessonId: LessonId, val turma: String)
@@ -38,6 +46,7 @@ class ClassFolderFollow(
 
     private val lock = ReentrantLock()
     private var state: State? = null
+    private var reminded = false
     private val problems = mutableSetOf<String>()
 
     fun follow() {
@@ -69,7 +78,14 @@ class ClassFolderFollow(
             }
             state.current = now
             changed = true
+        } else if (on != null && !reminded) {
+            try {
+                remind(on)
+            } catch (e: RuntimeException) {
+                log("The class lesson's notice did not show again", e)
+            }
         }
+        reminded = true
         try {
             if (!canSee()) return
             if (on != null) makeFolder(on)?.let { problem("The folder of ${on.turma} can't be made: $it") }
@@ -132,6 +148,11 @@ class ClassFolderFollow(
             problem("Leaving ${source.name}: there is a link in it, which isn't followed or removed.")
             return true
         }
+        if (hasWork(source)) {
+            problem("Leaving ${source.name}: there are files in it the class folder can't carry, which are the student's.")
+            folder.removeEmptySubfolders(source)
+            return true
+        }
         if (!deleteTree(source)) {
             problem("The folder ${source.name} can't be removed yet.")
             return false
@@ -173,6 +194,10 @@ class ClassFolderFollow(
             }
         }
     }
+
+    // A file left that isn't junk (ClassFolderRules.isJunk).
+    private fun hasWork(directory: File): Boolean =
+        (directory.listFiles() ?: emptyArray()).any { if (it.isDirectory) hasWork(it) else !ClassFolderRules.isJunk(it.name) }
 
     private fun hasLink(directory: File): Boolean =
         (directory.listFiles() ?: emptyArray()).any { PhoneClassFolder.isLink(it) || (it.isDirectory && hasLink(it)) }

@@ -111,7 +111,8 @@ public partial class ThumbnailPollerTests
         var lesson = new ClassLesson(1000, Guid.NewGuid(), "3º A", 1, Ended: false);
         using var poller = new ThumbnailPoller(
             session.Machine() with { AgentThumbprint = agent.Thumbprint, Kind = DeviceKind.Android },
-            session.MasterCertificate, session.Port, agent.Port, classLesson: () => lesson);
+            session.MasterCertificate, session.Port, agent.Port, classLesson: () => lesson,
+            classHomeClaim: () => new ClassHomeClaim("PROF-01", ClassFolderRemote.Port, TakeOver: true, 5));
         var polls = new Polls(poller);
 
         poller.Start();
@@ -119,5 +120,8 @@ public partial class ThumbnailPollerTests
         await WaitUntil(() => agent.LessonsReceived.Length > 0);
         await polls.OneMoreAsync();
         Assert.Equal(new[] { 1000L }, agent.LessonsReceived);
+        // A phone keeps no class folders' home: it is never claimed nor asked.
+        Assert.DoesNotContain(MessageType.ClaimClassHome, agent.TypesReceived);
+        Assert.DoesNotContain(MessageType.GetClassHome, agent.TypesReceived);
     }
 }

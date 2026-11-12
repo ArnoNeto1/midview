@@ -85,5 +85,15 @@ object ClassFolderRules {
 
     fun ticksOf(unixMillis: Long): Long = maxOf(0L, unixMillis) * 10_000 + UNIX_EPOCH_TICKS
 
-    fun millisOf(ticks: Long): Long = (ticks - UNIX_EPOCH_TICKS) / 10_000
+    // Never before 1970: Android can't give a file an earlier time
+    // (File.setLastModified throws), and the wire takes any time from year 1.
+    fun millisOf(ticks: Long): Long = maxOf(0L, (ticks - UNIX_EPOCH_TICKS) / 10_000)
+
+    // What may be deleted for good when a lesson's folder goes: only what
+    // is never anybody's work (a file Android or Chrome is still writing,
+    // Midview's own temp). Anything else, listed or not, is the student's.
+    fun isJunk(name: String): Boolean =
+        name.startsWith(".pending-") ||
+            name.endsWith(".crdownload", ignoreCase = true) ||
+            (name.startsWith(TEMP_PREFIX, ignoreCase = true) && name.endsWith(TEMP_SUFFIX, ignoreCase = true))
 }

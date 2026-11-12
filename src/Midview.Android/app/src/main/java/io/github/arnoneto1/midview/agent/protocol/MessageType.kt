@@ -130,12 +130,11 @@ object MessageType {
     const val INSTALL_ACCEPTED = 87
     const val INSTALL_STARTED = 88
     // "Pasta da turma", as a PC's Agent and Session take it (ClassLesson,
-    // ClassHome, ClassFolderWire), from a trusted teacher only. On the
-    // commands port (28900), the Agent's: SET_CLASS_LESSON (a CommandAck,
-    // CommandResult), GET_CLASS_LESSON (one CLASS_LESSON_STATUS),
-    // CLAIM_CLASS_HOME (a CommandAck), GET_CLASS_HOME (one CLASS_HOME_STATUS,
-    // empty for none) and IS_TEACHER_TRUSTED (a thumbprint in ASCII; a
-    // CommandAck, 1 when trusted). On the screen port (5901), the Session's,
+    // ClassFolderWire), from a trusted teacher only. On the commands port
+    // (28900), the Agent's: SET_CLASS_LESSON (a CommandAck, CommandResult) and
+    // GET_CLASS_LESSON (one CLASS_LESSON_STATUS); the class folders' home's
+    // (75 to 78) stay with the PCs and get "Ainda não funciona em celular.".
+    // On the screen port (5901), the Session's,
     // each the first message of its connection: LIST_CLASS_FOLDER (answered
     // with CLASS_FOLDER_LISTING parts), PULL_CLASS_FILE (SEND_FILE and
     // FILE_CHUNKs, then a CommandAck), PUSH_CLASS_FILE (a CommandAck, the
@@ -152,10 +151,6 @@ object MessageType {
     const val DELETE_CLASS_FILE = 72
     const val RENAME_CLASS_FILE = 73
     const val CLEAR_SET_ASIDE = 74
-    const val CLAIM_CLASS_HOME = 75
-    const val GET_CLASS_HOME = 76
-    const val CLASS_HOME_STATUS = 77
-    const val IS_TEACHER_TRUSTED = 78
 
     const val FILL_ADMIN_PASSWORD = 90
 

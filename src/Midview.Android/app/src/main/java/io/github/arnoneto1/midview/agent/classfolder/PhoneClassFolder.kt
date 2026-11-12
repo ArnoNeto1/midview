@@ -62,7 +62,9 @@ class PhoneClassFolder(
     // The current lesson's folder's files (lesson = the current one) and
     // those set aside for other lessons, files before subfolders, in name
     // order. A problem (no access, no folder yet, a link) means no entries.
-    fun list(): Listing {
+    fun list(): Listing = synchronized(gate) { listLocked() }
+
+    private fun listLocked(): Listing {
         val on = lesson()
         val current = on?.lessonId ?: LessonId.EMPTY
         if (on != null && !canSee()) return Listing(current, NO_ACCESS, emptyList())
@@ -133,7 +135,13 @@ class PhoneClassFolder(
             out.fd.sync()
             out.close()
             // Before it shows under its name: the Master must never see its own copy with another time.
-            temp.setLastModified(ClassFolderRules.millisOf(header.lastWriteTicks))
+            // A time the storage refuses is no failure: the ticks are remembered below either way,
+            // and the Master sees its own version (a failure would resend the file every round).
+            try {
+                temp.setLastModified(ClassFolderRules.millisOf(header.lastWriteTicks))
+            } catch (e: IllegalArgumentException) {
+                // Kept with the time it was written at.
+            }
             synchronized(gate) {
                 // The lesson ended meanwhile: its folder is being set aside.
                 if (lesson()?.lessonId != lessonId) throw ClassFolderRefusal(OTHER_LESSON)

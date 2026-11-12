@@ -23,8 +23,21 @@ public class PhoneClassFolderTests
         Assert.Equal((false, CommandClient.OlderSession), ClassFolderClient.SetLesson(agent.Phone, agent.MasterCertificate, Lesson, agent.Port));
     }
 
+    // Only PCs are asked which PC keeps the class folders (and their lessons
+    // read): a phone from another room never moves this room's home.
     [Fact]
-    public void An_older_phone_agent_keeps_no_home()
+    public void Only_pcs_are_asked_about_the_home()
+    {
+        var pc = new KnownMachine("ALUNO-01", "127.0.0.1", "S1", "A1");
+        var phone = new KnownMachine("Celular 01", "127.0.0.1", "S2", "A2", Kind: DeviceKind.Android);
+        var noAgent = new KnownMachine("ALUNO-02", "127.0.0.1", "S3", null);
+        var online = ClassLessonOnAgents.Online(() => new[] { pc, phone, noAgent }, _ => true, _ => { });
+        Assert.Equal(new[] { pc }, online);
+    }
+
+    // A phone answers the home's messages as an Agent from before them: it keeps none.
+    [Fact]
+    public void A_phone_agent_keeps_no_home()
     {
         using var agent = new FakePhone(channel =>
         {

@@ -98,6 +98,23 @@ class PhoneClassFolderTest {
         assertEquals(ClassFolderRules.ticksOf(1_800_000_000_000), folder.list().entries.single().lastWriteTicks)
     }
 
+    // A teacher's file dated before 1970 (the wire takes any time from year 1;
+    // Android none before 1970) is saved all the same, and listed with the
+    // teacher's own time, so the Master never sends it again.
+    @Test
+    fun aFileFromBefore1970IsSavedAndListedWithTheTeachersTime() {
+        classDir
+        val year1601 = 504_911_232_000_000_000L
+        val bytes = "antigo".toByteArray()
+        folder.beginPush(ClassPushHeader(lessonId, "antigo.txt", bytes.size.toLong(), year1601, null)).use {
+            it.write(bytes)
+            it.complete()
+        }
+        assertEquals(ClassFolderEntry(lessonId, "antigo.txt", 6, year1601), folder.list().entries.single())
+        assertEquals(0L, ClassFolderRules.millisOf(year1601))
+        assertEquals(0L, ClassFolderRules.millisOf(0))
+    }
+
     @Test
     fun aPushOntoAFileThatChangedIsRefused() {
         classDir

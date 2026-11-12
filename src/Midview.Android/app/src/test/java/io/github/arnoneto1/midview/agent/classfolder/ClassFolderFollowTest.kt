@@ -20,12 +20,14 @@ class ClassFolderFollowTest {
     private var lesson: ClassLesson = ClassLesson.none(0)
     private var canSee = true
     private val notices = mutableListOf<String?>()
+    private val reminders = mutableListOf<String>()
 
     private val root by lazy { temp.newFolder("Midview") }
     private val folder by lazy { PhoneClassFolder(root, { lesson.takeIf { it.isOn } }, ClassFileTimes(File(temp.root, "times.txt")), { canSee }, { Long.MAX_VALUE }) }
     private val stateFile by lazy { File(temp.root, "follow.txt") }
 
-    private fun follow() = ClassFolderFollow(folder, { lesson }, stateFile, { canSee }, notice = { notices += it?.turma })
+    private fun follow() =
+        ClassFolderFollow(folder, { lesson }, stateFile, { canSee }, notice = { notices += it?.turma }, remind = { reminders += it.turma })
 
     private fun dir(l: ClassLesson) = File(root, l.folderName)
 
@@ -63,6 +65,8 @@ class ClassFolderFollowTest {
         File(dir(first), "fotos").mkdirs()
         File(dir(first), "fotos/praia.jpg").writeText("praia")
         File(dir(first), "baixando.crdownload").writeText("metade")
+        File(dir(first), ".pending-1700000000-x.pdf").writeText("chegando")
+        File(dir(first), ".midview-0123abcd.parcial").writeText("do professor")
 
         lesson = first.copy(savedAt = 11, ended = true)
         follow.follow()
@@ -142,5 +146,41 @@ class ClassFolderFollowTest {
         lesson = ClassLesson.none(30)
         follow.follow()
         assertTrue(root.list()!!.isEmpty())
+    }
+
+    // What a listing can't carry is the student's: the folder stays with it
+    // (a PC would send it to the Recycle Bin; a phone has none).
+    @Test
+    fun anUnlistedFileKeepsTheFolder() {
+        val follow = follow()
+        lesson = first
+        follow.follow()
+        File(dir(first), "trabalho.docx").writeText("listado")
+        File(dir(first), "~${'$'}trabalho.docx").writeText("do Word")
+        val deep = File(dir(first), "1/2/3/4/5/6/7/8").apply { mkdirs() }
+        File(deep, "fundo.txt").writeText("fundo demais")
+        File(dir(first), "vazia").mkdirs()
+        lesson = ClassLesson.none(30)
+        follow.follow()
+        assertTrue(File(aside(first), "trabalho.docx").exists())
+        assertTrue(File(dir(first), "~${'$'}trabalho.docx").exists())
+        assertTrue(File(deep, "fundo.txt").exists())
+        assertFalse(File(dir(first), "trabalho.docx").exists())
+        // An empty subfolder goes; the student's files stay.
+        assertFalse(File(dir(first), "vazia").exists())
+    }
+
+    // After a restart the notice of the lesson still on comes back, once.
+    @Test
+    fun aRestartRemindsTheStudentOfTheLessonOn() {
+        lesson = first
+        follow().follow()
+        assertEquals(listOf<String?>("3º A"), notices)
+        assertTrue(reminders.isEmpty())
+        val restarted = follow()
+        restarted.follow()
+        restarted.follow()
+        assertEquals(listOf("3º A"), reminders)
+        assertEquals(listOf<String?>("3º A"), notices)
     }
 }

@@ -12,7 +12,6 @@ class FakeChannel(
     override val remoteThumbprint: String,
     vararg incoming: Message,
     val events: MutableList<String> = mutableListOf(),
-    override val remoteAddress: String = "",
 ) : Channel {
     private val queue = ArrayDeque(incoming.toList())
 

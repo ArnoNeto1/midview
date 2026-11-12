@@ -159,13 +159,13 @@ public sealed partial class ThumbnailPoller : IDisposable
                 }
 
                 // A phone has no PC Agent: its own app block applies to it,
-                // and the class folder's home and lesson, which its agent
-                // keeps as a PC Agent does.
+                // and the class folder's lesson, which its agent keeps as a
+                // PC Agent does. Not the class folders' home: a phone keeps
+                // none (ClassLessonOnAgents.Online).
                 if (_machine.IsPhone)
                 {
                     SendPhoneAppBlockIfChanged();
                     ObservePhoneAppBlock();
-                    ClaimClassHome();
                     SendClassLessonIfChanged();
                 }
                 else

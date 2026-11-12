@@ -2,8 +2,6 @@ package io.github.arnoneto1.midview.agent.classfolder
 
 import io.github.arnoneto1.midview.agent.files.FileNames
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
-import io.github.arnoneto1.midview.agent.protocol.ClassHome
-import io.github.arnoneto1.midview.agent.protocol.ClassHomeClaim
 import io.github.arnoneto1.midview.agent.protocol.ClassLesson
 import java.io.File
 import java.io.IOException
@@ -11,14 +9,19 @@ import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
-// The phone's side of the teacher's lesson (SetClassLesson, GetClassLesson,
-// ClaimClassHome, GetClassHome), as the PC Agent's ClassLessonHandler
-// (src/Midview.Agent/ClassLessonHandler.cs) with its rules: the newest
-// savedAt wins; an end ends only the lesson it is of (or none); only the
-// class folders' home (ClassHomeStore) starts a lesson or changes the
-// class; a lesson that started on an earlier day ends by itself, keeping
-// the files. Kept in the app's storage (the lesson's payload), so it holds
-// after a restart.
+// The phone's side of the teacher's lesson (SetClassLesson, GetClassLesson),
+// as the PC Agent's ClassLessonHandler (src/Midview.Agent/ClassLessonHandler.cs)
+// with its rules: the newest savedAt wins; an end ends only the lesson it is
+// of (or none); a lesson that started on an earlier day ends by itself,
+// keeping the files. Kept in the app's storage (the lesson's payload), so it
+// holds after a restart.
+//
+// Unlike a PC Agent, a phone keeps no class folders' home ("PC das pastas":
+// ClaimClassHome and GetClassHome get "Ainda não funciona em celular.",
+// which the Master reads as an Agent from before two teacher PCs). It takes
+// the newest lesson from any teacher it trusts: a school phone goes from room
+// to room, and a home kept from one room would refuse the next room's
+// lessons. The Master asks only its PCs which PC keeps the folders.
 //
 // On a PC the Agent makes the student's Desktop folder and points Chrome at
 // it; here prepare makes Download/Midview/Pasta da turma – <turma> (and
@@ -27,7 +30,6 @@ import java.util.concurrent.locks.ReentrantLock
 // it only asks (it is called with the lesson's lock held).
 class ClassLessonStore(
     private val file: File,
-    val home: ClassHomeStore,
     private val today: () -> LocalDate = { LocalDate.now() },
     private val prepare: (ClassLesson) -> String? = { null },
     private val changed: () -> Unit = {},
@@ -42,15 +44,11 @@ class ClassLessonStore(
     // The lesson on, or null.
     val lessonOn: ClassLesson? get() = current.takeIf { it.isOn }
 
-    fun handle(payload: ByteArray, senderThumbprint: String, senderAddress: String): Pair<Boolean, String> {
+    // From a teacher this phone trusts (the CommandHandler checked).
+    fun handle(payload: ByteArray): Pair<Boolean, String> {
         val lesson = ClassLesson.decode(payload) ?: return false to INVALID
         if (lesson.isOn && !isFolderName(lesson.turma)) return false to "nome de turma inválido"
-        return locked { apply(lesson, senderThumbprint, senderAddress) }
-    }
-
-    fun claimHome(payload: ByteArray, senderThumbprint: String, senderAddress: String): Pair<Boolean, String> {
-        val claim = ClassHomeClaim.decode(payload) ?: return false to INVALID
-        return locked { home.claim(senderThumbprint, senderAddress, claim, lessonOn = current.isOn) }
+        return locked { apply(lesson) }
     }
 
     // Looked at every few seconds: a lesson from an earlier day ends, one
@@ -68,14 +66,12 @@ class ClassLessonStore(
         if (ended) changed()
     }
 
-    private fun apply(lesson: ClassLesson, senderThumbprint: String, senderAddress: String): Pair<Boolean, String> {
-        if (lesson.isOn) home.refusalToStart(senderThumbprint, senderAddress)?.let { return false to it }
+    private fun apply(lesson: ClassLesson): Pair<Boolean, String> {
         val held = current
-        val homesStart = homesStartOverAnotherEnd(lesson, held, senderThumbprint)
-        if ((lesson.savedAt < held.savedAt && !homesStart) || (!lesson.isOn && held.isOn && lesson.lessonId != held.lessonId)) {
+        if (lesson.savedAt < held.savedAt || (!lesson.isOn && held.isOn && lesson.lessonId != held.lessonId)) {
             return true to "${ClassLesson.KEPT_NEWER_TEXT}: ${describe(held)}"
         }
-        if (lesson.savedAt == held.savedAt && lesson != held && !homesStart) {
+        if (lesson.savedAt == held.savedAt && lesson != held) {
             return false to "outra aula foi salva no mesmo segundo; envie de novo"
         }
         if (lesson != held && !save(lesson)) return false to "não foi possível gravar a aula no celular"
@@ -93,15 +89,8 @@ class ClassLessonStore(
         return true to if (problem == null) detail else "$detail; não foi possível preparar a pasta agora: $problem"
     }
 
-    // A start from the home taken over an end of another lesson saved in the
-    // same second or the one before (ClassLessonHandler.HomesStartOverAnotherEnd).
-    private fun homesStartOverAnotherEnd(lesson: ClassLesson, held: ClassLesson, senderThumbprint: String): Boolean =
-        lesson.isOn && !held.isOn && lesson.lessonId != held.lessonId &&
-            (lesson.savedAt == held.savedAt || (held.savedAt > Long.MIN_VALUE && lesson.savedAt == held.savedAt - 1)) &&
-            home.current?.thumbprint?.equals(senderThumbprint, ignoreCase = true) == true
-
     private fun locked(work: () -> Pair<Boolean, String>): Pair<Boolean, String> {
-        if (!lock.tryLock(lockWaitMillis, TimeUnit.MILLISECONDS)) return false to ClassHome.BUSY_TEXT
+        if (!lock.tryLock(lockWaitMillis, TimeUnit.MILLISECONDS)) return false to BUSY_TEXT
         try {
             return work()
         } finally {
@@ -138,6 +127,9 @@ class ClassLessonStore(
 
     companion object {
         const val INVALID = "pedido inválido"
+
+        // ClassHomeClaim.BusyText: the Master asks again in a moment.
+        const val BUSY_TEXT = "ocupado agora, tente de novo em instantes"
 
         // ClassHomeClaim.MaxLockWait: well under the Master's read timeout.
         const val LOCK_WAIT_MILLIS = 10_000L

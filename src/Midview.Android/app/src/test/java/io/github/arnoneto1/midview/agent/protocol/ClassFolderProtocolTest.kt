@@ -65,37 +65,6 @@ class ClassFolderProtocolTest {
     }
 
     @Test
-    fun aHomeAndAClaimGoBothWays() {
-        val home = ClassHome("ABCDEF0123".repeat(4), "PROFESSOR-01", "192.168.0.10", 28903, 638_000_000_000_000_000)
-        val (ok, decoded) = ClassHome.decode(home.encode())
-        assertTrue(ok)
-        assertEquals(home, decoded)
-        assertEquals(true to null, ClassHome.decode(ByteArray(0)))
-        assertFalse(ClassHome.decode(home.encode() + byteArrayOf(0)).first)
-        assertEquals("As pastas das turmas ficam no PC PROFESSOR-01", home.refusalText)
-        assertEquals("As pastas das turmas ficam no PC de outro professor", home.copy(name = "").refusalText)
-
-        val claim = ClassHomeClaim("PROFESSOR-01", 28903, takeOver = true, generation = 42)
-        val bytes = claim.encode()
-        assertArrayEquals(byteArrayOf(2, 1, 0x70, 0xE7.toByte(), 0, 0, 0, 0, 0, 0, 0, 42, 0, 12) + "PROFESSOR-01".toByteArray(), bytes)
-        assertEquals(claim, ClassHomeClaim.decode(bytes))
-        assertNull(ClassHomeClaim.decode(bytes.clone().also { it[1] = 2 }))
-        assertNull(ClassHomeClaim.decode(ClassHomeClaim("X", 1, false, 0).encode()))
-    }
-
-    @Test
-    fun theSamePcIsKnownByItsIdentityItsGenerationOrItsName() {
-        val home = ClassHome("A".repeat(40), "PROF-01", "10.0.0.1", 28903, 7)
-        assertTrue(home.isSamePc("a".repeat(40), "prof-01", null))
-        assertTrue(home.isSamePc("A".repeat(40), "PROF-NOVO", 7))
-        assertTrue(home.isSamePc("B".repeat(40), "PROF-01", null))
-        assertFalse(home.isSamePc("B".repeat(40), "PROF-02", 7))
-        assertTrue(ClassHome.isIpLiteral("192.168.15.10"))
-        assertTrue(ClassHome.isIpLiteral("fe80::1%wlan0"))
-        assertFalse(ClassHome.isIpLiteral("professor.local"))
-    }
-
-    @Test
     fun aListingGoesInPartsTheLastSayingSo() {
         val entries = (1..5).map { ClassFolderEntry(id, "f$it.txt", it.toLong(), 638_000_000_000_000_000L + it) }
         val parts = ClassFolderWire.encodeListingParts(id, null, entries, partSize = 2)

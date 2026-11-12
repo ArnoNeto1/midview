@@ -42,10 +42,18 @@ internal static class ClassLessonOnAgents
         }
     }
 
-    // The online machines whose Agent the classroom list knows.
+    // The online PCs whose Agent the classroom list knows: whom the class
+    // folders' home is asked of and claimed on, and the lessons the room
+    // follows read from. Never a phone: a phone keeps no home (it takes the
+    // newest lesson from any teacher it trusts, and goes from room to room,
+    // where another room's lesson or teacher would mislead this one), so
+    // with phones in the room the PCs settle the home exactly as before.
+    // Phones get the lesson from the sync and their pollers.
     public static List<KnownMachine> Online(
         Func<IReadOnlyList<KnownMachine>> machines, Func<KnownMachine, bool> isOnline, Action<string> log) =>
-        Machines(machines, log).Where(machine => machine.AgentThumbprint is { Length: > 0 } && IsOnline(isOnline, machine)).ToList();
+        Machines(machines, log)
+            .Where(machine => !machine.IsPhone && machine.AgentThumbprint is { Length: > 0 } && IsOnline(isOnline, machine))
+            .ToList();
 
     // A lesson saved further ahead of this PC's clock than this is not believed.
     public static readonly TimeSpan Horizon = TimeSpan.FromDays(1);

@@ -57,6 +57,17 @@ class ClassFolderHandlerTest {
         assertEquals("conteúdo", File(classDir, "pasta/nota.txt").readText())
     }
 
+    // A date the phone can't give a file is no failure: no resend every round.
+    @Test
+    fun aPushDatedBefore1970IsSaved() {
+        classDir
+        val header = ClassPushHeader(lessonId, "velho.txt", 1, 0, null)
+        val channel = FakeChannel(teacher, Message(MessageType.FILE_CHUNK, byteArrayOf(7)))
+        handler.serve(channel, Message(MessageType.PUSH_CLASS_FILE, ClassFolderWire.encodePushHeader(header)))
+        assertEquals(listOf(true to "", true to ""), channel.sent.map(::ack))
+        assertEquals(0L, folder.list().entries.single().lastWriteTicks)
+    }
+
     @Test
     fun aPushForAnotherLessonIsRefusedUpFront() {
         classDir

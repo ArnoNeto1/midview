@@ -1,12 +1,9 @@
 package io.github.arnoneto1.midview.agent.classfolder
 
-import io.github.arnoneto1.midview.agent.protocol.ClassHome
-import io.github.arnoneto1.midview.agent.protocol.ClassHomeClaim
 import io.github.arnoneto1.midview.agent.protocol.ClassLesson
 import io.github.arnoneto1.midview.agent.protocol.LessonId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -15,13 +12,10 @@ import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
 
-// The lesson and the class folders' home on a phone, by the PC Agent's rules.
+// The lesson on a phone, by the PC Agent's rules, with no class folders' home.
 class ClassLessonStoreTest {
     @get:Rule val temp = TemporaryFolder()
 
-    private val home = "A".repeat(40)
-    private val colleague = "B".repeat(40)
-    private val address = "192.168.0.10"
     private var today = LocalDate.of(2026, 11, 12)
     private val prepared = mutableListOf<String>()
     private var changes = 0
@@ -30,7 +24,7 @@ class ClassLessonStoreTest {
     private val dir by lazy { temp.newFolder() }
 
     private fun store() = ClassLessonStore(
-        File(dir, "class-lesson.bin"), ClassHomeStore(File(dir, "class-home.bin")), { today },
+        File(dir, "class-lesson.bin"), { today },
         prepare = { prepared += it.turma; problem }, changed = { changes++ },
     )
 
@@ -44,83 +38,49 @@ class ClassLessonStoreTest {
     @Test
     fun aStartIsKeptAndTheFolderPrepared() {
         val store = store()
-        assertEquals(true to "aula do 3º A", store.handle(lesson(1, 100).encode(), home, address))
+        assertEquals(true to "aula do 3º A", store.handle(lesson(1, 100).encode()))
         assertEquals(listOf("3º A"), prepared)
         assertEquals(1, changes)
         // It holds after a restart.
         assertEquals(lesson(1, 100), store().current)
-        // The first PC to start a lesson becomes the home, with no name.
-        assertEquals(home, store.home.current?.thumbprint)
-        assertEquals("", store.home.current?.name)
     }
 
     @Test
     fun anOlderLessonOrAnEndOfAnotherOneIsNotTaken() {
         val store = store()
-        store.handle(lesson(1, 100).encode(), home, address)
-        assertEquals(true to "mantida a aula mais nova: aula do 3º A", store.handle(lesson(2, 90, "7º B").encode(), home, address))
-        assertEquals(true to "mantida a aula mais nova: aula do 3º A", store.handle(lesson(2, 200, ended = true).encode(), home, address))
+        store.handle(lesson(1, 100).encode())
+        assertEquals(true to "mantida a aula mais nova: aula do 3º A", store.handle(lesson(2, 90, "7º B").encode()))
+        assertEquals(true to "mantida a aula mais nova: aula do 3º A", store.handle(lesson(2, 200, ended = true).encode()))
         assertEquals(lesson(1, 100), store.current)
-        assertEquals(true to "aula encerrada", store.handle(lesson(1, 200, ended = true).encode(), colleague, address))
+        assertEquals(true to "aula encerrada", store.handle(lesson(1, 200, ended = true).encode()))
         assertFalse(store.current.isOn)
     }
 
     @Test
     fun anotherLessonInTheSameSecondIsRefused() {
         val store = store()
-        store.handle(lesson(1, 100).encode(), home, address)
-        assertEquals(false to "outra aula foi salva no mesmo segundo; envie de novo", store.handle(lesson(2, 100, "7º B").encode(), home, address))
+        store.handle(lesson(1, 100).encode())
+        assertEquals(false to "outra aula foi salva no mesmo segundo; envie de novo", store.handle(lesson(2, 100, "7º B").encode()))
         // The same lesson again changes nothing.
-        assertEquals(true to "aula do 3º A", store.handle(lesson(1, 100).encode(), home, address))
+        assertEquals(true to "aula do 3º A", store.handle(lesson(1, 100).encode()))
     }
 
+    // A phone that goes from room to room follows each room's newest lesson:
+    // no teacher PC is kept as the home that alone may start one.
     @Test
-    fun onlyTheHomeStarts() {
+    fun theNewestLessonOfAnyTrustedTeacherIsTaken() {
         val store = store()
-        assertEquals(true to "este PC guarda as pastas", store.claimHome(ClassHomeClaim("PROF-01", 28903, false, 5).encode(), home, address))
-        assertEquals(
-            false to "As pastas das turmas ficam no PC PROF-01",
-            store.handle(lesson(1, 100).encode(), colleague, "192.168.0.11"),
-        )
-        assertFalse(store.current.isOn)
-        assertEquals(true to "aula do 3º A", store.handle(lesson(1, 100).encode(), home, address))
-        // A take-over waits for the lesson's end.
-        assertEquals(
-            false to "Encerre a aula antes de passar as pastas.",
-            store.claimHome(ClassHomeClaim("PROF-02", 28903, true, 6).encode(), colleague, "192.168.0.11"),
-        )
-        store.handle(lesson(1, 101, ended = true).encode(), home, address)
-        assertEquals(
-            true to "as pastas passaram para este PC",
-            store.claimHome(ClassHomeClaim("PROF-02", 28903, true, 6).encode(), colleague, "192.168.0.11"),
-        )
-        assertEquals("PROF-02", store.home.current?.name)
-        assertEquals("192.168.0.11", store().home.current?.address)
-    }
-
-    @Test
-    fun anOlderTakeOverOrABadClaimIsRefused() {
-        val store = store()
-        store.claimHome(ClassHomeClaim("PROF-01", 28903, false, 5).encode(), home, address)
-        assertEquals(
-            false to "As pastas das turmas ficam no PC PROF-01",
-            store.claimHome(ClassHomeClaim("PROF-02", 28903, true, 5).encode(), colleague, address),
-        )
-        assertEquals(false to "pedido inválido", store.claimHome(byteArrayOf(9), home, address))
-        assertEquals(false to "pedido inválido", store.claimHome(ClassHomeClaim("PROF-01", 28903, false, 5).encode(), home, "professor.local"))
-        assertEquals(
-            false to "pedido inválido: data da troca além do limite",
-            store.claimHome(ClassHomeClaim("PROF-02", 28903, true, Long.MAX_VALUE).encode(), colleague, address),
-        )
-        // The home renamed keeps its generation and takes its new name.
-        assertEquals(true to "este PC guarda as pastas", store.claimHome(ClassHomeClaim("PROF-NOVO", 28903, false, 5).encode(), home, address))
-        assertEquals(ClassHome(home, "PROF-NOVO", address, 28903, 5), store.home.current)
+        store.handle(lesson(1, 100).encode())
+        store.handle(lesson(1, 101, ended = true).encode())
+        assertEquals(true to "aula do 7º B", store.handle(lesson(2, 200, "7º B").encode()))
+        assertTrue(File(dir, "class-lesson.bin").exists())
+        assertFalse(File(dir, "class-home.bin").exists())
     }
 
     @Test
     fun aLessonFromAnEarlierDayEndsByItself() {
         val store = store()
-        store.handle(lesson(1, 100).encode(), home, address)
+        store.handle(lesson(1, 100).encode())
         changes = 0
         store.endIfFromAnEarlierDay()
         assertTrue(store.current.isOn)
@@ -131,16 +91,16 @@ class ClassLessonStoreTest {
         assertEquals(101, store.current.savedAt)
         assertEquals(1, changes)
         // The Master sending yesterday's lesson again doesn't start it.
-        assertEquals(true to "mantida a aula mais nova: aula encerrada", store.handle(lesson(1, 100).encode(), home, address))
+        assertEquals(true to "mantida a aula mais nova: aula encerrada", store.handle(lesson(1, 100).encode()))
     }
 
     @Test
     fun aBadTurmaOrPayloadIsRefused() {
         val store = store()
-        assertEquals(false to "nome de turma inválido", store.handle(lesson(1, 100, "../fora").encode(), home, address))
-        assertEquals(false to "nome de turma inválido", store.handle(lesson(1, 100, "\${x}").encode(), home, address))
-        assertEquals(false to "pedido inválido", store.handle(byteArrayOf(1, 2), home, address))
-        assertNull(store.home.current)
+        assertEquals(false to "nome de turma inválido", store.handle(lesson(1, 100, "../fora").encode()))
+        assertEquals(false to "nome de turma inválido", store.handle(lesson(1, 100, "\${x}").encode()))
+        assertEquals(false to "pedido inválido", store.handle(byteArrayOf(1, 2)))
+        assertFalse(store.current.isOn)
     }
 
     @Test
@@ -148,7 +108,7 @@ class ClassLessonStoreTest {
         problem = "sem acesso a todos os arquivos neste celular"
         assertEquals(
             true to "aula do 3º A; não foi possível preparar a pasta agora: sem acesso a todos os arquivos neste celular",
-            store().handle(lesson(1, 100).encode(), home, address),
+            store().handle(lesson(1, 100).encode()),
         )
     }
 

@@ -119,6 +119,9 @@ class ClassFolderHandler(private val folder: PhoneClassFolder) {
             false to (e.message ?: PhoneClassFolder.CHANGED)
         } catch (e: IOException) {
             false to "não foi possível salvar o arquivo: ${e.message ?: "erro de gravação"}"
+        } catch (e: RuntimeException) {
+            // Whatever the storage throws is that file's refusal, never the connection's.
+            false to "não foi possível salvar o arquivo: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 

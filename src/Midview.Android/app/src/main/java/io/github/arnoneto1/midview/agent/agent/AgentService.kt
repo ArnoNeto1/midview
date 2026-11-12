@@ -27,7 +27,6 @@ import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
 import io.github.arnoneto1.midview.agent.classfolder.ClassFileTimes
 import io.github.arnoneto1.midview.agent.classfolder.ClassFolderFollow
-import io.github.arnoneto1.midview.agent.classfolder.ClassHomeStore
 import io.github.arnoneto1.midview.agent.classfolder.ClassLessonNotice
 import io.github.arnoneto1.midview.agent.classfolder.ClassLessonStore
 import io.github.arnoneto1.midview.agent.classfolder.PhoneClassFolder
@@ -361,11 +360,12 @@ class AgentService : Service() {
         val follow = ClassFolderFollow(
             classFolder, { classLessons.current }, File(filesDir, CLASS_FOLLOW_FILE), canSee = { downloads.seesEverything },
             notice = { if (it == null) lessonNotice.hide() else lessonNotice.show(it) },
+            remind = lessonNotice::showIfMissing,
             log = log,
         )
         val classTimer = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview class folder").apply { isDaemon = true } }
         classLessons = ClassLessonStore(
-            File(filesDir, CLASS_LESSON_FILE), ClassHomeStore(File(filesDir, CLASS_HOME_FILE), log),
+            File(filesDir, CLASS_LESSON_FILE),
             prepare = follow::prepare,
             changed = {
                 try {
@@ -556,7 +556,6 @@ class AgentService : Service() {
         private const val OPTIMIZE_FILE = "optimize.txt"
         private const val LAB_CONFIG_FILE = "lab-config.bin"
         private const val CLASS_LESSON_FILE = "class-lesson.bin"
-        private const val CLASS_HOME_FILE = "class-home.bin"
         private const val CLASS_FOLLOW_FILE = "class-folder-follow.txt"
         private const val CLASS_TIMES_FILE = "class-folder-times.txt"
 

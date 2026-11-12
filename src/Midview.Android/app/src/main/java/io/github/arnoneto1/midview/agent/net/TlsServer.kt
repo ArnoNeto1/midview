@@ -110,8 +110,6 @@ class TlsServer(
         private val input = BufferedInputStream(socket.inputStream)
         private val output = socket.outputStream
 
-        override val remoteAddress: String = addressText(socket.inetAddress)
-
         override fun receive(maxLength: Int): Message = MessageFramer.read(input, maxLength)
 
         override fun send(message: Message) = MessageFramer.write(output, message)
@@ -146,20 +144,6 @@ class TlsServer(
     }
 
     companion object {
-        // "192.168.0.10" for an IPv4 address, even one that came mapped into
-        // IPv6 (::ffff:192.168.0.10), as the Windows Agent's RemoteAddressText;
-        // an IPv6 address without its scope; "" for none.
-        fun addressText(address: InetAddress?): String {
-            if (address == null) return ""
-            val bytes = address.address
-            if (bytes.size == 16 && bytes.copyOfRange(0, 10).all { it.toInt() == 0 } &&
-                bytes[10].toInt() == -1 && bytes[11].toInt() == -1
-            ) {
-                return bytes.copyOfRange(12, 16).joinToString(".") { (it.toInt() and 0xFF).toString() }
-            }
-            return address.hostAddress?.substringBefore('%') ?: ""
-        }
-
         // The Windows Agent's TimeoutMs: generous for a LAN round trip.
         const val HANDSHAKE_TIMEOUT_MILLIS = 10_000
 

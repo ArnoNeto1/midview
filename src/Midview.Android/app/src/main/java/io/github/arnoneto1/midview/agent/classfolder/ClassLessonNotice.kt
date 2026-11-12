@@ -50,6 +50,16 @@ class ClassLessonNotice(context: Context) {
         }
     }
 
+    // After a restart: the notice again, unless it is still there.
+    fun showIfMissing(lesson: ClassLesson) {
+        val shown = try {
+            notifications.activeNotifications.any { it.id == NOTIFICATION }
+        } catch (e: RuntimeException) {
+            false
+        }
+        if (!shown) show(lesson)
+    }
+
     // The lesson is over: its notice would point at a folder that is gone.
     fun hide() {
         try {
