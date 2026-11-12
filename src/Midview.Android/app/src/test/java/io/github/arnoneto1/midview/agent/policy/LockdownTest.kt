@@ -15,6 +15,7 @@ class LockdownTest {
         private val failing: String? = null,
         override val debuggable: Boolean = false,
     ) : DevicePolicyGateway {
+        override fun addWifi(ssid: String, password: String?) {}
         val restrictions = mutableSetOf<String>()
         val uninstallBlocked = mutableMapOf<String, Boolean>()
         var controlDisabledPackages: List<String>? = null

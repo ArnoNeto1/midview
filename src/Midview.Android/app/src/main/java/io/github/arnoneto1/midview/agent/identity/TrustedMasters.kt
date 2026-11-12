@@ -2,6 +2,9 @@ package io.github.arnoneto1.midview.agent.identity
 
 import java.io.File
 
+// The trusted teachers file in the app's private storage.
+const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
+
 // The thumbprints of the teachers this device trusts: one upper-case
 // thumbprint per line, in the app's private storage. The device's
 // counterpart of the Windows trusted-masters.json (TrustStore,

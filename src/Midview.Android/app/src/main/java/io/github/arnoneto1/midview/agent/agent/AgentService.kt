@@ -20,6 +20,7 @@ import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
+import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.lock.ScreenLock
@@ -356,7 +357,6 @@ class AgentService : Service() {
         // How long the code screen has to come up when it is the only way
         // to show the code.
         private const val SHOW_TIMEOUT_MILLIS = 3_000L
-        private const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
         private const val APP_BLOCK_FILE = "app-block.bin"
         private const val SITE_BLOCK_FILE = "site-block.txt"
         private const val INTERNET_BLOCK_FILE = "internet-block.txt"

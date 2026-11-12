@@ -50,6 +50,9 @@ interface DevicePolicyGateway {
     // The phone's always-on VPN (null: none), and setting it.
     fun alwaysOnVpn(): AlwaysOnVpn?
     fun setAlwaysOnVpn(vpn: AlwaysOnVpn?)
+
+    // Saves a Wi-Fi network and joins it (WPA2 with a password, open without).
+    fun addWifi(ssid: String, password: String?)
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
 

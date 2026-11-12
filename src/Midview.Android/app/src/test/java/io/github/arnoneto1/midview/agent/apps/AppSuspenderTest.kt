@@ -180,6 +180,7 @@ class AppSuspenderTest {
     }
 
     private class FakeGateway(var owner: Boolean = true, val refused: Set<String> = emptySet()) : DevicePolicyGateway {
+        override fun addWifi(ssid: String, password: String?) {}
         val calls = mutableListOf<Pair<List<String>, Boolean>>()
         override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> {
             if (!owner) throw SecurityException("not the device owner")

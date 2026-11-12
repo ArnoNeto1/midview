@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.wifi.WifiConfiguration
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -21,6 +23,26 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     override val sdkInt: Int = Build.VERSION.SDK_INT
 
     override val debuggable: Boolean = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    // WifiManager.addNetwork is deprecated, and ignored for an ordinary app on
+    // Android 10 and newer, but the Device Owner may still use it.
+    @Suppress("DEPRECATION")
+    override fun addWifi(ssid: String, password: String?) {
+        val wifi = app.getSystemService(WifiManager::class.java)
+        // Android takes what is between the first and the last quote as it is.
+        val config = WifiConfiguration().apply {
+            SSID = "\"" + ssid + "\""
+            if (password.isNullOrEmpty()) {
+                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE)
+            } else {
+                preSharedKey = "\"" + password + "\""
+                allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK)
+            }
+        }
+        val id = wifi.addNetwork(config)
+        if (id == -1) throw IllegalStateException("Android did not add the Wi-Fi network")
+        wifi.enableNetwork(id, false)
+    }
 
     override fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(app.packageName)
 

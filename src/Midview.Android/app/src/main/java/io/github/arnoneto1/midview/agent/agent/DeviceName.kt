@@ -3,6 +3,8 @@ package io.github.arnoneto1.midview.agent.agent
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import io.github.arnoneto1.midview.agent.provisioning.CableSetup
+import java.io.File
 
 // The phone's name, for its certificate (CN) and for the teacher's search:
 // "Celular" and the end of its Android ID, which tells apart a classroom of
@@ -10,7 +12,13 @@ import android.provider.Settings
 // the model, so every phone of a set would answer with the same one. Only
 // without an Android ID, the model.
 object DeviceName {
-    fun choose(androidId: String?, model: String?): String {
+    // number: the one the Master gave while preparing the phone over the
+    // cable; it names the phone for good ("Celular 07").
+    fun choose(number: String?, androidId: String?, model: String?): String {
+        val given = number?.trim().orEmpty()
+        if (given.isNotEmpty()) {
+            return "Celular $given"
+        }
         val id = androidId?.trim().orEmpty()
         if (id.length >= 4) {
             return "Celular " + id.takeLast(4).uppercase()
@@ -20,6 +28,7 @@ object DeviceName {
     }
 
     fun read(context: Context): String = choose(
+        CableSetup(File(context.filesDir, CableSetup.FILE_NAME)).number(),
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID),
         Build.MODEL,
     )

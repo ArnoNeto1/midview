@@ -18,6 +18,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Wi-Fi kept awake so the phone answers with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The school Wi-Fi, added once the app is the Device Owner. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <!-- The watchdog's check every few seconds (AgentWatchdog), on time.
          USE_EXACT_ALARM is granted at install from Android 13 and cannot be
          taken back, so Android 14 and later (where SCHEDULE_EXACT_ALARM
@@ -135,6 +138,23 @@
         <receiver
             android:name=".agent.AgentWatchdog"
             android:exported="false" />
+
+        <!-- The cable door: adb shell (no permission to ask for) calls
+             "prepare"; CableSetupDoor checks the caller is uid 2000. Only
+             "call" does anything. -->
+        <provider
+            android:name=".provisioning.CableSetupProvider"
+            android:authorities="io.github.arnoneto1.midview.agent.setup"
+            android:exported="true" />
+
+        <!-- "Pronto. Este e o Celular 07 da escola." once the phone is prepared. -->
+        <activity
+            android:name=".ui.ReadyActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+            android:turnScreenOn="true" />
 
         <activity
             android:name=".ui.PairingCodeActivity"

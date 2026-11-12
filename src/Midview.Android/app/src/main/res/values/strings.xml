@@ -2,4 +2,7 @@
 <resources>
     <!-- Shown in the phone's accessibility settings (AccessibilityCapture). -->
     <string name="accessibility_description">Midview: permite ao professor ver a tela deste celular da escola.</string>
+    <!-- ReadyActivity: the cable preparation is done. -->
+    <string name="ready_text">Pronto. Este é o %1$s da escola.</string>
+    <string name="ready_ok">OK</string>
 </resources>

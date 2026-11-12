@@ -6,6 +6,7 @@ import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 // The DevicePolicyManager calls of the site block and of "Otimizar" (hidden
 // apps, the private DNS), recorded; the rest does nothing.
 class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
+    override fun addWifi(ssid: String, password: String?) {}
     var alwaysOn: AlwaysOnVpn? = null
     val alwaysOnCalls = mutableListOf<AlwaysOnVpn?>()
     var refuseAlwaysOn = false

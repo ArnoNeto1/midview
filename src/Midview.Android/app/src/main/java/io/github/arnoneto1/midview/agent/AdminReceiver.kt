@@ -3,7 +3,11 @@ package io.github.arnoneto1.midview.agent
 import android.app.admin.DeviceAdminReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import io.github.arnoneto1.midview.agent.agent.AgentService
+import io.github.arnoneto1.midview.agent.provisioning.CableSetup
+import io.github.arnoneto1.midview.agent.ui.ReadyActivity
+import java.io.File
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 
 // The app's device admin: the Master's QR code names it
@@ -22,7 +26,19 @@ class AdminReceiver : DeviceAdminReceiver() {
     companion object {
         fun lockDownAndStart(context: Context) {
             AndroidDevicePolicyGateway.lockDown(context)
+            // Prepared over the cable: the Wi-Fi and the name come from there.
+            val setup = CableSetup(File(context.filesDir, CableSetup.FILE_NAME))
+            try {
+                setup.takeWifi()?.let { (ssid, password) ->
+                    AndroidDevicePolicyGateway(context).addWifi(ssid, password)
+                }
+            } catch (e: RuntimeException) {
+                Log.e("Midview", "The school Wi-Fi was not added", e)
+            }
             AgentService.start(context)
+            if (setup.number() != null && setup.markReadyShown()) {
+                ReadyActivity.show(context)
+            }
         }
     }
 }
