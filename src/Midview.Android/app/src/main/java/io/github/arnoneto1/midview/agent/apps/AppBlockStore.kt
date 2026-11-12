@@ -5,6 +5,8 @@ import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
 import java.io.File
 import java.io.IOException
+import java.nio.file.AccessDeniedException
+import java.nio.file.NoSuchFileException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -47,7 +49,7 @@ class AppBlockStore(
                 writeAtomically(file, asked.encode())
             } catch (e: IOException) {
                 log("Couldn't save the app block", e)
-                return false to "não foi possível gravar o bloqueio: ${e.message ?: e.javaClass.simpleName}"
+                return false to "não foi possível gravar o bloqueio: ${saveError(e)}"
             }
 
             policy = asked
@@ -56,11 +58,41 @@ class AppBlockStore(
         }
     }
 
+    // The held policy applied again (an app installed, updated or removed),
+    // under the same lock as a new policy, so an older one is never applied
+    // after a newer one.
+    fun reapply() {
+        synchronized(gate) { apply(policy) }
+    }
+
     private fun savedAtText(savedAt: Long): String =
         DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(zone).format(Instant.ofEpochSecond(savedAt))
 
     companion object {
         const val INVALID = "pedido inválido"
+
+        // What the teacher reads when the policy could not be saved, as the
+        // Windows ErrorText: Android's own messages are in English.
+        val SAVE_ERRORS = setOf(
+            "sem espaço no celular",
+            "acesso negado",
+            "armazenamento só de leitura",
+            "pasta não encontrada",
+            "erro ao gravar no celular",
+        )
+
+        fun saveError(e: IOException): String {
+            val text = e.message.orEmpty()
+            fun has(vararg words: String) = words.any { text.contains(it, ignoreCase = true) }
+            return when {
+                has("ENOSPC", "No space left") -> "sem espaço no celular"
+                e is AccessDeniedException || has("EACCES", "EPERM", "Permission denied") -> "acesso negado"
+                has("EROFS", "Read-only") -> "armazenamento só de leitura"
+                e is NoSuchFileException ||
+                    has("ENOENT", "ENOTDIR", "No such file", "Not a directory", "cannot find the path") -> "pasta não encontrada"
+                else -> "erro ao gravar no celular"
+            }
+        }
 
         fun describe(policy: PhoneAppPolicy): String = when (policy.mode) {
             AppBlockMode.BLOCK_LIST -> "bloqueando ${policy.packages.size} app(s)"

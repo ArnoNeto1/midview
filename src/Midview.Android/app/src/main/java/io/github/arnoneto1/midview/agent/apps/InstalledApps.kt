@@ -29,29 +29,51 @@ class InstalledApps(context: Context) : AppCatalog {
     override fun launchable(): Set<String> =
         pm.queryIntentActivities(launcherIntent(), 0).map { it.activityInfo.packageName }.toSet()
 
-    // ProtectedApps plus what this phone resolves: every home screen, every
-    // app that dials, the settings, the package installer and verifier
-    // (Android refuses to suspend the verifier: Play Store on most phones),
-    // the WebView in use and the keyboards.
+    // ProtectedApps plus what this phone resolves (ProtectedApps.resolve):
+    // of the apps for the home screen, dialing, the settings, installing and
+    // verifying packages (Android refuses to suspend the verifier) and the
+    // keyboards, those that came with the phone; and the ones in use: the
+    // default home screen, dialer and keyboard, and the WebView.
     override fun protected(): Set<String> {
-        val resolved = mutableListOf<String?>()
+        val candidates = mutableListOf<ProtectedApps.Candidate>()
         fun all(intent: Intent) = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            .mapTo(resolved) { it.activityInfo.packageName }
-        all(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
+            .mapTo(candidates) { candidate(it.activityInfo.applicationInfo) }
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        all(home)
         all(Intent(Intent.ACTION_DIAL))
         all(Intent(Intent.ACTION_DIAL, Uri.parse("tel:190")))
         all(Intent(Settings.ACTION_SETTINGS))
         @Suppress("DEPRECATION")
         all(Intent(Intent.ACTION_INSTALL_PACKAGE).setDataAndType(Uri.parse("content://x/y.apk"), APK_TYPE))
         pm.queryBroadcastReceivers(Intent(Intent.ACTION_PACKAGE_NEEDS_VERIFICATION).setType(APK_TYPE), 0)
-            .mapTo(resolved) { it.activityInfo.packageName }
-        resolved += runCatching { app.getSystemService(TelecomManager::class.java)?.defaultDialerPackage }.getOrNull()
-        resolved += runCatching { WebView.getCurrentWebViewPackage()?.packageName }.getOrNull()
+            .mapTo(candidates) { candidate(it.activityInfo.applicationInfo) }
         runCatching { app.getSystemService(InputMethodManager::class.java)?.inputMethodList }.getOrNull()
-            ?.mapTo(resolved) { it.packageName }
-        resolved += app.packageName
-        return ProtectedApps.with(resolved)
+            ?.mapTo(candidates) { candidate(it.serviceInfo.applicationInfo) }
+
+        val inUse = listOf(
+            runCatching { pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName }.getOrNull(),
+            runCatching { app.getSystemService(TelecomManager::class.java)?.defaultDialerPackage }.getOrNull(),
+            ProtectedApps.inputMethodPackage(
+                runCatching { Settings.Secure.getString(app.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) }.getOrNull(),
+            ),
+            runCatching { WebView.getCurrentWebViewPackage()?.packageName }.getOrNull(),
+            app.packageName,
+        )
+        return ProtectedApps.resolve(candidates, inUse)
     }
+
+    override fun isInstalled(pkg: String): Boolean =
+        try {
+            pm.getApplicationInfo(pkg, 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+
+    private fun candidate(info: ApplicationInfo) = ProtectedApps.Candidate(
+        info.packageName,
+        system = (info.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0,
+    )
 
     override fun suspended(): Set<String> =
         pm.getInstalledApplications(0)
@@ -60,19 +82,22 @@ class InstalledApps(context: Context) : AppCatalog {
             .toSet()
 
     // The apps the teacher may block: those with an icon on the home screen,
-    // without the protected ones, one entry per app.
+    // without the protected ones, one entry per app; sorted and cut to what is
+    // sent before any icon is drawn.
     fun list(): List<PhoneApp> {
         val protected = protected()
         val seen = HashSet<String>()
-        val apps = ArrayList<PhoneApp>()
-        for (info in pm.queryIntentActivities(launcherIntent(), 0)) {
-            val pkg = info.activityInfo.packageName
-            if (pkg in protected || !seen.add(pkg)) continue
-            val label = PhoneAppsAnswer.label(info.loadLabel(pm)?.toString() ?: pkg)
+        val entries = pm.queryIntentActivities(launcherIntent(), 0)
+            .filter { info -> info.activityInfo.packageName.let { it !in protected && seen.add(it) } }
+            .map { info ->
+                val pkg = info.activityInfo.packageName
+                val label = PhoneAppsAnswer.label(info.loadLabel(pm)?.toString() ?: pkg)
+                info to label.ifEmpty { pkg.take(PhoneAppList.MAX_LABEL_LENGTH) }
+            }
+        return PhoneAppsAnswer.pick(entries) { it.second }.map { (info, label) ->
             val icon = runCatching { png(info.loadIcon(pm)) }.getOrDefault(ByteArray(0))
-            apps += PhoneApp(pkg, label.ifEmpty { pkg.take(PhoneAppList.MAX_LABEL_LENGTH) }, icon)
+            PhoneApp(info.activityInfo.packageName, label, icon)
         }
-        return apps
     }
 
     private fun launcherIntent() = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -111,13 +136,15 @@ object PhoneAppsAnswer {
         return trimmed.substring(0, end)
     }
 
-    fun encode(apps: List<PhoneApp>): ByteArray {
+    // Sorted by label as a Brazilian reader expects, at most 300.
+    fun <T> pick(items: List<T>, label: (T) -> String): List<T> {
         val collator = Collator.getInstance(Locale.forLanguageTag("pt-BR"))
+        return items.sortedWith { a, b -> collator.compare(label(a), label(b)) }.take(PhoneAppList.MAX_APPS)
+    }
+
+    fun encode(apps: List<PhoneApp>): ByteArray {
         val seen = HashSet<String>()
-        val kept = apps
-            .filter { PhoneAppPolicy.isValidPackageName(it.pkg) && seen.add(it.pkg) }
-            .sortedWith { a, b -> collator.compare(a.label, b.label) }
-            .take(PhoneAppList.MAX_APPS)
+        val kept = pick(apps.filter { PhoneAppPolicy.isValidPackageName(it.pkg) && seen.add(it.pkg) }) { it.label }
             .map {
                 val label = label(it.label)
                 val icon = if (it.iconPng.size > PhoneAppList.MAX_ICON_BYTES) ByteArray(0) else it.iconPng

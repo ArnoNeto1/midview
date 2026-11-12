@@ -53,4 +53,13 @@ class PhoneAppsAnswerTest {
         val apps = listOf(app(1), app(1), PhoneApp("not a package", "X", ByteArray(0)))
         assertEquals(listOf("com.example.app1"), PhoneAppList.decode(PhoneAppsAnswer.encode(apps))!!.map { it.pkg })
     }
+
+    // The list is sorted and cut before any icon is drawn.
+    @Test fun pickSortsByLabelAndKeepsAtMost300() {
+        val labels = (1..320).map { "app %03d".format(321 - it) }
+        val picked = PhoneAppsAnswer.pick(labels) { it }
+        assertEquals(300, picked.size)
+        assertEquals("app 001", picked.first())
+        assertEquals("app 300", picked.last())
+    }
 }

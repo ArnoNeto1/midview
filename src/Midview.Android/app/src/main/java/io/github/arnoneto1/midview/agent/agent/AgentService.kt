@@ -188,7 +188,7 @@ class AgentService : Service() {
             val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
             val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
-            packageWatcher = PackageWatcher(this) { suspender.apply(appBlock.current) }.also { it.start() }
+            packageWatcher = PackageWatcher(this) { appBlock.reapply() }.also { it.start() }
             agentServer.start()
             sessionServer.start()
 

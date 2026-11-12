@@ -15,6 +15,9 @@ interface AppCatalog {
 
     // Packages suspended now.
     fun suspended(): Set<String>
+
+    // Still on the phone (an app may be removed while the block is applied).
+    fun isInstalled(pkg: String): Boolean
 }
 
 // The phone's app block: the Device Owner suspends the blocked apps
@@ -32,15 +35,23 @@ class AppSuspender(
     fun apply(policy: PhoneAppPolicy): String? {
         if (!gw.isDeviceOwner()) return NOT_DEVICE_OWNER
         return try {
+            val suspended = catalog.suspended()
             val target = toSuspend(policy, catalog.launchable(), catalog.protected())
-            val lift = toLift(target, catalog.suspended())
+            val lift = toLift(target, suspended)
             if (lift.isNotEmpty()) {
                 val stuck = gw.setPackagesSuspended(lift.sorted(), false)
                 if (stuck.isNotEmpty()) log("Apps still suspended: $stuck", null)
             }
-            val refused = if (target.isEmpty()) emptyList() else gw.setPackagesSuspended(target.sorted(), true)
+            // Only what is not suspended yet; an app removed in the meantime
+            // has nothing left to block.
+            val added = target - suspended
+            val refused = if (added.isEmpty()) {
+                emptyList()
+            } else {
+                gw.setPackagesSuspended(added.sorted(), true).filter { catalog.isInstalled(it) }
+            }
             if (refused.isNotEmpty()) log("Apps Android would not suspend: $refused", null)
-            log("App block applied: ${target.size} suspended, ${lift.size} lifted.", null)
+            log("App block applied: ${target.size} blocked (${added.size} new), ${lift.size} lifted.", null)
             if (refused.isEmpty()) null else "${refused.size} app(s) não puderam ser bloqueados"
         } catch (e: RuntimeException) {
             log("The app block was refused", e)
@@ -63,6 +74,12 @@ class AppSuspender(
             }
 
         // Suspended now and not to be: lifted (a protected app included).
+        // "Suspended now" also counts apps another app on the phone suspended
+        // (a digital wellbeing timer, say): that is harmless, since Android
+        // lifts only the Device Owner's own suspension and leaves theirs (they
+        // come back as still suspended, logged and asked again at each apply).
+        // Likewise an app to block that is suspended by someone else is not
+        // asked again; the next apply catches it once they lift theirs.
         fun toLift(target: Set<String>, suspended: Set<String>): Set<String> = suspended - target
     }
 }
@@ -85,6 +102,8 @@ object ProtectedApps {
         // Google Play services and the WebView.
         "com.google.android.gms",
         "com.google.android.gsf",
+        // Play Store: the package verifier, which Android refuses to suspend.
+        "com.android.vending",
         "com.google.android.webview",
         "com.android.webview",
         // Installing and Android's permission questions.
@@ -109,5 +128,18 @@ object ProtectedApps {
         "com.miui.notification",
     )
 
-    fun with(resolved: Iterable<String?>): Set<String> = ALWAYS + resolved.filterNotNull()
+    // An app the phone names for a role (home screen, dialer, settings,
+    // installer, keyboard), and whether it came with the phone.
+    data class Candidate(val pkg: String, val system: Boolean)
+
+    // ALWAYS, the phone's own apps for those roles (system apps), and the
+    // ones in use (default home, dialer and keyboard, the WebView, the agent).
+    // An app the student installs that only claims a role is not protected:
+    // it is listed for the teacher and can be blocked.
+    fun resolve(candidates: Iterable<Candidate>, inUse: Iterable<String?>): Set<String> =
+        ALWAYS + candidates.filter { it.system }.map { it.pkg } + inUse.filterNotNull()
+
+    // The package of Settings.Secure.DEFAULT_INPUT_METHOD ("package/.Service").
+    fun inputMethodPackage(id: String?): String? =
+        id?.substringBefore('/')?.takeIf { it.isNotEmpty() }
 }

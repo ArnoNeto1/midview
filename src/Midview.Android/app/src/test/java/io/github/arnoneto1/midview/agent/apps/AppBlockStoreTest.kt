@@ -9,6 +9,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.nio.file.AccessDeniedException
 import java.time.ZoneOffset
 
 class AppBlockStoreTest {
@@ -101,6 +104,8 @@ class AppBlockStoreTest {
         val (succeeded, detail) = store.handle(policy(3, AppBlockMode.BLOCK_LIST, "a.b").encode())
         assertEquals(false, succeeded)
         assertTrue(detail, detail.startsWith("não foi possível gravar o bloqueio: "))
+        // In Portuguese, never the system's own (English) text nor the path.
+        assertTrue(detail, detail.removePrefix("não foi possível gravar o bloqueio: ") in AppBlockStore.SAVE_ERRORS)
         assertTrue(applied.isEmpty())
         assertEquals(PhoneAppPolicy.lifted(0), store.current)
     }
@@ -110,5 +115,27 @@ class AppBlockStoreTest {
         file.writeBytes(byteArrayOf(1, 2, 3))
         assertEquals(PhoneAppPolicy.lifted(0), store().current)
         assertTrue(File(folder.root, "app-block.bin.corrupt").exists())
+    }
+
+    @Test fun saveErrorsAreSaidInPortuguese() {
+        assertEquals("sem espaço no celular", AppBlockStore.saveError(IOException("/data/x.tmp: open failed: ENOSPC (No space left on device)")))
+        assertEquals("acesso negado", AppBlockStore.saveError(AccessDeniedException("/data/x.tmp")))
+        assertEquals("acesso negado", AppBlockStore.saveError(FileNotFoundException("/data/x.tmp: open failed: EACCES (Permission denied)")))
+        assertEquals("armazenamento só de leitura", AppBlockStore.saveError(IOException("open failed: EROFS (Read-only file system)")))
+        assertEquals("pasta não encontrada", AppBlockStore.saveError(IOException("Not a directory")))
+        assertEquals("pasta não encontrada", AppBlockStore.saveError(FileNotFoundException("/data/x/y.tmp: open failed: ENOENT (No such file or directory)")))
+        assertEquals("erro ao gravar no celular", AppBlockStore.saveError(IOException("something else entirely")))
+        assertEquals("erro ao gravar no celular", AppBlockStore.saveError(IOException()))
+    }
+
+    // A package installed or removed: the policy held now is applied again,
+    // never one read before a newer one came in.
+    @Test fun reapplyAppliesTheHeldPolicy() {
+        val store = store()
+        val blocked = policy(5, AppBlockMode.ALLOW_ONLY)
+        store.handle(blocked.encode())
+        applied.clear()
+        store.reapply()
+        assertEquals(listOf(blocked), applied)
     }
 }

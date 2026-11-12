@@ -100,18 +100,53 @@ class AppSuspenderTest {
         ).forEach { assertTrue(it, it in ProtectedApps.ALWAYS) }
     }
 
-    @Test fun protectedAppsAddWhatThePhoneResolves() {
-        val all = ProtectedApps.with(listOf("com.google.android.dialer", null, "com.sec.android.app.launcher"))
-        assertTrue("com.google.android.dialer" in all)
-        assertTrue("com.sec.android.app.launcher" in all)
+    @Test fun playStoreIsAlwaysProtected() {
+        // Android refuses to suspend the package verifier.
+        assertTrue("com.android.vending" in ProtectedApps.ALWAYS)
+    }
+
+    // Only the phone's own home screens, dialers, keyboards and installers are
+    // kept from the block, and the ones in use: an app the student installs
+    // that says it is a home screen, a dialer or a keyboard is not.
+    @Test fun resolvedAppsAreProtectedOnlyWhenSystemOrInUse() {
+        val all = ProtectedApps.resolve(
+            candidates = listOf(
+                ProtectedApps.Candidate("com.android.contacts", system = true),
+                ProtectedApps.Candidate("com.thirdparty.launcher", system = false),
+                ProtectedApps.Candidate("com.voip.dialer", system = false),
+                ProtectedApps.Candidate("com.fancy.keyboard", system = false),
+            ),
+            inUse = listOf("com.thirdparty.launcher", null),
+        )
+        assertTrue("com.android.contacts" in all)
+        assertTrue("com.thirdparty.launcher" in all)
+        assertFalse("com.voip.dialer" in all)
+        assertFalse("com.fancy.keyboard" in all)
         assertTrue(ProtectedApps.ALWAYS.all { it in all })
     }
 
+    @Test fun theKeyboardInUseIsThePackageOfTheDefaultInputMethod() {
+        assertEquals(
+            "com.google.android.inputmethod.latin",
+            ProtectedApps.inputMethodPackage("com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME"),
+        )
+        assertEquals("com.fancy.keyboard", ProtectedApps.inputMethodPackage("com.fancy.keyboard"))
+        assertNull(ProtectedApps.inputMethodPackage(null))
+        assertNull(ProtectedApps.inputMethodPackage(""))
+        assertNull(ProtectedApps.inputMethodPackage("/.Service"))
+    }
+
     // Applying: what Android is told, lifting first.
-    private class FakeCatalog(var launchable: Set<String>, var suspended: Set<String>, val protected: Set<String>) : AppCatalog {
+    private class FakeCatalog(
+        var launchable: Set<String>,
+        var suspended: Set<String>,
+        val protected: Set<String>,
+        val installed: Set<String> = launchable + suspended + protected,
+    ) : AppCatalog {
         override fun launchable() = launchable
         override fun protected() = protected
         override fun suspended() = suspended
+        override fun isInstalled(pkg: String) = pkg in installed
     }
 
     private class FakeGateway(var owner: Boolean = true, val refused: Set<String> = emptySet()) : DevicePolicyGateway {
@@ -134,15 +169,43 @@ class AppSuspenderTest {
     }
 
     @Test fun applyLiftsThenSuspendsTheDifference() {
-        val catalog = FakeCatalog(launchable, suspended = setOf("com.android.camera"), protected = protected)
+        val catalog = FakeCatalog(launchable, suspended = setOf("com.android.camera", "com.whatsapp"), protected = protected)
         val gw = FakeGateway()
         val warning = AppSuspender(catalog, gw).apply(policy(AppBlockMode.BLOCK_LIST, "com.whatsapp", "com.android.chrome"))
 
         assertNull(warning)
+        // WhatsApp is suspended already: not asked again.
         assertEquals(
-            listOf(listOf("com.android.camera") to false, listOf("com.android.chrome", "com.whatsapp") to true),
+            listOf(listOf("com.android.camera") to false, listOf("com.android.chrome") to true),
             gw.calls,
         )
+    }
+
+    @Test fun applyWithEverythingAlreadyInPlaceCallsNothing() {
+        val gw = FakeGateway()
+        AppSuspender(FakeCatalog(launchable, setOf("com.whatsapp"), protected), gw)
+            .apply(policy(AppBlockMode.BLOCK_LIST, "com.whatsapp"))
+        assertTrue(gw.calls.isEmpty())
+    }
+
+    // Removed between the reading and the call: nothing left to block.
+    @Test fun aRefusedAppThatIsGoneIsNotCounted() {
+        val gw = FakeGateway(refused = setOf("com.whatsapp", "com.android.camera"))
+        val catalog = FakeCatalog(launchable, emptySet(), protected, installed = launchable - "com.android.camera")
+        val warning = AppSuspender(catalog, gw).apply(policy(AppBlockMode.ALLOW_ONLY))
+        assertEquals("1 app(s) não puderam ser bloqueados", warning)
+    }
+
+    // Suspended by something else on the phone (Android only lifts its own
+    // suspension): logged, nothing for the teacher to do.
+    @Test fun aSuspensionAndroidKeepsIsLoggedNotWarned() {
+        val gw = FakeGateway(refused = setOf("com.whatsapp"))
+        val logged = mutableListOf<String>()
+        val warning = AppSuspender(FakeCatalog(launchable, setOf("com.whatsapp"), protected), gw) { text, _ -> logged += text }
+            .apply(PhoneAppPolicy.lifted(9))
+        assertNull(warning)
+        assertEquals(listOf(listOf("com.whatsapp") to false), gw.calls)
+        assertTrue(logged.toString(), logged.any { "still suspended" in it })
     }
 
     @Test fun applyNothingBlockedLiftsEverySuspension() {
