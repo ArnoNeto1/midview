@@ -335,6 +335,22 @@ public enum MessageType : byte
     // consent dialog, so the screen can then be streamed (ScreenStream, ScreenFrame).
     RequestScreenConsent = 92,
 
+    // Master -> Android agent (port 28900): the phone-apps block. Set a PhoneAppPolicy
+    // (answered with a CommandAck), ask for the one in force (answered with
+    // PhoneAppBlockStatus, a PhoneAppPolicy payload), and ask for the apps the student
+    // can open (answered with PhoneApps, a PhoneAppList payload).
+    SetPhoneAppBlock = 93,
+    GetPhoneAppBlock = 94,
+    PhoneAppBlockStatus = 95,
+    GetPhoneApps = 96,
+    PhoneApps = 97,
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Otimizar"
+    // the phone (hide ad apps, ad-free DNS). No payload; answered with one
+    // PhoneOptimizeReport. Phone-only: an older agent answers CommandAck.
+    OptimizePhone = 98,
+    PhoneOptimizeReport = 99,
+
     // Master -> Android agent, over TLS, from a teacher it doesn't trust yet:
     // a PhoneClaimRequest with a fresh nonce and the teacher's name, sent to
     // the phone whose discovery reply carried the claim id of this Master's QR.
@@ -342,14 +358,14 @@ public enum MessageType : byte
     // whose Proof is HMAC-SHA256 keyed by the token over the nonce and both
     // thumbprints (PhoneClaim.Proof), and now trusts the Master; or it answers
     // PairRefused (why, in Portuguese). The token works once.
-    ClaimPhone = 93,
+    ClaimPhone = 101,
 
     // Master -> Android agent, from a trusted teacher only: erase the phone
     // and set it up again ("Apagar e preparar de novo"), no payload. Answered
     // with one CommandAck carrying a CommandResult. An agent from before this
     // answers CommandAck with a refusal, which the Master shows as a phone that
     // cannot be erased from here yet.
-    WipePhone = 94,
+    WipePhone = 100,
 }
 
 public enum CloseAppsMode : byte

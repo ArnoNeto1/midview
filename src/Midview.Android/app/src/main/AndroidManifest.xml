@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Otimizar": whether the network validates the ad-free DNS. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- The agent runs all the time, from the phone's start. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -15,8 +18,25 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Wi-Fi kept awake so the phone answers with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The watchdog's check every few seconds (AgentWatchdog), on time.
+         USE_EXACT_ALARM is granted at install from Android 13 and cannot be
+         taken back, so Android 14 and later (where SCHEDULE_EXACT_ALARM
+         starts denied) keep exact alarms; the app is installed by the
+         school phone's provisioning, not by Google Play. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Blocking apps: the agent sees every app on the phone (which the
+         student can open, which are suspended). The app comes with the
+         school phone's provisioning, not from Google Play. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- "Atualizar celulares": the agent installs its own next version, as
+         the Device Owner (no question to the student). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
+        android:name=".MidviewApplication"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -37,6 +57,37 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- The screen seen without asking the student (Android 11+), once
+             turned on by cable while the phone is prepared: takes pictures
+             of the screen only, reads and does nothing else. -->
+        <service
+            android:name=".screen.AccessibilityCapture"
+            android:exported="false"
+            android:label="Midview"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_capture" />
+        </service>
+
+        <!-- "Bloquear a internet": the phone's always-on VPN, set by the
+             Device Owner, which lets nothing out but the agent. Only the
+             system may bind it (BIND_VPN_SERVICE). -->
+        <service
+            android:name=".sites.BlockVpnService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
+        </service>
+
         <!-- Android's request to see the screen, nothing of its own to show. -->
         <activity
             android:name=".screen.ConsentActivity"
@@ -44,14 +95,46 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- The teacher's "Bloquear telas": a padlock over the whole screen,
+             held in lock task mode (a task of its own, allowed by Lockdown).
+             Turning the phone redraws it instead of starting it again. -->
+        <activity
+            android:name=".lock.LockActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|locale|layoutDirection|fontScale"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:lockTaskMode="if_whitelisted"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.lock"
+            android:theme="@style/Theme.Midview.Lock" />
+
         <receiver
             android:name=".agent.AgentService$StartAtBoot"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- The agent again, in the new version, after the app is updated. -->
+        <receiver
+            android:name=".update.PackageReplacedReceiver"
+            android:exported="true">
+            <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Android's answer to the agent's own install (SelfInstaller). -->
+        <receiver
+            android:name=".update.InstallResult"
+            android:exported="false" />
+
+        <!-- Starts the agent again if it is not running, every few seconds. -->
+        <receiver
+            android:name=".agent.AgentWatchdog"
+            android:exported="false" />
 
         <activity
             android:name=".ui.PairingCodeActivity"

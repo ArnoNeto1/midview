@@ -29,14 +29,21 @@ public enum ToolbarAction
     WipePhone,
 }
 
-// What each kind of device accepts. A phone supports none of them yet, except
-// WipePhone (which only a phone supports); the plans that teach the Android
-// agent to watch the screen, lock it, block programs and sites and update
-// itself turn those on here.
+// What each kind of device accepts. A phone can have its screen watched and
+// locked, its apps blocked (its own window: PhoneAppBlockWindow) and its
+// sites blocked (the same commands as a PC's); the plan that teaches the
+// Android agent to update itself turns that on here. Control stays for computers.
+// WipePhone (a tile's menu only) is for phones alone.
 public static class DeviceSupport
 {
-    public static bool Supports(DeviceKind kind, ToolbarAction action) =>
-        action == ToolbarAction.WipePhone ? kind == DeviceKind.Android : kind == DeviceKind.Windows;
+    public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
+    {
+        DeviceKind.Windows => action != ToolbarAction.WipePhone,
+        DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.ScreenLock
+            or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
+            or ToolbarAction.WipePhone,
+        _ => false,
+    };
 
     // The machines that can do the action, in order: what a feature that
     // phones do not take part in (the class folder, the Windows update) is fed.
@@ -57,6 +64,46 @@ public static class DeviceSupport
             0 => null,
             1 => "1 celular ficou de fora: essa ação ainda não funciona em celular.",
             _ => $"{leftOut} celulares ficaram de fora: essa ação ainda não funciona em celular.",
+        };
+    }
+
+    // Whom a toolbar button reaches: the whole room, as always, except for
+    // blocking programs and sites when only phones are selected, or nothing is
+    // selected and the grid shows only phones: then those phones ("Bloquear
+    // programas" then opens the phones' window); and when the grid shows only
+    // computers: then every PC and no phone, which the teacher cannot see
+    // there (none when the room has no PC). PCs are reached as before.
+    public static IReadOnlyList<KnownMachine> ToolbarReach(
+        ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
+    {
+        if (action is not (ToolbarAction.BlockPrograms or ToolbarAction.BlockSites))
+        {
+            return room;
+        }
+        if (selected.Count > 0 && selected.All(machine => machine.IsPhone))
+        {
+            return selected;
+        }
+        if (shown == DeviceFilter.Computers)
+        {
+            return room.Where(machine => !machine.IsPhone).ToList();
+        }
+        if (selected.Count == 0 && shown == DeviceFilter.Phones && room.Any(machine => machine.IsPhone))
+        {
+            return room.Where(machine => machine.IsPhone).ToList();
+        }
+        return room;
+    }
+
+    // For an action made for phones only: said after it when PCs were among the targets; null when none.
+    public static string? PhoneOnlyLeftOutNotice(IReadOnlyCollection<KnownMachine> targets)
+    {
+        var leftOut = targets.Count(machine => !machine.IsPhone);
+        return leftOut switch
+        {
+            0 => null,
+            1 => "1 computador ficou de fora: essa ação só funciona em celular.",
+            _ => $"{leftOut} computadores ficaram de fora: essa ação só funciona em celular.",
         };
     }
 }

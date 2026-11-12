@@ -15,13 +15,25 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.apps.AppSuspender
+import io.github.arnoneto1.midview.agent.apps.InstalledApps
+import io.github.arnoneto1.midview.agent.apps.PackageWatcher
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.lock.LockActivity
+import io.github.arnoneto1.midview.agent.lock.ScreenLock
 import io.github.arnoneto1.midview.agent.net.CommandHandler
 import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
+import io.github.arnoneto1.midview.agent.net.LockScreenHandler
 import io.github.arnoneto1.midview.agent.net.ScreenStreamHandler
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
+import io.github.arnoneto1.midview.agent.optimize.AdblockDns
+import io.github.arnoneto1.midview.agent.optimize.AndroidDnsNetwork
+import io.github.arnoneto1.midview.agent.optimize.DnsWatcher
+import io.github.arnoneto1.midview.agent.optimize.OptimizeStore
+import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.Discovery
@@ -30,8 +42,19 @@ import io.github.arnoneto1.midview.agent.screen.CaptureCadence
 import io.github.arnoneto1.midview.agent.screen.FrameCredit
 import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
 import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
+import io.github.arnoneto1.midview.agent.sites.BlockVpnService
+import io.github.arnoneto1.midview.agent.sites.InternetBlock
+import io.github.arnoneto1.midview.agent.sites.OtherBrowsers
+import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
+import io.github.arnoneto1.midview.agent.sites.SitePolicy
 import io.github.arnoneto1.midview.agent.status.StatusImage
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
+import io.github.arnoneto1.midview.agent.update.ApkFingerprint
+import io.github.arnoneto1.midview.agent.update.ApkUpdateStore
+import io.github.arnoneto1.midview.agent.update.ApkUpdater
+import io.github.arnoneto1.midview.agent.update.ApkUpload
+import io.github.arnoneto1.midview.agent.update.PackageApkReader
+import io.github.arnoneto1.midview.agent.update.SelfInstaller
 import java.io.File
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
@@ -41,13 +64,15 @@ import java.util.concurrent.TimeUnit
 // The Midview agent on the phone: always running (a foreground service with
 // its fixed notification, started again after every restart), it answers
 // the teacher's search (UDP 28901), takes pairing and commands (TLS 28900)
-// and serves the screen (TLS 5901: the grid's thumbnail and the big
-// window), the same ports as on a PC.
+// and serves the screen (TLS 5901: the grid's thumbnail, the big window and
+// "Bloquear telas"), the same ports as on a PC.
 class AgentService : Service() {
     private val lock = Any()
     private var tlsServers = emptyList<TlsServer>()
     private var discoverySocket: DatagramSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var packageWatcher: PackageWatcher? = null
+    private var dnsWatcher: DnsWatcher? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private val main = Handler(Looper.getMainLooper())
     private var stopped = false
@@ -60,6 +85,8 @@ class AgentService : Service() {
         createChannels()
         ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)
+        keeper(this).created()
+        AgentWatchdog.arm(this)
         holdWifi()
         // Making the identity the first time takes a moment (an RSA key).
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
@@ -70,7 +97,12 @@ class AgentService : Service() {
     // `dpm set-device-owner`, the app is told (and starts the agent) before
     // it really is one: the locks are tried once more a little later.
     // Applying them twice changes nothing.
+    //
+    // No intent: Android started the service again after killing the app
+    // (START_STICKY). onCreate already put it back in the foreground.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) Log.i(TAG, "Agent started again by Android.")
+        AgentWatchdog.arm(this)
         AndroidDevicePolicyGateway.lockDown(this)
         main.removeCallbacks(lockAgain)
         main.postDelayed(lockAgain, LOCK_AGAIN_MILLIS)
@@ -85,6 +117,7 @@ class AgentService : Service() {
             closeListeners()
         }
         stopping.countDown()
+        keeper(this).destroyed()
         main.removeCallbacks(lockAgain)
         wifiLock?.let { if (it.isHeld) it.release() }
         wifiLock = null
@@ -118,6 +151,10 @@ class AgentService : Service() {
     }
 
     private fun closeListeners() {
+        packageWatcher?.stop()
+        packageWatcher = null
+        dnsWatcher?.stop()
+        dnsWatcher = null
         tlsServers.forEach { it.close() }
         tlsServers = emptyList()
         discoverySocket?.close()
@@ -139,19 +176,68 @@ class AgentService : Service() {
             hideCode = { hideCode() },
             deviceName = { DeviceName.read(this) },
         )
-        val commands = CommandHandler(trusted, pairing)
         val consent = ScreenCaptureService.consent
+        // The app block: kept in the app's storage, applied again now (it
+        // holds after a restart, or MIUI ending the app) and whenever an app
+        // is installed, updated or removed.
+        val installedApps = InstalledApps(this)
+        val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
+        val suspender = AppSuspender(installedApps, AndroidDevicePolicyGateway(this), log)
+        val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
+        // "Otimizar": the ad apps hidden and the ad-free DNS, run by itself at
+        // the first command of a trusted teacher and repeated by "Otimizar";
+        // the DNS is tried again when the internet block is freed, and goes
+        // back to automatic if the network stops validating it (DnsWatcher).
+        val policyGateway = AndroidDevicePolicyGateway(this)
+        lateinit var internet: InternetBlock
+        val internetBlocked = { internet.isBlocked }
+        val optimizer = Optimizer(
+            installedApps, policyGateway,
+            AdblockDns(policyGateway, AndroidDnsNetwork(this), internetBlocked, log),
+            OptimizeStore(File(filesDir, OPTIMIZE_FILE), log),
+            internetBlocked, log = log,
+        )
+        // The site block: Chrome's policy and the internet block, kept the
+        // same way and applied again now. Other browsers are hidden, checked
+        // again with every app installed (the package watcher).
+        internet = InternetBlock(
+            policyGateway, File(filesDir, INTERNET_BLOCK_FILE),
+            startVpn = { BlockVpnService.start(this) },
+            stopVpn = { BlockVpnService.stop(this) },
+            log = log,
+            freed = optimizer::internetFreed,
+        )
+        val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(policyGateway, internet, log)::apply, log = log)
+        sites.reapply()
+        val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
+        // "Atualizar celulares": the agent's next version comes over the
+        // network and installs itself. The attempt a restart cut short, or
+        // the one that installed this version, is closed here; the APK's
+        // fingerprint is worked out in the background.
+        val updater = ApkUpdater(
+            ApkUpdateStore(File(filesDir, ApkUpdater.ATTEMPT_FILE), log),
+            ApkUpload(File(filesDir, ApkUpdater.UPLOAD_FOLDER)),
+            ApkFingerprint { ApkFingerprint.of(File(applicationInfo.sourceDir)) },
+            PackageApkReader(this),
+            SelfInstaller(this),
+            isDeviceOwner = policyGateway::isDeviceOwner,
+            log = log,
+        )
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,
             status = { text, width, height -> StatusImage.render(width, height, DeviceName.read(this), text) },
             jpeg = BitmapJpeg::thumbnail,
         )
+        val screenLock = ScreenLock(show = { LockActivity.show(this) }, hide = { LockActivity.hide() })
+        val policy = AndroidDevicePolicyGateway(this)
         val thumbnails = ThumbnailHandler(
             trusted,
             render = picture::render,
             teacherConnected = consent::teacherConnected,
             stream = { ScreenStreamHandler(it, frames, FrameCredit(), CaptureCadence(), BitmapJpeg).run() },
+            lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
@@ -160,6 +246,11 @@ class AgentService : Service() {
             val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
             val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
+            packageWatcher = PackageWatcher(this) {
+                appBlock.reapply()
+                otherBrowsers.apply()
+            }.also { it.start() }
+            dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
             agentServer.start()
             sessionServer.start()
 
@@ -239,10 +330,11 @@ class AgentService : Service() {
 
     private fun notifications() = getSystemService(NotificationManager::class.java)
 
-    // Starts the agent after the phone restarts (and after the app is updated).
+    // Starts the agent after the phone restarts (after the app is updated:
+    // PackageReplacedReceiver).
     class StartAtBoot : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
                 start(context)
             }
         }
@@ -265,6 +357,11 @@ class AgentService : Service() {
         // to show the code.
         private const val SHOW_TIMEOUT_MILLIS = 3_000L
         private const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
+        private const val APP_BLOCK_FILE = "app-block.bin"
+        private const val SITE_BLOCK_FILE = "site-block.txt"
+        private const val INTERNET_BLOCK_FILE = "internet-block.txt"
+        private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
+        private const val OPTIMIZE_FILE = "optimize.txt"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1
@@ -282,6 +379,24 @@ class AgentService : Service() {
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AgentService::class.java))
+        }
+
+        @Volatile private var keeper: AgentKeeper? = null
+
+        private fun keeper(context: Context): AgentKeeper =
+            keeper ?: synchronized(this) {
+                keeper ?: AgentKeeper { start(context.applicationContext) }.also { keeper = it }
+            }
+
+        // Starts the agent unless it already runs in this process (the
+        // watchdog and every start of the process). Never fails its caller:
+        // a start Android refuses is logged and tried at the next check.
+        fun ensureRunning(context: Context, reason: String) {
+            try {
+                if (keeper(context).ensureRunning()) Log.i(TAG, "Agent started ($reason).")
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "Agent could not be started ($reason)", e)
+            }
         }
     }
 }

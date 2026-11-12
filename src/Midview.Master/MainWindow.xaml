@@ -137,9 +137,9 @@
                             <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" local:DeviceActions.Action="CloseApps" Click="OnCloseAppsClassClicked" OpensOptions="True"
                                                  ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
                             <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsClassClicked" OpensOptions="True"
-                                                 ToolTip="Impede programas de abrir nas máquinas da turma." />
+                                                 ToolTip="Impede programas de abrir nas máquinas da turma. Com só celulares selecionados, ou no filtro Celulares, bloqueia apps nos celulares." />
                             <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" local:DeviceActions.Action="BlockSites" Click="OnSiteBlockClassClicked" OpensOptions="True"
-                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma." />
+                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma, celulares também. Com só celulares selecionados, ou no filtro Celulares, vale só para eles; no filtro Computadores, só para os computadores." />
                         </StackPanel>
                         <ContentControl Content="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
@@ -298,6 +298,8 @@
                                             <Separator />
                                             <MenuItem Tag="uma" Header="Ver a tela" local:DeviceActions.Action="View" Click="OnViewMachineClicked" />
                                             <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" local:DeviceActions.Action="Control" Click="OnControlMachineClicked" />
+                                            <!-- Only for phones: shown by OnMachineMenuOpening when one is among the machines. -->
+                                            <MenuItem Tag="celular" Header="Pedir de novo para ver a tela" Visibility="Collapsed" Click="OnAskScreenAgainClicked" />
                                             <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
                                             <MenuItem Tag="bloqueio" Header="Bloquear a tela" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockMachineClicked" />
                                             <Separator />

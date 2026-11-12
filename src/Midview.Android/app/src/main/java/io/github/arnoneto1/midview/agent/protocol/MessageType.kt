@@ -8,9 +8,28 @@ object MessageType {
     const val START_CONTROL = 3
     const val STOP_CONTROL = 4
     const val INPUT_EVENT = 6
+
+    // The teacher's "Bloquear sites" window, as on a PC: the internet as a
+    // whole (no payload), or one site (what the teacher typed, UTF-8). Each
+    // is acknowledged with a CommandAck of a single byte, 1 or 0.
+    const val BLOCK_INTERNET = 7
+    const val UNBLOCK_INTERNET = 8
+    const val BLOCK_DOMAIN = 9
+    const val UNBLOCK_DOMAIN = 10
     const val COMMAND_ACK = 11
     const val REQUEST_THUMBNAIL = 12
     const val THUMBNAIL_FRAME = 13
+
+    // Sending a file in chunks (the update's APK too).
+    const val FILE_CHUNK = 18
+
+    // Updating the agent over the network, from a trusted teacher only (see
+    // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
+    // GET_UPDATE_STATUS -> UPDATE_STATUS.
+    const val UPDATE_OFFER = 25
+    const val UPDATE_ACCEPTED = 26
+    const val GET_UPDATE_STATUS = 27
+    const val UPDATE_STATUS = 28
     const val LOCK_SCREEN = 34
 
     // Pairing a teacher with this device (see Pairing for the exchange).
@@ -38,4 +57,19 @@ object MessageType {
     // Master -> Android agent (port 28900): ask this device to show the
     // screen-capture consent dialog.
     const val REQUEST_SCREEN_CONSENT = 92
+
+    // Master -> Android agent (port 28900): the phone-apps block. SET sends a
+    // PhoneAppPolicy (CommandAck back), GET asks for the one in force (STATUS
+    // carries it), GET_PHONE_APPS asks for the openable apps (PHONE_APPS).
+    const val SET_PHONE_APP_BLOCK = 93
+    const val GET_PHONE_APP_BLOCK = 94
+    const val PHONE_APP_BLOCK_STATUS = 95
+    const val GET_PHONE_APPS = 96
+    const val PHONE_APPS = 97
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Otimizar"
+    // the phone (no payload), answered with one PHONE_OPTIMIZE_REPORT
+    // (a PhoneOptimizeReport). An older agent answers COMMAND_ACK.
+    const val OPTIMIZE_PHONE = 98
+    const val PHONE_OPTIMIZE_REPORT = 99
 }

@@ -1,8 +1,12 @@
 package io.github.arnoneto1.midview.agent.screen
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class ScreenConsentTest {
     private var now = 0L
@@ -133,5 +137,181 @@ class ScreenConsentTest {
         consent.captureFailed()
         assertEquals(4, shown)
         assertEquals(ConsentState.Waiting, consent.state)
+    }
+
+    // The student left the request without answering (the home button, say):
+    // nobody said no, the tile still waits, and the teacher's next ask puts
+    // it up again at once instead of a minute later.
+    @Test fun aRequestLeftUnansweredIsShownAgainAtTheNextAsk() {
+        val consent = consent()
+        consent.teacherConnected()
+        assertEquals(1, shown)
+
+        consent.dismissed()
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // "Pedir de novo para ver a tela", well within the minute.
+        now += 1_000
+        consent.ask()
+        assertEquals(2, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // Still one request on the screen at a time.
+        consent.ask()
+        assertEquals(2, shown)
+    }
+
+    // The teacher's lock screen came over the request: it comes back at the unlock.
+    @Test fun aRequestPushedAsideByTheLockIsShownAtTheUnlock() {
+        val consent = consent()
+        consent.ask()
+        assertEquals(1, shown)
+
+        consent.lockedChanged(true)
+        consent.dismissed()
+        assertEquals(ConsentState.Waiting, consent.state)
+        assertEquals(1, shown)
+
+        consent.lockedChanged(false)
+        assertEquals(2, shown)
+    }
+
+    // A late "went away" changes nothing once the student answered.
+    @Test fun dismissedAfterAnAnswerChangesNothing() {
+        val consent = consent()
+        consent.ask()
+        consent.denied()
+        consent.dismissed()
+        assertEquals(ConsentState.Denied, consent.state)
+
+        consent.ask()
+        consent.granted()
+        consent.dismissed()
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertEquals(2, shown)
+    }
+
+    // Only leaving the request for something else counts as no answer: not
+    // turning the phone, not the answer itself, not the screen going off.
+    @Test fun onlyLeavingTheRequestIsNoAnswer() {
+        assertTrue(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = true, answered = false, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = true, screenOn = true))
+        assertFalse(ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = false))
+
+        // A "no" still being weighed when the screen went away: the system
+        // took its request down as the student left, not a refusal.
+        assertTrue(
+            ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = true, closingRequest = true),
+        )
+        assertTrue(
+            ScreenConsent.leftUnanswered(changingConfigurations = false, answered = false, screenOn = false, closingRequest = true),
+        )
+        assertFalse(
+            ScreenConsent.leftUnanswered(changingConfigurations = true, answered = false, screenOn = true, closingRequest = true),
+        )
+    }
+
+    // The lock cannot come up between deciding to show the request and
+    // showing it: lockedChanged waits until the request is on its way.
+    @Test fun theLockWaitsForARequestBeingShown() {
+        val inShow = CountDownLatch(1)
+        val letGo = CountDownLatch(1)
+        lateinit var consent: ScreenConsent
+        consent = ScreenConsent(clock = { now }) {
+            shown++
+            inShow.countDown()
+            letGo.await(5, TimeUnit.SECONDS)
+        }
+        val asking = Thread { consent.ask() }
+        asking.start()
+        assertTrue(inShow.await(5, TimeUnit.SECONDS))
+
+        val locked = CountDownLatch(1)
+        val locking = Thread {
+            consent.lockedChanged(true)
+            locked.countDown()
+        }
+        locking.start()
+        assertFalse("the lock came up while the request was being shown", locked.await(200, TimeUnit.MILLISECONDS))
+
+        letGo.countDown()
+        assertTrue(locked.await(5, TimeUnit.SECONDS))
+        asking.join(5_000)
+        locking.join(5_000)
+        assertTrue(consent.isLocked)
+        assertEquals(1, shown)
+    }
+
+    // A school phone with the accessibility service on (Android 11+): the
+    // screen is seen without asking the student, whatever happens.
+    @Test fun withAccessibilityTheStudentIsNeverAsked() {
+        val consent = ScreenConsent(clock = { now }, askAgainWhenStopped = true, source = { CaptureSource.Accessibility }) { shown++ }
+
+        consent.teacherConnected()
+        consent.ask()
+        consent.stopped()
+        consent.lockedChanged(true)
+        consent.ask()
+        consent.lockedChanged(false)
+        consent.captureFailed()
+        consent.captureFailed()
+        consent.denied()
+        now += ScreenConsent.ASK_AGAIN_AFTER_MILLIS
+        consent.ask()
+
+        assertEquals(0, shown)
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertNull(ScreenConsent.statusText(consent.state))
+    }
+
+    // Enabled in the settings but not connected yet (the phone or the app
+    // just started): no request meanwhile, the tile keeps waiting.
+    @Test fun accessibilityStartingAsksNothingMeanwhile() {
+        var source = CaptureSource.AccessibilityStarting
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+
+        consent.teacherConnected()
+        consent.ask()
+        assertEquals(0, shown)
+        assertEquals("Aguardando o aluno permitir", ScreenConsent.statusText(consent.state))
+
+        source = CaptureSource.Accessibility
+        consent.sourceChanged()
+        assertEquals(0, shown)
+        assertEquals(ConsentState.Capturing, consent.state)
+    }
+
+    // Accessibility turned off later: back to the request ("Iniciar agora"),
+    // at once if a teacher is already looking.
+    @Test fun accessibilityTurnedOffFallsBackToTheRequest() {
+        var source = CaptureSource.Accessibility
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+        consent.teacherConnected()
+        assertEquals(0, shown)
+
+        source = CaptureSource.MediaProjection
+        consent.sourceChanged()
+        assertEquals(1, shown)
+        assertEquals(ConsentState.Waiting, consent.state)
+
+        // Turned on again: capturing, nothing more asked.
+        source = CaptureSource.Accessibility
+        consent.sourceChanged()
+        assertEquals(ConsentState.Capturing, consent.state)
+        assertEquals(1, shown)
+    }
+
+    // Turned off with no teacher looking yet: asked when one connects.
+    @Test fun accessibilityTurnedOffBeforeAnyTeacherAsksAtTheFirstOne() {
+        var source = CaptureSource.Accessibility
+        val consent = ScreenConsent(clock = { now }, source = { source }) { shown++ }
+        source = CaptureSource.MediaProjection
+        consent.sourceChanged()
+        assertEquals(0, shown)
+        assertEquals(ConsentState.NotAsked, consent.state)
+
+        consent.teacherConnected()
+        assertEquals(1, shown)
     }
 }

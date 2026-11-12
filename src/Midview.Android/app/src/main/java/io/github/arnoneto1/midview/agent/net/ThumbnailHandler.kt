@@ -1,7 +1,6 @@
 package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
-import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.ThumbnailRequest
@@ -14,22 +13,23 @@ import java.io.EOFException
 //   every few seconds; each request gets one ThumbnailFrame, a JPEG that
 //   fits the box asked for (render).
 // - ScreenStream: the big window, served by stream (ScreenStreamHandler).
-// - LockScreen: not on a phone yet; the teacher reads why.
+// - LockScreen: "Bloquear telas", held by lockScreen (LockScreenHandler).
 // Anything else (StartControl and the other control messages among them)
-// ends the connection: a phone takes no control. A trusted teacher
-// connecting at all is teacherConnected: the moment the student is asked to
-// let the screen be seen.
+// ends the connection: a phone takes no control. A trusted teacher asking
+// for the screen (a thumbnail or the big window) is teacherConnected: the
+// moment the student is asked to let the screen be seen. A lock does not
+// ask: the request would only wait under the padlock.
 class ThumbnailHandler(
     private val trusted: TrustedMasters,
     private val render: (width: Int, height: Int) -> ByteArray,
     private val teacherConnected: () -> Unit = {},
     private val stream: (Channel) -> Unit = {},
+    private val lockScreen: (Channel) -> Unit = {},
 ) {
     fun handle(channel: Channel) {
         if (!trusted.isTrusted(channel.remoteThumbprint)) {
             return
         }
-        teacherConnected()
 
         channel.setTimeout(FIRST_MESSAGE_TIMEOUT_MILLIS)
         val first = try {
@@ -38,10 +38,15 @@ class ThumbnailHandler(
             return
         }
         when (first.type) {
-            MessageType.REQUEST_THUMBNAIL -> thumbnails(channel, first)
-            MessageType.SCREEN_STREAM -> stream(channel)
-            MessageType.LOCK_SCREEN ->
-                channel.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, NO_SCREEN_LOCK)))
+            MessageType.REQUEST_THUMBNAIL -> {
+                teacherConnected()
+                thumbnails(channel, first)
+            }
+            MessageType.SCREEN_STREAM -> {
+                teacherConnected()
+                stream(channel)
+            }
+            MessageType.LOCK_SCREEN -> lockScreen(channel)
             else -> return
         }
     }
@@ -64,9 +69,6 @@ class ThumbnailHandler(
     }
 
     companion object {
-        // What the teacher reads when locking this phone's screen.
-        const val NO_SCREEN_LOCK = "este celular não bloqueia a tela"
-
         // A request is 4 bytes; nothing that opens a connection here needs more.
         private const val MAX_REQUEST_LENGTH = 1024
 

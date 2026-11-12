@@ -9,8 +9,7 @@
             <local:DialogHeader Icon="&#xE774;" Heading="Bloquear sites" Accent="{StaticResource ProgramasBrush}">
                 <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
             </local:DialogHeader>
-            <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
-                       Text="O bloqueio continua valendo se a máquina reiniciar. O Midview continua funcionando mesmo com a internet bloqueada." />
+            <TextBlock x:Name="PersistenceTextBlock" Style="{StaticResource Hint}" Margin="0,12,0,0" />
 
             <Border Style="{StaticResource Card}" Margin="0,12,0,10">
                 <StackPanel>
@@ -30,8 +29,8 @@
                         <Button Content="Bloquear o site" Click="OnBlockSiteClicked" Style="{StaticResource DangerButton}" Padding="12,5" Margin="0,0,8,0" />
                         <Button Content="Liberar o site" Click="OnUnblockSiteClicked" Padding="12,5" />
                     </WrapPanel>
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="Bloqueia o endereço com e sem www (youtube.com e www.youtube.com). Outros endereços do mesmo site, como m.youtube.com, e abas que já estavam abertas podem continuar funcionando." />
+                    <TextBlock x:Name="SiteHintTextBlock" Style="{StaticResource Hint}" />
+                    <TextBlock x:Name="PhoneNoteTextBlock" Style="{StaticResource Hint}" Margin="0,6,0,0" Visibility="Collapsed" />
                 </StackPanel>
             </Border>
         </StackPanel>

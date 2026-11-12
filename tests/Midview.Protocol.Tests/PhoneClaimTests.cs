@@ -50,7 +50,7 @@ public class PhoneClaimTests
     [Fact]
     public void Claim_messages_have_the_agreed_numbers()
     {
-        Assert.Equal(93, (int)MessageType.ClaimPhone);
-        Assert.Equal(94, (int)MessageType.WipePhone);
+        Assert.Equal(101, (int)MessageType.ClaimPhone);
+        Assert.Equal(100, (int)MessageType.WipePhone);
     }
 }

@@ -2,6 +2,9 @@ import "./index.css";
 import "./fonts";
 import React from "react";
 import { AbsoluteFill, Composition, Folder } from "remotion";
+import { COMERCIAL, MidviewComercial } from "./comercial/Comercial";
+import { MidviewReels3min, REELS3 } from "./comercial/vertical/Reels3";
+import { MidviewComercialVertical, VERTICAL } from "./comercial/vertical/Vertical";
 import { AppThemeProvider } from "./components/app/appTheme";
 import { Background } from "./components/Background";
 import { MidviewPromo } from "./MidviewPromo";
@@ -70,6 +73,26 @@ export const RemotionRoot: React.FC = () => (
       fps={FPS}
       width={WIDTH}
       height={HEIGHT}
+    />
+    {/* O comercial de cerca de 54 s: tomadas reais do programa e ambiente de IA (src/comercial). */}
+    <Composition id="MidviewComercial" component={MidviewComercial} durationInFrames={COMERCIAL.frames} fps={COMERCIAL.fps} width={WIDTH} height={HEIGHT} />
+    {/* O comercial vertical, no estilo de explicação em neon (src/comercial/vertical). */}
+    <Composition
+      id="MidviewComercialVertical"
+      component={MidviewComercialVertical}
+      durationInFrames={VERTICAL.frames}
+      fps={VERTICAL.fps}
+      width={VERTICAL.largura}
+      height={VERTICAL.altura}
+    />
+    {/* Reels de 3 minutos: um passeio pelo programa no visual do comercial vertical. */}
+    <Composition
+      id="MidviewReels3min"
+      component={MidviewReels3min}
+      durationInFrames={REELS3.frames}
+      fps={REELS3.fps}
+      width={REELS3.largura}
+      height={REELS3.altura}
     />
     {/* Reels do Instagram (vertical), no visual Painel, sem narração. */}
     <Composition id="MidviewReels" component={MidviewReels} durationInFrames={REELS_TOTAL} fps={FPS} width={REELS_W} height={REELS_H} />

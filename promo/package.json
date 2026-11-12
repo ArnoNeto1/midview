@@ -8,7 +8,9 @@
     "render": "remotion render MidviewPromo out/midview-promo.mp4",
     "render:escuro": "remotion render MidviewPromoEscuro out/midview-promo-escuro.mp4",
     "typecheck": "tsc --noEmit",
-    "narracao": "node scripts/narracao.mjs"
+    "narracao": "node scripts/narracao.mjs",
+    "comercial:audio": "python scripts/comercial-audio.py",
+    "comercial:render": "remotion render MidviewComercial out/comercial/midview-comercial.mp4 --public-dir=out/comercial/public"
   },
   "dependencies": {
     "@remotion/cli": "4.0.537",

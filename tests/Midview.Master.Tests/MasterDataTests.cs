@@ -24,7 +24,7 @@ public class MasterDataTests
 
             var paths = new[]
             {
-                KnownMachinesFile.DefaultPath, PowerScheduleFile.DefaultPath, AppBlockFile.DefaultPath,
+                KnownMachinesFile.DefaultPath, PowerScheduleFile.DefaultPath, AppBlockFile.DefaultPath, PhoneAppBlockFile.DefaultPath,
                 MasterIdentity.DefaultCertificatePath, SavedMenu.WebsitesPath, SavedMenu.ProgramsPath,
                 WakeTask.LogPath, GridViewFile.DefaultPath, ClassLessonFileMaster.Path, ClassStore.DefaultLessonsPath,
                 ClassStore.DefaultIndexRoot,

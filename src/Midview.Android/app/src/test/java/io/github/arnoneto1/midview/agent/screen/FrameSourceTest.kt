@@ -4,6 +4,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
@@ -96,5 +97,94 @@ class FrameSourceTest {
         frames.changed()
         assertNull(frames.latest())
         assertEquals(3, conversions)
+    }
+
+    // The accessibility capture: a shot only when someone asks, never more
+    // often than Android allows.
+    @Test fun shotsAreTakenOnlyWhenAskedAndNotTooOften() {
+        var now = 1_000L
+        val frames = LatestFrame(clock = { now })
+        var shots = 0
+        frames.attachShots(minIntervalMillis = 350) { shots++; Picture(IntArray(4) { shots }, 2, 2) }
+
+        // Nobody asks: nothing taken, however long.
+        now += 60_000
+        assertEquals(0, shots)
+
+        val first = frames.latest()!!
+        assertEquals(1, shots)
+        assertEquals(1, first.pixels[0])
+
+        // Asked again too soon: the same picture, no shot.
+        now += 349
+        assertSame(first, frames.latest())
+        assertNull(frames.awaitNew(first.seq, 0))
+        assertEquals(1, shots)
+
+        now += 1
+        val second = frames.latest()!!
+        assertEquals(2, shots)
+        assertEquals(first.seq + 1, second.seq)
+    }
+
+    @Test fun aBigWindowWaitingGetsTheNextShot() {
+        val frames = LatestFrame()
+        var shots = 0
+        frames.attachShots(minIntervalMillis = 40) { shots++; Picture(IntArray(4), 2, 2) }
+
+        val first = frames.awaitNew(0, 2_000)!!
+        val started = System.nanoTime()
+        val second = frames.awaitNew(first.seq, 2_000)!!
+        val waitedMillis = (System.nanoTime() - started) / 1_000_000
+
+        assertEquals(2, shots)
+        assertEquals(first.seq + 1, second.seq)
+        assertTrue("waited $waitedMillis ms", waitedMillis >= 30)
+    }
+
+    // A shot Android refuses or that fails (null) keeps the picture before.
+    @Test fun aFailedShotKeepsThePictureBefore() {
+        var now = 0L
+        val frames = LatestFrame(clock = { now })
+        var fail = false
+        frames.attachShots(minIntervalMillis = 100) { if (fail) null else Picture(IntArray(4), 2, 2) }
+        val first = frames.latest()!!
+
+        fail = true
+        now += 100
+        assertSame(first, frames.latest())
+    }
+
+    // Accessibility and the "Iniciar agora" capture side by side: the shots
+    // win, and the other capture stopping does not take them away.
+    @Test fun shotsWinOverTheProjectionWhichLeavesThemAloneWhenItStops() {
+        var now = 0L
+        val frames = LatestFrame(clock = { now })
+        frames.attach { Picture(IntArray(4) { 1 }, 2, 2) }
+        frames.changed()
+        frames.attachShots(minIntervalMillis = 100) { Picture(IntArray(4) { 2 }, 2, 2) }
+        assertEquals(2, frames.latest()!!.pixels[0])
+
+        frames.clear()
+        frames.changed()
+        now += 100
+        assertEquals(2, frames.latest()!!.pixels[0])
+
+        // Accessibility off: no picture until a capture gives one.
+        frames.detachShots()
+        assertNull(frames.latest())
+        frames.attach { Picture(IntArray(4) { 3 }, 2, 2) }
+        assertEquals(3, frames.latest()!!.pixels[0])
+    }
+
+    // Accessibility going off while the projection captures: its pictures again.
+    @Test fun theProjectionTakesOverWhenShotsStop() {
+        val frames = LatestFrame()
+        frames.attach { Picture(IntArray(4) { 1 }, 2, 2) }
+        frames.attachShots(minIntervalMillis = 100) { Picture(IntArray(4) { 2 }, 2, 2) }
+        assertEquals(2, frames.latest()!!.pixels[0])
+
+        frames.detachShots()
+        assertEquals(1, frames.latest()!!.pixels[0])
     }
 }

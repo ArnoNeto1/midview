@@ -162,6 +162,109 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
     // already allowed the first update comes at once.
     private static readonly TimeSpan StreamWait = TimeSpan.FromSeconds(90);
 
+    // "Bloquear telas" as the Master keeps it (ScreenLockKeeper). Only a
+    // phone made Device Owner by the Master's QR code can be locked; a test
+    // phone that is not one answers why, and nothing on it changes.
+    [AndroidFact]
+    public void Lock_on_a_phone_that_is_not_device_owner_is_refused()
+    {
+        using var teacher = Teacher();
+        var machine = Pair(teacher);
+        var status = new TaskCompletionSource<(bool Locked, string Detail)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (var keeper = new ScreenLockKeeper(machine, teacher, SessionPort))
+        {
+            keeper.StatusChanged += (locked, detail) => status.TrySetResult((locked, detail));
+            keeper.Start();
+            Assert.True(status.Task.Wait(TimeSpan.FromSeconds(15)), "no answer to LockScreen in 15 s");
+        }
+
+        output.WriteLine($"lock: {status.Task.Result}");
+        Assert.Equal((false, "este celular não bloqueia a tela"), status.Task.Result);
+    }
+
+    // The same lock on a phone made Device Owner (MIDVIEW_ANDROID_DEVICE_OWNER=1):
+    // locked while the keeper lives, released when it is disposed. With adb set
+    // (MIDVIEW_ANDROID_ADB / MIDVIEW_ANDROID_SERIAL; only a debug build keeps
+    // adb on a Device Owner) the phone's own lock task state is read too:
+    // LOCKED while held, NONE within 20 s of closing. Without adb only the
+    // keeper's answer is checked.
+    [AndroidDeviceOwnerFact]
+    public void Lock_on_phone_answers_and_releases()
+    {
+        using var teacher = Teacher();
+        var machine = Pair(teacher);
+        var status = new TaskCompletionSource<(bool Locked, string Detail)>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using (var keeper = new ScreenLockKeeper(machine, teacher, SessionPort))
+        {
+            keeper.StatusChanged += (locked, detail) => status.TrySetResult((locked, detail));
+            keeper.Start();
+            Assert.True(status.Task.Wait(TimeSpan.FromSeconds(15)), "no answer to LockScreen in 15 s");
+            output.WriteLine($"lock: {status.Task.Result}");
+            Assert.True(status.Task.Result.Locked, status.Task.Result.Detail);
+            WaitForLockTask("LOCKED", TimeSpan.FromSeconds(10));
+            Thread.Sleep(ScreenLockKeeper.HeartbeatInterval * 2);
+            WaitForLockTask("LOCKED", TimeSpan.FromSeconds(1));
+        }
+
+        // Closed: the phone lets go at once (its own silence limit is 15 s).
+        WaitForLockTask("NONE", TimeSpan.FromSeconds(20));
+        output.WriteLine("released: keeper disposed");
+    }
+
+    // The phone's lock task state (mLockTaskModeState: NONE, LOCKED or
+    // PINNED) reaches the expected one within the time; without adb there is
+    // nothing to read.
+    private void WaitForLockTask(string expected, TimeSpan within)
+    {
+        if (Adb("shell", "dumpsys", "activity", "activities") is null)
+        {
+            output.WriteLine($"no adb: the phone's lock task state was not read (expected {expected})");
+            return;
+        }
+
+        var watch = Stopwatch.StartNew();
+        string? state = null;
+        while (true)
+        {
+            var text = Adb("shell", "dumpsys", "activity", "activities") ?? "";
+            var at = text.IndexOf("mLockTaskModeState=", StringComparison.Ordinal);
+            Assert.True(at >= 0, "dumpsys activity activities has no mLockTaskModeState");
+            state = new string(text[(at + "mLockTaskModeState=".Length)..].TakeWhile(char.IsLetter).ToArray());
+            if (state == expected)
+            {
+                output.WriteLine($"lock task {state} after {watch.Elapsed.TotalSeconds:F1} s");
+                return;
+            }
+            Assert.True(watch.Elapsed < within, $"lock task {state}, not {expected}, after {within.TotalSeconds} s");
+            Thread.Sleep(500);
+        }
+    }
+
+    // The output of adb for the test phone; null when no adb is set.
+    private static string? Adb(params string[] arguments)
+    {
+        var adb = Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_ADB");
+        var serial = Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_SERIAL");
+        if (string.IsNullOrEmpty(adb) || string.IsNullOrEmpty(serial))
+        {
+            return null;
+        }
+
+        var start = new ProcessStartInfo(adb) { RedirectStandardOutput = true, UseShellExecute = false };
+        start.ArgumentList.Add("-s");
+        start.ArgumentList.Add(serial);
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(start)!;
+        var text = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        return text;
+    }
+
     [AndroidLanFact]
     public void Search_finds_the_phone()
     {
@@ -201,9 +304,7 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
     // The phone's pairing notification carries the code it shows.
     private void CheckCodeOnPhone(string code)
     {
-        var adb = Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_ADB");
-        var serial = Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_SERIAL");
-        if (string.IsNullOrEmpty(adb) || string.IsNullOrEmpty(serial))
+        if (Adb("shell", "echo") is null)
         {
             output.WriteLine("no adb: the code on the phone was not looked at");
             return;
@@ -212,15 +313,7 @@ public sealed class AndroidAgentInteropTests(ITestOutputHelper output)
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
         while (true)
         {
-            var start = new ProcessStartInfo(adb)
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                ArgumentList = { "-s", serial, "shell", "dumpsys", "notification", "--noredact" },
-            };
-            using var process = Process.Start(start)!;
-            var text = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
+            var text = Adb("shell", "dumpsys", "notification", "--noredact") ?? "";
             if (text.Contains(code))
             {
                 output.WriteLine($"the phone shows {code}");
@@ -266,6 +359,18 @@ public class AndroidFactAttribute : FactAttribute
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_HOST")))
         {
             Skip = "MIDVIEW_ANDROID_HOST is not set: no Android agent to test against";
+        }
+    }
+}
+
+// One that also needs a phone made Device Owner (the lock only works on it).
+public sealed class AndroidDeviceOwnerFactAttribute : AndroidFactAttribute
+{
+    public AndroidDeviceOwnerFactAttribute()
+    {
+        if (Skip is null && Environment.GetEnvironmentVariable("MIDVIEW_ANDROID_DEVICE_OWNER") != "1")
+        {
+            Skip = "MIDVIEW_ANDROID_DEVICE_OWNER=1 is not set: the test phone is not Device Owner";
         }
     }
 }

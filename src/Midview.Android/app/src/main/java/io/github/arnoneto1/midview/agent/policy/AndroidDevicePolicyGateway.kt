@@ -4,9 +4,13 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 
 // DevicePolicyManager for Lockdown, as the app's AdminReceiver.
 class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
@@ -36,8 +40,81 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         }
     }
 
+    override fun setLockTaskPackages(pkgs: List<String>) = dpm.setLockTaskPackages(admin, pkgs.toTypedArray())
+
+    override fun setLockTaskFeatures(features: Int) = dpm.setLockTaskFeatures(admin, features)
+
+    override fun setPermittedAccessibilityServices(pkgs: List<String>?) {
+        if (!dpm.setPermittedAccessibilityServices(admin, pkgs)) {
+            throw SecurityException("Accessibility services $pkgs were not permitted")
+        }
+    }
+
+    override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> =
+        dpm.setPackagesSuspended(admin, pkgs.toTypedArray(), suspended).toList()
+
+    override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) {
+        val bundle = Bundle()
+        for ((key, value) in restrictions) {
+            when (value) {
+                is String -> bundle.putString(key, value)
+                is Boolean -> bundle.putBoolean(key, value)
+                is Array<*> -> bundle.putStringArray(key, value.map { it as String }.toTypedArray())
+                else -> throw IllegalArgumentException("Restriction $key of an unknown type")
+            }
+        }
+        dpm.setApplicationRestrictions(admin, pkg, bundle)
+    }
+
+    override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean =
+        dpm.setApplicationHidden(admin, pkg, hidden)
+
+    override fun isApplicationHidden(pkg: String): Boolean = dpm.isApplicationHidden(admin, pkg)
+
+    override fun privateDns(): PrivateDns =
+        PrivateDns(dpm.getGlobalPrivateDnsMode(admin), dpm.getGlobalPrivateDnsHost(admin))
+
+    // Android first connects to the host (DNS over TLS, port 853) from this
+    // app's process and answers PRIVATE_DNS_SET_ERROR_HOST_NOT_SERVING,
+    // changing nothing, if it cannot.
+    override fun setPrivateDnsHost(host: String): Int = dpm.setGlobalPrivateDnsModeSpecifiedHost(admin, host)
+
+    override fun setPrivateDnsAutomatic(): Int = dpm.setGlobalPrivateDnsModeOpportunistic(admin)
+
+    // A Device Owner may write these two global settings (they are on
+    // DevicePolicyManagerService's list for setGlobalSetting, Android 10 on;
+    // their Settings names are hidden), as the system: the private DNS
+    // restriction (Lockdown) does not stop it, and Android checks no host.
+    override fun writePrivateDnsHost(host: String) {
+        dpm.setGlobalSetting(admin, PRIVATE_DNS_SPECIFIER, host)
+        dpm.setGlobalSetting(admin, PRIVATE_DNS_MODE, PRIVATE_DNS_MODE_HOSTNAME)
+    }
+
+    override fun alwaysOnVpn(): AlwaysOnVpn? {
+        val pkg = dpm.getAlwaysOnVpnPackage(admin) ?: return null
+        return AlwaysOnVpn(pkg, dpm.isAlwaysOnVpnLockdownEnabled(admin))
+    }
+
+    override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) {
+        try {
+            dpm.setAlwaysOnVpnPackage(admin, vpn?.pkg, vpn?.lockdown ?: false)
+        } catch (e: PackageManager.NameNotFoundException) {
+            throw IllegalStateException("The VPN app ${vpn?.pkg} is not installed", e)
+        }
+    }
+
+    // Whether "Bloquear telas" can hold this phone: the Device Owner, with
+    // lock task mode allowed for the app (Lockdown).
+    fun canLockScreen(): Boolean = isDeviceOwner() && dpm.isLockTaskPermitted(app.packageName)
+
     companion object {
         private const val TAG = "Midview"
+
+        // Settings.Global.PRIVATE_DNS_SPECIFIER and PRIVATE_DNS_MODE, and the
+        // mode's value for a host (ConnectivityManager.PRIVATE_DNS_MODE_PROVIDER_HOSTNAME).
+        private const val PRIVATE_DNS_SPECIFIER = "private_dns_specifier"
+        private const val PRIVATE_DNS_MODE = "private_dns_mode"
+        private const val PRIVATE_DNS_MODE_HOSTNAME = "hostname"
 
         // Applies the locks and never fails its caller: a refused lock is
         // logged, and the next start of the agent tries again.

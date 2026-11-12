@@ -35,6 +35,17 @@ public class FailureTextTests
         Assert.Equal("Offline", FailureText.DescribeAgent(new OperationCanceledException()));
     }
 
+    // A phone's agent listens on the same port: refused, it is not running there.
+    [Fact]
+    public void RefusedByAPhonesAgent_SaysThePhone()
+    {
+        Assert.Equal("O Midview não está rodando neste celular",
+            FailureText.DescribePhoneAgent(new SocketException((int)SocketError.ConnectionRefused)));
+        Assert.Equal("Offline", FailureText.DescribePhoneAgent(new OperationCanceledException()));
+        Assert.Equal("Certificado recusado",
+            FailureText.DescribePhoneAgent(new AuthenticationException("The remote certificate was rejected")));
+    }
+
     [Fact]
     public void SomethingUnexpected_KeepsTheTechnicalMessage_ButTheTileStaysShort()
     {

@@ -8,8 +8,11 @@ namespace Midview.Master;
 
 // Blocks the whole internet or one site on one machine or on the whole
 // class, through each machine's Agent (hosts file and firewall; see the
-// site-blocking design). Takes the Agent's thumbprint from the classroom
-// list, filled in by "Importar máquinas instaladas".
+// site-blocking design). Phones take the same commands from this window and
+// answer them the same way (their agent blocks the sites in Chrome and the
+// internet for the whole phone), and its words follow what it acts on
+// (SiteBlockText). Takes the Agent's thumbprint from the classroom list,
+// filled in by "Importar máquinas instaladas" or pairing.
 public partial class SiteBlockWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -21,7 +24,14 @@ public partial class SiteBlockWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
+        TargetsTextBlock.Text = SiteBlockText.Targets(targets, wholeClass);
+        PersistenceTextBlock.Text = SiteBlockText.Persistence(targets);
+        SiteHintTextBlock.Text = SiteBlockText.SiteHint(targets);
+        if (SiteBlockText.PhoneNote(targets) is { } note)
+        {
+            PhoneNoteTextBlock.Text = note;
+            PhoneNoteTextBlock.Visibility = Visibility.Visible;
+        }
     }
 
     private async void OnBlockInternetClicked(object sender, RoutedEventArgs e) =>
@@ -66,10 +76,7 @@ public partial class SiteBlockWindow : MidviewWindow
 
         var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => SendTo(machine, command, payload, done))));
 
-        var failures = results.Count(result => !result.Succeeded);
-        ProgressTextBlock.Text = failures == 0
-            ? results.Length == 1 ? "Feito." : $"Feito nas {results.Length} máquinas."
-            : $"Feito em {results.Length - failures} de {results.Length}.";
+        ProgressTextBlock.Text = SiteBlockText.Done(_targets, results.Count(result => !result.Succeeded));
         ResultTextBlock.Text = string.Join("\n", results.Select(result =>
             $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
         IsEnabled = true;
@@ -79,8 +86,7 @@ public partial class SiteBlockWindow : MidviewWindow
     {
         if (string.IsNullOrEmpty(machine.AgentThumbprint))
         {
-            return (machine.Name, false,
-                "a lista da sala não tem o certificado do Agent desta máquina: pareie-a de novo em \"Máquinas da sala\"");
+            return (machine.Name, false, SiteBlockText.NoThumbprint(machine));
         }
         try
         {
@@ -93,7 +99,7 @@ public partial class SiteBlockWindow : MidviewWindow
         }
         catch (Exception ex)
         {
-            return (machine.Name, false, FailureText.DescribeAgent(ex));
+            return (machine.Name, false, SiteBlockText.Failure(machine, ex));
         }
     }
 }

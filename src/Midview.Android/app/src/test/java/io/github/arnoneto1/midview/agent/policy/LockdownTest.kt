@@ -1,5 +1,7 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,6 +19,9 @@ class LockdownTest {
         val uninstallBlocked = mutableMapOf<String, Boolean>()
         var controlDisabledPackages: List<String>? = null
         val granted = mutableSetOf<Pair<String, String>>()
+        var lockTaskAllowed: List<String>? = null
+        var lockTaskFeatureFlags: Int? = null
+        var accessibilityPermitted: List<String>? = listOf("never set")
         var calls = 0
 
         override fun addUserRestriction(r: String) {
@@ -40,6 +45,41 @@ class LockdownTest {
             granted += pkg to permission
         }
 
+        override fun setLockTaskPackages(pkgs: List<String>) {
+            calls++
+            lockTaskAllowed = pkgs
+        }
+
+        override fun setLockTaskFeatures(features: Int) {
+            calls++
+            lockTaskFeatureFlags = features
+        }
+
+        override fun setPermittedAccessibilityServices(pkgs: List<String>?) {
+            calls++
+            accessibilityPermitted = pkgs
+        }
+
+        override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> = emptyList()
+
+        override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) = Unit
+
+        override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean = true
+
+        override fun isApplicationHidden(pkg: String): Boolean = false
+
+        override fun privateDns(): PrivateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
+
+        override fun setPrivateDnsHost(host: String): Int = PrivateDns.SET_NO_ERROR
+
+        override fun writePrivateDnsHost(host: String) = Unit
+
+        override fun setPrivateDnsAutomatic(): Int = PrivateDns.SET_NO_ERROR
+
+        override fun alwaysOnVpn(): AlwaysOnVpn? = null
+
+        override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) = Unit
+
         override fun isDeviceOwner(): Boolean = owner
     }
 
@@ -50,6 +90,11 @@ class LockdownTest {
         "no_safe_boot",
         "no_add_user",
         "no_usb_file_transfer",
+        "disallow_config_private_dns",
+        "no_config_vpn",
+        "no_install_unknown_sources",
+        "no_install_unknown_sources_globally",
+        "no_modify_accounts",
     )
 
     @Test fun appliesAllRestrictionsWhenDeviceOwner() {
@@ -129,6 +174,20 @@ class LockdownTest {
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), android13.granted)
     }
 
+    // "Bloquear telas": only this app may hold the phone in lock task mode,
+    // with nothing of the system's (home, recents, notifications, the power
+    // menu) left to reach. On debug builds too.
+    @Test fun lockdownAllowsLockTaskForOwnPackage() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 29, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertEquals(listOf(pkg), gw.lockTaskAllowed)
+            assertEquals(0, gw.lockTaskFeatureFlags)
+        }
+    }
+
     @Test fun doesNothingWhenNotDeviceOwner() {
         val gw = FakeGateway(sdkInt = 34, owner = false)
 
@@ -165,5 +224,38 @@ class LockdownTest {
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
+        assertEquals(listOf(pkg), gw.lockTaskAllowed)
+    }
+
+    // A student cannot install an app the teacher's block does not know (an
+    // APK downloaded in Chrome, with "Instalar apps desconhecidos" turned on
+    // in Settings) nor add an account (a Google one would open the Play
+    // Store; a Google or Mi one would tie the phone to the student after a
+    // reset). On debug builds too: adb still installs them.
+    @Test fun studentsCannotInstallAppsNorAddAccounts() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 29, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertTrue(
+                gw.restrictions.containsAll(
+                    setOf("no_install_unknown_sources", "no_install_unknown_sources_globally", "no_modify_accounts"),
+                ),
+            )
+        }
+    }
+
+    // The screen is seen through the app's accessibility service: only it
+    // may be turned on (Android keeps the phone's own, as TalkBack, anyway),
+    // so a student cannot turn on an app that taps for them.
+    @Test fun onlyTheAppsAccessibilityServiceIsPermitted() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 33, debuggable = debuggable)
+
+            assertTrue(Lockdown(gw).apply())
+
+            assertEquals(listOf(pkg), gw.accessibilityPermitted)
+        }
     }
 }
