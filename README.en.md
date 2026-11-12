@@ -14,7 +14,7 @@
 > works for the teacher's computer and for the students' machines.
 > Website for teachers: https://arnoneto1.github.io/midview/en/
 
-Midview manages a school's computer lab. From their own computer, the teacher sees and controls the students' machines, talks to the class, sends and collects files, blocks programs and websites, and turns the lab on or off. Everything runs over the school's local network, with no outside server. Only the teacher's computer uses the internet, to fetch Midview updates from GitHub.
+Midview manages a school's computer lab. From their own computer, the teacher sees and controls the students' machines, talks to the class, sends and collects files, blocks programs and websites, and turns the lab on or off. Everything runs over the school's local network, with no outside server. The teacher's computer uses the internet only to fetch Midview updates from GitHub, and optimized phones use a public ad-free DNS (see Privacy).
 
 > **Language:** Midview's interface, installer and videos are in Brazilian Portuguese. In this page, each English name is followed by the label you will see in the app, in Portuguese.
 
@@ -53,7 +53,7 @@ The same installer has two types:
 - **Teacher** (Professor): installs the "Midview - Sala de aula" program, which runs without administrator rights.
 - **Student** (Aluno): installs the **Midview Agent** service, which runs as system on each lab machine, and the program that shows messages, the screen lock and notices to the student.
 
-The teacher finds the machines on the network and pairs each one by checking, within 5 minutes, a 6-digit code shown on the student's screen. After that, the machine only accepts paired teachers. Commands, screens and files travel encrypted with TLS and Midview's own certificates; only machine discovery and Wake-on-LAN use unencrypted UDP packets. Midview has no telemetry. The only internet connection is from the teacher's computer to GitHub, to check for a new version and download it; the students' machines receive updates over the local network.
+The teacher finds the machines on the network and pairs each one by checking, within 5 minutes, a 6-digit code shown on the student's screen. After that, the machine only accepts paired teachers. Commands, screens and files travel encrypted with TLS and Midview's own certificates; only machine discovery and Wake-on-LAN use unencrypted UDP packets. Midview has no telemetry. The teacher's computer only connects to the internet to reach GitHub, to check for a new version and download it; the students' machines receive updates over the local network, and optimized phones use a public ad-free DNS (see Privacy).
 
 Ports used on the local network:
 
@@ -115,6 +115,11 @@ An Android phone (Android 10 or newer) shows up in the grid, under the **Celular
 
 The app and website blocks stay in effect if the phone restarts.
 
+Phones also have two buttons of their own, which act on the selected phones or, with nothing selected, on every phone in the room:
+
+- **Otimizar** (optimize) hides the ad apps that come preinstalled on the phone (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
+- **Atualizar celulares** (update phones) sends the new version of the phone app over the network: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
+
 To prepare a phone:
 
 1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). The window first asks for the lab Wi-Fi (network name and password); click **Gerar código** (generate code) and the QR appears.
@@ -132,7 +137,9 @@ The other **Lab panel** policies stay applied after uninstalling. To remove them
 
 Midview sends nothing to the developer. Between the teacher and the machines go the screen images, the text copied during remote control, the messages, the chat, the files sent and collected, the machines' names and MAC addresses, and the names of the programs opened or installed.
 
-For updates, the teacher's computer queries GitHub (`api.github.com`), stating the installed Midview version, and downloads the installer from there. No classroom data goes with it. The students' machines don't access the internet through Midview.
+For updates, the teacher's computer queries GitHub (`api.github.com`), stating the installed Midview version, and downloads the installer and the phone app (`MidviewAgent.apk`) from there. No classroom data goes with it. The students' computers don't access the internet through Midview.
+
+On optimized phones, Android looks up the addresses of websites and apps with a public ad-free DNS service, over an encrypted connection, instead of the school network's DNS. That service learns which addresses the phone looks up, but not the content of the pages. To turn this DNS on and check it, the phone app tests the internet through Android's connectivity-check address and through the service itself. Without optimizing, or if the network blocks this DNS, the phone uses its usual DNS.
 
 A student's screen can be viewed with no notice on their machine; only remote control shows a notice. So the school must tell students and their parents or guardians that Midview is in use, as clause 6 of the [license](LICENSE) requires.
 

@@ -22,7 +22,20 @@ public sealed record PushResult(PushOutcome Outcome, string Detail);
 
 public sealed record StatusResult(UpdateStatusReport? Report, bool OldAgent);
 
-// The Master's side of NetworkUpdate, one machine at a time, always on the
+// What UpdateClient.Push sends: the student program zipped for a PC
+// (UpdatePackage), or the phone agent's APK (PhoneAgentApk). Offer says what
+// it is; the file at ZipPath, ZipSize bytes, goes in FileChunks after it.
+public interface IUpdatePayload
+{
+    string ZipPath { get; }
+
+    long ZipSize { get; }
+
+    UpdateOffer Offer(byte[] attemptId);
+}
+
+// The Master's side of NetworkUpdate (a PC's Agent, or a phone's agent with
+// its APK), one machine at a time, always on the
 // Agent's port with the Agent's thumbprint (never the Session's: students
 // can read the Session's private key).
 public static class UpdateClient
@@ -53,7 +66,7 @@ public static class UpdateClient
     }
 
     public static PushResult Push(
-        KnownMachine machine, X509Certificate2 masterCertificate, UpdatePackage package, byte[] attemptId,
+        KnownMachine machine, X509Certificate2 masterCertificate, IUpdatePayload package, byte[] attemptId,
         Action<long, long>? progress = null, CancellationToken cancellationToken = default, int port = ConnectionClient.AgentPort)
     {
         using var tcpClient = Connect(machine, port, OfferReplyTimeoutMs);

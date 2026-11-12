@@ -82,7 +82,9 @@ class NetworkUpdateCodecTest {
     fun encodeStatus_usesAsciiDigitsInAnyLocale() {
         val old = Locale.getDefault()
         try {
-            Locale.setDefault(Locale("ar"))
+            // Arabic-Indic digits asked for explicitly: plain "ar" may keep
+            // Latin digits on some JDKs and would prove nothing.
+            Locale.setDefault(Locale.forLanguageTag("ar-EG-u-nu-arab"))
             val report = UpdateStatusReport(
                 null, null, false,
                 UpdateAttemptReport("00", "failed", "x", Instant.parse("2026-11-12T15:30:45.5Z")),

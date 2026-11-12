@@ -67,11 +67,15 @@ class ApkUpdaterTest {
         val installs = mutableListOf<Pair<ByteArray, String>>()
         var refusal: Exception? = null
         var busy = false
+        var cleanups = 0
         override fun install(apk: File, attemptId: String) {
             refusal?.let { throw it }
             installs += apk.readBytes() to attemptId
         }
         override fun installing() = busy
+        override fun abandonStale() {
+            cleanups++
+        }
     }
 
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -359,10 +363,26 @@ class ApkUpdaterTest {
         val failing = object : AgentInstaller {
             override fun install(apk: File, attemptId: String) = Unit
             override fun installing(): Boolean = throw SecurityException("no sessions")
+            override fun abandonStale() = throw SecurityException("no sessions")
         }
         val agent = ApkUpdater(store, ApkUpload(updateFolder), fingerprint, reader, failing, isDeviceOwner = { true }, clock = { clock })
         assertEquals(UpdateStates.APPLYING, store.current!!.state)
         assertEquals("0.0.50", ready(agent).build)
+    }
+
+    // An install session a restart or a failure left behind is abandoned at
+    // the start, once, so Android does not keep it (and its copy of the APK).
+    @Test fun atStartTheInstallSessionsLeftBehindAreAbandoned() {
+        updater()
+        assertEquals(1, installer.cleanups)
+    }
+
+    // A late success: Android installed the version after the 3-minute
+    // timeout had already marked the attempt failed.
+    @Test fun atStartTheNewVersionCommitsAnAttemptTheTimeoutFailed() {
+        store.save(ApkAttempt(attemptHex, UpdateStates.FAILED, "a instalação não terminou; o celular continua na versão 0.0.49", now.minusSeconds(20), 50))
+        updater()
+        assertEquals(ApkAttempt(attemptHex, UpdateStates.COMMITTED, "atualizado para 0.0.50", now, 50), store.current)
     }
 
     @Test fun atStartAnUploadCutShortFailsAndItsFileIsDeleted() {

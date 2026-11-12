@@ -115,6 +115,8 @@ public partial class MainWindow : MidviewWindow
         }
         UpdateEmptyHint();
         ShowClassLesson();
+        ShowPhoneGroup();
+        _tiles.CollectionChanged += (_, _) => ShowPhoneGroup();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -206,8 +208,12 @@ public partial class MainWindow : MidviewWindow
                 continue;
             }
             // One button for both: it also gives the locked screens back.
-            var enabled = reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
-                || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
+            // The CELULARES group's buttons reach the room's phones even
+            // when only PCs are selected (DeviceSupport.ToolbarReach).
+            var enabled = DeviceSupport.IsPhoneOnly(action)
+                ? ToolbarReach(action).Count > 0
+                : reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
+                  || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
             button.IsEnabled = enabled;
         }
     }
@@ -499,6 +505,10 @@ public partial class MainWindow : MidviewWindow
         ShowWipePhoneItem(menu.Items, targets);
         ShowPhoneItems(menu, targets.Select(target => target.Machine).ToList());
         NameBlockProgramsItem(menu, targets.Select(target => target.Machine).ToList());
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.UpdatePhones))
+        {
+            item.Header = PhoneUpdateText.MenuItem(targets.Count(target => target.Machine.IsPhone));
+        }
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
@@ -520,7 +530,7 @@ public partial class MainWindow : MidviewWindow
     internal static void ShowPhoneItems(ContextMenu menu, IReadOnlyList<KnownMachine> machines)
     {
         var phones = machines.Any(machine => machine.IsPhone);
-        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, PhoneOnlyTag)))
+        foreach (var item in menu.Items.OfType<Control>().Where(item => Equals(item.Tag, PhoneOnlyTag)))
         {
             item.Visibility = phones ? Visibility.Visible : Visibility.Collapsed;
         }

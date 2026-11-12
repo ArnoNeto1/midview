@@ -26,11 +26,12 @@ public static class CommandClient
     }
 
     // For questions answered with something other than a CommandAck (e.g.
-    // the Agent's WakeAddress): the reply as it came.
+    // the Agent's WakeAddress): the reply as it came. timeout: as in
+    // SendCommandForResult, for a question known to take longer than TimeoutMs.
     public static Message Ask(
         string hostAddress, int port, string targetThumbprint, X509Certificate2 masterCertificate,
-        MessageType questionType, byte[] payload) =>
-        Exchange(hostAddress, port, targetThumbprint, masterCertificate, questionType, payload);
+        MessageType questionType, byte[] payload, TimeSpan? timeout = null) =>
+        Exchange(hostAddress, port, targetThumbprint, masterCertificate, questionType, payload, timeout);
 
     // For commands whose acknowledgement also says what happened (a
     // CommandResult), e.g. how many programs were asked to close. timeout is

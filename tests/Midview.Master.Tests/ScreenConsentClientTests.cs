@@ -91,6 +91,27 @@ public sealed class ScreenConsentClientTests
         });
     }
 
+    // The CELULARES items of a tile's menu come with their own separator, shown and hidden with them.
+    [Fact]
+    public void Phone_separator_follows_the_phone_items()
+    {
+        var pc = new KnownMachine("PC-1", "10.0.0.1", "s", "a");
+        var phone = new KnownMachine("Cel 01", "10.0.0.2", "s", "a", Kind: DeviceKind.Android);
+
+        InSta(() =>
+        {
+            var menu = new ContextMenu();
+            var separator = new Separator { Tag = MainWindow.PhoneOnlyTag, Visibility = System.Windows.Visibility.Collapsed };
+            menu.Items.Add(separator);
+
+            MainWindow.ShowPhoneItems(menu, new[] { pc, phone });
+            Assert.Equal(System.Windows.Visibility.Visible, separator.Visibility);
+
+            MainWindow.ShowPhoneItems(menu, new[] { pc });
+            Assert.Equal(System.Windows.Visibility.Collapsed, separator.Visibility);
+        });
+    }
+
     private static void InSta(Action body)
     {
         Exception? failure = null;

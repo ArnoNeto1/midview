@@ -119,7 +119,18 @@ class ApkUpdateStoreTest {
     @Test fun atStartFinalAttemptsAreLeftAsTheyAre() {
         assertNull(atStart(null))
         assertNull(atStart(applying.copy(state = UpdateStates.COMMITTED)))
-        assertNull(atStart(applying.copy(state = UpdateStates.FAILED, expectedVersionCode = 50)))
+        assertNull(atStart(applying.copy(state = UpdateStates.COMMITTED, expectedVersionCode = 50)))
+        assertNull(atStart(applying.copy(state = UpdateStates.FAILED)))
+        assertNull(atStart(receiving.copy(state = UpdateStates.FAILED)))
+    }
+
+    // The 3-minute timeout failed it, and Android installed it after all:
+    // running that version is the proof, so it is committed.
+    @Test fun atStartAFailedAttemptOfTheRunningVersionIsCommitted() {
+        assertEquals(
+            ApkAttempt(id, UpdateStates.COMMITTED, "atualizado para 0.0.50", at.plusSeconds(9), expectedVersionCode = 50),
+            atStart(applying.copy(state = UpdateStates.FAILED, detail = "a instalação não terminou", expectedVersionCode = 50)),
+        )
     }
 
     // Android's answer to an install (InstallResult): only the attempt being

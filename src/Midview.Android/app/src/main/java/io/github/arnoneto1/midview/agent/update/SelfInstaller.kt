@@ -22,6 +22,11 @@ interface AgentInstaller {
     // Whether Android is still installing an update of ours (the old agent
     // started again while it does).
     fun installing(): Boolean
+
+    // At the agent's start: abandons our install sessions nobody uses any
+    // more (left by a restart or a failure), so Android drops them and their
+    // copy of the APK. One Android is installing stays.
+    fun abandonStale()
 }
 
 // Installs the agent's next version over itself, silently: a PackageInstaller
@@ -65,10 +70,27 @@ class SelfInstaller(context: Context) : AgentInstaller {
     override fun installing(): Boolean =
         sessions.mySessions.any { it.appPackageName == app.packageName && it.isActive }
 
+    override fun abandonStale() {
+        for (id in InstallSessions.stale(sessions.mySessions.map { it.sessionId to it.isActive })) {
+            try {
+                sessions.abandonSession(id)
+            } catch (e: Exception) {
+                Log.w(TAG, "Couldn't abandon install session $id", e)
+            }
+        }
+    }
+
     private companion object {
         const val SESSION_FILE = "agent.apk"
         const val BUFFER = 64 * 1024
+        const val TAG = "Midview"
     }
+}
+
+// Which of our install sessions (id, active) are left over: the inactive
+// ones. Apart from Android's classes so it is tested on the JVM.
+object InstallSessions {
+    fun stale(sessions: List<Pair<Int, Boolean>>): List<Int> = sessions.filter { !it.second }.map { it.first }
 }
 
 // Android's answer to the install of an attempt. Success is the new version's

@@ -10,7 +10,7 @@ namespace Midview.Master;
 // BundledStudentFolder), exactly the files its midview-build.json lists
 // plus the manifest itself, zipped into a temporary file that goes away
 // with this object.
-public sealed class UpdatePackage : IDisposable
+public sealed class UpdatePackage : IUpdatePayload, IDisposable
 {
     private UpdatePackage(string zipPath, BuildManifest manifest, byte[] fingerprint, byte[] zipSha256, long uncompressedSize)
     {

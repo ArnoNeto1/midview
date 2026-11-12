@@ -48,4 +48,11 @@ class SelfInstallerTest {
         assertEquals("o Android não instalou", InstallStatus.failure(1, "Session was abandoned"))
         assertEquals("o Android não instalou", InstallStatus.failure(1, ""))
     }
+
+    // Only sessions nobody is using: a committed one Android is installing
+    // stays active and is left alone.
+    @Test fun onlyInactiveSessionsAreStale() {
+        assertEquals(listOf(2, 3), InstallSessions.stale(listOf(1 to true, 2 to false, 3 to false, 4 to true)))
+        assertEquals(emptyList<Int>(), InstallSessions.stale(emptyList()))
+    }
 }
