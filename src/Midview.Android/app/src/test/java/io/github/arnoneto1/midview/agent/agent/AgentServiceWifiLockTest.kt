@@ -5,13 +5,13 @@ import org.junit.Test
 
 class AgentServiceWifiLockTest {
     // The phone keeps answering the teacher with the screen off: the
-    // high-performance lock, and from Android 14 (where that one is
-    // deprecated) the low-latency one.
+    // high-performance lock, and from Android 14 (which replaces that one
+    // with it) the low-latency one (AgentWifi says what holds then).
     @Test fun wifiLockModeByAndroidVersion() {
-        assertEquals(WIFI_MODE_FULL_HIGH_PERF, AgentService.wifiLockMode(29))
-        assertEquals(WIFI_MODE_FULL_HIGH_PERF, AgentService.wifiLockMode(33))
-        assertEquals(WIFI_MODE_FULL_LOW_LATENCY, AgentService.wifiLockMode(34))
-        assertEquals(WIFI_MODE_FULL_LOW_LATENCY, AgentService.wifiLockMode(35))
+        assertEquals(WIFI_MODE_FULL_HIGH_PERF, AgentWifi.lockMode(29))
+        assertEquals(WIFI_MODE_FULL_HIGH_PERF, AgentWifi.lockMode(33))
+        assertEquals(WIFI_MODE_FULL_LOW_LATENCY, AgentWifi.lockMode(34))
+        assertEquals(WIFI_MODE_FULL_LOW_LATENCY, AgentWifi.lockMode(35))
     }
 
     private companion object {

@@ -183,4 +183,42 @@ class ClassFolderFollowTest {
         assertEquals(listOf("3º A"), reminders)
         assertEquals(listOf<String?>("3º A"), notices)
     }
+
+    // With no lesson and nothing left to set aside, the agent looks rarely.
+    @Test
+    fun withoutALessonThereIsNothingToLookAtSoon() {
+        val follow = follow()
+        assertTrue(follow.needsLooking())
+        follow.follow()
+        assertFalse(follow.needsLooking())
+        lesson = first
+        assertTrue(follow.needsLooking())
+        follow.follow()
+        lesson = first.copy(savedAt = 11, ended = true)
+        assertTrue(follow.needsLooking())
+        follow.follow()
+        assertFalse(follow.needsLooking())
+    }
+
+    // A look lets go of set-aside lessons a month old, once an hour at most.
+    @Test
+    fun aLookLetsGoOfLessonsKeptAMonth() {
+        var now = 1_800_000_000_000L
+        val follow = ClassFolderFollow(folder, { lesson }, stateFile, { canSee }, clock = { now })
+        val old = aside(first).apply { mkdirs() }
+        File(old, "x.txt").writeText("x")
+        old.setLastModified(now - PhoneClassFolder.SET_ASIDE_MAX_AGE_MILLIS - 1)
+        follow.follow()
+        assertFalse(old.exists())
+
+        val older = aside(second).apply { mkdirs() }
+        File(older, "y.txt").writeText("y")
+        older.setLastModified(now - PhoneClassFolder.SET_ASIDE_MAX_AGE_MILLIS - 1)
+        now += 60_000
+        follow.follow()
+        assertTrue(older.exists())
+        now += ClassFolderFollow.PRUNE_EVERY_MILLIS
+        follow.follow()
+        assertFalse(older.exists())
+    }
 }

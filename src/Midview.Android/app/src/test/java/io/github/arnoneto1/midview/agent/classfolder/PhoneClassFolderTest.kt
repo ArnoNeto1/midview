@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.classfolder
 
+import io.github.arnoneto1.midview.agent.files.DiskReserve
 import io.github.arnoneto1.midview.agent.protocol.ClassFolderEntry
 import io.github.arnoneto1.midview.agent.protocol.ClassLesson
 import io.github.arnoneto1.midview.agent.protocol.ClassPushHeader
@@ -200,10 +201,45 @@ class PhoneClassFolderTest {
         assertFalse(File(root, ".midview-turmas").exists())
     }
 
+    // The phone keeps 100 MB free.
     @Test
     fun aFullPhoneRefuses() {
-        free = 10
-        assertEquals("não há espaço livre suficiente no celular", folder.refusalFor(11))
+        free = DiskReserve.SPARE_BYTES + 10
+        assertEquals(DiskReserve.NO_SPACE, folder.refusalFor(11))
         assertNull(folder.refusalFor(10))
+        free = DiskReserve.SPARE_BYTES - 1
+        assertEquals(DiskReserve.NO_SPACE, folder.refusalFor(0))
+    }
+
+    // Lessons the teacher's Master never came for do not fill the phone.
+    @Test
+    fun setAsideLessonsOlderThanAMonthGo() {
+        val now = 1_800_000_000_000L
+        val old = setAside(LessonId(ByteArray(16) { 1 }), "velho.txt", 5, now - PhoneClassFolder.SET_ASIDE_MAX_AGE_MILLIS - 1)
+        val recent = setAside(LessonId(ByteArray(16) { 2 }), "novo.txt", 5, now - 1_000)
+        assertEquals(listOf(LessonId(ByteArray(16) { 1 })), folder.pruneSetAside(now))
+        assertFalse(old.exists())
+        assertTrue(recent.exists())
+    }
+
+    @Test
+    fun overTheCapTheOldestSetAsideLessonsGoFirst() {
+        val now = 1_800_000_000_000L
+        val first = setAside(LessonId(ByteArray(16) { 1 }), "a.txt", 40, now - 3_000)
+        val second = setAside(LessonId(ByteArray(16) { 2 }), "b.txt", 40, now - 2_000)
+        val third = setAside(LessonId(ByteArray(16) { 3 }), "c.txt", 40, now - 1_000)
+        assertEquals(listOf(LessonId(ByteArray(16) { 1 })), folder.pruneSetAside(now, maxBytes = 100))
+        assertFalse(first.exists())
+        assertTrue(second.exists() && third.exists())
+        // Nothing over the cap any more: nothing else goes.
+        assertEquals(emptyList<LessonId>(), folder.pruneSetAside(now, maxBytes = 100))
+    }
+
+    // A lesson's folder set aside at setAsideAt, with one file of size bytes.
+    private fun setAside(id: LessonId, name: String, size: Int, setAsideAt: Long): File {
+        val dir = File(File(root, PhoneClassFolder.SET_ASIDE_FOLDER), id.hex).apply { mkdirs() }
+        File(dir, name).writeBytes(ByteArray(size))
+        dir.setLastModified(setAsideAt)
+        return dir
     }
 }

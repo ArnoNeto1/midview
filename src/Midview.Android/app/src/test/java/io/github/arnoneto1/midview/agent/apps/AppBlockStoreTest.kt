@@ -2,7 +2,6 @@ package io.github.arnoneto1.midview.agent.apps
 
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,7 +41,8 @@ class AppBlockStoreTest {
         assertEquals(true to "bloqueando 1 app(s)", store.handle(blocked.encode()))
         assertEquals(listOf(blocked), applied)
         assertEquals(blocked, store.current)
-        assertArrayEquals(blocked.encode(), file.readBytes())
+        assertEquals(blocked, AppBlockStore.decodeStored(file.readBytes()))
+        assertTrue(file.readText().startsWith("midview-app-block 2\n"))
 
         // Back after a restart.
         assertEquals(blocked, store().current)

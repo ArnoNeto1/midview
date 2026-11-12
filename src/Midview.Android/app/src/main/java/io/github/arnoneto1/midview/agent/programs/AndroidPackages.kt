@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.programs
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -66,14 +67,17 @@ class AndroidPackages(
 
     override fun read(apk: File): ApkFacts? = apks.read(apk)
 
+    // Hidden apps too (Android lists them only with MATCH_UNINSTALLED_PACKAGES),
+    // not one removed for this user (which comes without FLAG_INSTALLED).
     @Suppress("DEPRECATION")
     override fun installed(pkg: String): PhoneAppFacts? {
         val info = try {
-            pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
+            pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES or PackageManager.MATCH_UNINSTALLED_PACKAGES)
         } catch (_: PackageManager.NameNotFoundException) {
             return null
         }
         val application = info.applicationInfo ?: return null
+        if ((application.flags and ApplicationInfo.FLAG_INSTALLED) == 0) return null
         val facts = ApkFacts(
             info.packageName,
             info.longVersionCode,
@@ -81,8 +85,18 @@ class AndroidPackages(
             ApkCheck.signers(info.signingInfo?.apkContentsSigners.orEmpty().map { it.toByteArray() }),
         )
         val label = runCatching { application.loadLabel(pm).toString().trim() }.getOrNull()?.takeIf { it.isNotEmpty() } ?: pkg
-        return PhoneAppFacts(facts, label, origin.cameWithPhone(application), origin.installedByMidview(pkg))
+        return PhoneAppFacts(facts, label, origin.cameWithPhone(application), origin.installedByMidview(pkg), hidden = isHidden(pkg))
     }
+
+    // Android leaves a hidden app out of what it lists without
+    // MATCH_UNINSTALLED_PACKAGES.
+    private fun isHidden(pkg: String): Boolean =
+        try {
+            pm.getApplicationInfo(pkg, 0)
+            false
+        } catch (_: PackageManager.NameNotFoundException) {
+            true
+        }
 
     override fun isSuspended(pkg: String): Boolean =
         try {
@@ -125,6 +139,10 @@ class AndroidPackages(
         return InstallStatus.failure(status, message)
     }
 
+    // REQUEST_DELETE_PACKAGES is not declared on purpose: the Device
+    // Owner's silent uninstall needs no permission (checked on the Redmi
+    // 10C, Android 13), and the agent never asks the student to confirm one.
+    @SuppressLint("MissingPermission")
     override fun uninstall(pkg: String): String? {
         val (token, result) = PackageResults.expect()
         try {

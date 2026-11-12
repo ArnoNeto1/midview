@@ -1,0 +1,3 @@
+internet=1
+www.g1.com
+youtube.com

@@ -44,11 +44,20 @@ class OptimizeStoreTest {
         assertEquals(never, OptimizeStore(file).current)
     }
 
-    @Test fun theSavedFileIsTheReportTheTeacherGets() {
+    // The phone's own format, not the report's network form.
+    @Test fun theSavedFileIsThePhonesOwnFormat() {
         OptimizeStore(file).save(state)
-        val lines = file.readText(Charsets.UTF_8).split('\n')
-        assertEquals("lastDnsAttempt=2026-11-12T13:00:25+00:00", lines[0])
-        assertEquals(state.report, PhoneOptimizeReport.decode(lines[1].toByteArray(Charsets.UTF_8)))
+        assertEquals(
+            "midview-optimize 2\nlastDnsAttempt=2026-11-12T13:00:25+00:00\noptimizedAt=2026-11-12T13:00:00+00:00\n" +
+                "hidden=com.miui.msa.global\nhidden=com.xiaomi.glgm\nfailed=com.facebook.system\ndns=on\ndnsHost=${AdblockDns.HOST}\n",
+            file.readText(Charsets.UTF_8),
+        )
+    }
+
+    // What 0.0.70 and before wrote is read too.
+    @Test fun theOldFormatIsReadToo() {
+        file.writeBytes("lastDnsAttempt=2026-11-12T13:00:25+00:00\n".toByteArray() + state.report.encode())
+        assertEquals(state, OptimizeStore(file).current)
     }
 
     @Test fun savingLeavesNoTemporaryFileBehind() {

@@ -1,8 +1,10 @@
 package io.github.arnoneto1.midview.agent.classfolder
 
 import io.github.arnoneto1.midview.agent.files.FileNames
+import io.github.arnoneto1.midview.agent.identity.StoredText
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
 import io.github.arnoneto1.midview.agent.protocol.ClassLesson
+import io.github.arnoneto1.midview.agent.protocol.LessonId
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
@@ -13,8 +15,8 @@ import java.util.concurrent.locks.ReentrantLock
 // as the PC Agent's ClassLessonHandler (src/Midview.Agent/ClassLessonHandler.cs)
 // with its rules: the newest savedAt wins; an end ends only the lesson it is
 // of (or none); a lesson that started on an earlier day ends by itself,
-// keeping the files. Kept in the app's storage (the lesson's payload), so it
-// holds after a restart.
+// keeping the files. Kept in the app's storage (in the phone's own format,
+// encodeStored), so it holds after a restart.
 //
 // Unlike a PC Agent, a phone keeps no class folders' home ("PC das pastas":
 // ClaimClassHome and GetClassHome get "Ainda não funciona em celular.",
@@ -100,7 +102,7 @@ class ClassLessonStore(
 
     private fun save(lesson: ClassLesson): Boolean = try {
         file.absoluteFile.parentFile?.mkdirs()
-        writeAtomically(file, lesson.encode())
+        writeAtomically(file, encodeStored(lesson))
         current = lesson
         true
     } catch (e: IOException) {
@@ -118,7 +120,7 @@ class ClassLessonStore(
             log("Couldn't read the class lesson, following none", e)
             return ClassLesson.none(0)
         }
-        return ClassLesson.decode(bytes) ?: run {
+        return decodeStored(bytes) ?: run {
             log("The class lesson file is corrupt, following none; kept aside as .corrupt", null)
             file.renameTo(File(file.path + ".corrupt"))
             ClassLesson.none(0)
@@ -133,6 +135,36 @@ class ClassLessonStore(
 
         // ClassHomeClaim.MaxLockWait: well under the Master's read timeout.
         const val LOCK_WAIT_MILLIS = 10_000L
+
+        private const val KIND = "class-lesson"
+
+        // StoredText "class-lesson": savedAt, startedAt (Unix seconds),
+        // ended (0|1), lessonId (hex) and turma.
+        fun encodeStored(lesson: ClassLesson): ByteArray =
+            StoredText.encode(
+                KIND,
+                listOf(
+                    "savedAt" to lesson.savedAt.toString(),
+                    "startedAt" to lesson.startedAt.toString(),
+                    "ended" to if (lesson.ended) "1" else "0",
+                    "lessonId" to lesson.lessonId.hex,
+                    "turma" to lesson.turma,
+                ),
+            )
+
+        // Null for a file that is neither the phone's format nor the
+        // network's of 0.0.70 and before. A lesson id it cannot read is no
+        // lesson (its folder could not be found anyway).
+        fun decodeStored(bytes: ByteArray): ClassLesson? {
+            val stored = StoredText.decode(KIND, bytes) ?: return ClassLesson.decode(bytes)
+            val savedAt = stored.first("savedAt")?.toLongOrNull() ?: 0L
+            val id = stored.first("lessonId")?.let(LessonId::fromHex) ?: return ClassLesson.none(savedAt)
+            return ClassLesson(
+                savedAt, id, stored.first("turma").orEmpty(),
+                stored.first("startedAt")?.toLongOrNull() ?: 0L,
+                ended = stored.first("ended") != "0",
+            )
+        }
 
         fun describe(lesson: ClassLesson) = if (lesson.isOn) "aula do ${lesson.turma}" else "aula encerrada"
 

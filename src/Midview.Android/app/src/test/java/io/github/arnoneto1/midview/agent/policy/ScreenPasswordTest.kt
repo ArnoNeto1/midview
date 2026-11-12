@@ -146,6 +146,29 @@ class ScreenPasswordTest {
         assertEquals(listOf("1234"), android.resets)
     }
 
+    // The student changes the PIN two seconds after the agent put it back:
+    // the agent's own report was already counted, so this one is the
+    // student's and is undone too.
+    @Test fun aStudentsChangeRightAfterARestoreIsUndone() {
+        val keeper = keeper()
+        keeper.setTeacherPin(pin("1234"))
+        now += 1_000
+        assertTrue(keeper.isOwnChange())
+        now += 60_000
+        android.lock = "5678"
+        assertFalse(keeper.isOwnChange())
+        assertEquals(ScreenPasswordAction.RESTORE, keeper.lockChanged())
+        // Android's report of the restore.
+        now += 500
+        assertTrue(keeper.isOwnChange())
+        // The student again, two seconds later.
+        now += 2_000
+        android.lock = "0000"
+        assertFalse(keeper.isOwnChange())
+        assertEquals(ScreenPasswordAction.RESTORE, keeper.lockChanged())
+        assertEquals("1234", android.lock)
+    }
+
     @Test fun aChangeReportedBeforeTheAgentStopsIsUndoneAtItsNextStart() {
         val first = keeper()
         first.setTeacherPin(pin("1234"))

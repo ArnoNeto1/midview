@@ -53,7 +53,7 @@ class CommandHandlerTest {
     private val stranger = "B".repeat(40)
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
-    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }) }
+    private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }, elapsed = { 1_000L }) }
     private var shown = 0
     private val consent = ScreenConsent(clock = { 0L }) { shown++ }
     private val applied = mutableListOf<PhoneAppPolicy>()
@@ -839,7 +839,7 @@ class CommandHandlerTest {
         val packages = object : PackageFacts, PackageChanger {
             override fun read(apk: File) = ApkFacts("com.x.ola", 1, "1.0", setOf("k"))
             override fun installed(pkg: String) =
-                if (pkg == "com.x.ola" && "install" in installEvents) PhoneAppFacts(ApkFacts(pkg, 1, "1.0", setOf("k")), "Olá", false, byMidview = true) else null
+                if (pkg == "com.x.ola" && "install" in installEvents && "uninstall $pkg" !in installEvents) PhoneAppFacts(ApkFacts(pkg, 1, "1.0", setOf("k")), "Olá", false, byMidview = true) else null
             override fun isSuspended(pkg: String) = false
             override fun freeBytes() = Long.MAX_VALUE
             override fun install(apk: File, pkg: String): String? = null.also { installEvents += "install" }

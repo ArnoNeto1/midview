@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.pairing
 
+import android.os.SystemClock
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.net.Channel
@@ -16,7 +17,12 @@ import java.util.Locale
 // Pairing), as the Windows Agent's PairingService. A phone with no teacher
 // takes the first confirmed pairing; a teacher it already trusts may pair
 // again (a lost classroom list); anyone else only while a trusted teacher's
-// "Permitir novo professor" lasts, which ends with the first new teacher.
+// "Permitir novo professor" lasts, which ends with the first new teacher
+// whose pairing reaches the code on the phone's screen (whether or not the
+// teacher then confirms it: a classmate who got there first used it up, and
+// the real teacher asks again). The window is counted on the clock since the
+// phone started (elapsed), which no one can set back in Settings; the wall
+// clock (now) only says until when, for the teacher to read.
 // One pairing at a time. The code shows on the phone (showCode, with the
 // teacher's computer name) before the teacher can have it, and is taken
 // down (hideCode) however the pairing ends. showCode says whether the code
@@ -30,6 +36,7 @@ class PairingFlow(
     private val deviceName: () -> String = { commonName(identity) },
     private val newNonce: () -> ByteArray = Pairing::newNonce,
     private val now: () -> Long = System::currentTimeMillis,
+    private val elapsed: () -> Long = SystemClock::elapsedRealtime,
 ) {
     private val lock = Any()
     private var newTeacherUntil: Long? = null
@@ -48,8 +55,8 @@ class PairingFlow(
     // AllowNewTeacher, from a trusted teacher (CommandHandler checks that):
     // the CommandResult the teacher sees.
     fun allowNewTeacher(): Pair<Boolean, String> = synchronized(lock) {
+        newTeacherUntil = elapsed() + Pairing.NEW_TEACHER_WINDOW_MILLIS
         val until = now() + Pairing.NEW_TEACHER_WINDOW_MILLIS
-        newTeacherUntil = until
         true to "liberada até ${SimpleDateFormat("HH:mm", Locale.ROOT).format(Date(until))}"
     }
 
@@ -74,6 +81,8 @@ class PairingFlow(
             usesWindow = trusted.count() > 0 && !trusted.isTrusted(master)
             busy = true
         }
+        // From here the connection lives as long as a pairing does.
+        channel.pairingStarted()
 
         try {
             exchange(channel, master, teacherName, usesWindow)
@@ -101,15 +110,20 @@ class PairingFlow(
                 channel.send(Pairing.refused("Não foi possível mostrar o código na tela do celular. Tente de novo."))
                 return
             }
+            // The new teacher's window is used up by the first pairing whose
+            // code came up, confirmed or not.
+            if (usesWindow) {
+                synchronized(lock) { newTeacherUntil = null }
+            }
 
-            val revealedAt = now()
+            val revealedAt = elapsed()
             channel.send(Message(MessageType.PAIR_REVEAL, agentNonce))
 
             val answer = channel.receive(SHORT_MESSAGE_LENGTH)
             if (answer.type != MessageType.PAIR_CONFIRM) {
                 return
             }
-            if (now() - revealedAt > Pairing.CONFIRM_TIMEOUT_MILLIS) {
+            if (elapsed() - revealedAt > Pairing.CONFIRM_TIMEOUT_MILLIS) {
                 channel.send(Pairing.refused("O tempo para conferir o código acabou. Tente de novo."))
                 return
             }
@@ -121,9 +135,6 @@ class PairingFlow(
                 return
             }
 
-            if (usesWindow) {
-                synchronized(lock) { newTeacherUntil = null }
-            }
             channel.send(
                 Message(MessageType.PAIR_DONE, Pairing.encodeResult(deviceName(), identity.thumbprint, mac = null)),
             )
@@ -132,7 +143,7 @@ class PairingFlow(
         }
     }
 
-    private fun windowOpen() = newTeacherUntil?.let { now() < it } ?: false
+    private fun windowOpen() = newTeacherUntil?.let { elapsed() < it } ?: false
 
     companion object {
         // A teacher not trusted yet opens with a PairRequest: a computer

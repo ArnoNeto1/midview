@@ -286,7 +286,7 @@ class OptimizerTest {
         val asking = Thread { answer = optimizer.run() }.apply { start() }
         // Waiting for what runs in the background to end.
         val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (asking.state != Thread.State.BLOCKED && System.nanoTime() < until) Thread.sleep(5)
+        while (asking.state != Thread.State.BLOCKED && asking.state != Thread.State.WAITING && System.nanoTime() < until) Thread.sleep(5)
         slow.release.countDown()
         asking.join(5_000)
         return answer
@@ -351,6 +351,31 @@ class OptimizerTest {
         assertEquals(PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null), gw.privateDns)
         assertEquals(PhoneDnsStates.OFF_BY_TEACHER, store.current.report.dns)
         assertEquals(now, store.current.report.optimizedAt)
+    }
+
+    // "Otimizar" running (its DNS step can take ~36 s): turning the ad
+    // blocker off answers the teacher's panel at once and puts the
+    // automatic DNS back once that run ends.
+    @Test fun turningTheAdBlockerOffDuringARunDoesNotWaitForIt() {
+        val slow = SlowNetwork()
+        val optimizer = Optimizer(
+            catalog, gw, AdblockDns(gw, slow, internetBlocked = { false }), store,
+            internetBlocked = { false }, adblockWanted = { adblock }, clock = { now }, background = { Thread(it).start() },
+        )
+        val running = Thread { optimizer.run() }.apply { start() }
+        assertTrue(slow.inside.await(5, TimeUnit.SECONDS))
+
+        adblock = false
+        val started = System.nanoTime()
+        optimizer.adblockChanged()
+        assertTrue(System.nanoTime() - started < TimeUnit.SECONDS.toNanos(1))
+
+        slow.release.countDown()
+        running.join(5_000)
+        val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (store.current.report.dns != PhoneDnsStates.OFF_BY_TEACHER && System.nanoTime() < until) Thread.sleep(5)
+        assertEquals(PhoneDnsStates.OFF_BY_TEACHER, store.current.report.dns)
+        assertEquals(PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null), gw.privateDns)
     }
 
     @Test fun turningTheAdBlockerOnAgainTriesTheDnsInTheBackground() {

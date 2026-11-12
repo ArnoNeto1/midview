@@ -28,6 +28,8 @@ import java.util.concurrent.locks.ReentrantLock
 //   on comes back if it is gone (remind), once.
 // What this phone last followed, and the lessons over whose folder isn't
 // settled yet, are kept in the app's storage, so a restart repeats nothing.
+// Once an hour it also lets go of the set-aside lessons nobody came for
+// (PhoneClassFolder.pruneSetAside: a month old, or over the size cap).
 // Never throws.
 class ClassFolderFollow(
     private val folder: PhoneClassFolder,
@@ -39,15 +41,27 @@ class ClassFolderFollow(
     // The notice of the lesson still on, shown again if it is not there any more.
     private val remind: (ClassLesson) -> Unit = {},
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     data class Followed(val lessonId: LessonId, val turma: String)
 
     private class State(var current: Followed, val pending: MutableList<Followed>)
 
     private val lock = ReentrantLock()
-    private var state: State? = null
+    @Volatile private var state: State? = null
     private var reminded = false
     private val problems = mutableSetOf<String>()
+
+    @Volatile private var prunedAt: Long? = null
+
+    // Whether the next look has anything to do soon: a lesson on, one that
+    // just ended, or one over whose folder is not settled yet (or nothing
+    // read yet). Otherwise the agent looks far less often (a lesson's start
+    // asks for a look at once).
+    fun needsLooking(): Boolean {
+        val held = state ?: return true
+        return lesson().isOn || held.current != NONE || held.pending.isNotEmpty()
+    }
 
     fun follow() {
         if (!lock.tryLock()) return // the last look is still moving files; it sees the same
@@ -98,9 +112,18 @@ class ClassFolderFollow(
                 }
             }
             if (state.pending.isEmpty()) problems.clear()
+            prune()
         } finally {
             if (changed) save(state)
         }
+    }
+
+    private fun prune() {
+        val now = clock()
+        val last = prunedAt
+        if (last != null && now - last in 0 until PRUNE_EVERY_MILLIS) return
+        prunedAt = now
+        for (id in folder.pruneSetAside(now)) log("Let go of the set-aside files of lesson $id: kept a month, or over the size cap.", null)
     }
 
     private fun makeFolder(lesson: ClassLesson): String? {
@@ -248,6 +271,8 @@ class ClassFolderFollow(
 
     companion object {
         val NONE = Followed(LessonId.EMPTY, "")
+
+        const val PRUNE_EVERY_MILLIS = 60L * 60 * 1000
 
         // What the student reads when a lesson starts. A phone's Chrome has no
         // download folder to point at the class folder (and the agent never

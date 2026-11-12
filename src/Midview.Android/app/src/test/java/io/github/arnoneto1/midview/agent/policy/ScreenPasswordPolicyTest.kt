@@ -73,7 +73,20 @@ class ScreenPasswordPolicyTest {
         assertEquals(ResetToken.NONE, t(true, false, true, false))
     }
 
-    @Test fun ownChangesAreTheAgentsWhileAndJustAfter() {
+    // The teacher's PIN unknown (a damaged file): the lock stays as it is,
+    // never removed.
+    @Test fun anUnknownTeachersPinLeavesTheLockAsItIs() {
+        assertEquals(
+            ScreenPasswordAction.NOTHING,
+            ScreenPasswordPolicy.decide(true, secure = true, ResetToken.ACTIVE, teacherPin = null, changedByOther = true, pinUnknown = true),
+        )
+        assertEquals(
+            ScreenPasswordAction.CLEAR,
+            ScreenPasswordPolicy.decide(true, secure = true, ResetToken.ACTIVE, teacherPin = null, changedByOther = true),
+        )
+    }
+
+    @Test fun aReportWhileTheAgentChangesTheLockIsItsOwn() {
         var now = 1_000L
         val own = OwnChanges { now }
         assertFalse(own.isOwn())
@@ -82,9 +95,58 @@ class ScreenPasswordPolicyTest {
         now += 60_000
         assertTrue(own.isOwn())
         own.finished()
-        now += OwnChanges.WINDOW_MILLIS
+        // Its report came already; a repeat of it a moment later too.
+        now += 1_000
         assertTrue(own.isOwn())
-        now += 1
+        now += OwnChanges.REPEAT_MILLIS
+        assertFalse(own.isOwn())
+    }
+
+    @Test fun eachChangeOwesOneReport() {
+        var now = 1_000L
+        val own = OwnChanges { now }
+        own.starting()
+        own.finished()
+        now += 2_000
+        assertTrue(own.isOwn())
+        // The same report again, at once: some phones send two.
+        now += 100
+        assertTrue(own.isOwn())
+        // A change two seconds later is the student's, within the old window.
+        now += 2_000
+        assertFalse(own.isOwn())
+    }
+
+    @Test fun aReportOwedTooLongAgoIsSomeoneElses() {
+        var now = 1_000L
+        val own = OwnChanges { now }
+        own.starting()
+        own.finished()
+        now += OwnChanges.WINDOW_MILLIS + 1
+        assertFalse(own.isOwn())
+    }
+
+    @Test fun aChangeAndroidRefusedOwesNothing() {
+        var now = 1_000L
+        val own = OwnChanges { now }
+        own.starting()
+        own.finished(changed = false)
+        now += 100
+        assertFalse(own.isOwn())
+    }
+
+    @Test fun twoChangesOweTwoReports() {
+        var now = 1_000L
+        val own = OwnChanges { now }
+        repeat(2) {
+            own.starting()
+            own.finished()
+        }
+        now += 2_000
+        assertTrue(own.isOwn())
+        now += 2_000
+        assertTrue(own.isOwn())
+        now += 2_000
         assertFalse(own.isOwn())
     }
 }

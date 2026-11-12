@@ -60,6 +60,9 @@ class DnsWatcher(
     private val checks = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview DNS watch").apply { isDaemon = true } }
     private var pending: ScheduledFuture<*>? = null
 
+    // The wait before the next look while the network stays unvalidated.
+    private var wait: Duration = FALL_BACK_AFTER
+
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             clock.changed(network, capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED), now())
@@ -91,6 +94,7 @@ class DnsWatcher(
         if (unvalidatedFor == null) {
             set?.cancel(false)
             pending = null
+            wait = FALL_BACK_AFTER
         } else if (set == null || set.isDone) {
             checkIn(FALL_BACK_AFTER - unvalidatedFor)
         }
@@ -105,16 +109,25 @@ class DnsWatcher(
         }
     }
 
-    // Still unvalidated afterwards (the DNS was off, or turned on since):
-    // looked at again 30 s later.
+    // Still unvalidated afterwards: looked at again 30 s later while the
+    // ad-free DNS is on (or turned on since); with it off there is nothing
+    // to fall back from, so the looks space out (nextWait), and start over
+    // when the network changes.
     private fun check() {
         try {
             optimizer.fallBack(::unvalidatedFor)
         } catch (e: Exception) {
             log("The network check failed", e)
         }
+        val ours = optimizer.ourDnsSet()
         synchronized(this) {
-            if (clock.unvalidatedFor(now()) != null) checkIn(FALL_BACK_AFTER) else pending = null
+            if (clock.unvalidatedFor(now()) != null) {
+                wait = nextWait(ours, wait)
+                checkIn(wait)
+            } else {
+                pending = null
+                wait = FALL_BACK_AFTER
+            }
         }
     }
 
@@ -130,6 +143,13 @@ class DnsWatcher(
 
     companion object {
         val FALL_BACK_AFTER: Duration = Duration.ofSeconds(30)
+
+        // The longest wait between looks with the ad-free DNS off.
+        val MAX_WAIT: Duration = Duration.ofMinutes(10)
+
+        // 30 s with our DNS on; doubling up to MAX_WAIT with it off.
+        fun nextWait(ourDnsOn: Boolean, last: Duration): Duration =
+            if (ourDnsOn) FALL_BACK_AFTER else minOf(last.multipliedBy(2), MAX_WAIT)
 
         fun shouldFallBack(strictOnOurHost: Boolean, unvalidatedFor: Duration): Boolean =
             strictOnOurHost && unvalidatedFor >= FALL_BACK_AFTER

@@ -19,6 +19,7 @@ class TeacherPrograms(
     reapplyBlock: () -> Unit,
     isDeviceOwner: () -> Boolean,
     log: (String, Throwable?) -> Unit,
+    hideBrowsers: () -> Unit = {},
 ) {
     private val folder = File(context.filesDir, FOLDER)
     private val packages = AndroidPackages(context, folder)
@@ -43,8 +44,13 @@ class TeacherPrograms(
 
     val installs = TeacherInstalls(
         ApkUpload(folder, APK_NAME).also { it.delete() }, packages, packages, context.packageName,
-        isDeviceOwner, protectedApps, reapplyBlock, log,
+        isDeviceOwner, protectedApps, reapplyBlock, log, hideBrowsers,
     )
+
+    // The thread that waits for the lock screen to go, ended with the agent.
+    fun close() {
+        waiting.shutdownNow()
+    }
 
     private companion object {
         const val FOLDER = "teacher-app"

@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.optimize
 
+import io.github.arnoneto1.midview.agent.identity.StoredText
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
 import io.github.arnoneto1.midview.agent.protocol.IsoTime
 import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
@@ -55,14 +56,39 @@ class OptimizeStore(
         fun retryDue(now: Instant, lastDnsAttempt: Instant?): Boolean =
             lastDnsAttempt == null || now.isBefore(lastDnsAttempt) || !now.isBefore(lastDnsAttempt.plus(RETRY_INTERVAL))
 
-        // "lastDnsAttempt=<ISO-8601 or nothing>", a line break, then the
-        // report as the teacher gets it.
-        fun encode(state: OptimizeState): ByteArray =
-            (ATTEMPT + (state.lastDnsAttempt?.let { IsoTime.format(it) } ?: "") + "\n").toByteArray(Charsets.UTF_8) +
-                state.report.encode()
+        private const val KIND = "optimize"
 
-        // Null for anything this agent did not write.
+        // The phone's own format (StoredText "optimize"), not the report's
+        // network form: lastDnsAttempt and optimizedAt (ISO-8601, empty for
+        // none), a "hidden=" and "failed=" per app, dns and dnsHost.
+        fun encode(state: OptimizeState): ByteArray {
+            val report = state.report
+            return StoredText.encode(
+                KIND,
+                listOf(
+                    "lastDnsAttempt" to (state.lastDnsAttempt?.let { IsoTime.format(it) } ?: ""),
+                    "optimizedAt" to (report.optimizedAt?.let { IsoTime.format(it) } ?: ""),
+                ) + report.hidden.map { "hidden" to it } + report.failed.map { "failed" to it } +
+                    listOf("dns" to report.dns, "dnsHost" to report.dnsHost),
+            )
+        }
+
+        // Null for a file that is neither the phone's format nor that of
+        // 0.0.70 and before. Read tolerantly: a time it cannot read is none,
+        // a DNS state it does not know is "not on".
         fun decode(bytes: ByteArray): OptimizeState? {
+            val stored = StoredText.decode(KIND, bytes) ?: return decodeOld(bytes)
+            fun time(key: String) = stored.first(key)?.takeIf { it.isNotEmpty() }?.let { IsoTime.parse(it) }
+            val dns = stored.first("dns")?.takeIf { PhoneDnsStates.isKnown(it) } ?: PhoneDnsStates.OFF_ERROR
+            val report = PhoneOptimizeReport(
+                time("optimizedAt"), stored.all("hidden"), stored.all("failed"), dns, stored.first("dnsHost") ?: AdblockDns.HOST,
+            )
+            return OptimizeState(report, time("lastDnsAttempt"))
+        }
+
+        // 0.0.70 and before: "lastDnsAttempt=<ISO-8601 or nothing>", a line
+        // break, then the report as the teacher gets it.
+        private fun decodeOld(bytes: ByteArray): OptimizeState? {
             val end = bytes.indexOf('\n'.code.toByte())
             if (end < 0) return null
             val header = String(bytes, 0, end, Charsets.UTF_8)

@@ -43,6 +43,14 @@ class FakeChannel(
         timeoutMillis = millis
     }
 
+    // pairingStarted was called.
+    var pairing = false
+        private set
+
+    override fun pairingStarted() {
+        pairing = true
+    }
+
     override fun close() {
         closed = true
     }

@@ -36,6 +36,12 @@ class TeacherInstallsTest {
     private var allowOnly = false
     private var installedBytes: ByteArray? = null
 
+    // Apps the phone takes for browsers (hidden after an install).
+    private val browsers = mutableSetOf<String>()
+
+    // Apps Android says it removed but that stay (a hidden app).
+    private val stuck = mutableSetOf<String>()
+
     private val facts = object : PackageFacts {
         override fun read(apk: File): ApkFacts? = readAs
         override fun installed(pkg: String) = installedApps[pkg]
@@ -53,7 +59,7 @@ class TeacherInstallsTest {
 
         override fun uninstall(pkg: String): String? {
             events += "uninstall $pkg"
-            if (uninstallFailure == null) installedApps.remove(pkg)
+            if (uninstallFailure == null && pkg !in stuck) installedApps.remove(pkg)
             return uninstallFailure
         }
     }
@@ -66,6 +72,10 @@ class TeacherInstallsTest {
             reapplyBlock = {
                 events += "reapply"
                 if (allowOnly) installedApps.keys.filter { it != SELF }.forEach { suspended += it }
+            },
+            hideBrowsers = {
+                events += "browsers"
+                browsers.forEach { pkg -> installedApps[pkg]?.let { installedApps[pkg] = it.copy(hidden = true) } }
             },
         )
     }
@@ -99,9 +109,28 @@ class TeacherInstallsTest {
         assertEquals(listOf(MessageType.INSTALL_ACCEPTED, MessageType.INSTALL_STARTED, MessageType.COMMAND_ACK), types(channel))
         assertEquals(true to "instalado: Olá (versão 1.0)", result)
         assertArrayEquals(apkBytes, installedBytes)
-        assertEquals(listOf("install $OLA", "reapply"), events)
+        assertEquals(listOf("install $OLA", "reapply", "browsers"), events)
         // Nothing left behind.
         assertTrue(receiveFolder.listFiles().isNullOrEmpty())
+    }
+
+    // A browser the teacher installs is hidden at once (the phones browse
+    // only in Chrome): the teacher reads so, not just "instalado".
+    @Test fun anInstalledBrowserIsSaidToBeHidden() {
+        browsers += OLA
+        val (_, result) = install()
+        assertEquals(true to "instalado: Olá (versão 1.0); ${TeacherInstalls.HIDDEN_BROWSER}", result)
+    }
+
+    // A hidden app is on the phone: removing it is no "não está neste
+    // celular", and one Android leaves is no success.
+    @Test fun aHiddenAppIsUninstalledOrSaidToStay() {
+        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false, byMidview = true, hidden = true)
+        stuck += OLA
+        assertEquals(false to "Olá: ${TeacherInstalls.STILL_HERE_HIDDEN}", installs.uninstall(ProgramInstall.encodeList(listOf(OLA))))
+        assertEquals(listOf("uninstall $OLA"), events)
+        stuck.clear()
+        assertEquals(true to "Olá: desinstalado", installs.uninstall(ProgramInstall.encodeList(listOf(OLA))))
     }
 
     @Test fun underAllowOnlyTheNewAppIsSuspendedBeforeTheTeacherHearsOfIt() {
@@ -113,7 +142,7 @@ class TeacherInstallsTest {
     @Test fun onlyAnApkSmallEnoughOnADeviceOwnerWithRoomIsAccepted() {
         assertEquals(false to TeacherInstalls.NOT_APK, install(request("setup.exe")).second)
         assertEquals(false to TeacherInstalls.TOO_BIG, install(request(size = ProgramInstall.MAX_APK_SIZE + 1)).second)
-        free = apkBytes.size * 2L
+        free = apkBytes.size * 2L + TeacherInstalls.SPARE_BYTES - 1
         assertEquals(false to TeacherInstalls.NO_SPACE, install().second)
         free = Long.MAX_VALUE
         deviceOwner = false

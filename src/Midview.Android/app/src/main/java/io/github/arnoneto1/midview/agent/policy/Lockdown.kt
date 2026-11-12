@@ -143,6 +143,15 @@ class Lockdown(
         // YouTube client). adb is not an unknown source, so debug builds keep
         // them too: `adb install -r` of a debug build still works with them
         // on (checked on the Redmi 10C).
+        //
+        // DISALLOW_CONFIG_DATE_TIME keeps the date, time and time zone out
+        // of the student's reach (the phone keeps setting them by itself
+        // from the network, as it was): what the agent counts in time does
+        // not move with them. DISALLOW_CREATE_WINDOWS keeps other apps from
+        // drawing over the screen (MIUI's floating windows, chat bubbles),
+        // also over the teacher's lock screen; the agent's own notices are
+        // accessibility windows, which it leaves alone (checked on the
+        // Redmi 10C: the "Controlar" strip and the countdown still show).
         val RESTRICTIONS = listOf(
             "no_factory_reset",
             "no_debugging_features",
@@ -154,6 +163,8 @@ class Lockdown(
             "no_install_unknown_sources",
             "no_install_unknown_sources_globally",
             "no_modify_accounts",
+            "no_config_date_time",
+            "no_create_windows",
         )
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,

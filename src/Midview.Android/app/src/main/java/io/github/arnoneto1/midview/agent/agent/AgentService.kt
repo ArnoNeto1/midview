@@ -87,7 +87,6 @@ import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 // The Midview agent on the phone: always running (a foreground service with
@@ -102,8 +101,13 @@ class AgentService : Service() {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var packageWatcher: PackageWatcher? = null
     private var dnsWatcher: DnsWatcher? = null
-    private var wifiLock: WifiManager.WifiLock? = null
-    private var classFolderTimer: ScheduledExecutorService? = null
+    private val wifi by lazy { AgentWifi(this) }
+
+    // What a start of the agent made that must end with it (threads that
+    // wait, the class folder's timer): ended by closeListeners, so a start
+    // that failed, or a service Android made again in the same process,
+    // leaves nothing of the old one running.
+    private val owned = mutableListOf<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
     private var stopped = false
     private val stopping = CountDownLatch(1)
@@ -117,7 +121,7 @@ class AgentService : Service() {
         goForeground(STATUS_TEXT)
         keeper(this).created()
         AgentWatchdog.arm(this)
-        holdWifi()
+        wifi.hold()
         // Making the identity the first time takes a moment (an RSA key).
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
     }
@@ -151,8 +155,7 @@ class AgentService : Service() {
         stopping.countDown()
         keeper(this).destroyed()
         main.removeCallbacks(lockAgain)
-        wifiLock?.let { if (it.isHeld) it.release() }
-        wifiLock = null
+        wifi.release()
         PairingCodeActivity.hide()
         super.onDestroy()
     }
@@ -172,19 +175,21 @@ class AgentService : Service() {
         }
     }
 
-    // Many phones put the Wi-Fi to sleep with the screen off, and the
-    // teacher's search and commands would go unanswered.
-    private fun holdWifi() {
-        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wifiLock = wifi.createWifiLock(wifiLockMode(Build.VERSION.SDK_INT), "Midview agent").apply {
-            setReferenceCounted(false)
-            acquire()
+    // Something this start made, ended with the agent (at once if the agent
+    // already stopped).
+    private fun own(stop: () -> Unit) {
+        synchronized(lock) {
+            if (stopped) {
+                runCatching(stop)
+            } else {
+                owned += stop
+            }
         }
     }
 
     private fun closeListeners() {
-        classFolderTimer?.shutdownNow()
-        classFolderTimer = null
+        owned.forEach { runCatching(it) }
+        owned.clear()
         packageWatcher?.stop()
         packageWatcher = null
         dnsWatcher?.stop()
@@ -258,6 +263,10 @@ class AgentService : Service() {
         val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(chromeConfig, internet, log)::apply, log = log)
         // Chrome's configuration, with the site block and the download block.
         sites.reapply()
+        // The app block, before any port opens (and whether or not one can):
+        // also lets go of apps a "Fechar programas" cut short left suspended
+        // (the block lifts every suspension of the agent's that is not its own).
+        appBlock.reapply()
         val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
         // "Atualizar celulares": the agent's next version comes over the
         // network and installs itself. The attempt a restart cut short, or
@@ -270,6 +279,7 @@ class AgentService : Service() {
             PackageApkReader(this),
             SelfInstaller(this),
             isDeviceOwner = policyGateway::isDeviceOwner,
+            freeBytes = { filesDir.usableSpace },
             log = log,
         )
         val lockScreen = LockScreenKeeper.get(this)
@@ -289,10 +299,9 @@ class AgentService : Service() {
         // "Abrir site", "Abrir programa", "Instalar programa", "Desinstalar programa".
         programs = TeacherPrograms(
             this, { screenLock.locked }, internetBlocked, { sites.current.domains }, installedApps::protected,
-            appBlock::reapply, policyGateway::isDeviceOwner, log,
+            appBlock::reapply, policyGateway::isDeviceOwner, log, hideBrowsers = otherBrowsers::apply,
         )
-        // "Mensagem" and "Bate-papo": never over the teacher's lock screen.
-        TeacherTalk.start(this, isLocked = { screenLock.locked })
+        own(programs::close)
         // "Fechar programas": the home screen in front, the student's apps
         // closed by suspending them for a moment, and the app block applied
         // again; under the teacher's lock screen, once it goes.
@@ -310,6 +319,7 @@ class AgentService : Service() {
         )
         // The student's warning and the wait, then the closing, on one thread of its own.
         val closing = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview close apps").apply { isDaemon = true } }
+        own { closing.shutdownNow() }
         val countdown = CloseCountdown(
             closer, AndroidCloseNotice(this),
             schedule = { delay, task ->
@@ -329,6 +339,7 @@ class AgentService : Service() {
         // "Desligar" and "Reiniciar": the student's warning and the wait,
         // then the screen off or the restart, on a thread of their own.
         val powering = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview power").apply { isDaemon = true } }
+        own { powering.shutdownNow() }
         val power = PowerCountdown(
             AndroidPhonePower(this), AndroidCloseNotice(this, AndroidCloseNotice.POWER_NOTIFICATION),
             schedule = { delay, task ->
@@ -364,6 +375,7 @@ class AgentService : Service() {
             log = log,
         )
         val classTimer = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview class folder").apply { isDaemon = true } }
+        own { classTimer.shutdownNow() }
         classLessons = ClassLessonStore(
             File(filesDir, CLASS_LESSON_FILE),
             prepare = follow::prepare,
@@ -411,31 +423,38 @@ class AgentService : Service() {
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
-        synchronized(lock) {
-            if (stopped) {
-                classTimer.shutdownNow()
-                return
+        // The class folder looked at every few seconds while a lesson is on
+        // (or just ended), far less often otherwise.
+        fun look() {
+            try {
+                classLessons.endIfFromAnEarlierDay()
+                follow.follow()
+            } catch (e: RuntimeException) {
+                log("The class folder's look failed", e)
             }
-            val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
-            val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
+            val next = if (follow.needsLooking()) CLASS_FOLDER_LOOK_SECONDS else CLASS_FOLDER_IDLE_LOOK_SECONDS
+            try {
+                classTimer.schedule(Runnable { look() }, next, TimeUnit.SECONDS)
+            } catch (e: RejectedExecutionException) {
+                // The agent is stopping.
+            }
+        }
+
+        synchronized(lock) {
+            if (stopped) return
+            // "Mensagem" and "Bate-papo": never over the teacher's lock
+            // screen. Only by a start that still runs: an old one, of a
+            // service Android already made again, never takes them over.
+            TeacherTalk.start(this, isLocked = { screenLock.locked })
+            val agentServer = TlsServer(identity, AGENT_PORT, isTrusted = trusted::isTrusted) { commands.handle(it) }
+            val sessionServer = TlsServer(identity, SESSION_PORT, isTrusted = trusted::isTrusted) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
             packageWatcher = PackageWatcher(this) {
                 appBlock.reapply()
                 otherBrowsers.apply()
             }.also { it.start() }
             dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
-            classFolderTimer = classTimer
-            classTimer.scheduleWithFixedDelay(
-                {
-                    try {
-                        classLessons.endIfFromAnEarlierDay()
-                        follow.follow()
-                    } catch (e: RuntimeException) {
-                        log("The class folder's look failed", e)
-                    }
-                },
-                0, CLASS_FOLDER_LOOK_SECONDS, TimeUnit.SECONDS,
-            )
+            classTimer.execute { look() }
             agentServer.start()
             sessionServer.start()
 
@@ -559,22 +578,14 @@ class AgentService : Service() {
         private const val CLASS_FOLLOW_FILE = "class-folder-follow.txt"
         private const val CLASS_TIMES_FILE = "class-folder-times.txt"
 
-        // As often as a PC's Session follows the lesson.
+        // As often as a PC's Session follows the lesson; with no lesson, only
+        // to let go of old set-aside files (a lesson's start looks at once).
         private const val CLASS_FOLDER_LOOK_SECONDS = 5L
+        private const val CLASS_FOLDER_IDLE_LOOK_SECONDS = 60L
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1
         private const val PAIRING_NOTIFICATION = 2
-
-        // WifiManager.WIFI_MODE_FULL_HIGH_PERF, deprecated from Android 14 in
-        // favor of WIFI_MODE_FULL_LOW_LATENCY.
-        @Suppress("DEPRECATION")
-        fun wifiLockMode(sdkInt: Int): Int =
-            if (sdkInt >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-            } else {
-                WifiManager.WIFI_MODE_FULL_HIGH_PERF
-            }
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AgentService::class.java))

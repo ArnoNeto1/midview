@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.lab
 
+import io.github.arnoneto1.midview.agent.identity.StoredText
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
 import io.github.arnoneto1.midview.agent.protocol.LabConfig
 import io.github.arnoneto1.midview.agent.sites.ChromePolicy
@@ -22,7 +23,8 @@ import java.util.Locale
 //   the Optimizer reads it here (adblock) and is told of a change
 //   (adblockChanged), turning the DNS on in the background or off at once.
 // RESET puts the phone back to its default (LabConfig.DEFAULT): downloads
-// free, the ad-free DNS on, as "Otimizar" leaves a phone.
+// free, the ad-free DNS on, as "Otimizar" leaves a phone. Kept in the
+// phone's own format (encodeStored), not the network's.
 class LabConfigStore(
     private val file: File,
     private val isDeviceOwner: () -> Boolean,
@@ -72,7 +74,7 @@ class LabConfigStore(
         }
         try {
             file.absoluteFile.parentFile?.mkdirs()
-            writeAtomically(file, next.encode())
+            writeAtomically(file, encodeStored(next))
         } catch (e: IOException) {
             log("Couldn't save the lab panel's configuration; keeping the previous one", e)
             downloads(held.blockDownloads)
@@ -109,6 +111,32 @@ class LabConfigStore(
             "guardado, mas o Chrome deste celular (versão $version) só trava downloads a partir da versão " +
                 "${ChromePolicy.DOWNLOADS_FROM_VERSION}: atualize o Chrome"
 
+        private const val KIND = "lab-config"
+
+        // StoredText "lab-config": "savedAt=<Unix seconds>",
+        // "blockDownloads=0|1", "adblock=0|1".
+        fun encodeStored(config: LabConfig): ByteArray =
+            StoredText.encode(
+                KIND,
+                listOf(
+                    "savedAt" to config.savedAt.toString(),
+                    "blockDownloads" to if (config.blockDownloads) "1" else "0",
+                    "adblock" to if (config.adblock) "1" else "0",
+                ),
+            )
+
+        // Null for a file that is neither the phone's format nor the
+        // network's of 0.0.70 and before. A function left out reads as the
+        // default (downloads free, the ad blocker on).
+        fun decodeStored(bytes: ByteArray): LabConfig? {
+            val stored = StoredText.decode(KIND, bytes) ?: return LabConfig.decode(bytes)
+            return LabConfig(
+                stored.first("savedAt")?.toLongOrNull() ?: 0L,
+                blockDownloads = stored.first("blockDownloads")?.let { it == "1" } ?: LabConfig.DEFAULT.blockDownloads,
+                adblock = stored.first("adblock")?.let { it == "1" } ?: LabConfig.DEFAULT.adblock,
+            )
+        }
+
         fun describe(config: LabConfig): String {
             val on = listOfNotNull(
                 "travar downloads".takeIf { config.blockDownloads },
@@ -130,7 +158,7 @@ class LabConfigStore(
                 log("Couldn't read the lab panel's configuration file", e)
                 return null
             }
-            return LabConfig.decode(bytes) ?: run {
+            return decodeStored(bytes) ?: run {
                 log("Couldn't read the lab panel's configuration; using the default", null)
                 file.renameTo(File(file.path + ".corrupt"))
                 null

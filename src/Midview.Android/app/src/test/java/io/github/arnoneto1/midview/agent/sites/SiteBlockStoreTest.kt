@@ -105,16 +105,29 @@ class SiteBlockStoreTest {
     }
 
     @Test fun aCorruptFileMeansNothingBlockedAndIsKeptAside() {
-        file.writeText("internet=1\nnot a domain\n")
+        file.writeText("garbage\nyoutube.com\n")
         val store = store()
         assertEquals(SiteBlockState.EMPTY, store.current)
         assertFalse(file.exists())
         assertTrue(File(file.path + ".corrupt").exists())
     }
 
-    @Test fun theFileFormatIsReadBack() {
+    // A site the agent no longer reads is left out; the rest of the block,
+    // and the internet block, stay.
+    @Test fun aSiteThatNoLongerReadsIsLeftOutAlone() {
+        file.writeText("internet=1\nnot a domain\nyoutube.com\n")
+        assertEquals(SiteBlockState(setOf("youtube.com"), true), store().current)
+    }
+
+    // The format of 0.0.70 and before.
+    @Test fun theOldFileFormatIsReadBack() {
         file.writeText("internet=0\nyoutube.com\nwww.g1.com\n")
         assertEquals(SiteBlockState(setOf("youtube.com", "www.g1.com"), false), store().current)
+    }
+
+    @Test fun theFileIsThePhonesOwnFormat() {
+        store().send(MessageType.BLOCK_DOMAIN, "youtube.com")
+        assertEquals("midview-site-block 2\ninternet=0\nsite=youtube.com\n", file.readText())
     }
 
     @Test fun chromeTakesNoMoreDomainsThanItReads() {

@@ -8,9 +8,12 @@ const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
 // The thumbprints of the teachers this device trusts: one upper-case
 // thumbprint per line, in the app's private storage. The device's
 // counterpart of the Windows trusted-masters.json (TrustStore,
-// TrustedMastersFile). Read on every question, so a teacher added through
-// another instance is trusted at once; written whole to a temporary file and
-// moved over the old one, so a reader never sees half a list.
+// TrustedMastersFile). Kept in memory and read again only when the file
+// changed (its time or size), so a flood of discovery packets is no flood of
+// disk reads; a teacher added through another instance is trusted at once
+// (the add updates the memory every instance shares). Written whole to a
+// temporary file and moved over the old one, so a reader never sees half a
+// list.
 class TrustedMasters(private val file: File) {
     fun isTrusted(thumb: String): Boolean {
         val wanted = normalize(thumb)
@@ -36,17 +39,33 @@ class TrustedMasters(private val file: File) {
     // How many teachers are trusted (none: nobody paired yet).
     fun count(): Int = synchronized(lock) { load().size }
 
-    private fun load(): LinkedHashSet<String> =
-        if (file.isFile) {
+    // A copy of the list (callers may change it), from memory while the
+    // file is as it was when last read.
+    private fun load(): LinkedHashSet<String> {
+        val key = file.absolutePath
+        val stamp = Stamp(file.lastModified(), if (file.isFile) file.length() else -1)
+        val held = cache[key]
+        if (held != null && held.stamp == stamp) return LinkedHashSet(held.teachers)
+        val read = if (file.isFile) {
             file.readLines(Charsets.US_ASCII).map(::normalize).filterTo(LinkedHashSet()) { it.isNotEmpty() }
         } else {
             LinkedHashSet()
         }
+        cache[key] = Cached(stamp, read)
+        return LinkedHashSet(read)
+    }
+
+    private data class Stamp(val modified: Long, val length: Long)
+
+    private class Cached(val stamp: Stamp, val teachers: Set<String>)
 
     private companion object {
         // One lock for every instance: two adds through different instances
         // must not each write a list without the other's teacher.
         val lock = Any()
+
+        // The lists read, by file, shared by every instance (under lock).
+        val cache = HashMap<String, Cached>()
 
         fun normalize(thumb: String) = thumb.trim().uppercase()
     }

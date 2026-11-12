@@ -32,6 +32,15 @@ class PairingFlowTest {
     private val masterNonce = ByteArray(32) { (100 + it).toByte() }
 
     private var clock = 1_700_000_000_000L
+
+    // The time since the phone started, which nobody can set.
+    private var uptime = 60_000L
+
+    // Both clocks move on.
+    private fun pass(millis: Long) {
+        clock += millis
+        uptime += millis
+    }
     private val events = mutableListOf<String>()
     private val shown = mutableListOf<Pair<String, String>>()
     private var hidden = 0
@@ -51,6 +60,7 @@ class PairingFlowTest {
             deviceName = { "Cel 01" },
             newNonce = { agentNonce.copyOf() },
             now = { clock },
+            elapsed = { uptime },
         )
     }
 
@@ -121,7 +131,7 @@ class PairingFlowTest {
         assertEquals(true to "liberada até ${SimpleDateFormat("HH:mm", Locale.ROOT).format(until)}", flow.allowNewTeacher())
         assertTrue(flow.newTeacherOpen)
 
-        clock += 9 * 60 * 1000L
+        pass(9 * 60 * 1000L)
         assertEquals(MessageType.PAIR_DONE, pairs(teacherB).sent.last().type)
         assertTrue(trusted.isTrusted(teacherB))
 
@@ -135,12 +145,75 @@ class PairingFlowTest {
     @Test fun theWindowEndsAfterTenMinutes() {
         pairs(teacherA)
         flow.allowNewTeacher()
-        clock += 10 * 60 * 1000L
+        pass(10 * 60 * 1000L)
         assertFalse(flow.newTeacherOpen)
 
         val channel = teacher(teacherB, nonce(), confirm())
         flow.run(channel, request("PROF-02"))
         assertEquals(MessageType.PAIR_REFUSED, channel.sent.single().type)
+    }
+
+    // A student who sets the date back in Settings does not keep the
+    // window open: it runs on the time since the phone started.
+    @Test fun settingTheClockBackDoesNotKeepTheWindowOpen() {
+        pairs(teacherA)
+        flow.allowNewTeacher()
+        clock -= 24 * 60 * 60 * 1000L
+        uptime += 10 * 60 * 1000L
+        assertFalse(flow.newTeacherOpen)
+    }
+
+    // Nor does it make a late confirmation look in time.
+    @Test fun aLateConfirmIsRefusedWhateverTheWallClockSays() {
+        val channel = teacher(teacherA, nonce(), confirm())
+        channel.onReceive = {
+            if (it.type == MessageType.PAIR_CONFIRM) {
+                uptime += 5 * 60 * 1000L + 1
+                clock -= 60 * 60 * 1000L
+            }
+        }
+        flow.run(channel, request("PROF-01"))
+        assertEquals("O tempo para conferir o código acabou. Tente de novo.", Pairing.refusalText(channel.sent.last().payload))
+        assertEquals(0, trusted.count())
+    }
+
+    // The window ends with the first new teacher whose code came up, even
+    // one who never confirms (a classmate who got there first): the real
+    // teacher asks for it again.
+    @Test fun theWindowEndsWithTheFirstCodeShownEvenUnconfirmed() {
+        pairs(teacherA)
+        flow.allowNewTeacher()
+        val classmate = teacher(teacherB, nonce(), cancel())
+        flow.run(classmate, request("ALUNO"))
+        assertFalse(trusted.isTrusted(teacherB))
+        assertFalse(flow.newTeacherOpen)
+
+        val real = teacher(teacherC, nonce(), confirm())
+        flow.run(real, request("PROF-03"))
+        assertEquals(MessageType.PAIR_REFUSED, real.sent.single().type)
+    }
+
+    // A code the phone could not show uses nothing up.
+    @Test fun aCodeThatDidNotShowLeavesTheWindowOpen() {
+        pairs(teacherA)
+        flow.allowNewTeacher()
+        canShow = false
+        flow.run(teacher(teacherB, nonce(), confirm()), request("PROF-02"))
+        assertTrue(flow.newTeacherOpen)
+    }
+
+    // From the PairRequest on, the connection may last as long as a pairing.
+    @Test fun aPairingTellsTheConnectionItIsOne() {
+        val channel = teacher(teacherA, nonce(), confirm())
+        flow.run(channel, request("PROF-01"))
+        assertTrue(channel.pairing)
+    }
+
+    @Test fun aRefusedPairingDoesNotGetAPairingsTime() {
+        pairs(teacherA)
+        val channel = teacher(teacherB, nonce(), confirm())
+        flow.run(channel, request("PROF-02"))
+        assertFalse(channel.pairing)
     }
 
     @Test fun aTrustedTeacherMayPairAgain() {
@@ -214,7 +287,7 @@ class PairingFlowTest {
 
     @Test fun aConfirmAfterFiveMinutesIsRefused() {
         val channel = teacher(teacherA, nonce(), confirm())
-        channel.onReceive = { if (it.type == MessageType.PAIR_CONFIRM) clock += 5 * 60 * 1000L + 1 }
+        channel.onReceive = { if (it.type == MessageType.PAIR_CONFIRM) pass(5 * 60 * 1000L + 1) }
         flow.run(channel, request("PROF-01"))
 
         assertEquals("O tempo para conferir o código acabou. Tente de novo.", Pairing.refusalText(channel.sent.last().payload))
@@ -234,6 +307,7 @@ class PairingFlowTest {
             },
             hideCode = {},
             deviceName = { "Cel 01" },
+            elapsed = { uptime },
         )
         flowRef = busyFlow
         busyFlow.run(first, request("PROF-01"))

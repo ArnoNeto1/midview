@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.programs
 
+import io.github.arnoneto1.midview.agent.files.DiskReserve
 import io.github.arnoneto1.midview.agent.net.Channel
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
@@ -15,8 +16,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 // An app on the phone as the teacher's install and uninstall need it
 // (AppOrigin): system, it came with the phone; byMidview, Android records the
-// Midview as its installer.
-data class PhoneAppFacts(val facts: ApkFacts, val label: String, val system: Boolean, val byMidview: Boolean = false)
+// Midview as its installer; hidden, the Device Owner hid it (another browser,
+// OtherBrowsers, or an ad app of "Otimizar"): still on the phone.
+data class PhoneAppFacts(
+    val facts: ApkFacts,
+    val label: String,
+    val system: Boolean,
+    val byMidview: Boolean = false,
+    val hidden: Boolean = false,
+)
 
 // What installing and uninstalling need of Android (AndroidPackages), behind
 // interfaces so TeacherInstalls is tested on the JVM.
@@ -24,7 +32,8 @@ interface PackageFacts {
     // Null when Android cannot read the file as an app (signed) at all.
     fun read(apk: File): ApkFacts?
 
-    // Null when the app is not on the phone for the student.
+    // Null when the app is not on the phone for the student (one hidden by
+    // the Device Owner is on it).
     fun installed(pkg: String): PhoneAppFacts?
 
     fun isSuspended(pkg: String): Boolean
@@ -68,6 +77,9 @@ class TeacherInstalls(
     private val protectedApps: () -> Set<String>,
     private val reapplyBlock: () -> Unit,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    // Other browsers hidden again (OtherBrowsers), before the teacher hears
+    // of the install: a browser the teacher installs is hidden at once.
+    private val hideBrowsers: () -> Unit = {},
 ) {
     private val busy = AtomicBoolean(false)
 
@@ -79,7 +91,7 @@ class TeacherInstalls(
             !ProgramInstall.isApkName(request.fileName) -> NOT_APK
             request.size > ProgramInstall.MAX_APK_SIZE -> TOO_BIG
             !isDeviceOwner() -> NOT_DEVICE_OWNER
-            facts.freeBytes() < request.size * 2 + SPARE_BYTES -> NO_SPACE
+            !DiskReserve.fits(facts.freeBytes(), request.size * 2) -> NO_SPACE
             else -> null
         }
         if (refusal != null) return answer(channel, false, refusal)
@@ -127,15 +139,26 @@ class TeacherInstalls(
             "o Android não começou a instalação: ${e.message ?: e.javaClass.simpleName}"
         }
         if (failure != null) return false to failure
-        // Before the teacher hears of it: under "Liberar só estes" it is suspended.
+        // Before the teacher hears of it: under "Liberar só estes" it is
+        // suspended, and another browser is hidden.
         try {
             reapplyBlock()
         } catch (e: RuntimeException) {
             log("The app block after an install", e)
         }
-        val label = facts.installed(apk.packageName)?.label ?: apk.packageName
+        try {
+            hideBrowsers()
+        } catch (e: RuntimeException) {
+            log("Hiding the other browsers after an install", e)
+        }
+        val now = facts.installed(apk.packageName)
+        val label = now?.label ?: apk.packageName
         val done = "instalado: $label (versão ${apk.versionName})"
-        return true to if (facts.isSuspended(apk.packageName)) "$done; fica bloqueado pelo \"Liberar só estes\"" else done
+        return true to when {
+            now?.hidden == true -> "$done; $HIDDEN_BROWSER"
+            facts.isSuspended(apk.packageName) -> "$done; fica bloqueado pelo \"Liberar só estes\""
+            else -> done
+        }
     }
 
     // UNINSTALL_PROGRAMS's payload (the apps' packages) in, the CommandAck's
@@ -174,7 +197,11 @@ class TeacherInstalls(
             "o Android não desinstalou: ${e.message ?: e.javaClass.simpleName}"
         }
         log("The teacher's uninstall of $pkg: ${failure ?: "done"}", null)
-        return if (failure == null) true to UNINSTALLED else false to failure
+        if (failure != null) return false to failure
+        // Android said done: only true if the app is really gone.
+        val left = facts.installed(pkg) ?: return true to UNINSTALLED
+        log("The teacher's uninstall of $pkg: still on the phone (hidden: ${left.hidden})", null)
+        return false to if (left.hidden) STILL_HERE_HIDDEN else STILL_HERE
     }
 
     private fun answer(channel: Channel, succeeded: Boolean, detail: String) {
@@ -188,20 +215,23 @@ class TeacherInstalls(
     companion object {
         // What the folder of the APK has to keep free besides the APK twice
         // (the file, then Android's copy of it).
-        const val SPARE_BYTES = 100L * 1024 * 1024
+        const val SPARE_BYTES = DiskReserve.SPARE_BYTES
 
         const val INVALID = "pedido inválido"
         const val NOT_APK = "no celular só instalam aplicativos de Android (.apk)"
         const val TOO_BIG = "o aplicativo é grande demais (até 200 MB)"
         const val NOT_DEVICE_OWNER = "este celular não instala aplicativos pelo Midview"
         const val NOT_DEVICE_OWNER_UNINSTALL = "este celular não desinstala aplicativos pelo Midview"
-        const val NO_SPACE = "sem espaço no celular para este aplicativo"
+        const val NO_SPACE = "sem espaço no celular para este aplicativo (é preciso deixar pelo menos 100 MB livres)"
         const val BUSY = "outra instalação já está em andamento neste celular"
         const val NOT_AN_APP = "o arquivo recebido não é um aplicativo de Android"
         const val SELF_INSTALL = "é o próprio Midview do celular: use \"Atualizar os celulares\", em \"Máquinas da sala\""
         const val OTHER_KEY = "o celular tem este app assinado com outra chave: desinstale-o antes"
 
         const val UNINSTALLED = "desinstalado"
+        const val HIDDEN_BROWSER = "fica escondido: os celulares navegam só pelo Chrome"
+        const val STILL_HERE = "o Android disse que desinstalou, mas o app continua no celular"
+        const val STILL_HERE_HIDDEN = "o Android não tirou o app: ele continua no celular, escondido"
         const val NOT_HERE = "não está neste celular"
         const val SELF_UNINSTALL = "é o Midview: não sai do celular"
         const val ESSENTIAL = "o celular precisa dele (tela inicial, telefone, configurações, teclado): não dá para desinstalar"

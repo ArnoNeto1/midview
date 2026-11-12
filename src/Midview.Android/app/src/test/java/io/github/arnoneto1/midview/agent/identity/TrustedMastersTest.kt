@@ -47,4 +47,30 @@ class TrustedMastersTest {
         TrustedMasters(file).add(a)
         assertTrue(reader.isTrusted(a))
     }
+
+    // Discovery asks at every packet: the file is read again only when it changed.
+    @Test fun theListIsReadAgainOnlyWhenTheFileChanges() {
+        val file = file()
+        TrustedMasters(file).add(a)
+        val masters = TrustedMasters(file)
+        assertTrue(masters.isTrusted(a))
+        // Changed behind the agent's back, same time and size: still the memory.
+        val stamp = file.lastModified()
+        file.writeText("$b\n")
+        file.setLastModified(stamp)
+        assertTrue(masters.isTrusted(a))
+        // A newer file is read again.
+        file.setLastModified(stamp + 2_000)
+        assertTrue(masters.isTrusted(b))
+        assertFalse(masters.isTrusted(a))
+    }
+
+    @Test fun aRemovedFileTrustsNobody() {
+        val file = file()
+        val masters = TrustedMasters(file)
+        masters.add(a)
+        file.delete()
+        assertFalse(masters.isTrusted(a))
+        assertEquals(0, masters.count())
+    }
 }

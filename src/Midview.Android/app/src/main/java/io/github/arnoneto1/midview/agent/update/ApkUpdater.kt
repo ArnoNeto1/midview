@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.update
 
+import io.github.arnoneto1.midview.agent.files.DiskReserve
 import io.github.arnoneto1.midview.agent.net.Channel
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
@@ -87,6 +88,8 @@ class ApkUpdater(
     private val apks: ApkReader,
     private val installer: AgentInstaller,
     private val isDeviceOwner: () -> Boolean,
+    // Free space where the APK is received.
+    private val freeBytes: () -> Long = { Long.MAX_VALUE },
     private val clock: () -> Instant = Instant::now,
     private val fingerprintWaitMillis: Long = FINGERPRINT_WAIT_MILLIS,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
@@ -143,6 +146,8 @@ class ApkUpdater(
         !isDeviceOwner() -> false to NOT_DEVICE_OWNER
         !offer.fingerprint.contentEquals(offer.zipSha256) || offer.zipSize != offer.uncompressedSize -> false to NOT_THE_APP
         offer.zipSize > PhoneUpdate.MAX_APK_SIZE -> false to TOO_BIG
+        // The APK, then Android's copy of it, and the phone's spare room.
+        !DiskReserve.fits(freeBytes(), offer.zipSize * 2) -> false to NO_SPACE
         settled()?.state == UpdateStates.APPLYING -> false to BUSY
         fingerprint.await(fingerprintWaitMillis).equals(Hex.upper(offer.fingerprint), ignoreCase = true) -> true to ALREADY
         else -> null
@@ -235,6 +240,7 @@ class ApkUpdater(
         const val TOO_BIG = "o aplicativo é grande demais (até 64 MB)"
         const val BUSY = "outra atualização já está em andamento neste celular"
         const val ALREADY = "já está nesta versão"
+        const val NO_SPACE = "sem espaço no celular para a atualização (é preciso deixar pelo menos 100 MB livres)"
         const val RECEIVED = "recebido"
         private const val RECEIVING_TEXT = "recebendo"
         private const val VERIFYING_TEXT = "conferindo o aplicativo"

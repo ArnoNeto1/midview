@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.apps
 
+import io.github.arnoneto1.midview.agent.identity.StoredText
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
@@ -17,6 +18,7 @@ import java.time.format.DateTimeFormatter
 // (AppSuspender). The newest SavedAt wins, so two teachers' Masters don't keep
 // overwriting each other's. apply returns a warning for the teacher (the block
 // does not hold as asked on this phone), said when a block is applied.
+// Kept in the phone's own format (encodeStored), not the network's.
 class AppBlockStore(
     private val file: File,
     private val apply: (PhoneAppPolicy) -> String?,
@@ -46,7 +48,7 @@ class AppBlockStore(
 
             try {
                 file.absoluteFile.parentFile?.mkdirs()
-                writeAtomically(file, asked.encode())
+                writeAtomically(file, encodeStored(asked))
             } catch (e: IOException) {
                 log("Couldn't save the app block", e)
                 return false to "não foi possível gravar o bloqueio: ${saveError(e)}"
@@ -94,6 +96,46 @@ class AppBlockStore(
             }
         }
 
+        private const val KIND = "app-block"
+
+        // The policy in the phone's own format (StoredText "app-block"):
+        // "savedAt=<Unix seconds>", "mode=none|block-list|allow-only" and an
+        // "app=<package>" per app.
+        fun encodeStored(policy: PhoneAppPolicy): ByteArray =
+            StoredText.encode(
+                KIND,
+                listOf("savedAt" to policy.savedAt.toString(), "mode" to modeName(policy.mode)) +
+                    policy.packages.map { "app" to it },
+            )
+
+        // Null for a file that is neither the phone's format nor the
+        // network's of 0.0.70 and before. Read tolerantly: an app name that
+        // is not valid (or one too many) is left out, heard by dropped; a
+        // mode this version does not know blocks the listed apps (never
+        // nothing, which would lift the block).
+        fun decodeStored(bytes: ByteArray, dropped: (String) -> Unit = {}): PhoneAppPolicy? {
+            val stored = StoredText.decode(KIND, bytes) ?: return PhoneAppPolicy.decode(bytes)
+            val savedAt = stored.first("savedAt")?.toLongOrNull() ?: 0L
+            val modeText = stored.first("mode")
+            val apps = LinkedHashSet<String>()
+            for (name in stored.all("app")) {
+                if (PhoneAppPolicy.isValidPackageName(name) && apps.size < PhoneAppPolicy.MAX_PACKAGES) apps += name else dropped(name)
+            }
+            val mode = modeOf(modeText) ?: if (apps.isEmpty()) AppBlockMode.NONE else {
+                dropped("mode=$modeText")
+                AppBlockMode.BLOCK_LIST
+            }
+            return PhoneAppPolicy(savedAt, mode, if (mode == AppBlockMode.NONE) emptyList() else apps.toList())
+        }
+
+        private fun modeName(mode: AppBlockMode) = when (mode) {
+            AppBlockMode.NONE -> "none"
+            AppBlockMode.BLOCK_LIST -> "block-list"
+            AppBlockMode.ALLOW_ONLY -> "allow-only"
+        }
+
+        private fun modeOf(name: String?) = AppBlockMode.entries.firstOrNull { modeName(it) == name }
+
         fun describe(policy: PhoneAppPolicy): String = when (policy.mode) {
             AppBlockMode.BLOCK_LIST -> "bloqueando ${policy.packages.size} app(s)"
             AppBlockMode.ALLOW_ONLY -> if (policy.packages.isEmpty()) {
@@ -115,7 +157,7 @@ class AppBlockStore(
                 log("Couldn't read the app block file, blocking nothing", e)
                 return null
             }
-            return PhoneAppPolicy.decode(bytes) ?: run {
+            return decodeStored(bytes) { log("Part of the kept app block the agent no longer reads was left out: $it", null) } ?: run {
                 log("Couldn't read the app block, blocking nothing", null)
                 file.renameTo(File(file.path + ".corrupt"))
                 null

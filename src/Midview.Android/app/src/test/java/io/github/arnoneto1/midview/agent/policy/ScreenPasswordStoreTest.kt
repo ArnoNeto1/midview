@@ -36,13 +36,31 @@ class ScreenPasswordStoreTest {
         assertEquals("changed=0\n", file.readText(Charsets.US_ASCII))
     }
 
-    @Test fun aDamagedFileReadsAsNothingKept() {
+    // With no copy to read, the teacher's PIN is unknown: never "no PIN",
+    // which would remove the teacher's.
+    @Test fun aDamagedFileWithoutACopyLeavesThePinUnknown() {
         val logged = mutableListOf<String>()
         for (text in listOf("token=xyz\n", "pin=12345\n", "pin=\n", "tokenBoot=a\n", "changed=2\n", "garbage\n")) {
             file.writeText(text, Charsets.US_ASCII)
-            assertEquals(text, ScreenPasswordState.EMPTY, ScreenPasswordStore(file) { t, _ -> logged += t }.current)
+            assertEquals(text, ScreenPasswordState.UNKNOWN, ScreenPasswordStore(file) { t, _ -> logged += t }.current)
         }
-        assertEquals(6, logged.size)
+        assertTrue(logged.isNotEmpty())
+    }
+
+    @Test fun aDamagedFileIsReadFromItsCopy() {
+        ScreenPasswordStore(file).save(state)
+        file.writeText("garbage\n", Charsets.US_ASCII)
+        assertEquals(state, ScreenPasswordStore(file).current)
+    }
+
+    @Test fun theUnknownPinIsKeptUntilTheTeacherSendsOne() {
+        file.writeText("garbage\n", Charsets.US_ASCII)
+        val store = ScreenPasswordStore(file)
+        store.save(store.current.copy(token = token, tokenBoot = 3))
+        assertTrue(ScreenPasswordStore(file).current.pinUnknown)
+        store.save(store.current.copy(teacherPin = "1234", pinUnknown = false))
+        assertEquals("1234", ScreenPasswordStore(file).current.teacherPin)
+        assertFalse(ScreenPasswordStore(file).current.pinUnknown)
     }
 
     @Test fun decodeRefusesWhatItDidNotWrite() {

@@ -48,12 +48,9 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
             granted(Manifest.permission.READ_EXTERNAL_STORAGE) && granted(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
 
+    // The phone keeps its spare room (DiskReserve).
     override fun refusalFor(size: Long): String? = try {
-        if (StatFs(Environment.getExternalStorageDirectory().path).availableBytes < size) {
-            "não há espaço livre suficiente no celular"
-        } else {
-            null
-        }
+        DiskReserve.refusal(StatFs(Environment.getExternalStorageDirectory().path).availableBytes, size)
     } catch (e: IllegalArgumentException) {
         "a pasta ${PhoneFolder.NAME} não pôde ser usada"
     }

@@ -33,6 +33,19 @@ class DnsWatcherTest {
 
     // How long the default network has gone unvalidated.
 
+    // With the ad-free DNS off (the panel turned it off, or it fell back)
+    // a network without internet is looked at less and less often.
+    @Test fun withTheDnsOffTheLooksSpaceOut() {
+        var wait = DnsWatcher.FALL_BACK_AFTER
+        val waits = List(6) { DnsWatcher.nextWait(ourDnsOn = false, wait).also { wait = it } }
+        assertEquals(
+            listOf(60L, 120L, 240L, 480L, 600L, 600L).map { Duration.ofSeconds(it) },
+            waits,
+        )
+        // Ours on again: back to every 30 s.
+        assertEquals(DnsWatcher.FALL_BACK_AFTER, DnsWatcher.nextWait(ourDnsOn = true, Duration.ofMinutes(10)))
+    }
+
     @Test fun anUnvalidatedNetworkCountsFromWhenItWasSeen() {
         val clock = ValidationClock()
         clock.changed("wifi", validated = false, now = 1_000)

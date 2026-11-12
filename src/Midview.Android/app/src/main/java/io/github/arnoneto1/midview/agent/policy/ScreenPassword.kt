@@ -96,7 +96,7 @@ class ScreenPassword(
             }
             val before = store.current
             val wanted = pin.ifEmpty { null }
-            if (!store.save(before.copy(teacherPin = wanted, changedByOther = false))) {
+            if (!store.save(before.copy(teacherPin = wanted, changedByOther = false, pinUnknown = false))) {
                 store.save(before)
                 return false to NOT_SAVED
             }
@@ -119,7 +119,10 @@ class ScreenPassword(
         val state = store.current
         val secure = gw.isDeviceSecure()
         val token = tokenNow(secure)
-        val action = ScreenPasswordPolicy.decide(true, secure, token, state.teacherPin, state.changedByOther)
+        val action = ScreenPasswordPolicy.decide(true, secure, token, state.teacherPin, state.changedByOther, state.pinUnknown)
+        if (state.pinUnknown && token == ResetToken.ACTIVE) {
+            note("The teacher's lock screen PIN is unknown (its file was damaged): the lock is left as it is until the teacher sends the PIN again.")
+        }
         when (action) {
             ScreenPasswordAction.SET_TOKEN -> giveToken(secure)
             ScreenPasswordAction.WAIT_FOR_UNLOCK ->
@@ -140,7 +143,7 @@ class ScreenPassword(
             ScreenPasswordAction.NOTHING ->
                 if (state.changedByOther) store.save(state.copy(changedByOther = false))
         }
-        if (token == ResetToken.ACTIVE) requirePin(store.current.teacherPin != null && gw.isDeviceSecure())
+        if (token == ResetToken.ACTIVE && !store.current.pinUnknown) requirePin(store.current.teacherPin != null && gw.isDeviceSecure())
         return action
     }
 
@@ -182,13 +185,13 @@ class ScreenPassword(
     private fun reset(pin: String): Boolean {
         val token = store.current.token?.let(::fromHex) ?: return false
         own.starting()
-        val done = try {
-            gw.resetPassword(pin, token)
+        var done = false
+        try {
+            done = gw.resetPassword(pin, token)
         } catch (e: RuntimeException) {
             log("Android refused to change the lock screen", e)
-            false
         } finally {
-            own.finished()
+            own.finished(changed = done)
         }
         if (!done) log("Android refused to change the lock screen.", null)
         return done

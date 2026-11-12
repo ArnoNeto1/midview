@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.update
 
+import io.github.arnoneto1.midview.agent.files.DiskReserve
 import io.github.arnoneto1.midview.agent.net.FakeChannel
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
@@ -43,13 +44,14 @@ class ApkUpdaterTest {
     private val reader = FakeReader(running, next)
     private val installer = FakeInstaller()
     private var deviceOwner = true
+    private var free = Long.MAX_VALUE
     private var fingerprint = ApkFingerprint { hex(sha256(installedApk)) }
     private val updater by lazy { updater() }
 
     // A new start of the agent.
     private fun updater() = ApkUpdater(
         store, ApkUpload(updateFolder), fingerprint, reader, installer,
-        isDeviceOwner = { deviceOwner }, clock = { clock }, fingerprintWaitMillis = 2_000,
+        isDeviceOwner = { deviceOwner }, freeBytes = { free }, clock = { clock }, fingerprintWaitMillis = 2_000,
     )
 
     private class FakeReader(var installed: ApkFacts, var received: ApkFacts?) : ApkReader {
@@ -202,6 +204,19 @@ class ApkUpdaterTest {
         assertEquals(true to "já está nesta versão", ack(channel.sent.single()))
         assertEquals(listOf("send 11"), channel.events)
         assertNull(store.current)
+    }
+
+    // The APK twice (the file, then Android's copy) and the phone's 100 MB.
+    @Test fun aPhoneWithoutRoomRefusesBeforeReceiving() {
+        free = apk.size * 2L + DiskReserve.SPARE_BYTES - 1
+        val channel = channelWith(apk)
+        updater.offer(offer(), channel)
+        assertEquals(false to ApkUpdater.NO_SPACE, ack(channel.sent.single()))
+        assertNull(store.current)
+        free = apk.size * 2L + DiskReserve.SPARE_BYTES
+        val again = channelWith(apk)
+        updater.offer(offer(), again)
+        assertEquals(true to "recebido", ack(again.sent[1]))
     }
 
     @Test fun anotherAttemptBeingInstalledRefuses() {

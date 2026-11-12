@@ -19,4 +19,9 @@ interface Channel : Closeable {
 
     // How long a receive waits before the connection is given up.
     fun setTimeout(millis: Int)
+
+    // A teacher not trusted yet started a pairing on this connection: it
+    // may last as long as a pairing does (Pairing.CONFIRM_TIMEOUT_MILLIS),
+    // past the short time a stranger's connection otherwise has.
+    fun pairingStarted() {}
 }

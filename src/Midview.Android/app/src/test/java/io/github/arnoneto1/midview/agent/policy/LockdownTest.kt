@@ -97,7 +97,18 @@ class LockdownTest {
         "no_install_unknown_sources",
         "no_install_unknown_sources_globally",
         "no_modify_accounts",
+        "no_config_date_time",
+        "no_create_windows",
     )
+
+    // The date and time stay out of the student's reach on every build: the
+    // new teacher's window and the lock screen's checks count time.
+    @Test fun theDateAndTimeAreLockedOnDebugBuildsToo() {
+        val gw = FakeGateway(sdkInt = 33, debuggable = true)
+        Lockdown(gw).apply()
+        assertTrue("no_config_date_time" in gw.restrictions)
+        assertTrue("no_create_windows" in gw.restrictions)
+    }
 
     @Test fun appliesAllRestrictionsWhenDeviceOwner() {
         val gw = FakeGateway(sdkInt = 34)

@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.classfolder
 
+import io.github.arnoneto1.midview.agent.files.DiskReserve
 import io.github.arnoneto1.midview.agent.files.FileNames
 import io.github.arnoneto1.midview.agent.protocol.ClassFolderEntry
 import io.github.arnoneto1.midview.agent.protocol.ClassLesson
@@ -92,9 +93,10 @@ class PhoneClassFolder(
         return folder?.let { existingFile(it, path) }
     }
 
-    // Null when a file of that size fits, otherwise why not.
+    // Null when a file of that size fits and leaves the phone its spare
+    // room (DiskReserve), otherwise why not.
     fun refusalFor(size: Long): String? = try {
-        if (freeBytes() < size) "não há espaço livre suficiente no celular" else null
+        DiskReserve.refusal(freeBytes(), size)
     } catch (e: RuntimeException) {
         "a pasta Download/Midview não pôde ser usada"
     }
@@ -290,6 +292,44 @@ class PhoneClassFolder(
             .mapNotNull { directory -> LessonId.fromHex(directory.name)?.takeIf { !it.isEmpty }?.let { it to directory } }
             .sortedBy { it.second.name }
 
+    // The set-aside lessons whose teacher's Master never came for them do
+    // not fill the phone: one set aside more than maxAgeMillis ago goes,
+    // and while all of them take more than maxBytes, the oldest go first.
+    // Their age is when they were set aside (the newest change of a folder
+    // in them). Returns the lessons removed.
+    fun pruneSetAside(
+        nowMillis: Long,
+        maxAgeMillis: Long = SET_ASIDE_MAX_AGE_MILLIS,
+        maxBytes: Long = SET_ASIDE_MAX_BYTES,
+    ): List<LessonId> = synchronized(gate) {
+        val lessons = setAsideFolders().map { (id, dir) -> Triple(id, dir, newestFolderChange(dir)) }.sortedBy { it.third }
+        var total = lessons.sumOf { sizeOf(it.second) }
+        val removed = mutableListOf<LessonId>()
+        for ((id, dir, setAsideAt) in lessons) {
+            if (nowMillis - setAsideAt <= maxAgeMillis && total <= maxBytes) continue
+            val size = sizeOf(dir)
+            if (deleteTree(dir)) {
+                total -= size
+                removed += id
+            }
+        }
+        if (removed.isNotEmpty()) tidySetAsideRoot()
+        removed
+    }
+
+    private fun newestFolderChange(dir: File): Long =
+        (dir.listFiles() ?: emptyArray()).filter { it.isDirectory && !isLink(it) }
+            .maxOfOrNull { newestFolderChange(it) }?.let { maxOf(it, dir.lastModified()) } ?: dir.lastModified()
+
+    private fun sizeOf(file: File): Long =
+        if (isLink(file)) 0 else if (file.isDirectory) (file.listFiles() ?: emptyArray()).sumOf { sizeOf(it) } else file.length()
+
+    // Never through a link: only what is really inside goes.
+    private fun deleteTree(file: File): Boolean {
+        if (file.isDirectory && !isLink(file)) (file.listFiles() ?: emptyArray()).forEach { deleteTree(it) }
+        return file.delete() || !file.exists()
+    }
+
     // Nothing set aside any more: the folder (and its .nomedia) goes too,
     // so a phone with no lesson leaves Download/Midview as it found it.
     fun tidySetAsideRoot() {
@@ -324,6 +364,12 @@ class PhoneClassFolder(
 
         // Keeps the gallery out of the set-aside files.
         const val NO_MEDIA = ".nomedia"
+
+        // A lesson's files wait this long for the teacher's Master.
+        const val SET_ASIDE_MAX_AGE_MILLIS = 30L * 24 * 60 * 60 * 1000
+
+        // And all of them take no more than this.
+        const val SET_ASIDE_MAX_BYTES = 2L * 1024 * 1024 * 1024
 
         const val NO_ACCESS = "sem acesso a todos os arquivos neste celular"
         const val NO_FOLDER = "sem pasta"

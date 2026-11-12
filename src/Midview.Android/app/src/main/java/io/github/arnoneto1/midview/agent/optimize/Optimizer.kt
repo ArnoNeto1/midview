@@ -7,6 +7,8 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 // What the commands port asks of "Otimizar" (Optimizer).
 interface PhoneOptimizer {
@@ -57,7 +59,7 @@ class Optimizer(
     private val background: (Runnable) -> Unit = { Thread(it, "Midview optimize").apply { isDaemon = true }.start() },
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
 ) : PhoneOptimizer {
-    private val lock = Any()
+    private val lock = ReentrantLock()
     private val busy = AtomicBoolean(false)
     private val runs = AtomicLong()
     private val dnsSteps = AtomicLong()
@@ -65,7 +67,7 @@ class Optimizer(
     override fun run(): PhoneOptimizeReport {
         val askedRuns = runs.get()
         val askedDns = dnsSteps.get()
-        synchronized(lock) {
+        lock.withLock {
             // One ended while this waited (the first one, in the background):
             // its report is as new as another run's would be.
             if (runs.get() != askedRuns) return store.current.report
@@ -99,8 +101,9 @@ class Optimizer(
 
     // The lab panel's "Bloqueador de anúncios" changed (LabConfigStore). On:
     // the DNS tried in the background, unless it is on already. Off: the
-    // automatic DNS back now (after a run under way, which may take ~36 s),
-    // and the report says the teacher turned it off.
+    // automatic DNS back at once, and the report says the teacher turned it
+    // off; while a run is under way (up to ~36 s) that waits for it in the
+    // background, so the teacher's panel is answered without waiting.
     fun adblockChanged() {
         if (adblockWanted()) {
             val on = try {
@@ -111,14 +114,30 @@ class Optimizer(
             if (!on) inBackground { retryDns() }
             return
         }
-        synchronized(lock) {
+        if (lock.tryLock()) {
             try {
-                val held = store.current
-                val state = dnsStep()
-                if (held.report.dns != state) store.save(held.copy(report = held.report.copy(dns = state)))
-            } catch (e: Exception) {
-                log("The ad-free DNS could not be turned off", e)
+                adblockOff()
+            } finally {
+                lock.unlock()
             }
+            return
+        }
+        try {
+            background(Runnable { lock.withLock { adblockOff() } })
+        } catch (e: Exception) {
+            log("The ad-free DNS could not be turned off", e)
+        }
+    }
+
+    private fun adblockOff() {
+        // Turned on again meanwhile: nothing to turn off.
+        if (adblockWanted()) return
+        try {
+            val held = store.current
+            val state = dnsStep()
+            if (held.report.dns != state) store.save(held.copy(report = held.report.copy(dns = state)))
+        } catch (e: Exception) {
+            log("The ad-free DNS could not be turned off", e)
         }
     }
 
@@ -126,7 +145,7 @@ class Optimizer(
     // 30 s, the DNS goes back to automatic and the teacher reads that the
     // network blocks it. unvalidatedFor is read once any run has ended (null:
     // validated, or no network at all). True when it went back.
-    fun fallBack(unvalidatedFor: () -> Duration?): Boolean = synchronized(lock) {
+    fun fallBack(unvalidatedFor: () -> Duration?): Boolean = lock.withLock {
         try {
             val since = unvalidatedFor() ?: return false
             if (!DnsWatcher.shouldFallBack(dns.isSet(), since)) return false
@@ -141,9 +160,17 @@ class Optimizer(
         }
     }
 
+    // Whether the ad-free DNS is set now (false when it cannot be read).
+    fun ourDnsSet(): Boolean =
+        try {
+            dns.isSet()
+        } catch (e: Exception) {
+            false
+        }
+
     // Only the DNS again: the apps and the time of the optimization stay.
     private fun retryDns() {
-        synchronized(lock) {
+        lock.withLock {
             val held = store.current
             val state = dnsStep()
             store.save(held.copy(report = held.report.copy(dns = state), lastDnsAttempt = clock()))

@@ -1,0 +1,2 @@
+lastDnsAttempt=2026-11-12T21:01:10.944603+00:00
+{"optimizedAt":"2026-11-12T20:58:03.392254+00:00","hidden":["com.miui.msa.global","com.miui.analytics","com.xiaomi.mipicks","com.xiaomi.glgm","com.miui.yellowpage","com.facebook.services","com.facebook.system","com.facebook.appmanager","com.amazon.appmanager","com.miui.android.fashiongallery","com.xiaomi.discover","com.miui.miservice","com.miui.bugreport","com.google.android.projection.gearhead","com.google.android.apps.subscriptions.red"],"failed":[],"dns":"on","dnsHost":"dns.adguard-dns.com"}
