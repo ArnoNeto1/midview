@@ -38,4 +38,13 @@ object MessageType {
     // Master -> Android agent (port 28900): ask this device to show the
     // screen-capture consent dialog.
     const val REQUEST_SCREEN_CONSENT = 92
+
+    // Master -> Android agent (port 28900): the phone-apps block. SET sends a
+    // PhoneAppPolicy (CommandAck back), GET asks for the one in force (STATUS
+    // carries it), GET_PHONE_APPS asks for the openable apps (PHONE_APPS).
+    const val SET_PHONE_APP_BLOCK = 93
+    const val GET_PHONE_APP_BLOCK = 94
+    const val PHONE_APP_BLOCK_STATUS = 95
+    const val GET_PHONE_APPS = 96
+    const val PHONE_APPS = 97
 }

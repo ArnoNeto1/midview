@@ -334,6 +334,16 @@ public enum MessageType : byte
     // Master -> Android agent (port 28900): ask the device to show its screen-capture
     // consent dialog, so the screen can then be streamed (ScreenStream, ScreenFrame).
     RequestScreenConsent = 92,
+
+    // Master -> Android agent (port 28900): the phone-apps block. Set a PhoneAppPolicy
+    // (answered with a CommandAck), ask for the one in force (answered with
+    // PhoneAppBlockStatus, a PhoneAppPolicy payload), and ask for the apps the student
+    // can open (answered with PhoneApps, a PhoneAppList payload).
+    SetPhoneAppBlock = 93,
+    GetPhoneAppBlock = 94,
+    PhoneAppBlockStatus = 95,
+    GetPhoneApps = 96,
+    PhoneApps = 97,
 }
 
 public enum CloseAppsMode : byte
