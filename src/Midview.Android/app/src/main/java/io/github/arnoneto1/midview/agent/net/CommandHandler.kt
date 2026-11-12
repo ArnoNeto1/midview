@@ -41,6 +41,9 @@ class CommandHandler(
     private val gateway: DevicePolicyGateway,
     private val runLater: (delayMillis: Long, task: () -> Unit) -> Unit = ::onNewThread,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    // The teacher's lock screen PIN (LockScreenKeeper): the payload in, the
+    // CommandAck's result out.
+    private val screenPin: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -107,6 +110,10 @@ class CommandHandler(
         }
         MessageType.GET_PHONE_APP_BLOCK -> Message(MessageType.PHONE_APP_BLOCK_STATUS, appBlock.current.encode())
         MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
+        MessageType.SET_PHONE_SCREEN_PASSWORD -> {
+            val (done, detail) = screenPin(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
         // On this connection's own thread: up to ~30 s checking the network.
         MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())
         // The payload (the attempt's id, from a Master following one) is

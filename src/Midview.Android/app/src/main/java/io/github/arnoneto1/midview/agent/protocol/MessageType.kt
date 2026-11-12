@@ -73,6 +73,13 @@ object MessageType {
     const val OPTIMIZE_PHONE = 98
     const val PHONE_OPTIMIZE_REPORT = 99
 
+    // Master -> Android agent (port 28900), trusted teacher only: the
+    // teacher's lock screen PIN (a PhoneScreenPassword payload: 4 digits, or
+    // empty to remove it), which the agent then keeps on the phone so the
+    // student can neither change nor remove it. Answered with a
+    // CommandAck (CommandResult).
+    const val SET_PHONE_SCREEN_PASSWORD = 100
+
     // Master -> Android agent (port 28900), trusted teacher only: erase the
     // phone ("Apagar e preparar de novo", no payload). Answered with a
     // COMMAND_ACK before the erasing starts. Number 101 as the C# WipePhone (100 is SetPhoneScreenPassword).

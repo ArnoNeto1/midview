@@ -37,6 +37,7 @@ import io.github.arnoneto1.midview.agent.optimize.OptimizeStore
 import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
+import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
@@ -105,6 +106,8 @@ class AgentService : Service() {
         if (intent == null) Log.i(TAG, "Agent started again by Android.")
         AgentWatchdog.arm(this)
         AndroidDevicePolicyGateway.lockDown(this)
+        // The lock screen's reset token and the teacher's PIN.
+        LockScreenKeeper.check(this, starting = true)
         main.removeCallbacks(lockAgain)
         main.postDelayed(lockAgain, LOCK_AGAIN_MILLIS)
         return START_STICKY
@@ -224,7 +227,11 @@ class AgentService : Service() {
             isDeviceOwner = policyGateway::isDeviceOwner,
             log = log,
         )
-        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway, log = log, listApps = installedApps::list)
+        val lockScreen = LockScreenKeeper.get(this)
+        val commands = CommandHandler(
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
+            log = log, screenPin = lockScreen::setTeacherPin, listApps = installedApps::list,
+        )
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,

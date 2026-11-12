@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Device Owner's locks (user restrictions, blocked uninstall, the
-     app's control) need no policies listed here. -->
+     app's control) need no policies listed here. limit-password is for the
+     teacher's lock screen PIN: Android tells the admin when the PIN changes
+     (onPasswordChanged) and takes its PIN rule only with it. A phone made
+     Device Owner before reads it at its next restart. -->
 <device-admin>
-    <uses-policies />
+    <uses-policies>
+        <limit-password />
+    </uses-policies>
 </device-admin>
