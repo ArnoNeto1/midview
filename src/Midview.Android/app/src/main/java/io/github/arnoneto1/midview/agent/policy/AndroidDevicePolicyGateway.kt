@@ -46,22 +46,22 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(app.packageName)
 
-    // The "no factory reset" lock (Lockdown) is lifted first, so it cannot
-    // stand in the way of the Device Owner's own wipe; a phone going back to
-    // factory settings has no lock left to keep.
-    override fun wipe() {
-        try {
-            dpm.clearUserRestriction(admin, "no_factory_reset")
-        } catch (e: RuntimeException) {
-            Log.w(TAG, "Could not lift the factory reset lock before wiping", e)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            dpm.wipeDevice(DevicePolicyManager.WIPE_RESET_PROTECTION_DATA)
-        } else {
-            @Suppress("DEPRECATION")
-            dpm.wipeData(DevicePolicyManager.WIPE_RESET_PROTECTION_DATA)
-        }
-    }
+    // The "no factory reset" lock (Lockdown) is lifted for the wipe, so it
+    // cannot stand in the way of the Device Owner's own wipe, and put back if
+    // the wipe fails (ResetLockedWipe).
+    override fun wipe() = ResetLockedWipe.run(
+        lift = { dpm.clearUserRestriction(admin, ResetLockedWipe.NO_FACTORY_RESET) },
+        lock = { dpm.addUserRestriction(admin, ResetLockedWipe.NO_FACTORY_RESET) },
+        wipe = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                dpm.wipeDevice(DevicePolicyManager.WIPE_RESET_PROTECTION_DATA)
+            } else {
+                @Suppress("DEPRECATION")
+                dpm.wipeData(DevicePolicyManager.WIPE_RESET_PROTECTION_DATA)
+            }
+        },
+        log = { text, e -> Log.w(TAG, text, e) },
+    )
 
     override fun addUserRestriction(r: String) = dpm.addUserRestriction(admin, r)
 

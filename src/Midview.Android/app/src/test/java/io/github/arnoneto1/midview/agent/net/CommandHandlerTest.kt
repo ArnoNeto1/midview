@@ -56,11 +56,13 @@ class CommandHandlerTest {
 
     // "Apagar e preparar de novo": the delays asked for, and the task run at
     // once (so the tests do not wait the two seconds).
+    private val logged = mutableListOf<Pair<String, Throwable?>>()
     private val wipeDelays = mutableListOf<Long>()
     private val handler by lazy {
         CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway,
             runLater = { delay, task -> wipeDelays += delay; task() },
+            log = { text, e -> logged += text to e },
         ) { phoneApps }
     }
 
@@ -370,6 +372,18 @@ class CommandHandlerTest {
         assertEquals(1, gateway.wipes)
         assertEquals(1, gateway.sentWhenWiped)
         assertEquals(listOf(CommandHandler.WIPE_DELAY_MILLIS), wipeDelays)
+    }
+
+    @Test fun failedWipeIsLoggedAndDoesNotEscape() {
+        trusted.add(teacher)
+        val refusal = SecurityException("refused")
+        gateway.onWipe = { throw refusal }
+        val channel = FakeChannel(teacher, message(MessageType.WIPE_PHONE))
+        handler.handle(channel)
+
+        assertEquals(1, channel.sent.size)
+        assertEquals(1, logged.size)
+        assertEquals(refusal, logged.single().second)
     }
 
     @Test fun wipeFromUntrustedNeverWipes() {

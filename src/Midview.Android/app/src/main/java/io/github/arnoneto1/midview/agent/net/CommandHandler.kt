@@ -40,6 +40,7 @@ class CommandHandler(
     private val updater: PhoneUpdater,
     private val gateway: DevicePolicyGateway,
     private val runLater: (delayMillis: Long, task: () -> Unit) -> Unit = ::onNewThread,
+    private val log: (String, Throwable?) -> Unit = { _, _ -> },
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -72,7 +73,8 @@ class CommandHandler(
                     try {
                         gateway.wipe()
                     } catch (e: RuntimeException) {
-                        // Nothing to tell: the teacher already has the ack.
+                        // The teacher already has the ack; the log is all there is.
+                        log("The wipe the teacher asked for failed", e)
                     }
                 }
             }
