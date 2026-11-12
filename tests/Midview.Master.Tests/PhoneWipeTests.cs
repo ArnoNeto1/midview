@@ -9,8 +9,12 @@ public class PhoneWipeTests
 
     [Fact]
     public void The_confirmation_names_the_phone_and_what_is_lost() =>
-        Assert.Equal("O Celular 07 vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele.",
+        Assert.Equal("O Celular 07 vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele. Para prepará-lo de novo, vai precisar outra vez do chip e da conta Mi.",
                      PhoneWipe.ConfirmText("Celular 07"));
+
+    [Fact]
+    public void The_wipe_command_has_its_own_message_number() =>
+        Assert.Equal(100, (int)MessageType.WipePhone);
 
     [Theory]
     [InlineData("Celular 07", "07")]

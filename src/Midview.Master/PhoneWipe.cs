@@ -17,7 +17,7 @@ public static class PhoneWipe
     public const string OldAgent = "este celular ainda não aceita o pedido de apagar";
 
     public static string ConfirmText(string name) =>
-        $"O {name} vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele.";
+        $"O {name} vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele. Para prepará-lo de novo, vai precisar outra vez do chip e da conta Mi.";
 
     // "Sim, apagar" or "Cancelar"; cancelling is the default.
     public static bool Confirm(System.Windows.Window? owner, string name) =>
@@ -25,17 +25,6 @@ public static class PhoneWipe
             "Apagar e preparar de novo", MidviewMessage.IconFor(System.Windows.MessageBoxImage.Warning),
             "Apagar e preparar de novo", "Sim, apagar", "Cancelar", Body: ConfirmText(name), NoIsDefault: true,
             Buttons: QuestionButtons.YesFirstDanger));
-
-    // Asked before wiping from the tile menu when the open assistant is still
-    // waiting for another phone: going on makes it stop waiting for that one.
-    public static string SwitchText(string waitingFor, string name) =>
-        $"O assistente ainda está esperando o {waitingFor} entrar na turma. Se você apagar o {name} agora, ele deixa de esperar o {waitingFor} (o {waitingFor} entra na turma do mesmo jeito).";
-
-    public static bool ConfirmSwitch(System.Windows.Window? owner, string waitingFor, string name) =>
-        QuestionWindow.Ask(owner, new QuestionContent(
-            "Apagar e preparar de novo", MidviewMessage.IconFor(System.Windows.MessageBoxImage.Warning),
-            "Parar de esperar o " + waitingFor + "?", "Sim, apagar o " + name, "Cancelar", Body: SwitchText(waitingFor, name),
-            NoIsDefault: true, Buttons: QuestionButtons.YesFirstDanger));
 
     // "07" for "Celular 07"; null for a name that is not a school phone's.
     public static string? NumberOf(string name)
