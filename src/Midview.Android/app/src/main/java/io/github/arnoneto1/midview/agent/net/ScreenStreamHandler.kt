@@ -58,7 +58,7 @@ class ScreenStreamHandler(
     // The size of the picture the teacher has, which the teacher's mouse is in.
     @Volatile private var sentSize: Size? = null
 
-    private val control = control?.let { RemoteControl(it, frameSize = { sentSize }) }
+    private val control = control?.let { RemoteControl(it, frameSize = { sentSize }, log = { text -> System.err.println("Midview control: $text") }) }
 
     // The sender's frames and the receiver's answers to StartControl go out
     // one whole message at a time.
@@ -75,7 +75,7 @@ class ScreenStreamHandler(
             readUntilTheEnd()
         } finally {
             running = false
-            control?.stop()
+            control?.stopAndWait()
             sender.interrupt()
             // A send in progress gives up once the connection is closed.
             channel.close()
@@ -103,6 +103,7 @@ class ScreenStreamHandler(
                         return
                     }
                 }
+                // Without waiting for the gesture under way: the acks keep being read.
                 MessageType.STOP_CONTROL -> control?.stop()
                 MessageType.INPUT_EVENT -> if (control?.controlling == true) {
                     // As the Session: a payload that is no InputEvent ends the connection.

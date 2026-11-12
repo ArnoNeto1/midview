@@ -7,8 +7,9 @@ namespace Midview.Master;
 // says, and which of the teacher's keys go as keys. A phone types characters
 // (InputEventKind.Text, from the window's TextInput, so the teacher's own
 // keyboard layout and accents count) and takes only the keys that edit or
-// move (Backspace, Delete, Enter, the arrows) and Android's buttons: Esc is
-// "Voltar", the Windows and Home keys "Início"; the window's "Voltar",
+// move (Backspace, Delete, Enter, the arrows, Home and End in the text
+// field) and Android's buttons: Esc is "Voltar", the Windows key "Início";
+// the window's "Voltar",
 // "Início" and "Recentes" buttons send the browser back, browser home and
 // context-menu keys (the agent's control/KeyMap.kt).
 public static class PhoneControl
@@ -37,6 +38,28 @@ public static class PhoneControl
     public static string OldAgent(string machineName) =>
         $"O Midview de {machineName} é de uma versão que ainda não deixa controlar. " +
         "Atualize os celulares (Máquinas da sala > Atualizações) e tente de novo.";
+
+    // The first version whose agent takes "Controlar".
+    public static readonly Version FirstWithControl = new(0, 0, 66);
+
+    // The connection ended before the phone answered StartControl, and the
+    // phone was asked afterwards which version it runs (status: its update
+    // status, null when it did not answer). Only a phone that says it runs a
+    // version from before control is told to update; anything else is a
+    // connection that fell.
+    public static string Dropped(string machineName, StatusResult? status) =>
+        IsBeforeControl(status) ? OldAgent(machineName) : ConnectionFell(machineName);
+
+    public static string ConnectionFell(string machineName) =>
+        $"A conexão com {machineName} caiu antes de o controle começar. Confira se o celular está ligado e na rede e tente de novo.";
+
+    private static bool IsBeforeControl(StatusResult? status) => status switch
+    {
+        // An agent from before network updates, so long before control.
+        { OldAgent: true } => true,
+        { Report.Build: { } build } when Version.TryParse(build, out var version) => version < FirstWithControl,
+        _ => false,
+    };
 
     // True for a key that types a character: it is left to TextInput (and not
     // marked handled, or Windows would not make the character). With Ctrl or

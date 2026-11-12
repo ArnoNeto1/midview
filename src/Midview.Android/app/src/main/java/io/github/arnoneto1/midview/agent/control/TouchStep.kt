@@ -10,8 +10,9 @@ data class Size(val width: Int, val height: Int)
 // Android's three buttons, as AccessibilityService's global actions.
 enum class GlobalKey { BACK, HOME, RECENTS }
 
-// The teacher's keys that edit the focused text field.
-enum class EditKey { BACKSPACE, DELETE, ENTER, LEFT, RIGHT }
+// The teacher's keys that edit the focused text field (START and END: the
+// keyboard's Home and End, the cursor to the field's start or end).
+enum class EditKey { BACKSPACE, DELETE, ENTER, LEFT, RIGHT, START, END }
 
 // What the phone does for the teacher's input (TouchPlanner), one step at a
 // time, each finished before the next (AndroidControlTarget).

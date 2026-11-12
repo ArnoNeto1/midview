@@ -117,6 +117,10 @@ class AndroidControlTarget(private val isLocked: () -> Boolean) : ControlTarget 
                     val (text, start, end) = read(field)
                     select(field, TextEdit.move(text, start, end, step.key == EditKey.RIGHT))
                 }
+                EditKey.START, EditKey.END -> {
+                    val field = focusedField(service) ?: return
+                    select(field, if (step.key == EditKey.START) 0 else read(field).text.length)
+                }
             }
         }
     }

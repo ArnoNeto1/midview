@@ -5,24 +5,34 @@ import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 // Chrome's managed configuration as a whole (ChromePolicy): the site block
 // (SitePolicy) and the lab panel's "Travar downloads" (LabConfigStore) go in
 // the same bundle, which Android replaces at every write, so each change is
-// written with the other's last value. A value is kept only once Chrome's
-// configuration took it. A phone that is not the Device Owner cannot set it:
-// false.
+// written with the other's last value. The download block is kept only once
+// Chrome's configuration took it. The site block is the one SiteBlockStore
+// holds (the last one it asked for, written or not), so a download change
+// never writes Chrome's policy without the blocked sites; before the site
+// block asked for any (the agent starting), a download change is refused.
+// A phone that is not the Device Owner cannot set it: false.
 class ChromeConfig(
     private val gw: DevicePolicyGateway,
     downloadsBlocked: Boolean = false,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
 ) {
-    private var sites = SiteBlockState.EMPTY
+    private var sites: SiteBlockState? = null
     private var downloadsBlocked = downloadsBlocked
 
     @Synchronized
-    fun setSites(state: SiteBlockState): Boolean =
-        write(state, downloadsBlocked, "Chrome's site block was refused").also { if (it) sites = state }
+    fun setSites(state: SiteBlockState): Boolean {
+        sites = state
+        return write(state, downloadsBlocked, "Chrome's site block was refused")
+    }
 
     @Synchronized
-    fun setDownloadsBlocked(blocked: Boolean): Boolean =
-        write(sites, blocked, "Chrome's download block was refused").also { if (it) downloadsBlocked = blocked }
+    fun setDownloadsBlocked(blocked: Boolean): Boolean {
+        val held = sites ?: run {
+            log("Chrome's download block waits for the site block, not known yet", null)
+            return false
+        }
+        return write(held, blocked, "Chrome's download block was refused").also { if (it) downloadsBlocked = blocked }
+    }
 
     private fun write(state: SiteBlockState, blockDownloads: Boolean, refused: String): Boolean =
         try {

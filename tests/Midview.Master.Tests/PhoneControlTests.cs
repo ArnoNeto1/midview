@@ -41,6 +41,7 @@ public class PhoneControlTests
     [InlineData(Key.Left)]
     [InlineData(Key.Right)]
     [InlineData(Key.Home)]
+    [InlineData(Key.End)]
     [InlineData(Key.LWin)]
     [InlineData(Key.Tab)]
     [InlineData(Key.F5)]
@@ -94,4 +95,22 @@ public class PhoneControlTests
     [Fact]
     public void An_old_phone_is_told_to_update() =>
         Assert.Contains("Atualize os celulares", PhoneControl.OldAgent("Celular 99"));
+
+    private static StatusResult Running(string? build) =>
+        new(new UpdateStatusReport("AB", build, true, null), false);
+
+    // Only a phone that says it runs a version from before control is told to update.
+    [Fact]
+    public void A_dropped_connection_names_an_old_phone_only_when_it_says_so()
+    {
+        Assert.Equal(PhoneControl.OldAgent("Celular 99"), PhoneControl.Dropped("Celular 99", Running("0.0.65")));
+        Assert.Equal(PhoneControl.OldAgent("Celular 99"), PhoneControl.Dropped("Celular 99", new StatusResult(null, true)));
+        Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", Running("0.0.66")));
+        Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", Running("0.1.0")));
+        // No answer (Wi-Fi gone), or a version it can't tell: the connection fell.
+        Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", null));
+        Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", Running(null)));
+        Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", Running("dev")));
+        Assert.Contains("caiu", PhoneControl.ConnectionFell("Celular 99"));
+    }
 }

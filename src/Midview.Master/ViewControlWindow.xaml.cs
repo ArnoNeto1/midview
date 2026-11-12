@@ -31,7 +31,8 @@ public partial class ViewControlWindow : MidviewWindow
     private readonly bool _isPhone;
 
     // A phone was asked to be controlled and has not answered yet: if the
-    // connection ends now, its agent is from before control (PhoneControl.OldAgent).
+    // connection ends now, the phone is asked which version it runs, and
+    // only one from before control is told to update (PhoneControl.Dropped).
     private volatile bool _phoneControlAsked;
 
     // 1 while a DrawChanges is waiting to run on the window's thread.
@@ -145,20 +146,46 @@ public partial class ViewControlWindow : MidviewWindow
         }
     }
 
-    private void CloseFromFailure() => Dispatcher.Invoke(() =>
+    private void CloseFromFailure()
     {
-        if (_closing)
-        {
-            return;
-        }
-        if (_phoneControlAsked)
+        if (_phoneControlAsked && _machine is { } phone && _masterCertificate is { } certificate)
         {
             _phoneControlAsked = false;
-            MidviewMessage.Show(this, PhoneControl.OldAgent(_machineName), "Controlar",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            // Off the window's thread: the phone may not answer at all.
+            Task.Run(() =>
+            {
+                StatusResult? status = null;
+                try
+                {
+                    status = UpdateClient.GetStatus(phone, certificate);
+                }
+                catch (Exception)
+                {
+                    // Gone from the network: the connection fell.
+                }
+                Dispatcher.BeginInvoke(new Action(() => CloseSaying(PhoneControl.Dropped(_machineName, status))));
+            });
+            return;
         }
-        Close();
-    });
+        Dispatcher.Invoke(() =>
+        {
+            if (!_closing)
+            {
+                Close();
+            }
+        });
+    }
+
+    // The window closes, and says why; once closed already (by the teacher,
+    // meanwhile), the words come on their own.
+    private void CloseSaying(string text)
+    {
+        MidviewMessage.Show(_closing ? null : this, text, "Controlar", MessageBoxButton.OK, MessageBoxImage.Warning);
+        if (!_closing)
+        {
+            Close();
+        }
+    }
 
     private void ReceiveLoop()
     {

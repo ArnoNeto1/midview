@@ -69,10 +69,30 @@ class SitePolicyTest {
 
     @Test fun aRefusedChangeIsNotKept() {
         val chrome = ChromeConfig(gw)
+        chrome.setSites(SiteBlockState.EMPTY)
         gw.owner = false
         assertFalse(chrome.setDownloadsBlocked(true))
         gw.owner = true
         assertTrue(chrome.setSites(SiteBlockState(setOf("youtube.com"), false)))
         assertEquals(setOf("URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
+    }
+
+    // The agent starting: the site block's write was refused. A later
+    // "Travar downloads" still writes the blocked sites with it.
+    @Test fun aSiteBlockChromeRefusedAtStartStillGoesWithTheDownloadBlock() {
+        val chrome = ChromeConfig(gw)
+        gw.owner = false
+        assertFalse(chrome.setSites(SiteBlockState(setOf("youtube.com"), false)))
+        gw.owner = true
+        assertTrue(chrome.setDownloadsBlocked(true))
+        assertEquals(3, gw.restrictions["com.android.chrome"]!!["DownloadRestrictions"])
+        assertArrayEquals(arrayOf("www.youtube.com", "youtube.com"), gw.restrictions["com.android.chrome"]!!["URLBlocklist"] as Array<*>)
+    }
+
+    // Before the site block is known, the download block writes nothing.
+    @Test fun theDownloadBlockWaitsForTheSiteBlock() {
+        val chrome = ChromeConfig(gw)
+        assertFalse(chrome.setDownloadsBlocked(true))
+        assertEquals(null, gw.restrictions["com.android.chrome"])
     }
 }

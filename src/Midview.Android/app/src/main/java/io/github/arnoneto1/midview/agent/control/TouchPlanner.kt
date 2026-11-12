@@ -11,7 +11,7 @@ import kotlin.math.abs
 //   still is Android's long press;
 // - right button: a long press where it is;
 // - the wheel: a short swipe up or down where the mouse is;
-// - the special keys: KeyMap; the typed characters: TEXT.
+// - the special keys: KeyMap; the typed characters: TEXT (typed).
 // frameSize is the picture the teacher sees, screenSize the phone's screen
 // now (both turn with the phone); while either is unknown the pointer is
 // not placed. One thread only.
@@ -70,7 +70,7 @@ class TouchPlanner(
         }
         InputEvent.WHEEL -> wheel(event.x)
         InputEvent.KEY_DOWN -> listOfNotNull(KeyMap.of(event.key))
-        InputEvent.TEXT -> text(event.key.toChar())
+        InputEvent.TEXT -> typed(event.key.toChar().toString())
         // RIGHT_UP, KEY_UP and kinds a newer teacher may add: nothing.
         else -> emptyList()
     }
@@ -83,16 +83,28 @@ class TouchPlanner(
     }
 
     // Steps that piled up while the phone was busy with the one before, made
-    // fewer: moves in a row become one move, characters in a row one text,
-    // and wheel swipes from the same place one longer swipe.
+    // fewer: moves in a row become one move, characters in a row one text
+    // (built once, however long), and wheel swipes from the same place one
+    // longer swipe.
     fun merge(steps: List<TouchStep>): List<TouchStep> {
         val merged = mutableListOf<TouchStep>()
+        val text = StringBuilder()
+        fun flushText() {
+            if (text.isNotEmpty()) {
+                merged += TouchStep.Type(text.toString())
+                text.setLength(0)
+            }
+        }
         for (step in steps) {
+            if (step is TouchStep.Type) {
+                text.append(step.text)
+                continue
+            }
+            flushText()
             val last = merged.lastOrNull()
             val joined = when {
                 last is TouchStep.Move && step is TouchStep.Move && last.to == step.from ->
                     TouchStep.Move(last.from, step.to, minOf(MAX_MERGED_MOVE_MS, last.durationMs + step.durationMs))
-                last is TouchStep.Type && step is TouchStep.Type -> TouchStep.Type(last.text + step.text)
                 last is TouchStep.Swipe && step is TouchStep.Swipe && last.from == step.from -> {
                     val height = lastScreen?.height ?: Int.MAX_VALUE
                     val y = clampSwipe(last.from.y, last.to.y - last.from.y + (step.to.y - step.from.y), height)
@@ -106,7 +118,30 @@ class TouchPlanner(
                 merged += step
             }
         }
+        flushText()
         return merged
+    }
+
+    // Characters the teacher typed (InputEvent.TEXT, one UTF-16 unit each,
+    // or a run of them): one text, without control characters (Enter,
+    // Backspace and Ctrl+letter come as keys) and with an emoji's halves
+    // put together, even across runs; a lone half is dropped.
+    fun typed(units: CharSequence): List<TouchStep> {
+        val text = StringBuilder(units.length)
+        for (c in units) {
+            if (c.isHighSurrogate()) {
+                pendingHigh = c
+                continue
+            }
+            val high = pendingHigh
+            pendingHigh = null
+            when {
+                c.isLowSurrogate() -> if (high != null) text.append(high).append(c)
+                c < ' ' || c.code == 0x7F -> Unit
+                else -> text.append(c)
+            }
+        }
+        return if (text.isEmpty()) emptyList() else listOf(TouchStep.Type(text.toString()))
     }
 
     private fun wheel(delta: Int): List<TouchStep> {
@@ -126,19 +161,6 @@ class TouchPlanner(
         val most = height * MAX_SWIPE
         val limited = distance.coerceIn(-most, most)
         return (fromY + limited).coerceIn(0f, (height - 1).toFloat())
-    }
-
-    private fun text(c: Char): List<TouchStep> {
-        if (c.isHighSurrogate()) {
-            pendingHigh = c
-            return emptyList()
-        }
-        val high = pendingHigh
-        pendingHigh = null
-        if (c.isLowSurrogate()) return if (high == null) emptyList() else listOf(TouchStep.Type("$high$c"))
-        // Control characters (Enter, Backspace, Ctrl+letter) come as keys.
-        if (c < ' ' || c.code == 0x7F) return emptyList()
-        return listOf(TouchStep.Type(c.toString()))
     }
 
     private fun moveDuration(nowMs: Long): Long {
