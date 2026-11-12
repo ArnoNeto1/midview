@@ -36,6 +36,7 @@ import java.io.EOFException
 // não funciona em celular.", which the teacher's program can tell apart).
 // files is "Enviar arquivo", "Recolher arquivos" and "Apagar as pastas dos
 // alunos" (FileHandler), a PC Session's too; without it they get that answer.
+// power is "Desligar" and "Reiniciar" (PowerCountdown), a PC Agent's command.
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -53,6 +54,10 @@ class CommandHandler(
     // "Fechar programas" (CloseCountdown): the warning's time in seconds in,
     // the CommandAck's result out.
     private val closeApps: (delaySeconds: Int) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Desligar" and "Reiniciar" (PowerCountdown): the PC's PowerAction (0
+    // shut down, 1 restart, 2 cancel) and the warning's time in seconds in,
+    // the CommandAck's result out.
+    private val power: (action: Int, delaySeconds: Int) -> Pair<Boolean, String> = { _, _ -> false to CommandResult.NOT_ON_PHONE },
     // "Mensagem" (TeacherMessages): the ShowMessage payload in, the
     // CommandAck's result out.
     private val showMessage: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -151,6 +156,15 @@ class CommandHandler(
             val (closed, detail) = if (delay == null) false to INVALID_REQUEST else closeApps(delay)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(closed, detail))
         }
+        // The PC's payload: the student is warned for the time in it, then
+        // the phone restarts, or its screen goes off ("Desligar": Android
+        // lets no app turn a phone off). The Windows updates' flag has no
+        // meaning on a phone.
+        MessageType.POWER -> {
+            val request = powerRequest(message.payload)
+            val (done, detail) = if (request == null) false to INVALID_REQUEST else power(request.first, request.second)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
         MessageType.CLEAR_DELIVERY_FOLDER -> {
             val (cleared, detail) = files?.clear() ?: (false to CommandResult.NOT_ON_PHONE)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(cleared, detail))
@@ -212,6 +226,20 @@ class CommandHandler(
         }
 
         const val MAX_CLOSE_DELAY_SECONDS = 10 * 60
+
+        // Power's payload, as src/Midview.Protocol/PowerCommand.cs: the
+        // action (0 shut down, 1 restart, 2 cancel), the warning in seconds
+        // (uint16, big-endian, at most 10 minutes), and, to install the
+        // Windows updates on the way, a fourth byte 1 (never on a cancel).
+        // The action and the warning's seconds, or null if invalid.
+        fun powerRequest(payload: ByteArray): Pair<Int, Int>? {
+            if (payload.size != 3 && payload.size != 4) return null
+            val action = payload[0].toInt()
+            if (action !in 0..2) return null
+            if (payload.size == 4 && (payload[3].toInt() != 1 || action == 2)) return null
+            val seconds = ((payload[1].toInt() and 0xFF) shl 8) or (payload[2].toInt() and 0xFF)
+            return if (seconds <= MAX_CLOSE_DELAY_SECONDS) action to seconds else null
+        }
 
         // The wait between the ack and the wipe, for the ack to reach the Master.
         const val WIPE_DELAY_MILLIS = 2_000L

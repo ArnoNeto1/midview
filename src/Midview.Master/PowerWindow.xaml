@@ -10,9 +10,13 @@
                 <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
             </local:DialogHeader>
             <Border Style="{StaticResource Card}" Margin="0,16,0,10">
-                <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="ShutdownRadioButton" GroupName="Action" IsChecked="True" Content="Desligar" Margin="0,0,16,0" Checked="OnActionChanged" />
-                    <RadioButton x:Name="RestartRadioButton" GroupName="Action" Content="Reiniciar" Checked="OnActionChanged" />
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton x:Name="ShutdownRadioButton" GroupName="Action" IsChecked="True" Content="Desligar" Margin="0,0,16,0" Checked="OnActionChanged" />
+                        <RadioButton x:Name="RestartRadioButton" GroupName="Action" Content="Reiniciar" Checked="OnActionChanged" />
+                    </StackPanel>
+                    <!-- With phones: what "Desligar" and "Reiniciar" do on them (PowerTargets). -->
+                    <TextBlock x:Name="PhoneNoteTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
                 </StackPanel>
             </Border>
             <Border Style="{StaticResource Card}" Margin="0,0,0,10">
@@ -20,12 +24,11 @@
                     <RadioButton x:Name="OneMinuteRadioButton" GroupName="Delay" IsChecked="True" Content="Avisar o aluno e esperar 1 minuto" Margin="0,0,0,4" />
                     <RadioButton x:Name="FiveMinutesRadioButton" GroupName="Delay" Content="Avisar o aluno e esperar 5 minutos" Margin="0,0,0,4" />
                     <RadioButton x:Name="NowRadioButton" GroupName="Delay" Content="Agora, sem esperar" Margin="0,0,0,8" />
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="O Windows mostra ao aluno um aviso com a contagem. Quando o tempo acaba, os programas abertos são fechados sem salvar. Vale também para máquinas sem ninguém logado." />
+                    <TextBlock x:Name="DelayHintTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
             <!-- Off each time the window opens: installing can keep a machine busy for minutes. -->
-            <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <Border x:Name="UpdatesCard" Style="{StaticResource Card}" Margin="0,0,0,14">
                 <StackPanel>
                     <CheckBox x:Name="InstallUpdatesCheckBox" FontWeight="SemiBold" Checked="OnActionChanged" Unchecked="OnActionChanged"
                               Content="Instalar as atualizações do Windows que estiverem esperando" />

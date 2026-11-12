@@ -41,9 +41,12 @@ public enum ToolbarAction
 // ("Fechar programas": all of them at once, CloseAppsTargets) and its sites
 // blocked (the same commands as a PC's), gets the teacher's messages and
 // chats ("Mensagem", "Bate-papo": MessageTargets, ChatConnection) and files
-// ("Enviar arquivo", "Recolher arquivos": FileTargets, its Download/Midview), and is
-// optimized and updated (actions a PC has nothing to do with). Control stays
-// for computers. WipePhone (a tile's menu only) is for Android devices alone.
+// ("Enviar arquivo", "Recolher arquivos": FileTargets, its Download/Midview), is
+// restarted and has its screen turned off ("Reiniciar", "Desligar":
+// PowerTargets; Android lets no app turn it off), and is optimized and
+// updated (actions a PC has nothing to do with). Control, "Ligar" and
+// "Agendar" stay for computers. WipePhone (a tile's menu only) is for
+// Android devices alone.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
@@ -53,7 +56,7 @@ public static class DeviceSupport
             or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
             or ToolbarAction.CloseApps or ToolbarAction.Message or ToolbarAction.Chat
             or ToolbarAction.SendFile or ToolbarAction.CollectFiles
-            or ToolbarAction.WipePhone
+            or ToolbarAction.Power or ToolbarAction.WipePhone
             || IsPhoneOnly(action),
         _ => false,
     };

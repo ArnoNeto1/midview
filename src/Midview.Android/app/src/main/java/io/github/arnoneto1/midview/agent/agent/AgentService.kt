@@ -44,6 +44,8 @@ import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.power.AndroidPhonePower
+import io.github.arnoneto1.midview.agent.power.PowerCountdown
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
@@ -283,9 +285,28 @@ class AgentService : Service() {
             },
             log = log,
         )
+        // "Desligar" and "Reiniciar": the student's warning and the wait,
+        // then the screen off or the restart, on a thread of their own.
+        val powering = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview power").apply { isDaemon = true } }
+        val power = PowerCountdown(
+            AndroidPhonePower(this), AndroidCloseNotice(this, AndroidCloseNotice.POWER_NOTIFICATION),
+            schedule = { delay, task ->
+                powering.schedule(
+                    Runnable {
+                        try {
+                            task()
+                        } catch (e: RuntimeException) {
+                            log("The warning before the restart or the screen off failed", e)
+                        }
+                    },
+                    delay, TimeUnit.MILLISECONDS,
+                )
+            },
+            log = log,
+        )
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
-            log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request,
+            log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.

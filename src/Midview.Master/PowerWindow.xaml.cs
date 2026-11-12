@@ -9,7 +9,9 @@ namespace Midview.Master;
 // while it's still counting down. It's the Agent's command (it works with
 // nobody logged in), so it needs each machine's Agent thumbprint. The
 // toolbar's "Desligar" and "Reiniciar" both open it, each already set to
-// its own action.
+// its own action. A phone takes the same command on its agent: it restarts,
+// or for "Desligar" turns its screen off and locks (PowerTargets); a line
+// says so, and for phones alone the Windows updates are not offered.
 public partial class PowerWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -22,7 +24,20 @@ public partial class PowerWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
+        TargetsTextBlock.Text = PowerTargets.Describe(targets, wholeClass);
+        DelayHintTextBlock.Text = PowerTargets.DelayHint(targets);
+        if (PowerTargets.Note(targets) is { } note)
+        {
+            PhoneNoteTextBlock.Text = note;
+            PhoneNoteTextBlock.Visibility = Visibility.Visible;
+        }
+        if (PowerTargets.OnlyPhones(targets))
+        {
+            // Never ticked, so no phone is ever sent it; the window is shorter without it.
+            UpdatesCard.Visibility = Visibility.Collapsed;
+            MinHeight = 500;
+            Height = 600;
+        }
         if (initialAction == PowerAction.Restart)
         {
             RestartRadioButton.IsChecked = true;
@@ -68,36 +83,15 @@ public partial class PowerWindow : MidviewWindow
         ResultTextBlock.Text = string.Empty;
         ProgressTextBlock.Text = action == PowerAction.Cancel ? "Cancelando..." : "Enviando...";
 
-        var payload = PowerCommand.Encode(action, delaySeconds, installUpdates);
-        var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => SendTo(machine, payload))));
+        var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() =>
+        {
+            var (succeeded, detail) = PowerTargets.Send(machine, action, delaySeconds, installUpdates, _masterCertificate);
+            return (machine.Name, Succeeded: succeeded, Detail: detail);
+        })));
 
-        var failures = results.Count(result => !result.Succeeded);
-        ProgressTextBlock.Text = failures == 0
-            ? results.Length == 1 ? "Concluído." : $"Concluído nas {results.Length} máquinas."
-            : $"Concluído em {results.Length - failures} de {results.Length}.";
+        ProgressTextBlock.Text = PowerTargets.Done(_targets, results.Count(result => !result.Succeeded));
         ResultTextBlock.Text = string.Join("\n", results.Select(result =>
-            $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {PowerText.Detail(result.Succeeded, result.Detail, installUpdates)}"));
+            $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
         RunButton.IsEnabled = CancelShutdownButton.IsEnabled = true;
-    }
-
-    private (string Name, bool Succeeded, string Detail) SendTo(KnownMachine machine, byte[] payload)
-    {
-        if (machine.AgentThumbprint is not { Length: > 0 } agentThumbprint)
-        {
-            return (machine.Name, false,
-                "falta o thumbprint do Agent (reinstale com o pacote de instalação, ou preencha em \"Testar / bloquear sites...\")");
-        }
-
-        try
-        {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                machine.HostAddress, ConnectionClient.AgentPort, agentThumbprint, _masterCertificate,
-                MessageType.Power, payload);
-            return (machine.Name, succeeded, detail);
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, FailureText.DescribeAgent(ex));
-        }
     }
 }

@@ -50,6 +50,12 @@ object MessageType {
     // path inside it) and FILE_CHUNKs, then one CommandAck (CommandResult).
     const val COLLECT_FILES = 20
 
+    // "Desligar" and "Reiniciar", as on a PC (PowerCommand's payload), from
+    // a trusted teacher only; answered with a CommandAck (CommandResult).
+    // The phone restarts, or for "Desligar" turns its screen off and locks
+    // (PowerCountdown).
+    const val POWER = 21
+
     // Updating the agent over the network, from a trusted teacher only (see
     // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
     // GET_UPDATE_STATUS -> UPDATE_STATUS.

@@ -66,6 +66,11 @@ public enum MessageType : byte
 
     // An Agent command: shut down, restart, or call either off (see
     // PowerCommand). Answered with one CommandAck carrying a CommandResult.
+    // A phone's agent (port 28900) takes it too, from a trusted teacher: it
+    // warns the student for the same time, then restarts, or for a shutdown
+    // turns its screen off and locks (Android lets no app turn a phone off);
+    // the Windows updates' flag means nothing there. An agent from before
+    // that answers "Ainda não funciona em celular.".
     Power = 21,
 
     // An Agent question, no payload: the MAC address of the network card

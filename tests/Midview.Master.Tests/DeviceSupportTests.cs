@@ -10,11 +10,11 @@ public class DeviceSupportTests
 
     [Fact]
     public void Phone_only_selection_disables_pc_actions() =>
-        Assert.False(DeviceSupport.IsEnabled(new[] { Phone("Cel 01") }, ToolbarAction.Power));
+        Assert.False(DeviceSupport.IsEnabled(new[] { Phone("Cel 01") }, ToolbarAction.Wake));
 
     [Fact]
     public void A_computer_in_the_selection_keeps_the_action_enabled() =>
-        Assert.True(DeviceSupport.IsEnabled(new[] { Phone("Cel 01"), Pc("PC 01") }, ToolbarAction.Power));
+        Assert.True(DeviceSupport.IsEnabled(new[] { Phone("Cel 01"), Pc("PC 01") }, ToolbarAction.Wake));
 
     [Fact]
     public void Nothing_selected_enables_nothing() =>
@@ -31,14 +31,14 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_power_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
-                or ToolbarAction.SendFile or ToolbarAction.CollectFiles
+                or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
@@ -127,16 +127,16 @@ public class DeviceSupportTests
     [Fact]
     public void Mixed_selection_warns_about_phones_left_out() =>
         Assert.Equal("2 celulares ficaram de fora: essa ação ainda não funciona em celular.",
-                     DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01"), Phone("Cel 02") }, ToolbarAction.Power));
+                     DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01"), Phone("Cel 02") }, ToolbarAction.Wake));
 
     [Fact]
     public void One_phone_left_out_uses_singular() =>
         Assert.Equal("1 celular ficou de fora: essa ação ainda não funciona em celular.",
-                     DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01") }, ToolbarAction.Power));
+                     DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01") }, ToolbarAction.Wake));
 
     [Fact]
     public void Nobody_left_out_is_no_notice() =>
-        Assert.Null(DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Pc("PC 02") }, ToolbarAction.Power));
+        Assert.Null(DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Pc("PC 02") }, ToolbarAction.Wake));
 
     // What PublishRoster feeds the class folder, and the update window its targets.
     [Theory]

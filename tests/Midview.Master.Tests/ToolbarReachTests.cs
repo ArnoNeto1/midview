@@ -97,7 +97,7 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.CloseApps, true)]
     [InlineData(ToolbarAction.Message, true)]
     [InlineData(ToolbarAction.Chat, true)]
-    [InlineData(ToolbarAction.Power, false)]
+    [InlineData(ToolbarAction.Power, true)]
     [InlineData(ToolbarAction.Wake, false)]
     [InlineData(ToolbarAction.Schedule, false)]
     [InlineData(ToolbarAction.SendFile, true)]

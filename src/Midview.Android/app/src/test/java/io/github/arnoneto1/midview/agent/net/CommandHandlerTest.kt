@@ -494,6 +494,75 @@ class CommandHandlerTest {
         assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
     }
 
+    // "Desligar" and "Reiniciar": the PC's payload (action, then the
+    // warning's time, then the Windows updates' flag), from a trusted teacher.
+    private val powered = mutableListOf<Pair<Int, Int>>()
+    private val powering by lazy {
+        CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway, power = { action, delay ->
+            powered += action to delay
+            true to "reinicia em 1 minuto"
+        }) { phoneApps }
+    }
+
+    @Test fun powerFromATrustedTeacherGoesToTheCountdown() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.POWER, byteArrayOf(1, 0, 60)),
+            message(MessageType.POWER, byteArrayOf(0, 0x01, 0x2C)),
+            // With the Windows updates' flag: meaningless here, still done.
+            message(MessageType.POWER, byteArrayOf(0, 0, 0, 1)),
+            message(MessageType.POWER, byteArrayOf(2, 0, 0)),
+        )
+        powering.handle(channel)
+
+        assertEquals(listOf(1 to 60, 0 to 300, 0 to 0, 2 to 0), powered)
+        assertEquals(4, channel.sent.size)
+        channel.sent.forEach {
+            assertEquals(MessageType.COMMAND_ACK, it.type)
+            assertEquals(true to "reinicia em 1 minuto", CommandResult.decode(it.payload))
+        }
+    }
+
+    @Test fun powerFromAnUntrustedTeacherDoesNothing() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.POWER, byteArrayOf(1, 0, 0)))
+        powering.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertTrue(powered.isEmpty())
+    }
+
+    @Test fun anInvalidPowerRequestDoesNothing() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.POWER),
+            message(MessageType.POWER, byteArrayOf(3, 0, 0)),
+            message(MessageType.POWER, byteArrayOf(1, 0x02, 0x59)),
+            message(MessageType.POWER, byteArrayOf(1, 0)),
+            message(MessageType.POWER, byteArrayOf(2, 0, 0, 1)),
+            message(MessageType.POWER, byteArrayOf(0, 0, 0, 2)),
+        )
+        powering.handle(channel)
+        assertTrue(powered.isEmpty())
+        assertEquals(6, channel.sent.size)
+        channel.sent.forEach { assertEquals(false to CommandHandler.INVALID_REQUEST, CommandResult.decode(it.payload)) }
+    }
+
+    @Test fun theLongestPowerWarningIsStillAValidRequest() {
+        assertEquals(1 to 600, CommandHandler.powerRequest(byteArrayOf(1, 0x02, 0x58)))
+        assertEquals(null, CommandHandler.powerRequest(byteArrayOf(1, 0x02, 0x59)))
+        assertEquals(0 to 60, CommandHandler.powerRequest(byteArrayOf(0, 0, 60, 1)))
+    }
+
+    // Without the countdown (as a JVM test builds it), the phone says it doesn't yet.
+    @Test fun withoutPowerThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.POWER, byteArrayOf(1, 0, 0)))
+        handler.handle(channel)
+        assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+    }
+
     @Test fun untrustedTeacherCannotSetThePin() {
         trusted.add(teacher)
         var asked = 0

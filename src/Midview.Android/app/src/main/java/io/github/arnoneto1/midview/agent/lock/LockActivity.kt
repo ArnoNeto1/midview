@@ -95,9 +95,23 @@ class LockActivity : Activity() {
         } catch (e: RuntimeException) {
             // It was not in lock task mode.
         }
+        finishOnceFree(FINISH_TRIES)
+    }
+
+    // Android refuses to finish the lock task's only screen ("Not finishing
+    // task in lock task mode") until the lock task has really ended, which
+    // can come a moment after stopLockTask: seen on the Redmi 10C after the
+    // teacher's "Desligar" turned the screen off under the lock (lockNow),
+    // when the lock screen Android owed came up first and the padlock
+    // stayed. So it is tried again a little later, while nobody locks again.
+    private fun finishOnceFree(triesLeft: Int) {
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
+        if (isFinishing || triesLeft <= 0) return
+        main.postDelayed({
+            if (!wanted && !isFinishing && !isDestroyed) finishOnceFree(triesLeft - 1)
+        }, FINISH_RETRY_MILLIS)
     }
 
     @Suppress("DEPRECATION")
@@ -164,6 +178,10 @@ class LockActivity : Activity() {
 
         // Long enough for whatever came up over it to settle first.
         private const val COME_BACK_MILLIS = 500L
+
+        // Finishing again while Android still holds the lock task: for up to 10 s.
+        private const val FINISH_RETRY_MILLIS = 250L
+        private const val FINISH_TRIES = 40
 
         private val main = Handler(Looper.getMainLooper())
         private val gate = Any()

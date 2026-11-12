@@ -71,9 +71,9 @@
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <local:ToolbarButton Content="Desligar" Width="54" Icon="&#xE7E8;" local:DeviceActions.Action="Power" Click="OnPowerClassClicked" OpensOptions="True"
-                                                 ToolTip="Desliga a turma, com aviso aos alunos." />
+                                                 ToolTip="Desliga a turma, com aviso aos alunos. Nos celulares, apaga a tela e trava: o celular continua ligado." />
                             <local:ToolbarButton Content="Reiniciar" Width="54" Icon="&#xE72C;" local:DeviceActions.Action="Power" Click="OnRestartClassClicked" OpensOptions="True"
-                                                 ToolTip="Reinicia a turma, com aviso aos alunos." />
+                                                 ToolTip="Reinicia a turma, com aviso aos alunos. Os celulares também reiniciam." />
                             <local:ToolbarButton Content="Ligar" Width="54" Icon="&#xE945;" local:DeviceActions.Action="Wake" Click="OnWakeClassClicked"
                                                  ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
                             <local:ToolbarButton Content="Agendar" Width="54" Icon="&#xE787;" local:DeviceActions.Action="Schedule" Click="OnScheduleClicked" OpensOptions="True"
