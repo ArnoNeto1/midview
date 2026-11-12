@@ -81,4 +81,48 @@ public class PhoneProvisioningTests
     [Fact]
     public void IsReady_follows_the_constant() =>
         Assert.Equal(PhoneProvisioning.IsReadyWith(PhoneProvisioning.SignatureChecksum), PhoneProvisioning.IsReady);
+
+    // Google blocks the QR for device-policy apps off its approved list: the
+    // phones are prepared by cable, and nothing offers the QR.
+    [Fact]
+    public void Qr_stays_off() =>
+        Assert.False(PhoneProvisioning.QrEnabled);
+
+    [Fact]
+    public void Setup_is_em_breve_until_the_phone_app_is_published()
+    {
+        Assert.Equal(PhoneSetupOffer.Soon, PhoneProvisioning.SetupWith(appReady: false, qrEnabled: false));
+        Assert.Equal(PhoneSetupOffer.Soon, PhoneProvisioning.SetupWith(appReady: false, qrEnabled: true));
+    }
+
+    [Fact]
+    public void Published_phone_app_without_the_qr_is_prepared_by_cable() =>
+        Assert.Equal(PhoneSetupOffer.Cable, PhoneProvisioning.SetupWith(appReady: true, qrEnabled: false));
+
+    [Fact]
+    public void Qr_is_offered_only_with_the_app_published_and_the_qr_on() =>
+        Assert.Equal(PhoneSetupOffer.Qr, PhoneProvisioning.SetupWith(appReady: true, qrEnabled: true));
+
+    // Filling SignatureChecksum (IsReady) must not bring the QR back.
+    [Fact]
+    public void Setup_never_offers_the_qr_in_this_build()
+    {
+        Assert.NotEqual(PhoneSetupOffer.Qr, PhoneProvisioning.Setup);
+        Assert.NotEqual(PhoneSetupOffer.Qr, PhoneProvisioning.SetupWith(appReady: true, PhoneProvisioning.QrEnabled));
+        Assert.Equal(PhoneProvisioning.SetupWith(PhoneProvisioning.IsReady, PhoneProvisioning.QrEnabled), PhoneProvisioning.Setup);
+    }
+
+    [Theory]
+    [InlineData(PhoneSetupOffer.Soon)]
+    [InlineData(PhoneSetupOffer.Cable)]
+    public void No_phone_hint_sends_nobody_to_the_qr_unless_it_is_on(PhoneSetupOffer setup) =>
+        Assert.DoesNotContain("Preparar celular", PhoneProvisioning.NoPhoneYet(setup));
+
+    [Fact]
+    public void Cable_hint_says_where_the_steps_are()
+    {
+        Assert.Contains("cabo USB", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Cable));
+        Assert.Equal("Nenhum celular nesta sala ainda.", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Soon));
+        Assert.Equal("https://github.com/ArnoNeto1/midview#celulares", PhoneProvisioning.CableStepsUrl);
+    }
 }

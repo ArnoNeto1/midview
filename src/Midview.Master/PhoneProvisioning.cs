@@ -3,9 +3,25 @@ using System.Text.Json.Nodes;
 
 namespace Midview.Master;
 
-// The text of the QR code a factory-reset Android phone scans on its first
-// screen to become a Midview phone: it names the Midview app, where to
-// download it, the lab Wi-Fi to join first, and keeps the phone's own apps.
+// How a phone becomes a Midview phone. Two separate switches:
+// - SignatureChecksum (IsReady): the phone app is published. It lets CI attach
+//   MidviewAgent.apk to the release and "Atualizar os celulares" work.
+// - QrEnabled: the Master offers "Preparar celular...", the QR a factory-reset
+//   phone scans on its first screen. Off: see QrEnabled.
+// Which of the two the Master offers is Setup (PhoneSetupOffer).
+public enum PhoneSetupOffer
+{
+    // The phone app is not published yet: "Celulares: em breve".
+    Soon = 0,
+
+    // Prepared by USB cable (adb, dpm set-device-owner); the Master points to
+    // the README's steps.
+    Cable = 1,
+
+    // The "Preparar celular..." QR window.
+    Qr = 2,
+}
+
 public static class PhoneProvisioning
 {
     private const string Extra = "android.app.extra.";
@@ -27,7 +43,31 @@ public static class PhoneProvisioning
     public static bool IsReadyWith(string checksum) =>
         !string.IsNullOrWhiteSpace(checksum) && checksum != "PREENCHER-NA-TASK-9";
 
-    // The QR's JSON. Throws ArgumentException when the Wi-Fi name is empty;
+    // Off on purpose, whatever SignatureChecksum says. Google lets only the
+    // device-policy apps on its approved list in through the QR of the first
+    // screen (6 taps), and Midview is not on it: the phone downloads the app,
+    // refuses it and says "Não foi possível configurar o dispositivo". So the
+    // phones are prepared by USB cable (README, "Celulares"). Turn it on only
+    // if Google approves the app.
+    public const bool QrEnabled = false;
+
+    public static PhoneSetupOffer Setup => SetupWith(IsReady, QrEnabled);
+
+    public static PhoneSetupOffer SetupWith(bool appReady, bool qrEnabled) =>
+        !appReady ? PhoneSetupOffer.Soon : qrEnabled ? PhoneSetupOffer.Qr : PhoneSetupOffer.Cable;
+
+    // The README's "Celulares" section, with the cable steps.
+    public const string CableStepsUrl = "https://github.com/ArnoNeto1/midview#celulares";
+
+    // Said where the room has no phone yet (the grid, the Telas menu).
+    public static string NoPhoneYet(PhoneSetupOffer setup) => setup switch
+    {
+        PhoneSetupOffer.Qr => "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\".",
+        PhoneSetupOffer.Cable => "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+        _ => "Nenhum celular nesta sala ainda.",
+    };
+
+    // The QR's JSON (only with QrEnabled). Throws ArgumentException when the Wi-Fi name is empty;
     // quotes, accents and ";" in the name or password are escaped by the JSON.
     public static string QrJson(string ssid, string password)
     {

@@ -60,6 +60,34 @@ public class ScreensMenuTests
         });
     }
 
+    // A PC-only teacher while phones are "em breve": no pointer to a phone
+    // preparation that doesn't exist yet; once out, the cable, never the QR.
+    [Theory]
+    [InlineData(PhoneSetupOffer.Soon, "Nenhum celular nesta sala ainda.")]
+    [InlineData(PhoneSetupOffer.Cable, "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".")]
+    public void Greyed_phones_hint_follows_the_phone_setup(PhoneSetupOffer setup, string toolTip)
+    {
+        InSta(() =>
+        {
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasAndroid: false, _ => { }, () => { }, setup);
+
+            var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
+            Assert.Equal(toolTip, phones.ToolTip);
+        });
+    }
+
+    [Fact]
+    public void Greyed_phones_hint_in_this_build_never_offers_the_qr()
+    {
+        InSta(() =>
+        {
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasAndroid: false, _ => { }, () => { }, PhoneProvisioning.Setup);
+
+            var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
+            Assert.DoesNotContain("Preparar celular", (string)phones.ToolTip);
+        });
+    }
+
     [Theory]
     [InlineData(DeviceFilter.All, "Escolhe as telas")]
     [InlineData(DeviceFilter.Computers, "Mostrando só os computadores.")]

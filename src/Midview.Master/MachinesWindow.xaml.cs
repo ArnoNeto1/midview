@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -42,12 +43,7 @@ public partial class MachinesWindow : MidviewWindow
         Action openGiveAccess, Action openJoinClass, Action openPhoneUpdate)
     {
         InitializeComponent();
-        if (!PhoneProvisioning.IsReady)
-        {
-            // No phone app published yet: no link to a factory reset that would be for nothing.
-            PreparePhoneSpan.Inlines.Clear();
-            PreparePhoneSpan.Inlines.Add(new Run("  Celulares: em breve."));
-        }
+        ShowPhoneSetup(PreparePhoneSpan, PhoneProvisioning.Setup, OpenCableSteps);
         _openAdvanced = openAdvanced;
         _openGiveAccess = openGiveAccess;
         _openJoinClass = openJoinClass;
@@ -101,8 +97,49 @@ public partial class MachinesWindow : MidviewWindow
             : "Nenhuma senha salva ainda.";
     }
 
-    // The QR code that turns a factory-reset phone into a Midview phone; it is
-    // here, not on the toolbar, which would wrap onto a second row at 1340 px.
+    // What the line under the list says about phones (PhoneSetupOffer): "em
+    // breve" while the phone app is not published (no link to a factory reset
+    // that would be for nothing); the README's cable steps once it is, since
+    // Google blocks the QR; the XAML's "Preparar celular..." link only with
+    // PhoneProvisioning.QrEnabled.
+    internal static void ShowPhoneSetup(Span span, PhoneSetupOffer setup, Action openCableSteps)
+    {
+        if (setup == PhoneSetupOffer.Qr)
+        {
+            return;
+        }
+        span.Inlines.Clear();
+        if (setup == PhoneSetupOffer.Soon)
+        {
+            span.Inlines.Add(new Run("  Celulares: em breve."));
+            return;
+        }
+        span.Inlines.Add(new Run("  Celular novo?"));
+        span.Inlines.Add(new Run(" "));
+        var link = new Hyperlink(new Run("Como preparar pelo cabo USB..."))
+        {
+            ToolTip = "Abre no navegador os passos do README do Midview: o celular é preparado pelo cabo USB, ligado a este computador.",
+        };
+        link.Click += (_, _) => openCableSteps();
+        span.Inlines.Add(link);
+    }
+
+    private void OpenCableSteps()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(PhoneProvisioning.CableStepsUrl) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            MidviewMessage.Show(this, $"Não foi possível abrir o navegador. Os passos estão em {PhoneProvisioning.CableStepsUrl}",
+                "Preparar celular", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // The QR code that turns a factory-reset phone into a Midview phone (only
+    // with PhoneProvisioning.QrEnabled); it is here, not on the toolbar, which
+    // would wrap onto a second row at 1340 px.
     private void OnPreparePhoneClicked(object sender, RoutedEventArgs e)
     {
         new PreparePhoneWindow { Owner = this }.ShowDialog();

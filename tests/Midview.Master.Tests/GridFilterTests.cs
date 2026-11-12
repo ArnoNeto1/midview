@@ -97,11 +97,19 @@ public class GridFilterTests
         Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: true, DeviceFilter.Phones)); // a phone not heard from yet is still connecting
 
     [Fact]
-    public void Empty_notice_when_filter_leaves_no_phones()
+    public void Empty_notice_when_filter_leaves_no_phones_points_to_the_cable_once_the_phone_app_is_out()
+    {
+        var onlyComputers = new[] { Tile(TilePresence.Online) };
+        Assert.Equal("Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Cable));
+    }
+
+    [Fact]
+    public void Empty_notice_for_phones_offers_the_qr_only_when_it_is_on()
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
         Assert.Equal("Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\".",
-                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Qr));
     }
 
     [Fact]
@@ -109,8 +117,16 @@ public class GridFilterTests
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
         Assert.Equal("Nenhum celular nesta sala ainda.",
-                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, phonesReady: false));
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Soon));
+        Assert.Equal("Nenhum celular nesta sala ainda.",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
     }
+
+    // What this build says: with the QR off, never "Preparar celular".
+    [Fact]
+    public void Empty_notice_for_phones_in_this_build_never_offers_the_qr() =>
+        Assert.DoesNotContain("Preparar celular",
+            GridFilter.EmptyNotice(new[] { Tile(TilePresence.Online) }, onlineOnly: false, DeviceFilter.Phones, PhoneProvisioning.Setup));
 
     [Fact]
     public void Empty_notice_when_filter_leaves_no_computers() =>

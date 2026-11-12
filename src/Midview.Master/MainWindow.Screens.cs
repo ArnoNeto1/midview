@@ -20,7 +20,7 @@ public partial class MainWindow
         var room = _tiles.Select(tile => tile.Machine).ToList();
         var menu = ScreensMenu(
             _devices, DeviceSupport.HasPhones(room), DeviceSupport.HasAndroid(room),
-            ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)));
+            ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)), PhoneProvisioning.Setup);
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -39,9 +39,11 @@ public partial class MainWindow
         _ => "Escolhe as telas que aparecem: todas, só os computadores ou só os celulares. Também otimiza celulares e tablets.",
     };
 
-    // Built at each click, so it follows the room as it is then.
+    // Built at each click, so it follows the room as it is then. phoneSetup
+    // decides what the greyed Celulares says about getting the first phone.
     internal static ContextMenu ScreensMenu(
-        DeviceFilter shown, bool hasPhones, bool hasAndroid, Action<DeviceFilter> show, Action optimize)
+        DeviceFilter shown, bool hasPhones, bool hasAndroid, Action<DeviceFilter> show, Action optimize,
+        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -60,7 +62,7 @@ public partial class MainWindow
         {
             phones.IsEnabled = false;
             phones.InputGestureText = "nenhum na sala";
-            phones.ToolTip = "Nenhum celular nesta sala ainda. Para colocar o primeiro, abra \"Máquinas da sala\" e use \"Preparar celular\".";
+            phones.ToolTip = PhoneProvisioning.NoPhoneYet(phoneSetup);
             ToolTipService.SetShowOnDisabled(phones, true);
         }
         menu.Items.Add(new MenuItem
