@@ -200,15 +200,16 @@ class LockdownTest {
         assertEquals(listOf(pkg), gw.lockTaskAllowed)
     }
 
-    // The screen is seen through the app's accessibility service: the
-    // Device Owner never leaves it out (null: every service allowed).
-    @Test fun accessibilityServicesAreAllPermitted() {
+    // The screen is seen through the app's accessibility service: only it
+    // may be turned on (Android keeps the phone's own, as TalkBack, anyway),
+    // so a student cannot turn on an app that taps for them.
+    @Test fun onlyTheAppsAccessibilityServiceIsPermitted() {
         for (debuggable in listOf(false, true)) {
             val gw = FakeGateway(sdkInt = 33, debuggable = debuggable)
 
             assertTrue(Lockdown(gw).apply())
 
-            assertEquals(null, gw.accessibilityPermitted)
+            assertEquals(listOf(pkg), gw.accessibilityPermitted)
         }
     }
 }

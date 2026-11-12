@@ -29,6 +29,9 @@ import java.util.concurrent.atomic.AtomicReference
 class AccessibilityCapture : AccessibilityService() {
     private var shots: ExecutorService? = null
 
+    // A screenshot failed and none worked since: the next failures go unlogged.
+    @Volatile private var failing = false
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -40,8 +43,10 @@ class AccessibilityCapture : AccessibilityService() {
         connected = true
         ScreenCaptureService.frames.attachShots(MIN_SHOT_INTERVAL_MILLIS) { shoot(executor) }
         ScreenCaptureService.consent.sourceChanged()
-        // Seen without asking now: an "Iniciar agora" capture is not needed.
+        // Seen without asking now: an "Iniciar agora" capture is not
+        // needed, nor a request still on the screen.
         ScreenCaptureService.stop(this)
+        ConsentActivity.closeIfOpen(this)
         Log.i(TAG, "Screen seen through accessibility.")
     }
 
@@ -84,6 +89,7 @@ class AccessibilityCapture : AccessibilityService() {
                     override fun onSuccess(screenshot: ScreenshotResult) {
                         try {
                             picture.set(toPicture(screenshot))
+                            failing = false
                         } catch (e: Throwable) {
                             Log.w(TAG, "A screenshot could not be read", e)
                         } finally {
@@ -92,7 +98,10 @@ class AccessibilityCapture : AccessibilityService() {
                     }
 
                     override fun onFailure(errorCode: Int) {
-                        if (errorCode != ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT) {
+                        // Logged once until a shot works again (the screen
+                        // off fails every time).
+                        if (errorCode != ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT && !failing) {
+                            failing = true
                             Log.w(TAG, "No screenshot (error $errorCode)")
                         }
                         done.countDown()
@@ -112,23 +121,24 @@ class AccessibilityCapture : AccessibilityService() {
     @TargetApi(Build.VERSION_CODES.R)
     private fun toPicture(screenshot: ScreenshotResult): Picture? {
         val buffer = screenshot.hardwareBuffer
+        var hardware: Bitmap? = null
+        var full: Bitmap? = null
+        var sized: Bitmap? = null
         try {
-            val hardware = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace) ?: return null
-            val full = hardware.copy(Bitmap.Config.ARGB_8888, false)
+            hardware = Bitmap.wrapHardwareBuffer(buffer, screenshot.colorSpace) ?: return null
+            full = hardware.copy(Bitmap.Config.ARGB_8888, false) ?: return null
             hardware.recycle()
-            full ?: return null
+            hardware = null
             val (width, height) = FrameScale.capture(full.width, full.height)
-            val sized = if (width == full.width && height == full.height) {
-                full
-            } else {
-                Bitmap.createScaledBitmap(full, width, height, true).also { if (it !== full) full.recycle() }
-            }
+            sized = if (width == full.width && height == full.height) full else Bitmap.createScaledBitmap(full, width, height, true)
             val pixels = IntArray(width * height)
             sized.getPixels(pixels, 0, width, 0, 0, width, height)
-            sized.recycle()
             for (i in pixels.indices) pixels[i] = pixels[i] or OPAQUE
             return Picture(pixels, width, height)
         } finally {
+            sized?.recycle()
+            full?.recycle()
+            hardware?.recycle()
             buffer.close()
         }
     }

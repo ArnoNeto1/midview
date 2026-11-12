@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import java.lang.ref.WeakReference
 
 // Puts Android's own request on the screen ("Iniciar agora"), with nothing
 // of its own to see, and hands the answer on: yes starts the capture
@@ -53,6 +54,7 @@ class ConsentActivity : Activity() {
         // Recreated (the phone turned, say): the system's request is already up.
         if (savedInstanceState != null) {
             open = token
+            shown = WeakReference(this)
             recreated = true
             return
         }
@@ -63,6 +65,7 @@ class ConsentActivity : Activity() {
             return
         }
         open = token
+        shown = WeakReference(this)
         // The teacher's lock screen came up meanwhile: the request waits for the unlock.
         if (ScreenCaptureService.consent.isLocked) {
             settled = true
@@ -122,6 +125,7 @@ class ConsentActivity : Activity() {
     override fun onDestroy() {
         main.removeCallbacks(refusal)
         if (open === token) open = null
+        if (shown?.get() === this) shown = null
         super.onDestroy()
     }
 
@@ -153,6 +157,17 @@ class ConsentActivity : Activity() {
         // The token of the request on the screen now, if any (not the
         // activity itself, which must not outlive its screen).
         @Volatile private var open: Any? = null
+
+        // The request on the screen now, if any, to close it (closeIfOpen).
+        @Volatile private var shown: WeakReference<ConsentActivity>? = null
+
+        // The screen is seen without asking now (the accessibility service
+        // connected): a request still on the screen goes, as one left
+        // without an answer, and its notice with it. On the main thread.
+        fun closeIfOpen(context: Context) {
+            shown?.get()?.let { if (!it.settled && !it.isFinishing) it.closeUnanswered() }
+            hideNotice(context)
+        }
 
         // Asks the student. With the request already up, the same start
         // brings it back in front (a second ConsentActivity only finishes,

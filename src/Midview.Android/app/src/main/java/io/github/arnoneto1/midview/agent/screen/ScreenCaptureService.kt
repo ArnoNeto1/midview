@@ -19,6 +19,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
@@ -265,11 +266,19 @@ class ScreenCaptureService : Service() {
             context?.let { ConsentActivity.show(it) }
         }
 
+        private val main by lazy { Handler(Looper.getMainLooper()) }
+
+        // A service on in the settings that does not connect in time: the
+        // student is asked after all.
+        private val sourceWatch = CaptureSourceWatch(Build.VERSION.SDK_INT, { SystemClock.elapsedRealtime() }) { delay ->
+            main.postDelayed({ consent.sourceChanged() }, delay)
+        }
+
         // Where the screen's pictures come from now (CaptureSource).
         fun source(): CaptureSource {
             val connected = AccessibilityCapture.connected
             val enabled = !connected && context?.let { AccessibilityCapture.enabledInSettings(it) } == true
-            return CaptureSource.choose(Build.VERSION.SDK_INT, enabled, connected)
+            return sourceWatch.current(enabled, connected)
         }
 
         // Called by the agent as it starts: consent needs a context to show its request.
