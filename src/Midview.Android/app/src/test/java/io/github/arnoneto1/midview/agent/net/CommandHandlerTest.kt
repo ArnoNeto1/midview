@@ -348,6 +348,46 @@ class CommandHandlerTest {
         assertEquals(optimizer.report, PhoneOptimizeReport.decode(answer.payload))
     }
 
+    @Test fun theTeachersPinGoesToTheLockScreenAndItsResultBack() {
+        trusted.add(teacher)
+        val pins = mutableListOf<String>()
+        val withPin = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, screenPin = {
+            pins += String(it, Charsets.US_ASCII)
+            false to "chave de redefinição ainda não ativa: desbloqueie o celular uma vez"
+        }) { phoneApps }
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.SET_PHONE_SCREEN_PASSWORD, "1234".toByteArray()),
+            message(MessageType.SET_PHONE_SCREEN_PASSWORD),
+        )
+        withPin.handle(channel)
+
+        assertEquals(listOf("1234", ""), pins)
+        assertEquals(2, channel.sent.size)
+        channel.sent.forEach { assertEquals(MessageType.COMMAND_ACK, it.type) }
+        assertEquals(false to "chave de redefinição ainda não ativa: desbloqueie o celular uma vez", CommandResult.decode(channel.sent[0].payload))
+    }
+
+    @Test fun untrustedTeacherCannotSetThePin() {
+        trusted.add(teacher)
+        var asked = 0
+        val withPin = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, screenPin = {
+            asked++
+            true to "PIN posto no celular"
+        }) { phoneApps }
+        val channel = FakeChannel(stranger, message(MessageType.SET_PHONE_SCREEN_PASSWORD, "1234".toByteArray()))
+        withPin.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertEquals(0, asked)
+    }
+
+    @Test fun withoutTheLockScreenThePinIsNotOnThePhone() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.SET_PHONE_SCREEN_PASSWORD, "1234".toByteArray()))
+        handler.handle(channel)
+        assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+    }
+
     @Test fun untrustedTeacherCannotOptimize() {
         trusted.add(teacher)
         val channel = FakeChannel(stranger, message(MessageType.OPTIMIZE_PHONE))

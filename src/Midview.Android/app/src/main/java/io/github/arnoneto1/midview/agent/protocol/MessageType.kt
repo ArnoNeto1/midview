@@ -72,4 +72,11 @@ object MessageType {
     // (a PhoneOptimizeReport). An older agent answers COMMAND_ACK.
     const val OPTIMIZE_PHONE = 98
     const val PHONE_OPTIMIZE_REPORT = 99
+
+    // Master -> Android agent (port 28900), trusted teacher only: the
+    // teacher's lock screen PIN (a PhoneScreenPassword payload: 4 digits, or
+    // empty to remove it), which the agent then keeps on the phone so the
+    // student can neither change nor remove it. Answered with a
+    // CommandAck (CommandResult).
+    const val SET_PHONE_SCREEN_PASSWORD = 100
 }

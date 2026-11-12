@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 
 // The watchdog: an alarm every few seconds (WatchdogAlarm) that starts the
 // agent again if it is not running, and arms itself again. Android keeps the
@@ -18,6 +19,9 @@ import android.os.SystemClock
 class AgentWatchdog : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         AgentService.ensureRunning(context, "watchdog")
+        // The lock screen too: the teacher's PIN put back if Android's
+        // "password changed" never came.
+        LockScreenKeeper.check(context)
         arm(context)
     }
 

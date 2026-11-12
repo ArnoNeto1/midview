@@ -117,6 +117,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- The teacher's lock screen PIN checked when the phone starts, while
+             it is still locked (device-protected storage only). -->
+        <receiver
+            android:name=".policy.LockScreenKeeper$AtLockedBoot"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- The agent again, in the new version, after the app is updated. -->
         <receiver
             android:name=".update.PackageReplacedReceiver"
