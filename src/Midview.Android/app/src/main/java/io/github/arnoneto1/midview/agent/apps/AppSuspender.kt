@@ -42,16 +42,17 @@ class AppSuspender(
                 val stuck = gw.setPackagesSuspended(lift.sorted(), false)
                 if (stuck.isNotEmpty()) log("Apps still suspended: $stuck", null)
             }
-            // Only what is not suspended yet; an app removed in the meantime
-            // has nothing left to block.
-            val added = target - suspended
-            val refused = if (added.isEmpty()) {
+            // The whole target every time, even what shows as suspended: that
+            // may be another app's suspension (a focus mode), which the student
+            // can end; asking again for one already ours changes nothing. An
+            // app removed in the meantime has nothing left to block.
+            val refused = if (target.isEmpty()) {
                 emptyList()
             } else {
-                gw.setPackagesSuspended(added.sorted(), true).filter { catalog.isInstalled(it) }
+                gw.setPackagesSuspended(target.sorted(), true).filter { catalog.isInstalled(it) }
             }
             if (refused.isNotEmpty()) log("Apps Android would not suspend: $refused", null)
-            log("App block applied: ${target.size} blocked (${added.size} new), ${lift.size} lifted.", null)
+            log("App block applied: ${target.size} blocked, ${lift.size} lifted.", null)
             if (refused.isEmpty()) null else "${refused.size} app(s) não puderam ser bloqueados"
         } catch (e: RuntimeException) {
             log("The app block was refused", e)
@@ -78,8 +79,7 @@ class AppSuspender(
         // (a digital wellbeing timer, say): that is harmless, since Android
         // lifts only the Device Owner's own suspension and leaves theirs (they
         // come back as still suspended, logged and asked again at each apply).
-        // Likewise an app to block that is suspended by someone else is not
-        // asked again; the next apply catches it once they lift theirs.
+        // An app to block is always asked for (apply), whoever else suspended it.
         fun toLift(target: Set<String>, suspended: Set<String>): Set<String> = suspended - target
     }
 }

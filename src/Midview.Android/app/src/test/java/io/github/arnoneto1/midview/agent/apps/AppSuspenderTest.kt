@@ -174,18 +174,19 @@ class AppSuspenderTest {
         val warning = AppSuspender(catalog, gw).apply(policy(AppBlockMode.BLOCK_LIST, "com.whatsapp", "com.android.chrome"))
 
         assertNull(warning)
-        // WhatsApp is suspended already: not asked again.
         assertEquals(
-            listOf(listOf("com.android.camera") to false, listOf("com.android.chrome") to true),
+            listOf(listOf("com.android.camera") to false, listOf("com.android.chrome", "com.whatsapp") to true),
             gw.calls,
         )
     }
 
-    @Test fun applyWithEverythingAlreadyInPlaceCallsNothing() {
+    // Suspended by another app (a focus mode the student can end): the
+    // block is still asked for, so it holds when theirs is lifted.
+    @Test fun anAppSuspendedBySomeoneElseIsStillAskedFor() {
         val gw = FakeGateway()
         AppSuspender(FakeCatalog(launchable, setOf("com.whatsapp"), protected), gw)
             .apply(policy(AppBlockMode.BLOCK_LIST, "com.whatsapp"))
-        assertTrue(gw.calls.isEmpty())
+        assertEquals(listOf(listOf("com.whatsapp") to true), gw.calls)
     }
 
     // Removed between the reading and the call: nothing left to block.
