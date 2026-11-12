@@ -11,7 +11,10 @@ namespace Midview.Master;
 
 // Watching only leaves the student's keyboard and mouse alone; controlling
 // locks them and sends the teacher's input instead. The toolbar button
-// switches between the two on the same connection.
+// switches between the two on the same connection. A phone is controlled on
+// its screen connection too (PhoneControl): it answers StartControl, with a
+// refusal when it can't be controlled, its student keeps the touch screen and
+// sees a strip, and the toolbar adds Android's "Voltar", "Início" and "Recentes".
 public partial class ViewControlWindow : MidviewWindow
 {
     private readonly ConnectionClient _client;
@@ -26,6 +29,10 @@ public partial class ViewControlWindow : MidviewWindow
     private readonly X509Certificate2? _masterCertificate;
     private ControlLockKeeper? _lockKeeper;
     private readonly bool _isPhone;
+
+    // A phone was asked to be controlled and has not answered yet: if the
+    // connection ends now, its agent is from before control (PhoneControl.OldAgent).
+    private volatile bool _phoneControlAsked;
 
     // 1 while a DrawChanges is waiting to run on the window's thread.
     private int _drawScheduled;
@@ -45,9 +52,7 @@ public partial class ViewControlWindow : MidviewWindow
         _endpoint = endpoint;
         _machine = machine;
         _masterCertificate = masterCertificate;
-        // A phone is only watched: no StartControl is ever sent to it.
         _isPhone = machine?.IsPhone == true;
-        control &= !_isPhone;
 
         // Asks for the screen as ScreenFrame updates, which starts it; a
         // Session from before that ignores the type and sends FrameTile,
@@ -56,6 +61,7 @@ public partial class ViewControlWindow : MidviewWindow
         _client.SendScreenStream();
         if (control)
         {
+            _phoneControlAsked = _isPhone;
             _client.SendStartControl();
         }
         else
@@ -141,10 +147,17 @@ public partial class ViewControlWindow : MidviewWindow
 
     private void CloseFromFailure() => Dispatcher.Invoke(() =>
     {
-        if (!_closing)
+        if (_closing)
         {
-            Close();
+            return;
         }
+        if (_phoneControlAsked)
+        {
+            _phoneControlAsked = false;
+            MidviewMessage.Show(this, PhoneControl.OldAgent(_machineName), "Controlar",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        Close();
     });
 
     private void ReceiveLoop()
@@ -186,6 +199,12 @@ public partial class ViewControlWindow : MidviewWindow
                         var column = BitConverter.ToInt32(message.Payload, 4);
                         _remoteScreen.AddTile(row, column, message.Payload[8..]);
                         break;
+
+                    // A phone's answer to StartControl (a PC answers nothing).
+                    case MessageType.CommandAck when _isPhone:
+                        var (accepted, detail) = CommandResult.Decode(message.Payload);
+                        Dispatcher.BeginInvoke(new Action(() => OnPhoneControlAnswer(accepted, detail)));
+                        continue;
 
                     case MessageType.ClipboardText:
                         if (ClipboardText.Decode(message.Payload) is { } incomingClip)
@@ -420,12 +439,61 @@ public partial class ViewControlWindow : MidviewWindow
         // with the real key in SystemKey -- e.Key alone would send a
         // meaningless code for all of them.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        // A phone gets the characters from OnTextInput; the key that makes
+        // one stays unhandled, or Windows would not make it.
+        if (_isPhone && PhoneControl.Types(key, Keyboard.Modifiers))
+        {
+            return;
+        }
         SendInput(kind, 0, 0, (ushort)KeyInterop.VirtualKeyFromKey(key));
 
         // Keeps this window from acting on the key itself: Tab and arrows
         // would move focus away from the view (silently dropping every key
         // after that), and Alt/F10 would open the window's system menu.
         e.Handled = true;
+    }
+
+    // What the teacher typed, as characters: for a phone only (a PC takes the keys).
+    private void OnTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (!_isPhone || !_controlling)
+        {
+            return;
+        }
+        foreach (var typed in PhoneControl.TextEvents(e.Text))
+        {
+            SendInput(typed.Kind, 0, 0, typed.VirtualKeyCode);
+        }
+        e.Handled = true;
+    }
+
+    private void OnPhoneBackClicked(object sender, RoutedEventArgs e) => PressPhoneButton(PhoneControl.BackKey);
+
+    private void OnPhoneHomeClicked(object sender, RoutedEventArgs e) => PressPhoneButton(PhoneControl.HomeKey);
+
+    private void OnPhoneRecentsClicked(object sender, RoutedEventArgs e) => PressPhoneButton(PhoneControl.RecentsKey);
+
+    private void PressPhoneButton(ushort virtualKey)
+    {
+        SendInput(InputEventKind.KeyDown, 0, 0, virtualKey);
+        SendInput(InputEventKind.KeyUp, 0, 0, virtualKey);
+        ScreenImage.Focus();
+    }
+
+    // The phone's answer to StartControl: a refusal goes back to watching and says why.
+    private void OnPhoneControlAnswer(bool accepted, string detail)
+    {
+        _phoneControlAsked = false;
+        if (accepted || _closing)
+        {
+            return;
+        }
+        _controlling = false;
+        ShowMode();
+        MidviewMessage.Show(this, PhoneControl.Refused(_machineName, detail), "Controlar",
+            MessageBoxButton.OK, MessageBoxImage.Warning);
+        ScreenImage.Focus();
     }
 
     private void SendInput(InputEventKind kind, int x, int y, ushort virtualKeyCode)
@@ -441,10 +509,6 @@ public partial class ViewControlWindow : MidviewWindow
 
     private void OnControlClicked(object sender, RoutedEventArgs e)
     {
-        if (_isPhone)
-        {
-            return;
-        }
         RunOrCloseOnFailure(() =>
         {
             if (_controlling)
@@ -453,6 +517,7 @@ public partial class ViewControlWindow : MidviewWindow
             }
             else
             {
+                _phoneControlAsked = _isPhone;
                 _client.SendStartControl();
             }
             _controlling = !_controlling;
@@ -466,18 +531,21 @@ public partial class ViewControlWindow : MidviewWindow
     {
         Title = $"Midview - {(_controlling ? "controlando" : "vendo")} {_machineName}";
         ControlButton.Content = _controlling ? "Parar de controlar (só ver)" : "Controlar";
-        ControlButton.Visibility = _isPhone ? Visibility.Collapsed : Visibility.Visible;
         ModeTextBlock.Content = _controlling
-            ? "Controlando: o teclado e o mouse do aluno estão travados."
+            ? _isPhone ? PhoneControl.ControllingMode : "Controlando: o teclado e o mouse do aluno estão travados."
             : _isPhone
                 ? "Só vendo: o aluno continua usando o celular normalmente."
                 : "Só vendo: o aluno continua usando o computador normalmente.";
         // The chip is accent-colored while controlling, muted while only viewing.
         ModeTextBlock.Background = (Brush)FindResource(_controlling ? "AccentSoftBrush" : "CardBrush");
         ModeTextBlock.Foreground = (Brush)FindResource(_controlling ? "AccentTextBrush" : "TextMutedBrush");
-        CompatibilityNote.Visibility = _controlling && _endpoint == ControlEndpoint.Session
+        CompatibilityNote.Visibility = _controlling && _endpoint == ControlEndpoint.Session && !_isPhone
             ? Visibility.Visible
             : Visibility.Collapsed;
+
+        // Android's three buttons: a phone's only, working while controlling.
+        PhoneButtons.Visibility = _isPhone ? Visibility.Visible : Visibility.Collapsed;
+        PhoneButtons.IsEnabled = _isPhone && _controlling;
 
         // The password buttons exist only on the helper connection, and the
         // fill one works only while controlling: the Session never gets it.

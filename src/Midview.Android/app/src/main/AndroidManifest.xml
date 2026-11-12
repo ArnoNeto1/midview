@@ -80,7 +80,8 @@
 
         <!-- The screen seen without asking the student (Android 11+), once
              turned on by cable while the phone is prepared: takes pictures
-             of the screen only, reads and does nothing else. -->
+             of the screen and, only while the teacher controls the phone,
+             carries out the teacher's touches and typing. -->
         <service
             android:name=".screen.AccessibilityCapture"
             android:exported="false"

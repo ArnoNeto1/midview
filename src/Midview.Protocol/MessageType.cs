@@ -163,6 +163,13 @@ public enum MessageType : byte
     // StartControl or a Heartbeat and still gets FrameTile; a Session from
     // before this ignores ScreenStream and sends FrameTile, which the viewer
     // still draws.
+    // A phone's agent (port 5901) takes "Controlar" on this connection too,
+    // from a trusted teacher, and answers StartControl (which a PC answers
+    // with nothing) with one CommandAck carrying a CommandResult: 1, or 0 and
+    // why not (its accessibility service off). Its InputEvents are in pixels
+    // of the last ScreenFrame, the characters typed as InputEventKind.Text;
+    // StopControl goes back to watching. An agent from before it closes the
+    // connection on StartControl.
     ScreenStream = 48,
     ScreenFrame = 49,
     FrameAck = 50,

@@ -23,6 +23,7 @@ import io.github.arnoneto1.midview.agent.apps.CloseCountdown
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
+import io.github.arnoneto1.midview.agent.control.AndroidControlTarget
 import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
@@ -333,7 +334,13 @@ class AgentService : Service() {
             trusted,
             render = picture::render,
             teacherConnected = consent::teacherConnected,
-            stream = { ScreenStreamHandler(it, frames, FrameCredit(), CaptureCadence(), BitmapJpeg).run() },
+            stream = {
+                // "Controlar" through the accessibility service; under the teacher's lock, never out of it.
+                ScreenStreamHandler(
+                    it, frames, FrameCredit(), CaptureCadence(), BitmapJpeg,
+                    control = AndroidControlTarget(isLocked = { screenLock.locked }),
+                ).run()
+            },
             lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }

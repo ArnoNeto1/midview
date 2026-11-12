@@ -1,5 +1,11 @@
 package io.github.arnoneto1.midview.agent.net
 
+import io.github.arnoneto1.midview.agent.control.ControlTarget
+import io.github.arnoneto1.midview.agent.control.RemoteControlTest
+import io.github.arnoneto1.midview.agent.control.Spot
+import io.github.arnoneto1.midview.agent.control.TouchStep
+import io.github.arnoneto1.midview.agent.protocol.CommandResult
+import io.github.arnoneto1.midview.agent.protocol.InputEvent
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
@@ -104,11 +110,13 @@ class ScreenStreamHandlerTest {
     private fun start(
         source: FrameSource = frames,
         silenceMillis: Int = ScreenStreamHandler.SILENCE_MILLIS,
+        control: ControlTarget? = null,
     ): Thread {
         val handler = ScreenStreamHandler(
             channel, source, FrameCredit(), CaptureCadence(),
             encoder = { _, _, quality -> byteArrayOf(quality.toByte()) },
             silenceMillis = silenceMillis,
+            control = control,
         )
         return thread { handler.run() }.also { running += it }
     }
@@ -184,14 +192,18 @@ class ScreenStreamHandlerTest {
         assertEquals(1, decode(channel.next()).id)
     }
 
-    @Test fun stopControlAndSilenceEndTheStream() {
+    @Test fun stopControlKeepsTheStream() {
         frames.publish(IntArray(64 * 64), 64, 64)
-        val stopped = start()
+        val stream = start()
         decode(channel.next())
         assertEquals(15_000, channel.timeoutMillis)
         channel.deliver(message(MessageType.HEARTBEAT))
         channel.deliver(message(MessageType.STOP_CONTROL))
-        assertEnds(stopped)
+        channel.deliver(ack(1))
+        frames.publish(IntArray(64 * 64) { 7 }, 64, 64)
+        assertEquals(2, decode(channel.next()).id)
+        assertTrue(stream.isAlive)
+        assertFalse(channel.closed)
     }
 
     @Test fun silenceEndsTheStreamAndHeartbeatsKeepIt() {
@@ -210,18 +222,73 @@ class ScreenStreamHandlerTest {
         assertEnds(stream)
     }
 
-    @Test fun controlMessagesCloseTheConnection() {
-        for (type in listOf(MessageType.START_CONTROL, MessageType.INPUT_EVENT, MessageType.FILL_ADMIN_PASSWORD)) {
-            val channel = LiveChannel()
-            val handler = ScreenStreamHandler(
-                channel, frames, FrameCredit(), CaptureCadence(), encoder = { _, _, _ -> ByteArray(1) },
-            )
-            val stream = thread { handler.run() }
-            channel.deliver(Message(type, byteArrayOf(1, 2, 3)))
-            stream.join(3_000)
-            assertFalse("type $type", stream.isAlive)
-            assertTrue("type $type", channel.closed)
-        }
+    @Test fun theHelpersPasswordClosesTheConnection() {
+        val stream = start()
+        channel.deliver(Message(MessageType.FILL_ADMIN_PASSWORD, byteArrayOf(1, 2, 3)))
+        assertEnds(stream)
+    }
+
+    private fun answer(): Pair<Boolean, String> {
+        val reply = channel.next()
+        assertNotNull("no answer", reply)
+        assertEquals(MessageType.COMMAND_ACK, reply!!.type)
+        return CommandResult.decode(reply.payload)
+    }
+
+    @Test fun withoutControlStartControlIsRefusedAndTheStreamGoesOn() {
+        val stream = start()
+        channel.deliver(message(MessageType.START_CONTROL))
+        assertEquals(false to CommandResult.NOT_ON_PHONE, answer())
+        // Input then is ignored, as a Session ignores it while not controlling.
+        channel.deliver(Message(MessageType.INPUT_EVENT, byteArrayOf(1)))
+        frames.publish(IntArray(64 * 64), 64, 64)
+        assertEquals(1, decode(channel.next()).id)
+        assertTrue(stream.isAlive)
+    }
+
+    @Test fun controlIsAnsweredAndCarriesTheTeachersInputInThePicturesPixels() {
+        val target = RemoteControlTest.FakeTarget()
+        frames.publish(IntArray(50 * 100), 50, 100)
+        val stream = start(control = target)
+        decode(channel.next())
+        channel.deliver(message(MessageType.START_CONTROL))
+        assertEquals(true to "", answer())
+        channel.deliver(Message(MessageType.INPUT_EVENT, InputEvent.encode(InputEvent(InputEvent.LEFT_DOWN, 10, 20, 0))))
+        channel.deliver(Message(MessageType.INPUT_EVENT, InputEvent.encode(InputEvent(InputEvent.LEFT_UP, 10, 20, 0))))
+        // The picture is 50 x 100, the fake screen 100 x 200.
+        assertEquals(listOf(TouchStep.Down(Spot(21f, 41f)), TouchStep.Up(Spot(21f, 41f))), target.waitFor(2))
+        channel.deliver(message(MessageType.STOP_CONTROL))
+        val until = System.currentTimeMillis() + 2_000
+        while (target.notice.size < 2 && System.currentTimeMillis() < until) Thread.sleep(5)
+        assertEquals(listOf("show", "hide"), target.notice)
+        assertTrue(stream.isAlive)
+    }
+
+    @Test fun aRefusedControlSaysWhy() {
+        val target = RemoteControlTest.FakeTarget().apply { refusing = "desligada" }
+        start(control = target)
+        channel.deliver(message(MessageType.START_CONTROL))
+        assertEquals(false to "desligada", answer())
+    }
+
+    @Test fun aMalformedInputWhileControllingClosesTheConnection() {
+        val target = RemoteControlTest.FakeTarget()
+        val stream = start(control = target)
+        channel.deliver(message(MessageType.START_CONTROL))
+        answer()
+        channel.deliver(Message(MessageType.INPUT_EVENT, byteArrayOf(1, 2, 3)))
+        assertEnds(stream)
+        assertEquals(listOf("show", "hide"), target.notice)
+    }
+
+    @Test fun theConnectionEndingStopsControl() {
+        val target = RemoteControlTest.FakeTarget()
+        val stream = start(control = target)
+        channel.deliver(message(MessageType.START_CONTROL))
+        answer()
+        channel.hangUp()
+        assertEnds(stream)
+        assertEquals(listOf("show", "hide"), target.notice)
     }
 
     @Test fun clipboardTextMidStreamKeepsFramesFlowing() {

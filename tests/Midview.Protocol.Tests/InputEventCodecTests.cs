@@ -30,11 +30,24 @@ public class InputEventCodecTests
     [InlineData(InputEventKind.MouseRightDown, 5)]
     [InlineData(InputEventKind.MouseRightUp, 6)]
     [InlineData(InputEventKind.MouseWheel, 7)]
+    [InlineData(InputEventKind.Text, 8)]
     public void Encode_writes_the_11_byte_wire_layout(InputEventKind kind, byte kindByte)
     {
         var encoded = InputEventCodec.Encode(new InputEvent(kind, X: 0x01020304, Y: -2, VirtualKeyCode: 0x0A0B));
 
         Assert.Equal(new byte[] { kindByte, 0x04, 0x03, 0x02, 0x01, 0xFE, 0xFF, 0xFF, 0xFF, 0x0B, 0x0A }, encoded);
+    }
+
+    // A phone's typed character rides in the key field, the whole UTF-16 unit.
+    [Fact]
+    public void A_typed_character_round_trips_in_the_key_field()
+    {
+        var typed = new InputEvent(InputEventKind.Text, 0, 0, 'ç');
+
+        var encoded = InputEventCodec.Encode(typed);
+
+        Assert.Equal(new byte[] { 8, 0, 0, 0, 0, 0, 0, 0, 0, 0xE7, 0x00 }, encoded);
+        Assert.Equal(typed, InputEventCodec.Decode(encoded));
     }
 
     // Decode has no length check of its own: a payload shorter than the 11

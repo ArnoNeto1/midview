@@ -5,6 +5,10 @@ package io.github.arnoneto1.midview.agent.protocol
 // used here; add others from that file with the same number.
 object MessageType {
     const val HEARTBEAT = 2
+
+    // "Controlar" on the screen port's ScreenStream connection, as a PC's
+    // Session; START_CONTROL answered with a COMMAND_ACK (a CommandResult),
+    // INPUT_EVENT an InputEvent (see ScreenStreamHandler).
     const val START_CONTROL = 3
     const val STOP_CONTROL = 4
     const val INPUT_EVENT = 6

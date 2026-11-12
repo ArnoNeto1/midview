@@ -183,6 +183,7 @@ public partial class MainWindow : MidviewWindow
         var machines = selected.Select(tile => tile.Machine).ToList();
         ViewButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.View);
         ControlButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.Control);
+        ControlButton.ToolTip = selected.Count == 1 && machines[0].IsPhone ? PhoneControl.ToolbarToolTip : PcControlToolTip;
         UpdateActionButtons();
         StatusTextBlock.Text = SelectionStatus();
     }
@@ -524,6 +525,10 @@ public partial class MainWindow : MidviewWindow
         {
             item.Header = ScreenLockText.MachineMenuItem(targets.Any(_screenLocks.ContainsKey));
         }
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.Control))
+        {
+            item.Header = PhoneControl.MenuItem(targets.Select(target => target.Machine).ToList());
+        }
     }
 
     // "Bloquear apps..." when the menu acts on phones alone (the phones'
@@ -619,6 +624,9 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
+    // The toolbar's "Controlar" for a PC (a phone's: PhoneControl.ToolbarToolTip).
+    private const string PcControlToolTip = "Controla a máquina selecionada e trava o teclado e o mouse do aluno.";
+
     private void OnControlSelectedClicked(object sender, RoutedEventArgs e)
     {
         if (_selection.Selected is [var tile])
@@ -694,7 +702,7 @@ public partial class MainWindow : MidviewWindow
     // teacher and a working connection. Runs off the window's thread.
     private (ConnectionClient Client, ControlEndpoint Endpoint) ConnectForScreen(KnownMachine machine, bool control)
     {
-        if (control && !string.IsNullOrEmpty(machine.AgentThumbprint))
+        if (control && !machine.IsPhone && !string.IsNullOrEmpty(machine.AgentThumbprint))
         {
             try
             {

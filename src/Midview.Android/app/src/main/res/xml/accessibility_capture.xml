@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AccessibilityCapture: pictures of the screen for the teacher, nothing
-     else. No events, no window content, no gestures, no keys. -->
+<!-- AccessibilityCapture: pictures of the screen for the teacher and, only
+     while the teacher controls the phone ("Controlar"), the teacher's touches
+     (gestures) and typing into the focused text field (window content, read
+     on demand). No events, no keys, nothing read on its own. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAnnouncement"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault"
-    android:canRetrieveWindowContent="false"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_description"
     android:notificationTimeout="0"

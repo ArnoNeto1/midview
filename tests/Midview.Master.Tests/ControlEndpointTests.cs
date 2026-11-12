@@ -32,6 +32,19 @@ public class ControlEndpointTests
         }
     }
 
+    // A phone takes control on its screen port (5901): it has no helper.
+    [Fact]
+    public void A_phone_always_chooses_its_screen_port()
+    {
+        var phone = new KnownMachine("Celular 99", "10.0.0.9", "phone-thumb", "phone-thumb", Kind: Midview.Protocol.DeviceKind.Android);
+
+        var choice = ControlChoice.Choose(phone, helperReachable: true);
+
+        Assert.Equal(ControlEndpoint.Session, choice.Endpoint);
+        Assert.Equal(5901, choice.Port);
+        Assert.Equal("phone-thumb", choice.Thumbprint);
+    }
+
     [Fact]
     public void An_unreachable_helper_falls_back_to_the_session()
     {

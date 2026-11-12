@@ -21,11 +21,14 @@ import java.util.concurrent.atomic.AtomicReference
 // prepared (README, "Celulares"), that takes a picture of the screen
 // (takeScreenshot, Android 11 and newer) only when a thumbnail or a big
 // window asks for one, at most every MIN_SHOT_INTERVAL_MILLIS, into the
-// same LatestFrame as the "Iniciar agora" capture. It reads nothing else of
-// the screen: no events, no window content, no gestures, no keys
-// (res/xml/accessibility_capture.xml). The one thing it puts on the screen
-// is the teacher's warning before "Fechar programas" (CloseOverlay), a strip
-// that lets every touch through. Android binds it
+// same LatestFrame as the "Iniciar agora" capture. Only while the teacher
+// controls the phone ("Controlar", control/AndroidControlTarget) does it do
+// more: the teacher's touches as gestures, and the teacher's typing into the
+// focused text field, read on demand; no events, no keys
+// (res/xml/accessibility_capture.xml). What it puts on the screen are the
+// teacher's warning before "Fechar programas" (AndroidCloseNotice) and the
+// "being controlled" strip (ControlNotice), both letting every touch
+// through. Android binds it
 // in the app's own process; the agent is started there as for any start of
 // the process (MidviewApplication).
 class AccessibilityCapture : AccessibilityService() {
@@ -162,7 +165,7 @@ class AccessibilityCapture : AccessibilityService() {
             private set
 
         // The service while Android has it connected (any Android version):
-        // what draws the warning strip (CloseOverlay).
+        // what draws the warning strips and carries out the teacher's control.
         @Volatile var instance: AccessibilityCapture? = null
             private set
 

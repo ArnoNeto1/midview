@@ -13,11 +13,12 @@ public static class ControlChoice
 {
     // The helper when the machine has one paired (an AgentThumbprint) and it
     // answered; the Session otherwise, which is also what a machine from
-    // before the helper gets.
+    // before the helper gets. A phone has no helper: its screen port takes
+    // control itself.
     public static (ControlEndpoint Endpoint, int Port, string Thumbprint) Choose(
         KnownMachine machine, bool helperReachable)
     {
-        if (helperReachable && !string.IsNullOrEmpty(machine.AgentThumbprint))
+        if (helperReachable && !machine.IsPhone && !string.IsNullOrEmpty(machine.AgentThumbprint))
         {
             return (ControlEndpoint.Helper, ConnectionClient.DeskPort, machine.AgentThumbprint);
         }

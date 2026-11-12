@@ -36,8 +36,8 @@ public enum ToolbarAction
     PhonePin,
 }
 
-// What each kind of device accepts. A phone can have its screen watched and
-// locked, its apps blocked (its own window: PhoneAppBlockWindow) and closed
+// What each kind of device accepts. A phone can have its screen watched,
+// controlled (PhoneControl) and locked, its apps blocked (its own window: PhoneAppBlockWindow) and closed
 // ("Fechar programas": all of them at once, CloseAppsTargets) and its sites
 // blocked (the same commands as a PC's), gets the teacher's messages and
 // chats ("Mensagem", "Bate-papo": MessageTargets, ChatConnection) and files
@@ -47,15 +47,15 @@ public enum ToolbarAction
 // ("Abrir site", "Abrir programa": RemoteLaunch, PhoneOpenAppWindow), gets
 // apps installed and uninstalled ("Instalar programa": an .apk,
 // InstallWindow; "Desinstalar programa": PhoneUninstallWindow), and is
-// optimized and updated (actions a PC has nothing to do with). Control,
-// "Ligar", "Agendar", the lab panel and the class folder stay for computers.
+// optimized and updated (actions a PC has nothing to do with). "Ligar",
+// "Agendar", the lab panel and the class folder stay for computers.
 // WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
     {
         DeviceKind.Windows => !IsPhoneOnly(action) && action != ToolbarAction.WipePhone,
-        DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.ScreenLock
+        DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.Control or ToolbarAction.ScreenLock
             or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
             or ToolbarAction.CloseApps or ToolbarAction.Message or ToolbarAction.Chat
             or ToolbarAction.SendFile or ToolbarAction.CollectFiles

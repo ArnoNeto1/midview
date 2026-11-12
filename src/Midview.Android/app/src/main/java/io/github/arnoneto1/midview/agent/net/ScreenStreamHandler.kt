@@ -1,6 +1,11 @@
 package io.github.arnoneto1.midview.agent.net
 
+import io.github.arnoneto1.midview.agent.control.ControlTarget
+import io.github.arnoneto1.midview.agent.control.RemoteControl
+import io.github.arnoneto1.midview.agent.control.Size
+import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.FrameAck
+import io.github.arnoneto1.midview.agent.protocol.InputEvent
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageFramer
 import io.github.arnoneto1.midview.agent.protocol.MessageType
@@ -26,11 +31,18 @@ fun interface RegionEncoder {
 // FrameCredit's two on their way unacknowledged, at CaptureCadence's pace.
 // While there is no picture (the student has not allowed it, or the capture
 // stopped) the stream stays open and nothing is sent. The teacher's window
-// sends a Heartbeat every second and a FrameAck per update; StopControl (the
-// window closing), the connection ending or silenceMillis without a word end
-// the stream. A phone takes no control: StartControl, InputEvent or
-// FillAdminPassword end the connection. The window's clipboard (ClipboardText,
-// sent whenever the teacher copies something) is read and dropped.
+// sends a Heartbeat every second and a FrameAck per update; the connection
+// ending or silenceMillis without a word end the stream.
+// "Controlar", as on a PC's Session: StartControl starts control (RemoteControl
+// over control), answered here (a PC answers nothing) with one CommandAck
+// carrying a CommandResult: 1, or 0 and why not (the accessibility service
+// off; no control at all here: CommandResult.NOT_ON_PHONE); InputEvent then
+// carries the teacher's mouse and keys, in pixels of the last picture sent,
+// and StopControl goes back to only watching (the window sends it as it
+// closes, too). A malformed InputEvent ends the connection, as on a PC;
+// FillAdminPassword (the PC helper's) does too. The window's clipboard
+// (ClipboardText, sent whenever the teacher copies something) is read and
+// dropped.
 class ScreenStreamHandler(
     private val channel: Channel,
     private val source: FrameSource,
@@ -39,8 +51,18 @@ class ScreenStreamHandler(
     private val encoder: RegionEncoder,
     private val silenceMillis: Int = SILENCE_MILLIS,
     private val ackTimeoutMillis: Long = ACK_TIMEOUT_MILLIS,
+    control: ControlTarget? = null,
 ) {
     @Volatile private var running = true
+
+    // The size of the picture the teacher has, which the teacher's mouse is in.
+    @Volatile private var sentSize: Size? = null
+
+    private val control = control?.let { RemoteControl(it, frameSize = { sentSize }) }
+
+    // The sender's frames and the receiver's answers to StartControl go out
+    // one whole message at a time.
+    private val sending = Any()
 
     // Returns when the stream has ended, its connection closed.
     fun run() {
@@ -53,6 +75,7 @@ class ScreenStreamHandler(
             readUntilTheEnd()
         } finally {
             running = false
+            control?.stop()
             sender.interrupt()
             // A send in progress gives up once the connection is closed.
             channel.close()
@@ -71,11 +94,23 @@ class ScreenStreamHandler(
             when (message.type) {
                 MessageType.HEARTBEAT -> Unit
                 MessageType.FRAME_ACK -> FrameAck.decode(message.payload)?.let { credit.ack(it) }
-                MessageType.STOP_CONTROL,
-                MessageType.START_CONTROL,
-                MessageType.INPUT_EVENT,
-                MessageType.FILL_ADMIN_PASSWORD,
-                -> return
+                MessageType.START_CONTROL -> {
+                    val refusal = if (control == null) CommandResult.NOT_ON_PHONE else control.start()
+                    val answer = Message(MessageType.COMMAND_ACK, CommandResult.encode(refusal == null, refusal.orEmpty()))
+                    try {
+                        synchronized(sending) { channel.send(answer) }
+                    } catch (e: IOException) {
+                        return
+                    }
+                }
+                MessageType.STOP_CONTROL -> control?.stop()
+                MessageType.INPUT_EVENT -> if (control?.controlling == true) {
+                    // As the Session: a payload that is no InputEvent ends the connection.
+                    val event = InputEvent.decode(message.payload) ?: return
+                    control.input(event)
+                    cadence.activity(System.nanoTime() / 1_000_000)
+                }
+                MessageType.FILL_ADMIN_PASSWORD -> return
                 // Anything else is ignored, as the Session does.
                 else -> Unit
             }
@@ -124,7 +159,8 @@ class ScreenStreamHandler(
                 // The work is the capture, compare and encode, as the
                 // Session counts it: a slow network is not the phone's work.
                 val workMillis = (System.nanoTime() - started) / 1_000_000
-                messages.forEach { channel.send(it) }
+                if (messages.isNotEmpty()) sentSize = Size(frame.width, frame.height)
+                synchronized(sending) { messages.forEach { channel.send(it) } }
 
                 val rest = cadence.restAfter(workMillis, regions.isNotEmpty(), System.nanoTime() / 1_000_000)
                 if (rest > 0) Thread.sleep(rest)

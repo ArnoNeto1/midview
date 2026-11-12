@@ -14,8 +14,8 @@ import java.io.EOFException
 //   fits the box asked for (render).
 // - ScreenStream: the big window, served by stream (ScreenStreamHandler).
 // - LockScreen: "Bloquear telas", held by lockScreen (LockScreenHandler).
-// Anything else (StartControl and the other control messages among them)
-// ends the connection: a phone takes no control. A trusted teacher asking
+// Anything else ends the connection: control (StartControl) comes only on a
+// ScreenStream connection, as the big window's. A trusted teacher asking
 // for the screen (a thumbnail or the big window) is teacherConnected: the
 // moment the student is asked to let the screen be seen. A lock does not
 // ask: the request would only wait under the padlock.

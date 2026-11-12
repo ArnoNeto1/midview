@@ -27,25 +27,35 @@
         <Image x:Name="ScreenImage" Stretch="Uniform"
                MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
                MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
-               KeyDown="OnKeyDown" KeyUp="OnKeyUp" MouseWheel="OnMouseWheel" Focusable="True" />
+               KeyDown="OnKeyDown" KeyUp="OnKeyUp" TextInput="OnTextInput" MouseWheel="OnMouseWheel" Focusable="True" />
         <Border x:Name="Toolbar" VerticalAlignment="Top" Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
             <Border.RenderTransform>
                 <TranslateTransform x:Name="ToolbarSlide" />
             </Border.RenderTransform>
             <StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <!-- Wraps in a narrow window (a phone's, in its own shape) instead of cutting the buttons off. -->
+                <WrapPanel Orientation="Horizontal">
                     <Button x:Name="ControlButton" Click="OnControlClicked" Padding="10,4" Margin="8,6,4,6" />
                     <Button x:Name="FullscreenButton" Content="Tela Cheia" Click="OnFullscreenClicked" Padding="10,4" Margin="4,6" />
                     <Button Content="Desconectar" Click="OnDisconnectClicked" Padding="10,4" Margin="4,6" />
+                    <!-- A phone's only (ShowMode): Android's three buttons, while controlling. -->
+                    <StackPanel x:Name="PhoneButtons" Orientation="Horizontal" Visibility="Collapsed">
+                        <Button Content="Voltar" Click="OnPhoneBackClicked" Padding="10,4" Margin="4,6"
+                                ToolTip="O botão Voltar do celular (no teclado: Esc)." />
+                        <Button Content="Início" Click="OnPhoneHomeClicked" Padding="10,4" Margin="4,6"
+                                ToolTip="Vai para a tela inicial do celular (no teclado: tecla Windows)." />
+                        <Button Content="Recentes" Click="OnPhoneRecentsClicked" Padding="10,4" Margin="4,6"
+                                ToolTip="Mostra os apps abertos no celular." />
+                    </StackPanel>
                     <!-- Only on the helper connection (ShowMode): the password never goes over the Session. -->
                     <Button x:Name="FillPasswordButton" Content="Preencher a senha de administrador" Click="OnFillPasswordClicked"
                             Padding="10,4" Margin="4,6" Visibility="Collapsed" />
                     <Button x:Name="ChangePasswordButton" Content="Trocar senha de administrador..." Click="OnChangePasswordClicked"
                             Padding="10,4" Margin="4,6" Visibility="Collapsed" />
                     <!-- ShowMode sets the colors: accent while controlling, muted while only viewing. -->
-                    <Label x:Name="ModeTextBlock" Style="{StaticResource ModeChip}" VerticalAlignment="Center" Margin="12,0,8,0" />
-                </StackPanel>
+                    <Label x:Name="ModeTextBlock" Style="{StaticResource ModeChip}" VerticalAlignment="Center" Margin="12,4,8,4" />
+                </WrapPanel>
                 <Border x:Name="CompatibilityNote" Visibility="Collapsed">
                     <Border.Background>
                         <SolidColorBrush Color="#FFC53D" Opacity="0.16" />

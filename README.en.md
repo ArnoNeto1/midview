@@ -108,7 +108,7 @@ In **Máquinas da sala** > **Outro professor**:
 
 Coming soon: the phone app hasn't been published yet.
 
-An Android phone (Android 10 or newer) shows up in the grid and is paired with the 6-digit code, like the machines. The **Telas** (screens) button picks what the grid shows: **Todos** (all), **Computadores** (computers) or **Celulares** (phones); **Tablets** is coming soon. The teacher sees the phone's screen, locks it with the padlock and blocks apps and websites:
+An Android phone (Android 10 or newer) shows up in the grid and is paired with the 6-digit code, like the machines. The **Telas** (screens) button picks what the grid shows: **Todos** (all), **Computadores** (computers) or **Celulares** (phones); **Tablets** is coming soon. The teacher sees the phone's screen and controls it (**Controlar**: a click is a tap, dragging swipes, the mouse wheel scrolls, the keyboard types into the text field, and the window gets **Voltar**, **Início** and **Recentes**, Android's Back, Home and Recents buttons; the student sees the notice "Este celular está sendo controlado pelo professor" (this phone is being controlled by the teacher), which almost fades away when the mouse comes near, and can still touch the screen), locks it with the padlock and blocks apps and websites:
 
 - **Block programs** (Bloquear programas), with only phones selected (or with **Telas** on **Celulares**), shows the phone's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
 - **Block websites** (Bloquear sites) is the same window as for the PCs. On the phone, blocked websites don't open in Chrome, and the other browsers are hidden. **Bloquear a internet** (block the internet) cuts the internet for every app, and Midview keeps seeing the phone.
@@ -139,7 +139,7 @@ A phone is prepared once, over a USB cable plugged into the teacher's computer. 
    adb shell dpm set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver
    ```
 
-   The second takes Midview out of battery saving; the third, only on Xiaomi (MIUI), lets Midview start on its own; the fourth and fifth let the teacher see the screen without the student tapping "Start now" (Android 11 or newer). `dpm set-device-owner` comes **last**: right after it, the phone's locks turn USB debugging off.
+   The second takes Midview out of battery saving; the third, only on Xiaomi (MIUI), lets Midview start on its own; the fourth and fifth let the teacher see the screen without the student tapping "Start now" (Android 11 or newer) and control the phone. `dpm set-device-owner` comes **last**: right after it, the phone's locks turn USB debugging off.
 5. In **Máquinas da sala** > **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.
 
 If the student closes every recent app ("Clear all" on Xiaomi), Midview on the phone comes back by itself within a few seconds (more slowly when the phone is idle).

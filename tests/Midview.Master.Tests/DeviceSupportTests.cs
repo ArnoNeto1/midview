@@ -31,11 +31,11 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_power_programs_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_control_screen_lock_blocking_closing_messages_chat_files_power_programs_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
-            var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
+            var expected = action is ToolbarAction.View or ToolbarAction.Control or ToolbarAction.ScreenLock
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
                 or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
@@ -97,13 +97,13 @@ public class DeviceSupportTests
     }
 
     [Fact]
-    public void Phone_only_selection_keeps_control_grey_but_view_and_lock_on()
+    public void Phone_only_selection_keeps_view_control_and_lock_on()
     {
         var selected = new[] { Phone("Cel 01") };
 
         Assert.True(DeviceSupport.IsEnabled(selected, ToolbarAction.View));
         Assert.True(DeviceSupport.IsEnabled(selected, ToolbarAction.ScreenLock));
-        Assert.False(DeviceSupport.IsEnabled(selected, ToolbarAction.Control));
+        Assert.True(DeviceSupport.IsEnabled(selected, ToolbarAction.Control));
     }
 
     [Fact]
@@ -111,9 +111,8 @@ public class DeviceSupportTests
         Assert.Null(DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Phone("Cel 01") }, ToolbarAction.ScreenLock));
 
     [Fact]
-    public void Control_of_a_phone_is_left_out() =>
-        Assert.Equal("1 celular ficou de fora: essa ação ainda não funciona em celular.",
-                     DeviceSupport.LeftOutNotice(new[] { Phone("Cel 01") }, ToolbarAction.Control));
+    public void Control_of_a_phone_leaves_nothing_out() =>
+        Assert.Null(DeviceSupport.LeftOutNotice(new[] { Phone("Cel 01") }, ToolbarAction.Control));
 
     // The Ctrl+Alt+Del escapes are a Windows Agent thing (port 28900): a phone has no Agent for it.
     [Fact]
