@@ -1,0 +1,256 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Midview.Protocol;
+
+namespace Midview.Master;
+
+// What can stop a phone from being prepared over the cable.
+public enum CableProblem
+{
+    NoPhone, TooMany, Unauthorized, TooOld, SecurityOff, InstallOff,
+    HasAccounts, HasUsers, AlreadySchool, InstallFailed, Refused, Lost,
+}
+
+public enum CableStage { Checking, Installing, Wifi, Pairing, Owner }
+
+// Phone is set when the phone is ready; Problem when it is not. OwnerUnconfirmed:
+// the cable dropped while the last command ran, so whether the phone became the
+// school's own is not known yet (the phone shows it on its screen).
+public sealed record CableResult(KnownMachine? Phone, CableProblem? Problem, bool OwnerUnconfirmed);
+
+// Prepares one school phone over USB, driving adb in a fixed order:
+// check, install, allow past the phone's cleaner, hand over the setup, make it
+// the school's own. Nothing uses the cable after that last command.
+public sealed class PhoneCable
+{
+    private static readonly TimeSpan Short = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan InstallTime = TimeSpan.FromMinutes(3);
+    private static readonly Regex AccountsLine = new(@"Accounts:\s*(\d+)", RegexOptions.Compiled);
+    private static readonly Regex GoneText = new(
+        "device offline|no devices|device .* not found|device not found|closed|disconnected|more than one device",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private const string Authority = "content://io.github.arnoneto1.midview.agent.setup";
+
+    private readonly IAdb _adb;
+
+    public PhoneCable(IAdb adb)
+    {
+        _adb = adb;
+    }
+
+    private AdbOutput Shell(TimeSpan timeout, params string[] command) =>
+        _adb.Run(timeout, new[] { "shell" }.Concat(command).ToArray());
+
+    private string Prop(string name) => Shell(Short, "getprop", name).Text.Trim();
+
+    // The single phone on the cable and its state, or the problem when there is not exactly one.
+    private (CableProblem? Problem, bool Present) Devices()
+    {
+        var output = _adb.Run(Short, "devices");
+        var states = new List<string>();
+        foreach (var line in output.Text.Split('\n'))
+        {
+            var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2 || line.StartsWith("List of", StringComparison.Ordinal) || line.StartsWith('*'))
+            {
+                continue;
+            }
+            states.Add(parts[1]);
+        }
+        if (states.Count == 0)
+        {
+            return (CableProblem.NoPhone, false);
+        }
+        if (states.Count > 1)
+        {
+            return (CableProblem.TooMany, false);
+        }
+        return states[0] switch
+        {
+            "device" => (null, true),
+            "unauthorized" => (CableProblem.Unauthorized, false),
+            _ => (CableProblem.NoPhone, false),
+        };
+    }
+
+    public CableProblem? Check()
+    {
+        var (problem, _) = Devices();
+        if (problem is not null)
+        {
+            return problem;
+        }
+
+        if (!int.TryParse(Prop("ro.build.version.sdk"), NumberStyles.None, CultureInfo.InvariantCulture, out var sdk))
+        {
+            return CableProblem.NoPhone;
+        }
+        if (sdk < 29)
+        {
+            return CableProblem.TooOld;
+        }
+
+        if (Prop("ro.miui.ui.version.name").Length > 0)
+        {
+            if (Prop("persist.security.adbinput") != "1")
+            {
+                return CableProblem.SecurityOff;
+            }
+            if (Prop("persist.security.adbinstall") != "1")
+            {
+                return CableProblem.InstallOff;
+            }
+        }
+
+        var accounts = Shell(Short, "dumpsys", "account").Text;
+        if (AccountsLine.Matches(accounts).Any(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > 0))
+        {
+            return CableProblem.HasAccounts;
+        }
+
+        var users = Shell(Short, "pm", "list", "users").Text;
+        if (users.Split("UserInfo{").Length - 1 > 1)
+        {
+            return CableProblem.HasUsers;
+        }
+
+        if (Shell(Short, "dpm", "list-owners").Text.Contains(PhoneProvisioning.AgentPackage, StringComparison.Ordinal))
+        {
+            return CableProblem.AlreadySchool;
+        }
+        return null;
+    }
+
+    public CableResult Prepare(
+        string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage)
+    {
+        static CableResult Fail(CableProblem problem) => new(null, problem, false);
+
+        stage(CableStage.Checking);
+        if (Check() is { } problem)
+        {
+            return Fail(problem);
+        }
+
+        stage(CableStage.Installing);
+        var package = PhoneProvisioning.AgentPackage;
+        var installed = Shell(Short, "pm", "list", "packages", package).Text
+            .Split('\n').Any(l => l.Trim() == "package:" + package);
+        if (installed)
+        {
+            Shell(Short, "pm", "clear", package);
+        }
+
+        var install = _adb.Run(InstallTime, "install", "-r", apkPath);
+        if (install.TimedOut || !install.Text.Contains("Success", StringComparison.Ordinal))
+        {
+            return Fail(install.Text.Contains("INSTALL_FAILED_USER_RESTRICTED", StringComparison.Ordinal)
+                ? CableProblem.InstallOff
+                : CableProblem.InstallFailed);
+        }
+
+        // Keeps the phone's cleaner from killing the app. A failure here does not stop the setup.
+        Shell(Short, "cmd", "appops", "set", package, "10008", "allow");
+        Shell(Short, "cmd", "deviceidle", "whitelist", "+" + package);
+
+        stage(CableStage.Wifi);
+        var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password);
+        var call = Shell(
+            Short, "content", "call", "--uri", Authority, "--method", "prepare", "--extra", "setup:s:" + payload);
+        var bundle = ParseBundle(call.Text);
+        if (!bundle.TryGetValue("ok", out var ok))
+        {
+            // No answer from the door: the cable dropped, or the app did not answer.
+            return Fail(Devices().Present ? CableProblem.Refused : CableProblem.Lost);
+        }
+        if (!ok.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || !bundle.TryGetValue("thumbprint", out var thumbprint) || thumbprint.Length == 0)
+        {
+            return Fail(CableProblem.Refused);
+        }
+
+        stage(CableStage.Pairing);
+        var phone = new KnownMachine(
+            PhoneNumber.NameOf(number), "0.0.0.0", thumbprint, thumbprint, null, DeviceKind.Android);
+
+        if (!Devices().Present)
+        {
+            return Fail(CableProblem.Lost);
+        }
+
+        stage(CableStage.Owner);
+        var owner = Shell(Short, "dpm", "set-device-owner", PhoneProvisioning.AdminComponent);
+        // From here on nothing else touches the cable.
+        if (owner.Text.Contains("Success", StringComparison.Ordinal))
+        {
+            return new CableResult(phone, null, false);
+        }
+        if (owner.Text.Contains("MANAGE_DEVICE_ADMINS", StringComparison.Ordinal))
+        {
+            return Fail(CableProblem.SecurityOff);
+        }
+        if (owner.Text.Contains("already some accounts", StringComparison.OrdinalIgnoreCase))
+        {
+            return Fail(CableProblem.HasAccounts);
+        }
+        if (owner.Text.Contains("already several users", StringComparison.OrdinalIgnoreCase))
+        {
+            return Fail(CableProblem.HasUsers);
+        }
+        if (owner.TimedOut || owner.Text.Trim().Length == 0 || GoneText.IsMatch(owner.Text))
+        {
+            return new CableResult(phone, null, true);
+        }
+        return Fail(CableProblem.Refused);
+    }
+
+    // "Result: Bundle[{ok=true, thumbprint=AB12, name=Celular 07}]" into its keys.
+    // Bundle.toString does not promise an order, so every key is read by name.
+    internal static Dictionary<string, string> ParseBundle(string text)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        const string Opening = "Bundle[{";
+        var open = text.IndexOf(Opening, StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return values;
+        }
+        var body = text[(open + Opening.Length)..];
+        var close = body.IndexOf("}]", StringComparison.Ordinal);
+        if (close >= 0)
+        {
+            body = body[..close];
+        }
+        // A value can hold ", " (a name), so a new pair starts only at ", key=" of a known key.
+        foreach (var part in Regex.Split(body, @",\s*(?=(?:ok|thumbprint|name|error)=)"))
+        {
+            var eq = part.IndexOf('=');
+            if (eq > 0)
+            {
+                values[part[..eq].Trim()] = part[(eq + 1)..].Trim();
+            }
+        }
+        return values;
+    }
+
+    public static (string Text, string? BackToStep) Describe(CableProblem p) => p switch
+    {
+        CableProblem.NoPhone => ("O celular não está no cabo.", "cabo"),
+        CableProblem.TooMany => ("Há mais de um celular no cabo. Deixe só um.", "cabo"),
+        CableProblem.Unauthorized => ("Falta tocar em Permitir no celular.", "cabo"),
+        CableProblem.TooOld => ("Este celular é antigo demais para o Midview (precisa do Android 10 ou mais novo).", null),
+        CableProblem.SecurityOff => ("A chave \"Depuração USB (configurações de segurança)\" está desligada.", "chaves"),
+        CableProblem.InstallOff => ("A chave \"Instalar via USB\" está desligada.", "chaves"),
+        CableProblem.HasAccounts => ("Ainda há uma conta neste celular.", "sair-contas"),
+        CableProblem.HasUsers => ("O celular tem um Segundo espaço ou Apps duplos. Apague-os nas Configurações e tente de novo.", null),
+        CableProblem.AlreadySchool => ("Este celular já é da escola. Para prepará-lo de novo, use \"Apagar e preparar de novo\" no Midview.", null),
+        CableProblem.InstallFailed => ("O Midview não foi instalado no celular. Se apareceu uma pergunta no celular, toque em Instalar e tente de novo.", "cabo"),
+        CableProblem.Refused => ("O celular recusou a preparação. Tente de novo.", "cabo"),
+        CableProblem.Lost => ("O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo"),
+        _ => throw new ArgumentOutOfRangeException(nameof(p)),
+    };
+}
