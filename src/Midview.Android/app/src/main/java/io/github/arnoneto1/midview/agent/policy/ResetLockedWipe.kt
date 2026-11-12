@@ -7,15 +7,31 @@ package io.github.arnoneto1.midview.agent.policy
 object ResetLockedWipe {
     const val NO_FACTORY_RESET = "no_factory_reset"
 
-    // lift and lock set and clear the restriction; a refusal to lift it is
-    // not fatal (the wipe is tried anyway), and it is then not locked again.
-    fun run(lift: () -> Unit, lock: () -> Unit, wipe: () -> Unit, log: (String, Throwable?) -> Unit = { _, _ -> }) {
-        var lifted = true
-        try {
-            lift()
+    // isLocked tells whether the restriction is on now: a debug build keeps
+    // it off (Lockdown.KEPT_ON_DEBUG_BUILDS), and it is then neither lifted
+    // nor put on after a failed wipe. When that cannot be read, it counts as
+    // on. lift and lock clear and set the restriction; a refusal to lift it
+    // is not fatal (the wipe is tried anyway), and it is then not locked again.
+    fun run(
+        isLocked: () -> Boolean,
+        lift: () -> Unit,
+        lock: () -> Unit,
+        wipe: () -> Unit,
+        log: (String, Throwable?) -> Unit = { _, _ -> },
+    ) {
+        var lifted = try {
+            isLocked()
         } catch (e: RuntimeException) {
-            lifted = false
-            log("Could not lift the factory reset lock before wiping", e)
+            log("Could not read the factory reset lock before wiping", e)
+            true
+        }
+        if (lifted) {
+            try {
+                lift()
+            } catch (e: RuntimeException) {
+                lifted = false
+                log("Could not lift the factory reset lock before wiping", e)
+            }
         }
         try {
             wipe()

@@ -84,14 +84,26 @@ class CableSetupDoorTest {
         setup = CableSetup(File(folder.root, "cable-setup.json"))
         trusted = TrustedMasters(File(folder.root, "trusted.txt"))
         val failing = CableSetupDoor(setup, trusted, { false }, { throw IllegalStateException("no keystore") })
-        try {
-            failing.prepare(2000, vector)
-            org.junit.Assert.fail("expected the identity failure")
-        } catch (_: IllegalStateException) {
-        }
+        val answer = failing.prepare(2000, vector)
+        assertEquals(false, answer["ok"])
+        assertEquals("no-identity", answer["error"])
         assertEquals(0, trusted.count())
         assertNull(setup.number())
         assertEquals(true, door().prepare(2000, vector)["ok"])
+    }
+
+    // The key store throws exceptions Java declares (not RuntimeException):
+    // the same answer, nothing saved nor trusted, and no throw to the caller.
+    @Test fun aKeyStoreExceptionIsAnAnswerAndLeavesNothing() {
+        setup = CableSetup(File(folder.root, "cable-setup.json"))
+        trusted = TrustedMasters(File(folder.root, "trusted.txt"))
+        val failing = CableSetupDoor(setup, trusted, { false }, { throw java.security.KeyStoreException("locked") })
+        val answer = failing.prepare(2000, vector)
+        assertEquals(false, answer["ok"])
+        assertEquals("no-identity", answer["error"])
+        assertFalse(answer.containsKey("thumbprint"))
+        assertEquals(0, trusted.count())
+        assertNull(setup.number())
     }
 
     @Test fun theMasterIsTrustedOnlyAfterTheIdentityExists() {

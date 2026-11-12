@@ -7,7 +7,9 @@ import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 // phone that is not yet the Device Owner nor trusts any teacher. Anything
 // refused saves and trusts nothing. identity makes (or reads) the agent's
 // certificate and returns its thumbprint and name; it runs after the number
-// is saved, so the certificate is born named "Celular 07".
+// is saved, so the certificate is born named "Celular 07". If it fails (the
+// key store can throw exceptions Kotlin does not see as RuntimeException),
+// the answer is "no-identity" and nothing is left saved nor trusted.
 class CableSetupDoor(
     private val setup: CableSetup,
     private val trusted: TrustedMasters,
@@ -21,12 +23,13 @@ class CableSetupDoor(
         val data = CableSetupPayload.decode(payload) ?: return error("bad-setup")
         setup.save(data)
         // The identity before the trust: if it fails, nothing is left half
-        // done (no setup file, nobody trusted) and a retry starts clean.
+        // done (no setup file, nobody trusted) and a retry starts clean. The
+        // failure is an answer, not a throw on the caller's binder thread.
         val (thumbprint, name) = try {
             identity()
-        } catch (e: RuntimeException) {
+        } catch (_: Exception) {
             setup.clear()
-            throw e
+            return error("no-identity")
         }
         trusted.add(data.master)
         return mapOf("ok" to true, "thumbprint" to thumbprint, "name" to name)

@@ -10,10 +10,10 @@ import io.github.arnoneto1.midview.agent.ui.ReadyActivity
 import java.io.File
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 
-// The app's device admin: the Master's QR code names it
-// (io.github.arnoneto1.midview.agent/.AdminReceiver), and it makes the app
-// the school phone's Device Owner. Once provisioning ends (or the app is
-// made Device Owner by hand), the locks go on and the agent starts.
+// The app's device admin: the Master names it over the cable (adb shell dpm
+// set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver), and it
+// makes the app the school phone's Device Owner. Once provisioning ends (or
+// the app is made Device Owner by hand), the locks go on and the agent starts.
 class AdminReceiver : DeviceAdminReceiver() {
     override fun onEnabled(context: Context, intent: Intent) {
         lockDownAndStart(context)

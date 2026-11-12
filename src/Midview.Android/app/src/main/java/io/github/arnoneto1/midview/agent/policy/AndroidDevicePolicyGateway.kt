@@ -48,8 +48,10 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     // The "no factory reset" lock (Lockdown) is lifted for the wipe, so it
     // cannot stand in the way of the Device Owner's own wipe, and put back if
-    // the wipe fails (ResetLockedWipe).
+    // the wipe fails (ResetLockedWipe). A debug build, which never had it on,
+    // is left without it.
     override fun wipe() = ResetLockedWipe.run(
+        isLocked = { dpm.getUserRestrictions(admin).getBoolean(ResetLockedWipe.NO_FACTORY_RESET) },
         lift = { dpm.clearUserRestriction(admin, ResetLockedWipe.NO_FACTORY_RESET) },
         lock = { dpm.addUserRestriction(admin, ResetLockedWipe.NO_FACTORY_RESET) },
         wipe = {
