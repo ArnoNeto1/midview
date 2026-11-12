@@ -41,6 +41,17 @@ class AdblockDnsTest {
         assertFalse(outcome.backToAutomatic)
     }
 
+    // Ours on and the internet check, which went through it, failing: the
+    // DNS may be what the network keeps out, so back to automatic.
+    @Test fun ourDnsOnAndNoInternetGoesBackToAutomatic() {
+        val outcome = AdblockDns.decide(internetOk = false, internetBlockedByTeacher = false, setResult = null, validated = null, dnsOn = true)
+        assertEquals(DnsOutcome.NOT_VALIDATED, outcome)
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, outcome.state)
+        assertTrue(outcome.backToAutomatic)
+        // The teacher's block still comes first.
+        assertEquals(DnsOutcome.INTERNET_BLOCKED, AdblockDns.decide(false, true, null, null, dnsOn = true))
+    }
+
     @Test fun withInternetTheHostIsSetNext() {
         val outcome = AdblockDns.decide(internetOk = true, internetBlockedByTeacher = false, setResult = null, validated = null)
         assertEquals(DnsOutcome.SET_HOST, outcome)
@@ -88,7 +99,7 @@ class AdblockDnsTest {
         assertEquals(PhoneDnsStates.ON, dns.apply())
         assertEquals(ours, gw.privateDns)
         assertEquals(listOf("host $host"), gw.dnsCalls)
-        assertEquals(listOf("check", "serves $host", "await $host 20000ms"), network.calls)
+        assertEquals(listOf("check", "check $host", "await $host 20000ms"), network.calls)
     }
 
     @Test fun internetBlockedByTheTeacherChecksNothingAndChangesNothing() {
@@ -120,18 +131,74 @@ class AdblockDnsTest {
         assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
         assertEquals(listOf("host $host"), gw.dnsCalls)
         assertEquals(automatic, gw.privateDns)
-        assertEquals(listOf("check", "serves $host"), network.calls)
+        assertEquals(listOf("check", "check $host"), network.calls)
     }
 
     // Android's own check of the host has no time limit (minutes on a network
-    // that drops the packets): the same check, bounded, comes first, and a
-    // host it finds not serving is not asked for at all.
-    @Test fun aHostAndroidWouldRefuseIsNotAskedFor() {
-        network.serves = false
+    // that drops the packets): the same check, bounded, comes first, and with
+    // no address of the host answering nothing is asked for nor written.
+    @Test fun noAddressAnsweringWritesNothing() {
+        network.firstAddress = false
+        network.ipv4 = false
         assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
         assertTrue(gw.dnsCalls.isEmpty())
         assertEquals(automatic, gw.privateDns)
-        assertEquals(listOf("check", "serves $host"), network.calls)
+        assertEquals(listOf("check", "check $host"), network.calls)
+    }
+
+    // The first address answering, Android's own way is used, even with the
+    // IPv4 addresses answering too.
+    @Test fun theFirstAddressAnsweringUsesAndroidsOwnWay() {
+        network.ipv4 = false
+        assertEquals(PhoneDnsStates.ON, dns.apply())
+        assertEquals(listOf("host $host"), gw.dnsCalls)
+    }
+
+    // A network whose route to the host's IPv6 is broken: Android's own check
+    // (the first address, IPv6) would refuse a host the phone can use, since
+    // the private DNS uses every address. The settings are written directly.
+    @Test fun onlyTheIpv4AnsweringWritesTheSettingsAndValidates() {
+        network.firstAddress = false
+        assertEquals(PhoneDnsStates.ON, dns.apply())
+        assertEquals(listOf("write $host"), gw.dnsCalls)
+        assertEquals(ours, gw.privateDns)
+        assertEquals(listOf("check", "check $host", "await $host 20000ms"), network.calls)
+    }
+
+    @Test fun onlyTheIpv4AnsweringAndNotValidatedGoesBackToAutomatic() {
+        network.firstAddress = false
+        network.validates = false
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
+        assertEquals(listOf("write $host", "automatic"), gw.dnsCalls)
+        assertEquals(automatic, gw.privateDns)
+    }
+
+    // A refused write is the network keeping the DNS out, not an error.
+    @Test fun aWriteAndroidRefusesIsTheNetworkBlocking() {
+        network.firstAddress = false
+        gw.refuseWrite = true
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
+        assertEquals(listOf("write $host"), gw.dnsCalls)
+        assertEquals(automatic, gw.privateDns)
+        assertEquals(listOf("check", "check $host"), network.calls)
+    }
+
+    @Test fun aWriteWithNoEffectIsTheNetworkBlocking() {
+        network.firstAddress = false
+        gw.writeHasNoEffect = true
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
+        assertEquals(listOf("write $host"), gw.dnsCalls)
+        assertEquals(automatic, gw.privateDns)
+        assertEquals(listOf("check", "check $host"), network.calls)
+    }
+
+    // Strict on no host (or another) would leave the phone without names.
+    @Test fun aWriteThatLeftTheModeWithoutOurHostGoesBackToAutomatic() {
+        network.firstAddress = false
+        gw.writeOnlyTheMode = true
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
+        assertEquals(listOf("write $host", "automatic"), gw.dnsCalls)
+        assertEquals(automatic, gw.privateDns)
     }
 
     @Test fun notValidatedGoesBackToAutomatic() {
@@ -144,7 +211,8 @@ class AdblockDnsTest {
     // Setting it again would make the network check it from the start.
     @Test fun alreadyOnIsCheckedAgainNotSetAgain() {
         gw.privateDns = ours
-        network.serves = false
+        network.firstAddress = false
+        network.ipv4 = false
         assertEquals(PhoneDnsStates.ON, dns.apply())
         assertTrue(gw.dnsCalls.isEmpty())
         assertEquals(listOf("check", "await $host 20000ms"), network.calls)
@@ -156,6 +224,15 @@ class AdblockDnsTest {
         assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
         assertEquals(listOf("automatic"), gw.dnsCalls)
         assertEquals(automatic, gw.privateDns)
+    }
+
+    @Test fun alreadyOnAndTheInternetCheckFailingGoesBackToAutomatic() {
+        gw.privateDns = ours
+        network.internet = false
+        assertEquals(PhoneDnsStates.OFF_NETWORK_BLOCKS, dns.apply())
+        assertEquals(listOf("automatic"), gw.dnsCalls)
+        assertEquals(automatic, gw.privateDns)
+        assertEquals(listOf("check"), network.calls)
     }
 
     @Test fun anotherHostIsReplacedByOurs() {

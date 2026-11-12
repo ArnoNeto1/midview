@@ -43,6 +43,10 @@ interface DevicePolicyGateway {
     fun setPrivateDnsHost(host: String): Int
     fun setPrivateDnsAutomatic(): Int
 
+    // The same two settings written directly (the host, then the mode),
+    // without Android's check of the host; throws when Android refuses.
+    fun writePrivateDnsHost(host: String)
+
     // The phone's always-on VPN (null: none), and setting it.
     fun alwaysOnVpn(): AlwaysOnVpn?
     fun setAlwaysOnVpn(vpn: AlwaysOnVpn?)

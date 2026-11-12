@@ -72,6 +72,8 @@ class LockdownTest {
 
         override fun setPrivateDnsHost(host: String): Int = PrivateDns.SET_NO_ERROR
 
+        override fun writePrivateDnsHost(host: String) = Unit
+
         override fun setPrivateDnsAutomatic(): Int = PrivateDns.SET_NO_ERROR
 
         override fun alwaysOnVpn(): AlwaysOnVpn? = null

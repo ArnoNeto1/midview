@@ -11,8 +11,10 @@ import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.URL
 import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
@@ -71,15 +73,19 @@ enum class DnsOutcome(val state: String?, val backToAutomatic: Boolean = false) 
     ERROR(PhoneDnsStates.OFF_ERROR, backToAutomatic = true),
 }
 
+// Whether the DNS host takes a TLS connection on port 853: at its first
+// address (what Android's own check tries), and at any of its IPv4 addresses
+// (with the host's name checked on its certificate).
+data class HostCheck(val firstAddress: Boolean, val ipv4: Boolean)
+
 // The phone's network as the ad-free DNS sees it (AndroidDnsNetwork).
 interface DnsNetwork {
     // The agent's own HTTPS request to Android's check address answers 204
     // within 5 s.
     fun internetOk(): Boolean
 
-    // Android's own check before it takes a host, bounded: a TLS connection
-    // to the host's first address on port 853.
-    fun hostServes(host: String): Boolean
+    // Both checks of the host, together, bounded (10 s).
+    fun checkHost(host: String): HostCheck
 
     // Waits up to timeoutMillis for the phone's network to be validated with
     // the private DNS on host in use; false if it never is.
@@ -136,22 +142,52 @@ class AdblockDns(
 
     private fun steps(): DnsOutcome {
         if (internetBlocked()) return decide(internetOk = false, internetBlockedByTeacher = true, setResult = null, validated = null)
-        val outcome = decide(network.internetOk(), internetBlockedByTeacher = false, setResult = null, validated = null)
+        val dnsOn = isSet()
+        val outcome = decide(network.internetOk(), internetBlockedByTeacher = false, setResult = null, validated = null, dnsOn = dnsOn)
         if (outcome != DnsOutcome.SET_HOST) return outcome
         // Already on: checked again, not set again (setting it makes the
-        // network check it from the start). Android checks a host before
-        // taking it with no time limit on the connection (minutes on a
-        // network that drops the packets, past what the teacher waits for):
-        // the same check, bounded, comes first, and a host it finds not
-        // serving gets the answer Android would give.
-        val result = when {
-            isSet() -> PrivateDns.SET_NO_ERROR
-            !network.hostServes(HOST) -> PrivateDns.SET_ERROR_HOST_NOT_SERVING
-            else -> gw.setPrivateDnsHost(HOST).also { log("Private DNS host asked for: Android answered $it.", null) }
-        }
+        // network check it from the start).
+        val result = if (dnsOn) PrivateDns.SET_NO_ERROR else setHost()
         val taken = decide(true, false, result, validated = null)
         if (taken != DnsOutcome.AWAIT_VALIDATION) return taken
         return decide(true, false, result, network.awaitPrivateDns(HOST, VALIDATION_MILLIS))
+    }
+
+    // Android checks a host before taking it, at its first address only and
+    // with no time limit on the connection (minutes on a network that drops
+    // the packets, past what the teacher waits for); the same check, bounded,
+    // comes first. With the first address answering, Android's own way. With
+    // only the IPv4 addresses answering (a network whose route to the host's
+    // IPv6 is broken: Android's check would refuse a host the phone can use,
+    // since the private DNS uses all of its addresses), the two settings are
+    // written directly. The validation decides either way. With no address
+    // answering, nothing is written: the answer Android would give.
+    private fun setHost(): Int {
+        val check = network.checkHost(HOST)
+        return when {
+            check.firstAddress -> gw.setPrivateDnsHost(HOST).also { log("Private DNS host asked for: Android answered $it.", null) }
+            check.ipv4 -> writeHost()
+            else -> PrivateDns.SET_ERROR_HOST_NOT_SERVING.also { log("No address of the DNS host answers.", null) }
+        }
+    }
+
+    // A refused write, or one with no effect, is a network that keeps the
+    // DNS out (HOST_NOT_SERVING), never an error. A mode left strict without
+    // our host would leave the phone without names: back to automatic.
+    private fun writeHost(): Int {
+        try {
+            gw.writePrivateDnsHost(HOST)
+        } catch (e: RuntimeException) {
+            log("Android would not take the private DNS written directly", e)
+        }
+        val now = gw.privateDns()
+        if (now.isStrictOn(HOST)) {
+            log("Private DNS written directly: only the host's IPv4 addresses answer.", null)
+            return PrivateDns.SET_NO_ERROR
+        }
+        if (now.mode == PrivateDns.MODE_PROVIDER_HOSTNAME) backToAutomatic()
+        log("The private DNS written directly did not take.", null)
+        return PrivateDns.SET_ERROR_HOST_NOT_SERVING
     }
 
     companion object {
@@ -164,10 +200,18 @@ class AdblockDns(
         // Each step's answer, in order: the internet blocked by the teacher,
         // the agent's internet check, what Android said to the host (null:
         // not asked yet), whether the network validated it (null: not yet).
-        fun decide(internetOk: Boolean, internetBlockedByTeacher: Boolean, setResult: Int?, validated: Boolean?): DnsOutcome =
+        // dnsOn: ours was on already, so the internet check went through it;
+        // failing, the DNS may be what the network keeps out.
+        fun decide(
+            internetOk: Boolean,
+            internetBlockedByTeacher: Boolean,
+            setResult: Int?,
+            validated: Boolean?,
+            dnsOn: Boolean = false,
+        ): DnsOutcome =
             when {
                 internetBlockedByTeacher -> DnsOutcome.INTERNET_BLOCKED
-                !internetOk -> DnsOutcome.NO_INTERNET
+                !internetOk -> if (dnsOn) DnsOutcome.NOT_VALIDATED else DnsOutcome.NO_INTERNET
                 setResult == null -> DnsOutcome.SET_HOST
                 setResult == PrivateDns.SET_ERROR_HOST_NOT_SERVING -> DnsOutcome.HOST_REFUSED
                 setResult != PrivateDns.SET_NO_ERROR -> DnsOutcome.ERROR
@@ -183,15 +227,22 @@ class AdblockDns(
 class AndroidDnsNetwork(context: Context) : DnsNetwork {
     private val cm = context.applicationContext.getSystemService(ConnectivityManager::class.java)
 
-    override fun internetOk(): Boolean = within(CHECK_MILLIS) { answers204() }
+    // Bounded as a whole: a name that does not resolve can take longer than
+    // the connection's own timeouts.
+    override fun internetOk(): Boolean = started { answers204() }.by(SystemClock.elapsedRealtime() + CHECK_MILLIS)
+
+    override fun checkHost(host: String): HostCheck {
+        val deadline = SystemClock.elapsedRealtime() + HOST_CHECK_MILLIS
+        val first = started { firstAddressAnswers(host) }
+        val ipv4 = started { ipv4Answers(host, deadline) }
+        return HostCheck(firstAddress = first.by(deadline), ipv4 = ipv4.by(deadline))
+    }
 
     // As DevicePolicyManager's own check (PrivateDnsConnectivityChecker): the
     // host's first address, as this process resolves it, and a TLS handshake
     // on port 853 with the system's certificates. Android's connects with no
     // time limit; this one gives up after a few seconds.
-    override fun hostServes(host: String): Boolean = within(HOST_CHECK_MILLIS) { handshakes(host) }
-
-    private fun handshakes(host: String): Boolean =
+    private fun firstAddressAnswers(host: String): Boolean =
         try {
             (SSLSocketFactory.getDefault().createSocket() as SSLSocket).use { socket ->
                 socket.soTimeout = HOST_HANDSHAKE_MILLIS
@@ -203,20 +254,46 @@ class AndroidDnsNetwork(context: Context) : DnsNetwork {
             false
         }
 
-    // Bounded as a whole: a name that does not resolve can take longer than
-    // the connection's own timeouts.
-    private fun within(millis: Long, check: () -> Boolean): Boolean {
-        val task = FutureTask(Callable { check() })
-        Thread(task, "Midview network check").apply { isDaemon = true }.start()
-        return try {
-            task.get(millis, TimeUnit.MILLISECONDS)
+    // Any of the host's IPv4 addresses, all tried at once, each with the
+    // host's name checked on the certificate it shows.
+    private fun ipv4Answers(host: String, deadline: Long): Boolean {
+        val addresses = try {
+            InetAddress.getAllByName(host).filterIsInstance<Inet4Address>()
+        } catch (_: IOException) {
+            return false
+        }
+        return addresses.map { address -> started { answersAs(address, host) } }.any { it.by(deadline) }
+    }
+
+    private fun answersAs(address: Inet4Address, host: String): Boolean =
+        try {
+            Socket().use { plain ->
+                plain.connect(InetSocketAddress(address, DOT_PORT), HOST_CONNECT_MILLIS)
+                plain.soTimeout = HOST_HANDSHAKE_MILLIS
+                ((SSLSocketFactory.getDefault() as SSLSocketFactory).createSocket(plain, host, DOT_PORT, true) as SSLSocket).use { socket ->
+                    socket.sslParameters = socket.sslParameters.apply { endpointIdentificationAlgorithm = "HTTPS" }
+                    socket.startHandshake()
+                    true
+                }
+            }
+        } catch (_: IOException) {
+            false
+        }
+
+    // A check on a thread of its own; its answer by the deadline, false if
+    // late or failed.
+    private fun started(check: () -> Boolean): FutureTask<Boolean> =
+        FutureTask(Callable { check() }).also { Thread(it, "Midview network check").apply { isDaemon = true }.start() }
+
+    private fun FutureTask<Boolean>.by(deadline: Long): Boolean =
+        try {
+            get((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0), TimeUnit.MILLISECONDS)
         } catch (_: TimeoutException) {
-            task.cancel(true)
+            cancel(true)
             false
         } catch (_: ExecutionException) {
             false
         }
-    }
 
     private fun answers204(): Boolean {
         val connection = URL(CHECK_URL).openConnection() as HttpURLConnection

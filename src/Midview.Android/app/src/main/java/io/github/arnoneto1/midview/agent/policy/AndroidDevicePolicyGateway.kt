@@ -81,6 +81,15 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun setPrivateDnsAutomatic(): Int = dpm.setGlobalPrivateDnsModeOpportunistic(admin)
 
+    // A Device Owner may write these two global settings (they are on
+    // DevicePolicyManagerService's list for setGlobalSetting, Android 10 on;
+    // their Settings names are hidden), as the system: the private DNS
+    // restriction (Lockdown) does not stop it, and Android checks no host.
+    override fun writePrivateDnsHost(host: String) {
+        dpm.setGlobalSetting(admin, PRIVATE_DNS_SPECIFIER, host)
+        dpm.setGlobalSetting(admin, PRIVATE_DNS_MODE, PRIVATE_DNS_MODE_HOSTNAME)
+    }
+
     override fun alwaysOnVpn(): AlwaysOnVpn? {
         val pkg = dpm.getAlwaysOnVpnPackage(admin) ?: return null
         return AlwaysOnVpn(pkg, dpm.isAlwaysOnVpnLockdownEnabled(admin))
@@ -100,6 +109,12 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     companion object {
         private const val TAG = "Midview"
+
+        // Settings.Global.PRIVATE_DNS_SPECIFIER and PRIVATE_DNS_MODE, and the
+        // mode's value for a host (ConnectivityManager.PRIVATE_DNS_MODE_PROVIDER_HOSTNAME).
+        private const val PRIVATE_DNS_SPECIFIER = "private_dns_specifier"
+        private const val PRIVATE_DNS_MODE = "private_dns_mode"
+        private const val PRIVATE_DNS_MODE_HOSTNAME = "hostname"
 
         // Applies the locks and never fails its caller: a refused lock is
         // logged, and the next start of the agent tries again.

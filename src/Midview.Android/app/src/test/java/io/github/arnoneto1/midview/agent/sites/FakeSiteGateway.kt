@@ -22,6 +22,12 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
     var refuseDns = false
     val dnsCalls = mutableListOf<String>()
 
+    // Writing the two settings directly (setGlobalSetting): refused, with no
+    // effect, or only the mode taking.
+    var refuseWrite = false
+    var writeHasNoEffect = false
+    var writeOnlyTheMode = false
+
     override fun alwaysOnVpn(): AlwaysOnVpn? = alwaysOn
 
     override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) {
@@ -59,6 +65,17 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
         dnsCalls += "host $host"
         if (setHostResult == PrivateDns.SET_NO_ERROR) privateDns = PrivateDns(PrivateDns.MODE_PROVIDER_HOSTNAME, host)
         return setHostResult
+    }
+
+    override fun writePrivateDnsHost(host: String) {
+        if (!owner) throw SecurityException("not the device owner")
+        dnsCalls += "write $host"
+        if (refuseWrite) throw SecurityException("device owners cannot update private_dns_mode")
+        when {
+            writeHasNoEffect -> Unit
+            writeOnlyTheMode -> privateDns = PrivateDns(PrivateDns.MODE_PROVIDER_HOSTNAME, privateDns.host)
+            else -> privateDns = PrivateDns(PrivateDns.MODE_PROVIDER_HOSTNAME, host)
+        }
     }
 
     override fun setPrivateDnsAutomatic(): Int {

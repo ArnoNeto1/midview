@@ -199,6 +199,7 @@ class AppSuspenderTest {
         override fun isApplicationHidden(pkg: String): Boolean = false
         override fun privateDns(): PrivateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
         override fun setPrivateDnsHost(host: String): Int = PrivateDns.SET_NO_ERROR
+        override fun writePrivateDnsHost(host: String) = Unit
         override fun setPrivateDnsAutomatic(): Int = PrivateDns.SET_NO_ERROR
         override fun alwaysOnVpn(): AlwaysOnVpn? = null
         override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) = Unit

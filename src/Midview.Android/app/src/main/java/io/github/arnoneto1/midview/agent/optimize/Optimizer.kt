@@ -37,7 +37,9 @@ interface BloatCatalog {
 // network that blocks it is tried again at a trusted teacher's command, at
 // most once every 30 minutes; one left off while the teacher had the internet
 // blocked, as soon as it is freed. One run at a time: the DnsWatcher's
-// fallback waits for a run, so the two never undo each other.
+// fallback waits for a run, so the two never undo each other; and a
+// "Otimizar" that waited for a DNS try reuses it, so the teacher waits for
+// one DNS step at most (up to ~36 s), never two.
 class Optimizer(
     private val catalog: BloatCatalog,
     private val gw: DevicePolicyGateway,
@@ -51,14 +53,18 @@ class Optimizer(
     private val lock = Any()
     private val busy = AtomicBoolean(false)
     private val runs = AtomicLong()
+    private val dnsSteps = AtomicLong()
 
     override fun run(): PhoneOptimizeReport {
-        val asked = runs.get()
+        val askedRuns = runs.get()
+        val askedDns = dnsSteps.get()
         synchronized(lock) {
             // One ended while this waited (the first one, in the background):
             // its report is as new as another run's would be.
-            if (runs.get() != asked) return store.current.report
-            return optimize().also { runs.incrementAndGet() }
+            if (runs.get() != askedRuns) return store.current.report
+            // A DNS try ended while this waited: the apps are seen to again,
+            // the DNS's answer is reused.
+            return optimize(reuseDns = dnsSteps.get() != askedDns).also { runs.incrementAndGet() }
         }
     }
 
@@ -105,18 +111,21 @@ class Optimizer(
     private fun retryDns() {
         synchronized(lock) {
             val held = store.current
-            val state = dns.apply()
+            val state = dnsStep()
             store.save(held.copy(report = held.report.copy(dns = state), lastDnsAttempt = clock()))
         }
     }
 
-    private fun optimize(): PhoneOptimizeReport {
+    // The DNS tried (AdblockDns), counted for a "Otimizar" waiting behind it.
+    private fun dnsStep(): String = dns.apply().also { dnsSteps.incrementAndGet() }
+
+    private fun optimize(reuseDns: Boolean): PhoneOptimizeReport {
         val now = clock()
         val held = store.current
         val next = if (gw.isDeviceOwner()) {
             val (hidden, failed) = hideApps()
-            val dnsState = dns.apply()
-            OptimizeState(PhoneOptimizeReport(now, hidden, failed, dnsState, AdblockDns.HOST), lastDnsAttempt = clock())
+            val (dnsState, attempt) = if (reuseDns) held.report.dns to held.lastDnsAttempt else dnsStep() to clock()
+            OptimizeState(PhoneOptimizeReport(now, hidden, failed, dnsState, AdblockDns.HOST), lastDnsAttempt = attempt)
         } else {
             // Not the school's phone: nothing can be hidden nor set.
             val failed = runCatching { toHide() }.getOrDefault(emptyList())

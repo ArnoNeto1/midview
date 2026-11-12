@@ -1,11 +1,13 @@
 package io.github.arnoneto1.midview.agent.optimize
 
 // The phone's network as a script: whether the internet check answers,
-// whether the DNS host takes a TLS connection (Android's own check) and
-// whether the network validates the private DNS; every call recorded.
+// whether the DNS host answers on its first address (Android's own check)
+// and on its IPv4 addresses, and whether the network validates the private
+// DNS; every call recorded.
 class FakeDnsNetwork(
     var internet: Boolean = true,
-    var serves: Boolean = true,
+    var firstAddress: Boolean = true,
+    var ipv4: Boolean = true,
     var validates: Boolean = true,
 ) : DnsNetwork {
     val calls = mutableListOf<String>()
@@ -17,9 +19,9 @@ class FakeDnsNetwork(
         return internet
     }
 
-    override fun hostServes(host: String): Boolean {
-        calls += "serves $host"
-        return serves
+    override fun checkHost(host: String): HostCheck {
+        calls += "check $host"
+        return HostCheck(firstAddress, ipv4)
     }
 
     override fun awaitPrivateDns(host: String, timeoutMillis: Long): Boolean {

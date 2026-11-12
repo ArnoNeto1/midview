@@ -1,6 +1,7 @@
 package io.github.arnoneto1.midview.agent.optimize
 
 import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
+import io.github.arnoneto1.midview.agent.protocol.PhoneOptimizeReport
 import io.github.arnoneto1.midview.agent.sites.FakeSiteGateway
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -252,38 +253,76 @@ class OptimizerTest {
         assertEquals(1, queued.size)
     }
 
+    // A network whose internet check waits until released, counting checks.
+    private class SlowNetwork(private val internet: Boolean = true) : DnsNetwork {
+        val inside = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        @Volatile var checks = 0
+
+        override fun internetOk(): Boolean {
+            checks++
+            inside.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            return internet
+        }
+
+        override fun checkHost(host: String) = HostCheck(firstAddress = true, ipv4 = true)
+        override fun awaitPrivateDns(host: String, timeoutMillis: Long) = true
+    }
+
+    private fun optimizerOn(slow: SlowNetwork) = Optimizer(
+        catalog, gw, AdblockDns(gw, slow, internetBlocked = { false }), store,
+        internetBlocked = { false }, clock = { now }, background = { Thread(it).start() },
+    )
+
+    // Asks "Otimizar" on a thread of its own once something holds the
+    // optimizer, lets that end, and returns the answer.
+    private fun optimizeBehind(optimizer: Optimizer, slow: SlowNetwork): Any? {
+        assertTrue(slow.inside.await(5, TimeUnit.SECONDS))
+        var answer: Any? = null
+        val asking = Thread { answer = optimizer.run() }.apply { start() }
+        // Waiting for what runs in the background to end.
+        val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (asking.state != Thread.State.BLOCKED && System.nanoTime() < until) Thread.sleep(5)
+        slow.release.countDown()
+        asking.join(5_000)
+        return answer
+    }
+
     // "Otimizar" while the first optimization still runs (in the
     // background) waits for it and answers its report, without a second run.
     @Test fun optimizeWhileOneRunsAnswersThatOnesReport() {
-        val inside = CountDownLatch(1)
-        val release = CountDownLatch(1)
-        val slow = object : DnsNetwork {
-            var checks = 0
-            override fun internetOk(): Boolean {
-                checks++
-                inside.countDown()
-                release.await(5, TimeUnit.SECONDS)
-                return true
-            }
-            override fun hostServes(host: String) = true
-            override fun awaitPrivateDns(host: String, timeoutMillis: Long) = true
-        }
-        val optimizer = Optimizer(
-            catalog, gw, AdblockDns(gw, slow, internetBlocked = { false }), store,
-            internetBlocked = { false }, clock = { now }, background = { Thread(it).start() },
-        )
+        val slow = SlowNetwork()
+        val optimizer = optimizerOn(slow)
 
         optimizer.teacherSeen()
-        assertTrue(inside.await(5, TimeUnit.SECONDS))
-        var answer: Any? = null
-        val asking = Thread { answer = optimizer.run() }.apply { start() }
-        // Waiting for the run in the background to end.
-        val until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
-        while (asking.state != Thread.State.BLOCKED && System.nanoTime() < until) Thread.sleep(5)
-        release.countDown()
-        asking.join(5_000)
+        val answer = optimizeBehind(optimizer, slow)
 
         assertSame(store.current.report, answer)
         assertEquals(1, slow.checks)
+    }
+
+    // "Otimizar" while the DNS is tried again in the background: the apps are
+    // hidden again, but the DNS attempt that just ended is reused, so the
+    // teacher waits for one DNS step, not two.
+    @Test fun optimizeWhileTheDnsIsTriedAgainReusesThatAttempt() {
+        store.save(
+            OptimizeState(
+                PhoneOptimizeReport(now.minus(Duration.ofHours(1)), emptyList(), emptyList(), PhoneDnsStates.OFF_NO_INTERNET, AdblockDns.HOST),
+                lastDnsAttempt = now.minus(Duration.ofHours(1)),
+            ),
+        )
+        val slow = SlowNetwork()
+        val optimizer = optimizerOn(slow)
+
+        optimizer.teacherSeen()
+        val answer = optimizeBehind(optimizer, slow) as PhoneOptimizeReport
+
+        assertEquals(1, slow.checks)
+        assertEquals(PhoneDnsStates.ON, answer.dns)
+        assertEquals(now, answer.optimizedAt)
+        assertEquals(listOf("com.miui.msa.global", "com.xiaomi.glgm", "com.facebook.system"), answer.hidden)
+        assertEquals(answer, store.current.report)
+        assertEquals(now, store.current.lastDnsAttempt)
     }
 }
