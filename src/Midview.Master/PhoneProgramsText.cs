@@ -115,7 +115,7 @@ public static class PhoneProgramsText
     public static string UninstallHeading(int phones) => phones == 1 ? "Desinstalar apps do celular" : "Desinstalar apps dos celulares";
 
     public const string UninstallHint =
-        "Desinstala os apps marcados, sem perguntar nada ao aluno. Os que vieram com o celular não saem: para esses, use \"Bloquear programas\".";
+        "Desinstala os apps que o Midview instalou (\"Instalar programa\"), sem perguntar nada ao aluno. Os outros, como os que vieram com o celular, não saem por aqui: para esses, use \"Bloquear programas\".";
 
     public const string UninstallNone = "Marque pelo menos um app primeiro.";
 
@@ -129,17 +129,21 @@ public static class PhoneProgramsText
 
     // ---- The phones' joined list ----
 
-    // Beside an app that came with the phone, in the uninstall list.
+    // Beside an app the uninstall list cannot take: one that came with the
+    // phone, or any other the Midview did not install.
     public const string CameWithThePhone = "veio com o celular: não sai";
+    public const string NotByMidview = "não foi instalado pelo Midview";
 
     // Every app any phone listed, once (PhoneAppBlockText.Union), with what
-    // the teacher reads beside it. forUninstall: an app that came with the
-    // phone is shown and cannot be picked.
+    // the teacher reads beside it. forUninstall: only an app some phone says
+    // the Midview installed, and none says came with it, can be picked (each
+    // phone checks again); the others are shown greyed, with why.
     public static IReadOnlyList<PhoneAppPick> Picks(IReadOnlyList<IReadOnlyList<PhoneApp>?> answers, bool forUninstall)
     {
         var answered = answers.Count(answer => answer is not null);
         var blocked = new Dictionary<string, int>(StringComparer.Ordinal);
         var system = new HashSet<string>(StringComparer.Ordinal);
+        var byMidview = new HashSet<string>(StringComparer.Ordinal);
         foreach (var app in answers.SelectMany(answer => answer ?? Array.Empty<PhoneApp>()))
         {
             if (app.Flags.HasFlag(PhoneAppFlags.Blocked))
@@ -150,6 +154,10 @@ public static class PhoneProgramsText
             {
                 system.Add(app.Package);
             }
+            if (app.Flags.HasFlag(PhoneAppFlags.InstalledByMidview))
+            {
+                byMidview.Add(app.Package);
+            }
         }
 
         return PhoneAppBlockText.Union(answers).Select(row =>
@@ -158,6 +166,10 @@ public static class PhoneProgramsText
             if (forUninstall && system.Contains(package))
             {
                 return new PhoneAppPick(package, row.Name, CameWithThePhone, CanPick: false);
+            }
+            if (forUninstall && !byMidview.Contains(package))
+            {
+                return new PhoneAppPick(package, row.Name, NotByMidview, CanPick: false);
             }
             var where = PhoneAppBlockText.RowDetail(row.Phones, answered);
             var blockedOn = forUninstall ? 0 : blocked.GetValueOrDefault(package);

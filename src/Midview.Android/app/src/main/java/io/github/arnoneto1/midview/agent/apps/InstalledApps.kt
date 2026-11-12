@@ -8,7 +8,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.net.Uri
-import android.os.Build
 import android.provider.MediaStore
 import android.provider.Settings
 import android.telecom.TelecomManager
@@ -123,7 +122,8 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
 
     // The apps the teacher may block (and open, uninstall): those with an icon
     // on the home screen, without the protected ones, one entry per app, with
-    // whether each came with the phone (Preinstalled) and is suspended now; sorted and cut to
+    // whether each came with the phone, is suspended now and was installed by
+    // the Midview (AppOrigin); sorted and cut to
     // what is sent before any icon is drawn.
     fun list(): List<PhoneApp> {
         val protected = protected()
@@ -136,14 +136,13 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
                 info to label.ifEmpty { pkg.take(PhoneAppList.MAX_LABEL_LENGTH) }
             }
         val suspended = suspended()
-        val installedAt = pm.getInstalledPackages(0).associate { it.packageName to it.firstInstallTime }
+        val origin = AppOrigin(pm, app.packageName)
         return PhoneAppsAnswer.pick(entries) { it.second }.map { (info, label) ->
             val icon = runCatching { png(info.loadIcon(pm)) }.getOrDefault(ByteArray(0))
             val pkg = info.activityInfo.packageName
-            val cameWithPhone = Preinstalled.cameWithPhone(
-                candidate(info.activityInfo.applicationInfo).system, installedAt[pkg] ?: Long.MAX_VALUE, Build.TIME,
-            )
-            val flags = (if (cameWithPhone) PhoneApp.FLAG_SYSTEM else 0) or (if (pkg in suspended) PhoneApp.FLAG_BLOCKED else 0)
+            val flags = (if (origin.cameWithPhone(info.activityInfo.applicationInfo)) PhoneApp.FLAG_SYSTEM else 0) or
+                (if (pkg in suspended) PhoneApp.FLAG_BLOCKED else 0) or
+                (if (origin.installedByMidview(pkg)) PhoneApp.FLAG_BY_MIDVIEW else 0)
             PhoneApp(pkg, label, icon, flags)
         }
     }

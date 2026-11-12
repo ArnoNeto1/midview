@@ -11,7 +11,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Browser
-import io.github.arnoneto1.midview.agent.apps.Preinstalled
+import io.github.arnoneto1.midview.agent.apps.AppOrigin
 import io.github.arnoneto1.midview.agent.update.ApkCheck
 import io.github.arnoneto1.midview.agent.update.ApkFacts
 import io.github.arnoneto1.midview.agent.update.ApkReader
@@ -36,6 +36,7 @@ class AndroidPackages(
     private val app = context.applicationContext
     private val pm = app.packageManager
     private val installer = pm.packageInstaller
+    private val origin = AppOrigin(pm, app.packageName)
 
     override fun state(pkg: String): AppState {
         val info = try {
@@ -79,12 +80,8 @@ class AndroidPackages(
             info.versionName ?: info.longVersionCode.toString(),
             ApkCheck.signers(info.signingInfo?.apkContentsSigners.orEmpty().map { it.toByteArray() }),
         )
-        val system = Preinstalled.cameWithPhone(
-            (application.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0,
-            info.firstInstallTime, Build.TIME,
-        )
         val label = runCatching { application.loadLabel(pm).toString().trim() }.getOrNull()?.takeIf { it.isNotEmpty() } ?: pkg
-        return PhoneAppFacts(facts, label, system)
+        return PhoneAppFacts(facts, label, origin.cameWithPhone(application), origin.installedByMidview(pkg))
     }
 
     override fun isSuspended(pkg: String): Boolean =

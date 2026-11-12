@@ -834,7 +834,7 @@ class CommandHandlerTest {
         val packages = object : PackageFacts, PackageChanger {
             override fun read(apk: File) = ApkFacts("com.x.ola", 1, "1.0", setOf("k"))
             override fun installed(pkg: String) =
-                if (pkg == "com.x.ola" && "install" in installEvents) PhoneAppFacts(ApkFacts(pkg, 1, "1.0", setOf("k")), "Olá", false) else null
+                if (pkg == "com.x.ola" && "install" in installEvents) PhoneAppFacts(ApkFacts(pkg, 1, "1.0", setOf("k")), "Olá", false, byMidview = true) else null
             override fun isSuspended(pkg: String) = false
             override fun freeBytes() = Long.MAX_VALUE
             override fun install(apk: File, pkg: String): String? = null.also { installEvents += "install" }

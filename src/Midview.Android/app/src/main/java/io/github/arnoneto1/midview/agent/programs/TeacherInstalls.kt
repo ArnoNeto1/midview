@@ -13,9 +13,10 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
-// An app on the phone as the teacher's install and uninstall need it.
-// system: it came with the phone (Preinstalled).
-data class PhoneAppFacts(val facts: ApkFacts, val label: String, val system: Boolean)
+// An app on the phone as the teacher's install and uninstall need it
+// (AppOrigin): system, it came with the phone; byMidview, Android records the
+// Midview as its installer.
+data class PhoneAppFacts(val facts: ApkFacts, val label: String, val system: Boolean, val byMidview: Boolean = false)
 
 // What installing and uninstalling need of Android (AndroidPackages), behind
 // interfaces so TeacherInstalls is tested on the JVM.
@@ -45,13 +46,15 @@ interface PackageChanger {
 // as a PC's Agent takes them (ProgramInstall, UninstallPrograms): an .apk the
 // teacher picked on the PC, received whole (ApkUpload, as "Atualizar
 // celulares" receives the agent's own) and installed silently by the Device
-// Owner, nobody asked anything on the phone; and apps from the phone's list
-// removed the same way. The agent itself is never installed over here (that
-// is "Atualizar os celulares", which checks the school's key) nor removed;
-// nor are the apps the phone needs (the home screen, the phone, the settings,
-// the keyboard: ProtectedApps) or the ones that came with it (Preinstalled),
-// which Android cannot remove or a school phone could not get back (the
-// teacher blocks those instead). An older version than the
+// Owner, nobody asked anything on the phone; and the apps the Midview
+// installed removed the same way. Only those: whatever the teacher's program
+// asks, an app goes only when it is not a system app, not one the phone needs
+// (the home screen, the phone, the settings, the keyboard: ProtectedApps),
+// not Chrome (the phones' browser for "Abrir site" and the site block) and
+// Android records the agent as its installer; anything else (the maker's apps,
+// the store's) is the teacher's to block instead. The agent itself is never
+// installed over here (that is "Atualizar os celulares", which checks the
+// school's key) nor removed. An older version than the
 // one installed is refused: it would undo fixes, and Android would refuse it
 // anyway. A new app is under the teacher's app block at once ("Liberar só
 // estes": suspended), before the teacher hears it is installed. One install
@@ -114,7 +117,8 @@ class TeacherInstalls(
                 return false to "o celular já tem este app numa versão mais nova (${now.versionName}): desinstale-o antes para instalar a ${apk.versionName}"
             }
             if (apk.signers.isNotEmpty() && now.signers.isNotEmpty() && apk.signers != now.signers) return false to OTHER_KEY
-            if (apk.versionCode == now.versionCode) return true to "${present.label} já está instalado nesta versão (${now.versionName})"
+            // Nothing installed: the same number may hide another build.
+            if (apk.versionCode == now.versionCode) return true to "${present.label} ${now.versionName}: $SAME_VERSION; nada foi instalado"
         }
         val failure = try {
             changer.install(upload.file, apk.packageName)
@@ -151,7 +155,9 @@ class TeacherInstalls(
                 pkg == selfPackage -> false to SELF_UNINSTALL
                 app == null -> true to NOT_HERE
                 pkg in protected -> false to ESSENTIAL
+                pkg == CHROME -> false to BROWSER
                 app.system -> false to SYSTEM_APP
+                !app.byMidview -> false to NOT_BY_MIDVIEW
                 else -> remove(pkg)
             }
             if (!ok) succeeded = false
@@ -200,5 +206,9 @@ class TeacherInstalls(
         const val SELF_UNINSTALL = "é o Midview: não sai do celular"
         const val ESSENTIAL = "o celular precisa dele (tela inicial, telefone, configurações, teclado): não dá para desinstalar"
         const val SYSTEM_APP = "veio com o celular: não dá para desinstalar; use \"Bloquear programas\""
+        const val NOT_BY_MIDVIEW = "este app não foi instalado pelo Midview: use \"Bloquear programas\""
+        const val BROWSER = "é o navegador do celular (\"Abrir site\" e \"Bloquear sites\" usam o Chrome): não sai"
+        const val SAME_VERSION = "esta versão já está instalada (mesmo número de versão)"
+        const val CHROME = "com.android.chrome"
     }
 }

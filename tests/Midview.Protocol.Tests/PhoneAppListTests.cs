@@ -133,6 +133,8 @@ public class PhoneAppListTests
         Assert.Null(PhoneAppList.Decode(Hex(FlaggedHex[..^2])));
         Assert.Null(PhoneAppList.Decode(Hex(FlaggedHex + "00")));
         Assert.Throws<InvalidOperationException>(() => PhoneAppList.Encode(Flagged, 3));
+        var ola = new PhoneApp("com.x.ola", "Olá", Array.Empty<byte>(), PhoneAppFlags.InstalledByMidview | PhoneAppFlags.Blocked);
+        Assert.Equal(ola.Flags, PhoneAppList.Decode(PhoneAppList.Encode(new[] { ola }, PhoneAppList.WithFlags))!.Single().Flags);
     }
 
     [Fact]

@@ -47,7 +47,7 @@ class TeacherInstallsTest {
         override fun install(apk: File, pkg: String): String? {
             events += "install $pkg"
             installedBytes = apk.readBytes()
-            if (installFailure == null) installedApps[pkg] = PhoneAppFacts(readAs!!, "Olá", system = false)
+            if (installFailure == null) installedApps[pkg] = PhoneAppFacts(readAs!!, "Olá", system = false, byMidview = true)
             return installFailure
         }
 
@@ -143,7 +143,7 @@ class TeacherInstallsTest {
         installedApps[OLA] = PhoneAppFacts(facts(OLA, 3, "1.2"), "Olá", system = false)
         assertEquals(false to "o celular já tem este app numa versão mais nova (1.2): desinstale-o antes para instalar a 1.0", install().second)
         readAs = facts(OLA, 3, "1.2")
-        assertEquals(true to "Olá já está instalado nesta versão (1.2)", install().second)
+        assertEquals(true to "Olá 1.2: esta versão já está instalada (mesmo número de versão); nada foi instalado", install().second)
         assertTrue(events.isEmpty())
         readAs = facts(OLA, 4, "1.3")
         assertEquals(true to "instalado: Olá (versão 1.3)", install().second)
@@ -178,7 +178,7 @@ class TeacherInstallsTest {
     }
 
     @Test fun anAppIsUninstalled() {
-        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false)
+        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false, byMidview = true)
         assertEquals(true to "Olá: desinstalado", installs.uninstall(ProgramInstall.encodeList(listOf(OLA))))
         assertEquals(listOf("uninstall $OLA"), events)
     }
@@ -187,7 +187,7 @@ class TeacherInstallsTest {
         installedApps[CALCULATOR] = PhoneAppFacts(facts(CALCULATOR, 1, "1"), "Calculadora", system = true)
         installedApps[LAUNCHER] = PhoneAppFacts(facts(LAUNCHER, 1, "1"), "Tela inicial", system = true)
         installedApps[SELF] = PhoneAppFacts(facts(SELF, 1, "1"), "Midview", system = false)
-        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false)
+        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false, byMidview = true)
 
         assertEquals(
             false to "Calculadora: ${TeacherInstalls.SYSTEM_APP}",
@@ -205,8 +205,29 @@ class TeacherInstallsTest {
         assertEquals(listOf("uninstall $OLA"), events)
     }
 
+    // Only what the Midview installed goes: not the store's, the maker's nor
+    // one installed over adb, even if it is not a system app; never Chrome.
+    @Test fun anAppTheMidviewDidNotInstallStays() {
+        installedApps[TIKTOK] = PhoneAppFacts(facts(TIKTOK, 1, "1"), "TikTok", system = false, byMidview = false)
+        installedApps[NOTES] = PhoneAppFacts(facts(NOTES, 1, "1"), "Anotações", system = false, byMidview = false)
+        installedApps[CHROME] = PhoneAppFacts(facts(CHROME, 1, "1"), "Chrome", system = false, byMidview = true)
+        // The system's own, even if the Midview put an update of it.
+        installedApps[CALCULATOR] = PhoneAppFacts(facts(CALCULATOR, 1, "1"), "Calculadora", system = true, byMidview = true)
+        assertEquals(false to "TikTok: ${TeacherInstalls.NOT_BY_MIDVIEW}", installs.uninstall(ProgramInstall.encodeList(listOf(TIKTOK))))
+        assertEquals(false to "Anotações: ${TeacherInstalls.NOT_BY_MIDVIEW}", installs.uninstall(ProgramInstall.encodeList(listOf(NOTES))))
+        assertEquals(false to "Chrome: ${TeacherInstalls.BROWSER}", installs.uninstall(ProgramInstall.encodeList(listOf(CHROME))))
+        assertEquals(false to "Calculadora: ${TeacherInstalls.SYSTEM_APP}", installs.uninstall(ProgramInstall.encodeList(listOf(CALCULATOR))))
+        assertTrue(events.isEmpty())
+    }
+
+    // An app it installed can be removed again, whatever its install date.
+    @Test fun anAppTheMidviewInstalledGoesAgain() {
+        install()
+        assertEquals(true to "Olá: desinstalado", installs.uninstall(ProgramInstall.encodeList(listOf(OLA))))
+    }
+
     @Test fun androidRefusingAnUninstallIsSaid() {
-        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false)
+        installedApps[OLA] = PhoneAppFacts(facts(OLA, 1, "1.0"), "Olá", system = false, byMidview = true)
         uninstallFailure = "o Android não desinstalou (DELETE_FAILED_INTERNAL_ERROR)"
         assertEquals(false to "Olá: o Android não desinstalou (DELETE_FAILED_INTERNAL_ERROR)", installs.uninstall(ProgramInstall.encodeList(listOf(OLA))))
     }
@@ -225,5 +246,8 @@ class TeacherInstallsTest {
         const val OLA = "io.github.arnoneto1.midview.teste.ola"
         const val CALCULATOR = "com.miui.calculator"
         const val LAUNCHER = "com.miui.home"
+        const val TIKTOK = "com.zhiliaoapp.musically"
+        const val NOTES = "com.miui.notes"
+        const val CHROME = "com.android.chrome"
     }
 }

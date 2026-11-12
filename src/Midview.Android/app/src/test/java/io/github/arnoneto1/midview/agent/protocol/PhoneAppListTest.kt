@@ -114,6 +114,9 @@ class PhoneAppListTest {
         assertNull(PhoneAppList.decode(hex(flaggedHex.dropLast(2))))
         assertNull(PhoneAppList.decode(hex(flaggedHex + "00")))
         assertRefused { PhoneAppList.encode(flagged, 3) }
+        // A flag this phone does not know yet still reads.
+        val withMidview = PhoneApp("com.x.ola", "Olá", ByteArray(0), PhoneApp.FLAG_BY_MIDVIEW or PhoneApp.FLAG_BLOCKED)
+        assertEquals(listOf(withMidview), PhoneAppList.decode(PhoneAppList.encode(listOf(withMidview), PhoneAppList.WITH_FLAGS)))
     }
 
     // Only the one byte 2 asks for the flags: a teacher from before them sends nothing.

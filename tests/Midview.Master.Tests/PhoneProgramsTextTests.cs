@@ -96,7 +96,7 @@ public class PhoneProgramsTextTests
     {
         var answers = new IReadOnlyList<PhoneApp>?[]
         {
-            new[] { App("com.miui.calculator", "Calculadora", PhoneAppFlags.System | PhoneAppFlags.Blocked), App("com.x.ola", "Olá") },
+            new[] { App("com.miui.calculator", "Calculadora", PhoneAppFlags.System | PhoneAppFlags.Blocked), App("com.x.ola", "Olá", PhoneAppFlags.InstalledByMidview) },
             new[] { App("com.miui.calculator", "Calculadora", PhoneAppFlags.System) },
             null,
         };
@@ -112,6 +112,20 @@ public class PhoneProgramsTextTests
         Assert.Equal(new PhoneAppPick("com.x.ola", "Olá", "em 1 de 2 celulares", CanPick: true), remove[1]);
     }
 
+    // The store's, the maker's: only what the Midview installed is offered.
+    [Fact]
+    public void Only_what_the_midview_installed_can_be_uninstalled()
+    {
+        var answers = new IReadOnlyList<PhoneApp>?[]
+        {
+            new[] { App("com.zhiliaoapp.musically", "TikTok"), App("com.x.ola", "Olá", PhoneAppFlags.InstalledByMidview) },
+        };
+        var remove = PhoneProgramsText.Picks(answers, forUninstall: true);
+        Assert.Equal(new PhoneAppPick("com.zhiliaoapp.musically", "TikTok", "não foi instalado pelo Midview", CanPick: false), remove[1]);
+        Assert.True(remove[0].CanPick);
+        Assert.All(PhoneProgramsText.Picks(answers, forUninstall: false), pick => Assert.True(pick.CanPick));
+    }
+
     [Fact]
     public void An_app_blocked_on_every_phone_that_has_it_is_just_blocked()
     {
@@ -119,11 +133,12 @@ public class PhoneProgramsTextTests
         Assert.Equal("bloqueado", PhoneProgramsText.Picks(answers, forUninstall: false).Single().Detail);
     }
 
+    // Without the flags nothing is known to be the Midview's: nothing is offered.
     [Fact]
-    public void A_phone_from_before_the_flags_lets_every_app_be_picked() =>
+    public void A_phone_from_before_the_flags_offers_nothing_to_uninstall() =>
         Assert.All(
             PhoneProgramsText.Picks(new IReadOnlyList<PhoneApp>?[] { new[] { App("com.miui.calculator", "Calculadora") } }, forUninstall: true),
-            pick => Assert.True(pick.CanPick));
+            pick => Assert.False(pick.CanPick));
 
     [Fact]
     public void An_apk_goes_to_the_phones_and_an_installer_to_the_pcs()

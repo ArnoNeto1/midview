@@ -5,7 +5,7 @@ import java.io.ByteArrayOutputStream
 // One app the student can open: its package name, the label the student sees,
 // the launcher icon as a PNG (48x48) and, in the list with flags
 // (PhoneAppList.WITH_FLAGS), what else the teacher's windows need to know of
-// it (FLAG_SYSTEM, FLAG_BLOCKED).
+// it (FLAG_SYSTEM, FLAG_BLOCKED, FLAG_BY_MIDVIEW).
 class PhoneApp(val pkg: String, val label: String, val iconPng: ByteArray, val flags: Int = 0) {
     override fun equals(other: Any?): Boolean =
         other is PhoneApp && pkg == other.pkg && label == other.label && iconPng.contentEquals(other.iconPng) &&
@@ -14,11 +14,15 @@ class PhoneApp(val pkg: String, val label: String, val iconPng: ByteArray, val f
     override fun hashCode(): Int = ((pkg.hashCode() * 31 + label.hashCode()) * 31 + iconPng.contentHashCode()) * 31 + flags
 
     companion object {
-        // Came with the phone (Preinstalled): it is not uninstalled.
+        // Came with the phone (AppOrigin): it is not uninstalled.
         const val FLAG_SYSTEM = 1
 
         // Suspended (the teacher's app block): it does not open.
         const val FLAG_BLOCKED = 2
+
+        // Installed by the Midview ("Instalar programa"): the only apps
+        // "Desinstalar programa" removes (with FLAG_SYSTEM off).
+        const val FLAG_BY_MIDVIEW = 4
     }
 }
 

@@ -14,13 +14,17 @@ public enum PhoneAppFlags : byte
 {
     None = 0,
 
-    // Came with the phone: a system app (or an update of one), or one the
-    // phone's maker installs at its first start. "Desinstalar programa"
-    // leaves it (the phone could not get it back); the teacher blocks it instead.
+    // Came with the phone: a system app, an update of one, or a package the
+    // system image has. "Desinstalar programa" leaves it; the teacher blocks
+    // it instead.
     System = 1,
 
     // Suspended now, by the teacher's app block: it does not open.
     Blocked = 2,
+
+    // Installed by the Midview ("Instalar programa"): with System off, the
+    // only apps "Desinstalar programa" removes.
+    InstalledByMidview = 4,
 }
 
 // The phone's answer to GetPhoneApps (MessageType.PhoneApps): the apps the
