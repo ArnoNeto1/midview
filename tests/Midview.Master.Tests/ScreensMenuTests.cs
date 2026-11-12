@@ -118,10 +118,31 @@ public class ScreensMenuTests
         });
     }
 
+    // Optimizing and the PIN reach what every toolbar button reaches: with
+    // Computadores, or a selection of PCs alone, no phone, so they are greyed
+    // and say why.
+    [Fact]
+    public void Optimizing_and_the_pin_are_greyed_while_they_would_reach_no_phone()
+    {
+        InSta(() =>
+        {
+            var menu = MainWindow.ScreensMenu(
+                DeviceFilter.Computers, hasPhones: true, hasAndroid: true, _ => { }, () => { }, () => { },
+                reachesAndroid: false);
+
+            var items = menu.Items.OfType<MenuItem>().ToList();
+            Assert.False(items[4].IsEnabled);
+            Assert.False(items[5].IsEnabled);
+            Assert.StartsWith("Nenhum celular ou tablet selecionado ou na grade", (string)items[4].ToolTip);
+            Assert.True(ToolTipService.GetShowOnDisabled(items[5]));
+            Assert.All(items.Take(3), item => Assert.True(item.IsEnabled));
+        });
+    }
+
     [Theory]
     [InlineData(DeviceFilter.All, "Escolhe as telas")]
-    [InlineData(DeviceFilter.Computers, "Mostrando só os computadores.")]
-    [InlineData(DeviceFilter.Phones, "Mostrando só os celulares.")]
+    [InlineData(DeviceFilter.Computers, "Mostrando só os computadores: os botões valem só para eles.")]
+    [InlineData(DeviceFilter.Phones, "Mostrando só os celulares: os botões valem só para eles.")]
     public void The_tool_tip_says_what_the_grid_shows(DeviceFilter shown, string start) =>
         Assert.StartsWith(start, MainWindow.ScreensToolTip(shown));
 

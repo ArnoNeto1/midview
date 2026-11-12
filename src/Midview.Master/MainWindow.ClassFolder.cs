@@ -82,10 +82,18 @@ public partial class MainWindow
         }
     }
 
-    // For the whole room, whichever machines are in it, like "Agendar". The
-    // window works what ClassFolderRole says now; a remote controller asks the
-    // home for its state only while a window shows it.
-    private void OnClassFolderClicked(object sender, RoutedEventArgs e) =>
+    // For the whole room, whichever machines are in it, like "Agendar": a
+    // lesson is the room's. Greyed like any button while it reaches phones
+    // alone (Celulares); with a selection or a filter leaving PCs out, it says
+    // it still goes to every PC. The window works what ClassFolderRole says
+    // now; a remote controller asks the home for its state only while a
+    // window shows it.
+    private void OnClassFolderClicked(object sender, RoutedEventArgs e)
+    {
+        if (_roster.Count > 0 && DeviceSupport.Only(ToolbarReach(ToolbarAction.ClassFolder), ToolbarAction.ClassFolder).Count < _roster.Count)
+        {
+            ShowNotice("A pasta da turma vale para todos os computadores da sala.");
+        }
         ShowOnce("pasta-da-turma", Array.Empty<KnownMachine>(), () =>
         {
             var controller = _classRole.Controller;
@@ -97,6 +105,7 @@ public partial class MainWindow
             _classRole.RefreshSoon();
             return window;
         });
+    }
 
     // Closed: no remote controller polls for it, and those given up meanwhile go
     // (only now: one disposed while its window is open would leave a click hanging).

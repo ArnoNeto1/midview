@@ -9,8 +9,9 @@ namespace Midview.Master;
 
 // The "Abrir site" and "Abrir programa" menus: the teacher's saved items
 // (SavedMenu), each opening with one click, then "Outro site..." or "Outro
-// programa..." for the window. On the toolbar for the whole class (straight
-// to the window while nothing is saved), and on a machine's own menu for
+// programa..." for the window. On the toolbar for the machines it reaches
+// (the selection, or every one the "Telas" filter shows: ToolbarReach;
+// straight to the window while nothing is saved), and on a machine's own menu for
 // that machine only. Delete over an item takes it out of the menu. With
 // several machines selected, a machine's menu acts on all of them
 // (TargetsOf).
@@ -58,23 +59,21 @@ public partial class MainWindow
 
     private void ShowClassLaunchMenu(FrameworkElement button, LaunchKind kind)
     {
-        if (_tiles.Count == 0)
+        var forWhat = kind == LaunchKind.Website ? "abrir o site" : "abrir o programa";
+        if (ToolbarTargets(LaunchAction(kind), forWhat) is not { } reached)
         {
-            StatusTextBlock.Text = kind == LaunchKind.Website
-                ? "Nenhuma máquina na lista da sala para abrir o site."
-                : "Nenhuma máquina na lista da sala para abrir o programa.";
             return;
         }
-
-        IReadOnlyList<KnownMachine> Everyone() => _tiles.Select(tile => tile.Machine).ToList();
         if (SavedMenu.Load(MenuPath(kind)).Count == 0)
         {
-            ShowLaunchWindow(kind, Everyone());
+            ShowLaunchWindow(kind, reached);
             return;
         }
 
+        // Asked again at the click: the selection may change while the menu is open.
+        IReadOnlyList<KnownMachine> Reached() => ToolbarReach(LaunchAction(kind));
         var menu = new ContextMenu { PlacementTarget = button, Placement = PlacementMode.Bottom };
-        FillLaunchMenu(menu.Items, kind, Everyone);
+        FillLaunchMenu(menu.Items, kind, Reached);
         menu.PreviewKeyDown += (_, e) => DeleteHighlighted(menu.Items, kind, e);
         menu.Opened += (_, _) => Keyboard.Focus(menu); // so Delete reaches it
         menu.IsOpen = true;

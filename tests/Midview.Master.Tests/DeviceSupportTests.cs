@@ -54,29 +54,6 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.IsEnabled(new[] { Pc("PC 01"), Phone("Cel 01") }, action));
     }
 
-    // "Otimizar celulares e tablets..." and "Senha dos celulares e tablets..."
-    // (Telas menu): the selected Android
-    // devices, or every one of the room when none is selected (a selection of
-    // PCs alone included).
-    [Theory]
-    [InlineData(ToolbarAction.Optimize)]
-    [InlineData(ToolbarAction.UpdatePhones)]
-    [InlineData(ToolbarAction.PhonePin)]
-    public void Phone_actions_reach_the_selected_phones_or_every_phone(ToolbarAction action)
-    {
-        var pc = Pc("PC 01");
-        var cel1 = Phone("Cel 01");
-        var cel2 = Phone("Cel 02");
-        var room = new[] { pc, cel1, cel2 };
-
-        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.All));
-        Assert.Equal(new[] { cel2 }, DeviceSupport.ToolbarReach(action, new[] { cel2 }, room, DeviceFilter.All));
-        Assert.Equal(new[] { cel1 }, DeviceSupport.ToolbarReach(action, new[] { pc, cel1 }, room, DeviceFilter.All));
-        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, new[] { pc }, room, DeviceFilter.All));
-        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
-        Assert.Empty(DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), new[] { pc }, DeviceFilter.All));
-    }
-
     // "Celulares" and "Otimizar celulares..." (Telas menu) and the "Atualizar os
     // celulares" card are for a room with a phone.
     [Fact]
@@ -163,64 +140,6 @@ public class DeviceSupportTests
         var machines = new[] { Pc("PC 01"), Phone("Cel 01"), Pc("PC 02") };
 
         Assert.Equal(new[] { "PC 01", "PC 02" }, DeviceSupport.Only(machines, action).Select(machine => machine.Name));
-    }
-
-    // The toolbar's "Bloquear programas" and "Bloquear sites" reach the whole
-    // room, as every toolbar button does, except a selection of phones only,
-    // or the "Celulares" filter with nothing selected: then those phones; and
-    // the "Computadores" filter: then the PCs.
-    [Theory]
-    [InlineData(ToolbarAction.BlockPrograms)]
-    [InlineData(ToolbarAction.BlockSites)]
-    public void Toolbar_blocking_reaches_the_room_unless_only_phones_are_chosen(ToolbarAction action)
-    {
-        var pc = Pc("PC 01");
-        var cel1 = Phone("Cel 01");
-        var cel2 = Phone("Cel 02");
-        var room = new[] { pc, cel1, cel2 };
-
-        Assert.Equal(room, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.All));
-        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { pc }, room, DeviceFilter.All));
-        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { pc, cel1 }, room, DeviceFilter.All));
-        Assert.Equal(new[] { pc }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
-        Assert.Equal(new[] { cel2 }, DeviceSupport.ToolbarReach(action, new[] { cel2 }, room, DeviceFilter.All));
-        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Phones));
-        Assert.Equal(new[] { cel1 }, DeviceSupport.ToolbarReach(action, new[] { cel1 }, room, DeviceFilter.Phones));
-    }
-
-    // The "Computadores" filter shows the PCs only: blocking from the toolbar
-    // reaches every PC, as before phones could be blocked, and never a phone
-    // the teacher cannot see there. A selection of phones only still reaches
-    // them; a room with no PC, nothing.
-    [Theory]
-    [InlineData(ToolbarAction.BlockPrograms)]
-    [InlineData(ToolbarAction.BlockSites)]
-    public void Computers_filter_keeps_the_hidden_phones_out(ToolbarAction action)
-    {
-        var pc1 = Pc("PC 01");
-        var cel = Phone("Cel 01");
-        var pc2 = Pc("PC 02");
-        var room = new[] { pc1, cel, pc2 };
-
-        Assert.Equal(new[] { pc1, pc2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
-        Assert.Equal(new[] { pc1, pc2 }, DeviceSupport.ToolbarReach(action, new[] { pc1 }, room, DeviceFilter.Computers));
-        Assert.Equal(new[] { pc1, pc2 }, DeviceSupport.ToolbarReach(action, new[] { pc1, cel }, room, DeviceFilter.Computers));
-        Assert.Equal(new[] { cel }, DeviceSupport.ToolbarReach(action, new[] { cel }, room, DeviceFilter.Computers));
-        Assert.Empty(DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), new[] { cel }, DeviceFilter.Computers));
-    }
-
-    // Every other toolbar button (locking the screens among them) keeps
-    // reaching the whole room.
-    [Theory]
-    [InlineData(ToolbarAction.ScreenLock)]
-    [InlineData(ToolbarAction.Power)]
-    [InlineData(ToolbarAction.CloseApps)]
-    public void Other_toolbar_buttons_reach_the_whole_room(ToolbarAction action)
-    {
-        var room = new[] { Pc("PC 01"), Phone("Cel 01") };
-
-        Assert.Equal(room, DeviceSupport.ToolbarReach(action, new[] { room[1] }, room, DeviceFilter.All));
-        Assert.Equal(room, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Phones));
     }
 
     [Fact]

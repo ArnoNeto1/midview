@@ -187,35 +187,47 @@ public partial class MainWindow : MidviewWindow
         StatusTextBlock.Text = SelectionStatus();
     }
 
+    // With nothing selected, whom the toolbar reaches while "Telas" leaves
+    // machines out ("Só nos celulares (3).").
     private string SelectionStatus()
     {
         var selected = _selection.Selected;
         return selected.Count switch
         {
-            0 => string.Empty,
+            0 => ReachNotice() ?? string.Empty,
             1 => $"Selecionada: {selected[0].Name}",
             _ => $"Selecionadas: {selected.Count}",
         };
     }
 
+    private string? ReachNotice() =>
+        DeviceSupport.ReachNotice(_devices, _selection.Selected.Count, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
+
     // Greys the toolbar buttons that do not work on the machines they would
-    // reach: the selection, or the whole class when nothing is selected. A
-    // room with no machines keeps them on, as they say so themselves when clicked.
+    // reach (ToolbarReach: the selection, or every machine the "Telas" filter
+    // shows), and words the screen-lock button for them. A room, or a
+    // filter, with no machines keeps them on, as they say so themselves when
+    // clicked.
     private void UpdateActionButtons()
     {
-        var reach = (_selection.Selected.Count > 0
-            ? _selection.Selected.Select(tile => tile.Machine)
-            : _tiles.Select(tile => tile.Machine)).ToList();
         foreach (var button in ToolbarButtonsIn(ToolbarPanel))
         {
             if (DeviceActions.Of(button) is not { } action || action is ToolbarAction.View or ToolbarAction.Control)
             {
                 continue;
             }
+            var reach = ToolbarTiles(action);
+            var machines = reach.Select(tile => tile.Machine).ToList();
             // One button for both: it also gives the locked screens back.
-            button.IsEnabled = reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
-                || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
+            button.IsEnabled = reach.Count == 0 || DeviceSupport.IsEnabled(machines, action)
+                || (action == ToolbarAction.ScreenLock && reach.Any(_screenLocks.ContainsKey));
         }
+
+        var (label, badge, toolTip) = ScreenLockText.ClassButton(
+            ScreenLockReach.Releases(ToolbarTiles(ToolbarAction.ScreenLock), tile => tile.Machine, _screenLocks.ContainsKey));
+        ScreenLockButton.Content = label;
+        ScreenLockButton.Badge = badge;
+        ScreenLockButton.ToolTip = toolTip;
     }
 
     private static IEnumerable<ToolbarButton> ToolbarButtonsIn(DependencyObject parent)
@@ -297,6 +309,8 @@ public partial class MainWindow : MidviewWindow
 
     // Chosen in the "Telas" menu (MainWindow.Screens.cs); one of the three
     // is always on: choosing the one already on keeps it.
+    // The toolbar then reaches what it shows (ToolbarReach); a screen locked
+    // before stays locked, shown or not.
     private void ShowDevices(DeviceFilter devices)
     {
         _devices = devices;
@@ -304,6 +318,15 @@ public partial class MainWindow : MidviewWindow
         _shownTiles.Refresh();
         UpdateEmptyHint();
         SaveGridView();
+        UpdateActionButtons();
+        if (_screenLocks.Count > 0)
+        {
+            ShowScreenLockStatus();
+        }
+        else
+        {
+            StatusTextBlock.Text = SelectionStatus();
+        }
     }
 
     // The teacher turned "Só online" on or off: shown now, and the next time
@@ -729,6 +752,9 @@ public partial class MainWindow : MidviewWindow
 
     private static string WithNotice(string text, string? notice) => notice is null ? text : $"{text} {notice}";
 
+    private static string? Joined(string? first, string? second) =>
+        first is null ? second : second is null ? first : $"{first} {second}";
+
     // How many phones the last lock left out, for every status line about it.
     private string? _screenLockLeftOut;
 
@@ -741,56 +767,53 @@ public partial class MainWindow : MidviewWindow
         window.Activate();
     }
 
-    // One button for both: it locks the class, or, while any screen is
-    // locked, gives them all back.
+    // One button for both, for the machines it reaches (the selection, or
+    // every one the "Telas" filter shows): it locks them, or, while every one
+    // of them is locked, gives them back (ScreenLockReach). The others keep
+    // what they have.
     private void OnScreenLockClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_screenLocks.Count > 0)
+        if (ToolbarTileTargets(ToolbarAction.ScreenLock, "bloquear") is not { } reach)
         {
-            UnlockAll();
+            return;
+        }
+        var (_, unlock) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
+        if (unlock.Count > 0)
+        {
+            Unlock(unlock);
         }
         else
         {
-            LockClass();
+            Lock(reach);
         }
     }
 
-    private void LockClass()
+    private void Lock(IReadOnlyList<MachineTile> reach)
     {
-        if (_tiles.Count == 0)
-        {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear.";
-            return;
-        }
-        IReadOnlyList<KnownMachine> everyone = _tiles.Select(tile => tile.Machine).ToList();
-        if (!SupportedTargets(ref everyone, ToolbarAction.ScreenLock, out var leftOut))
+        IReadOnlyList<KnownMachine> machines = reach.Select(tile => tile.Machine).ToList();
+        if (!SupportedTargets(ref machines, ToolbarAction.ScreenLock, out var leftOut))
         {
             return;
         }
         _screenLockLeftOut = leftOut;
-        foreach (var tile in _tiles.Where(tile => DeviceSupport.Supports(tile.Machine.Kind, ToolbarAction.ScreenLock)))
+        var (toLock, _) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
+        foreach (var tile in toLock)
         {
             LockScreen(tile);
         }
         ShowScreenLockStatus();
     }
 
-    private void UnlockAll()
+    // Says how many stay locked: the machines out of the button's reach.
+    private void Unlock(IReadOnlyList<MachineTile> tiles)
     {
-        foreach (var tile in _screenLocks.Keys.ToList())
+        foreach (var tile in tiles)
         {
             UnlockScreen(tile);
         }
-        StatusTextBlock.Text = "Telas desbloqueadas.";
-    }
-
-    private void UpdateScreenLockButton()
-    {
-        var (label, badge, toolTip) = ScreenLockText.ClassButton(anyLocked: _screenLocks.Count > 0);
-        ScreenLockButton.Content = label;
-        ScreenLockButton.Badge = badge;
-        ScreenLockButton.ToolTip = toolTip;
-        UpdateActionButtons();
+        StatusTextBlock.Text = WithNotice(
+            _screenLocks.Count > 0 ? $"Telas desbloqueadas. Continuam bloqueadas: {_screenLocks.Count}." : "Telas desbloqueadas.",
+            ReachNotice());
     }
 
     // One item for both, like the toolbar's button: while any of the machines
@@ -864,7 +887,7 @@ public partial class MainWindow : MidviewWindow
             _switchUserBlocks[tile] = block;
             block.Start();
         }
-        UpdateScreenLockButton();
+        UpdateActionButtons();
     }
 
     private void UnlockScreen(MachineTile tile)
@@ -884,7 +907,7 @@ public partial class MainWindow : MidviewWindow
             _screenLockLeftOut = null;
         }
         tile.ShowScreenLock(string.Empty, alert: false);
-        UpdateScreenLockButton();
+        UpdateActionButtons();
     }
 
     // "Telas bloqueadas: 12 de 14. Saíram do bloqueio: Aluno-03 (Sem
@@ -905,17 +928,16 @@ public partial class MainWindow : MidviewWindow
         StatusTextBlock.Text = WithNotice($"Telas bloqueadas: {locked} de {_screenLocks.Count}."
             + (waiting > 0 ? $" Aguardando {waiting}." : string.Empty)
             + (gotOut.Count > 0 ? $" Saíram do bloqueio: {Names(gotOut)}." : string.Empty)
-            + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty), _screenLockLeftOut);
+            + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty),
+            Joined(_screenLockLeftOut, ReachNotice()));
     }
 
     private void OnMessageClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Message, "receber a mensagem") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para receber a mensagem.";
-            return;
+            OpenSendMessageWindow(targets);
         }
-        OpenSendMessageWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnMessageMachineClicked(object sender, RoutedEventArgs e)
@@ -928,12 +950,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnFileClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.SendFile, "receber o arquivo") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para receber o arquivo.";
-            return;
+            OpenSendFileWindow(targets);
         }
-        OpenSendFileWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnFileMachineClicked(object sender, RoutedEventArgs e)
@@ -955,12 +975,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnCollectClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.CollectFiles, "recolher arquivos") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para recolher arquivos.";
-            return;
+            OpenCollectFilesWindow(targets);
         }
-        OpenCollectFilesWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnCollectMachineClicked(object sender, RoutedEventArgs e)
@@ -982,12 +1000,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnCloseAppsClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.CloseApps, "fechar programas") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para fechar programas.";
-            return;
+            OpenCloseAppsWindow(targets);
         }
-        OpenCloseAppsWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnCloseAppsMachineClicked(object sender, RoutedEventArgs e)
@@ -1009,19 +1025,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnBlockAppsClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.BlockPrograms, "bloquear programas") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
-            return;
+            OpenAppBlockWindow(targets);
         }
-        var targets = ToolbarReach(ToolbarAction.BlockPrograms);
-        if (targets.Count == 0)
-        {
-            // The "Computadores" filter in a room of phones only.
-            StatusTextBlock.Text = "Nenhum computador na lista da sala para bloquear programas.";
-            return;
-        }
-        OpenAppBlockWindow(targets);
     }
 
     // The block is remembered and resent (onClassPolicyApplied) only for the
@@ -1061,10 +1068,35 @@ public partial class MainWindow : MidviewWindow
         });
     }
 
-    // The machines a toolbar button acts on (DeviceSupport.ToolbarReach).
+    // The machines a toolbar button acts on (DeviceSupport.ToolbarReach): the
+    // selection, or every machine the "Telas" filter shows.
+    private IReadOnlyList<MachineTile> ToolbarTiles(ToolbarAction action) =>
+        DeviceSupport.ToolbarReach(action, _selection.Selected, _tiles, _devices, tile => tile.Machine);
+
     private IReadOnlyList<KnownMachine> ToolbarReach(ToolbarAction action) =>
-        DeviceSupport.ToolbarReach(
-            action, _selection.Selected.Select(tile => tile.Machine).ToList(), _tiles.Select(tile => tile.Machine).ToList(), _devices);
+        ToolbarTiles(action).Select(tile => tile.Machine).ToList();
+
+    // What a toolbar button acts on; null, said in the status bar, when the
+    // room or the "Telas" filter has no machine for it. forWhat: what the
+    // button does ("desligar").
+    private IReadOnlyList<MachineTile>? ToolbarTileTargets(ToolbarAction action, string forWhat)
+    {
+        if (_tiles.Count == 0)
+        {
+            StatusTextBlock.Text = DeviceSupport.NoneReachedText(DeviceFilter.All, forWhat);
+            return null;
+        }
+        var reach = ToolbarTiles(action);
+        if (reach.Count == 0)
+        {
+            StatusTextBlock.Text = DeviceSupport.NoneReachedText(_devices, forWhat);
+            return null;
+        }
+        return reach;
+    }
+
+    private IReadOnlyList<KnownMachine>? ToolbarTargets(ToolbarAction action, string forWhat) =>
+        ToolbarTileTargets(action, forWhat)?.Select(tile => tile.Machine).ToList();
 
     // Remembered and resent to phones that were off only when it is for every phone of the room.
     private void OpenPhoneAppBlockWindow(IReadOnlyList<KnownMachine> phones)
@@ -1086,19 +1118,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnSiteBlockClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.BlockSites, "bloquear sites") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear sites.";
-            return;
+            OpenSiteBlockWindow(targets);
         }
-        var targets = ToolbarReach(ToolbarAction.BlockSites);
-        if (targets.Count == 0)
-        {
-            // The "Computadores" filter in a room of phones only.
-            StatusTextBlock.Text = "Nenhum computador na lista da sala para bloquear sites.";
-            return;
-        }
-        OpenSiteBlockWindow(targets);
     }
 
     private void OnSiteBlockMachineClicked(object sender, RoutedEventArgs e)
@@ -1120,12 +1143,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnLabConfigClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.LabConfig, "configurar") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para configurar.";
-            return;
+            OpenLabConfigWindow(targets);
         }
-        OpenLabConfigWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnLabConfigMachineClicked(object sender, RoutedEventArgs e)
@@ -1145,17 +1166,12 @@ public partial class MainWindow : MidviewWindow
         ShowOnce("painel", targets, () => new LabConfigWindow(targets, IsWholeClass(targets, ToolbarAction.LabConfig), _masterCertificate) { Owner = this });
     }
 
-    // On the tiles' menu only, for the machines selected (drag over the grid
-    // for the whole room): a toolbar button would wrap the toolbar onto a
-    // second row on a 1366-pixel screen.
     private void OnInstallClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Install, "instalar o programa") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para instalar o programa.";
-            return;
+            OpenInstallWindow(targets);
         }
-        OpenInstallWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnInstallMachineClicked(object sender, RoutedEventArgs e)
@@ -1177,12 +1193,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnUninstallClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Uninstall, "desinstalar programas") is not { } classTargets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para desinstalar programas.";
             return;
         }
-        IReadOnlyList<KnownMachine> classTargets = _tiles.Select(t => t.Machine).ToList();
         if (!SupportedTargets(ref classTargets, ToolbarAction.Uninstall))
         {
             return;
@@ -1268,12 +1282,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnPowerClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Power, "desligar") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para desligar.";
-            return;
+            OpenPowerWindow(targets);
         }
-        OpenPowerWindow(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnPowerMachineClicked(object sender, RoutedEventArgs e)
@@ -1286,12 +1298,10 @@ public partial class MainWindow : MidviewWindow
 
     private void OnRestartClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Power, "reiniciar") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para reiniciar.";
-            return;
+            OpenPowerWindow(targets, PowerAction.Restart);
         }
-        OpenPowerWindow(_tiles.Select(tile => tile.Machine).ToList(), PowerAction.Restart);
     }
 
     private void OnRestartMachineClicked(object sender, RoutedEventArgs e)
@@ -1313,13 +1323,20 @@ public partial class MainWindow : MidviewWindow
             () => new PowerWindow(targets, IsWholeClass(targets, ToolbarAction.Power), _masterCertificate, action) { Owner = this });
     }
 
-    // For the whole room, whichever machines are in it.
+    // For the whole room, whichever machines are in it: the timetable is the
+    // room's, and every PC's Agent is handed it again by its poller. Greyed
+    // like any button while it reaches phones alone (Celulares); with a
+    // selection or a filter leaving PCs out, it says it still goes to every PC.
     private void OnScheduleClicked(object sender, RoutedEventArgs e)
     {
         IReadOnlyList<KnownMachine> everyone = _tiles.Select(tile => tile.Machine).ToList();
         if (everyone.Count > 0 && !SupportedTargets(ref everyone, ToolbarAction.Schedule))
         {
             return;
+        }
+        if (everyone.Count > 0 && DeviceSupport.Only(ToolbarReach(ToolbarAction.Schedule), ToolbarAction.Schedule).Count < everyone.Count)
+        {
+            ShowNotice("O agendamento vale para todos os computadores da sala.");
         }
         ShowOnce("agendar", Array.Empty<KnownMachine>(), () => new ScheduleWindow(
             () => _tiles.Select(tile => tile.Machine).Where(machine => DeviceSupport.Supports(machine.Kind, ToolbarAction.Schedule)).ToList(),
@@ -1334,12 +1351,10 @@ public partial class MainWindow : MidviewWindow
     // ignores the request), so it goes out at once.
     private void OnWakeClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        if (ToolbarTargets(ToolbarAction.Wake, "ligar") is { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para ligar.";
-            return;
+            Wake(targets);
         }
-        Wake(_tiles.Select(tile => tile.Machine).ToList());
     }
 
     private void OnWakeMachineClicked(object sender, RoutedEventArgs e)
@@ -1397,15 +1412,13 @@ public partial class MainWindow : MidviewWindow
 
     private void OnChatClassClicked(object sender, RoutedEventArgs e)
     {
-        if (_tiles.Count == 0)
+        // One class chat at a time, with the machines the button reaches now:
+        // a second one would pop a second chat up on every student's screen.
+        // Machines added meanwhile join when it's closed and opened again.
+        if (ToolbarTargets(ToolbarAction.Chat, "conversar") is not { } targets)
         {
-            StatusTextBlock.Text = "Nenhuma máquina na lista da sala para conversar.";
             return;
         }
-        // One class chat at a time, whoever is in the room list now: a second
-        // one would pop a second chat up on every student's screen. Machines
-        // added meanwhile join when it's closed and opened again.
-        IReadOnlyList<KnownMachine> targets = _tiles.Select(tile => tile.Machine).ToList();
         if (!SupportedTargets(ref targets, ToolbarAction.Chat))
         {
             return;

@@ -22,28 +22,28 @@ public class ScreenLockTextTests
     public void BackInTheLock_IsLockedAgain() =>
         Assert.Equal(("🔒 Tela bloqueada", false), ScreenLockText.Badge(locked: true, wasLocked: true, "tela bloqueada"));
 
-    // One toolbar button: it locks the class, and once any screen is
-    // locked it becomes the one that gives them all back. Its padlock shows
-    // how the screens are (open while free, closed while locked), and its
-    // label keeps one word per line either way, so the button doesn't change
-    // shape when it flips.
+    // One toolbar button, for the machines it reaches (ScreenLockReach): it
+    // locks them, and once every one is locked it becomes the one that gives
+    // them back. Its padlock shows how those screens are (open while any is
+    // free, closed while all are locked), and its label keeps one word per
+    // line either way, so the button doesn't change shape when it flips.
     [Fact]
     public void TheClassButton_LocksWhileNothingIsLocked()
     {
-        var button = ScreenLockText.ClassButton(anyLocked: false);
+        var button = ScreenLockText.ClassButton(releases: false);
 
         Assert.Equal("Bloquear\ntelas", button.Label);
         Assert.Equal("\uE785", button.Badge); // open padlock
     }
 
     [Fact]
-    public void TheClassButton_UnlocksOnceAnythingIsLocked()
+    public void TheClassButton_UnlocksOnceEverythingItReachesIsLocked()
     {
-        var button = ScreenLockText.ClassButton(anyLocked: true);
+        var button = ScreenLockText.ClassButton(releases: true);
 
         Assert.Equal("Desbloquear\ntelas", button.Label);
         Assert.Equal("\uE72E", button.Badge); // closed padlock
-        Assert.Contains("todos os alunos", button.ToolTip);
+        Assert.Contains("os selecionados, ou todos os que a grade mostra", button.ToolTip);
     }
 
     // One item in a machine's menu too, by the same rule for the machines it acts on.

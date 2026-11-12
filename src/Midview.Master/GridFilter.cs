@@ -9,20 +9,16 @@ public enum DeviceFilter
 }
 
 // "Só online" and "Todos / Computadores / Celulares": which tiles the classroom grid shows, and what it says when
-// that leaves none. Only the view changes -- the whole-class actions and the
-// machine counts still cover every machine.
+// that leaves none. "Só online" only changes the view; "Telas" also narrows
+// what the toolbar's buttons reach (DeviceSupport.ToolbarReach). The machine
+// counts still cover every machine.
 public static class GridFilter
 {
     // A machine not heard from yet shows up as soon as it answers.
     public static bool Shows(MachineTile tile, bool onlineOnly, DeviceFilter devices = DeviceFilter.All) =>
         (!onlineOnly || tile.Presence == TilePresence.Online) && ShowsDevice(tile, devices);
 
-    private static bool ShowsDevice(MachineTile tile, DeviceFilter devices) => devices switch
-    {
-        DeviceFilter.Computers => !tile.Machine.IsPhone,
-        DeviceFilter.Phones => tile.Machine.IsPhone,
-        _ => true,
-    };
+    private static bool ShowsDevice(MachineTile tile, DeviceFilter devices) => DeviceSupport.Shows(tile.Machine, devices);
 
     // "Celulares" with no phone in the class: the empty grid offers the big
     // "Preparar celulares" button, even with no machine at all (it then takes

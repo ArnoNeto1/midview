@@ -90,41 +90,63 @@ public static class DeviceSupport
         };
     }
 
-    // Whom a toolbar button reaches: the whole room, as always, except for
-    // blocking programs and sites when only phones are selected, or nothing is
-    // selected and the grid shows only phones: then those phones ("Bloquear
-    // programas" then opens the phones' window); and when the grid shows only
-    // computers: then every PC and no phone, which the teacher cannot see
-    // there (none when the room has no PC). PCs are reached as before. The
-    // phone actions reach the selected phones, or every phone of the room.
-    public static IReadOnlyList<KnownMachine> ToolbarReach(
-        ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
+    // Whether the "Telas" filter shows the machine: Todos every one,
+    // Computadores the PCs, Celulares the phones and tablets. The grid
+    // (GridFilter) and the toolbar's reach (ToolbarReach) go by it.
+    public static bool Shows(KnownMachine machine, DeviceFilter shown) => shown switch
     {
-        // The phone actions: the selected Android devices (phones and
-        // tablets), or every one of the room when none is selected.
-        if (IsPhoneOnly(action))
-        {
-            var chosen = selected.Where(IsAndroid).ToList();
-            return chosen.Count > 0 ? chosen : room.Where(IsAndroid).ToList();
-        }
-        if (action is not (ToolbarAction.BlockPrograms or ToolbarAction.BlockSites))
-        {
-            return room;
-        }
-        if (selected.Count > 0 && selected.All(machine => machine.IsPhone))
-        {
-            return selected;
-        }
-        if (shown == DeviceFilter.Computers)
-        {
-            return room.Where(machine => !machine.IsPhone).ToList();
-        }
-        if (selected.Count == 0 && shown == DeviceFilter.Phones && room.Any(machine => machine.IsPhone))
-        {
-            return room.Where(machine => machine.IsPhone).ToList();
-        }
-        return room;
+        DeviceFilter.Computers => !IsAndroid(machine),
+        DeviceFilter.Phones => IsAndroid(machine),
+        _ => true,
+    };
+
+    // Whom a toolbar button reaches: what the teacher sees. The selection
+    // when there is one (it only ever holds tiles the grid shows); otherwise
+    // every machine the "Telas" filter shows (Todos: the whole room;
+    // Computadores: the PCs; Celulares: the phones and tablets). "Só online"
+    // does not narrow it: a machine that is off is still there to be turned
+    // on. The phone actions keep the Android devices of it. A button whose
+    // action none of them can do is greyed (IsEnabled); the ones among them
+    // that cannot do it are left out with a notice (LeftOutNotice).
+    public static IReadOnlyList<KnownMachine> ToolbarReach(
+        ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown) =>
+        ToolbarReach(action, selected, room, shown, machine => machine);
+
+    // The same rule over the grid's tiles (machineOf gives each one's machine).
+    public static IReadOnlyList<T> ToolbarReach<T>(
+        ToolbarAction action, IReadOnlyList<T> selected, IReadOnlyList<T> room, DeviceFilter shown, Func<T, KnownMachine> machineOf)
+    {
+        var seen = selected.Count > 0 ? selected : room.Where(item => Shows(machineOf(item), shown)).ToList();
+        return IsPhoneOnly(action) ? seen.Where(item => IsAndroid(machineOf(item))).ToList() : seen;
     }
+
+    // Said in the status bar while nothing is selected and the "Telas" filter
+    // leaves machines out: whom the toolbar reaches ("Só nos celulares (3).").
+    // Null with a selection (the bar names it), with Todos, when the filter
+    // hides nothing, and when it shows nothing (the grid says so).
+    public static string? ReachNotice(DeviceFilter shown, int selected, int reached, int room)
+    {
+        if (selected > 0 || reached == 0 || reached == room)
+        {
+            return null;
+        }
+        return shown switch
+        {
+            DeviceFilter.Phones => $"Só nos celulares ({reached}).",
+            DeviceFilter.Computers => $"Só nos computadores ({reached}).",
+            _ => null,
+        };
+    }
+
+    // Said when a toolbar button finds none of the machines it would reach:
+    // the "Telas" filter shows no machine of its kind ("Nenhum celular na
+    // lista da sala para desligar."). forWhat: what the button does.
+    public static string NoneReachedText(DeviceFilter shown, string forWhat) => shown switch
+    {
+        DeviceFilter.Phones => $"Nenhum celular na lista da sala para {forWhat}.",
+        DeviceFilter.Computers => $"Nenhum computador na lista da sala para {forWhat}.",
+        _ => $"Nenhuma máquina na lista da sala para {forWhat}.",
+    };
 
     // For an action made for phones only: said after it when PCs were among the targets; null when none.
     public static string? PhoneOnlyLeftOutNotice(IReadOnlyCollection<KnownMachine> targets)
@@ -137,6 +159,29 @@ public static class DeviceSupport
             _ => $"{leftOut} computadores ficaram de fora: essa ação só funciona em celular.",
         };
     }
+}
+
+// What the toolbar's "Bloquear telas" does to the machines it reaches
+// (DeviceSupport.ToolbarReach): while every one of them that can be locked
+// is locked, it gives them back; otherwise it locks the ones that are not.
+// Machines out of its reach (hidden by "Telas", or left out of a selection)
+// keep their lock: switching the filter never unlocks anything by itself.
+public static class ScreenLockReach
+{
+    // True when the button gives the screens back ("Desbloquear telas").
+    public static bool Releases<T>(IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked)
+    {
+        var lockable = reach.Where(item => DeviceSupport.Supports(machineOf(item).Kind, ToolbarAction.ScreenLock)).ToList();
+        return lockable.Count > 0 && lockable.All(isLocked);
+    }
+
+    // What one press does: the machines it locks, or the ones it gives back.
+    public static (IReadOnlyList<T> Lock, IReadOnlyList<T> Unlock) Plan<T>(
+        IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked) =>
+        Releases(reach, machineOf, isLocked)
+            ? (Array.Empty<T>(), reach.Where(isLocked).ToList())
+            : (reach.Where(item => DeviceSupport.Supports(machineOf(item).Kind, ToolbarAction.ScreenLock) && !isLocked(item)).ToList(),
+               Array.Empty<T>());
 }
 
 // The action a toolbar button or a tile's menu item stands for, set in the
