@@ -14,7 +14,7 @@
 > para o computador do professor e para as máquinas dos alunos.
 > Página para os professores: https://arnoneto1.github.io/midview/
 
-O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem servidor externo. A internet só é usada pelo computador do professor, para buscar as atualizações do Midview no GitHub.
+O Midview gerencia o laboratório de informática da escola. Do próprio computador, o professor vê e controla as máquinas dos alunos, fala com a turma, envia e recolhe arquivos, bloqueia programas e sites e liga ou desliga o laboratório. Tudo passa pela rede local da escola, sem servidor externo. A internet só é usada pelo computador do professor, para buscar as atualizações do Midview no GitHub, e pelos celulares otimizados, que usam um DNS público sem anúncios (veja Privacidade).
 
 ## Veja funcionando
 
@@ -51,7 +51,7 @@ O mesmo instalador tem dois tipos:
 - **Professor**: instala o programa "Midview - Sala de aula", que roda sem direitos de administrador.
 - **Aluno**: instala o serviço **Midview Agent**, que roda como sistema em cada máquina do laboratório, e o programa que mostra as mensagens, o bloqueio de tela e os avisos para o aluno.
 
-O professor acha as máquinas pela rede e pareia cada uma conferindo, em até 5 minutos, um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria. A única conexão com a internet é a do computador do professor com o GitHub, para ver se saiu uma versão nova e baixá-la; as máquinas dos alunos recebem as atualizações pela rede local.
+O professor acha as máquinas pela rede e pareia cada uma conferindo, em até 5 minutos, um código de 6 dígitos que aparece na tela do aluno. Depois disso, a máquina só aceita os professores pareados. Os comandos, as telas e os arquivos passam criptografados com TLS e certificados próprios; só a busca de máquinas e o Wake-on-LAN usam pacotes UDP sem criptografia. O Midview não tem telemetria. A única conexão do computador do professor com a internet é com o GitHub, para ver se saiu uma versão nova e baixá-la; as máquinas dos alunos recebem as atualizações pela rede local, e os celulares otimizados usam um DNS público sem anúncios (veja Privacidade).
 
 Portas usadas na rede local:
 
@@ -153,7 +153,9 @@ As demais políticas do **Painel do laboratório** continuam aplicadas depois da
 
 O Midview não envia nada ao desenvolvedor. Entre o professor e as máquinas passam as imagens de tela, o texto copiado durante o controle, as mensagens, o bate-papo, os arquivos enviados e recolhidos, os nomes e os endereços MAC das máquinas e os nomes dos programas abertos ou instalados.
 
-Para as atualizações, o computador do professor consulta o GitHub (`api.github.com`), informando a versão do Midview instalada, e baixa o instalador de lá. Nenhum dado da sala vai junto. As máquinas dos alunos não acessam a internet pelo Midview.
+Para as atualizações, o computador do professor consulta o GitHub (`api.github.com`), informando a versão do Midview instalada, e baixa de lá o instalador e o aplicativo dos celulares (`MidviewAgent.apk`). Nenhum dado da sala vai junto. Os computadores dos alunos não acessam a internet pelo Midview.
+
+Nos celulares otimizados, o Android pergunta os endereços dos sites e apps a um serviço público de DNS sem anúncios, por conexão criptografada, em vez do DNS da rede da escola. Esse serviço fica sabendo quais endereços o celular procura, mas não o conteúdo das páginas. Para ligar e conferir esse DNS, o aplicativo do celular testa a internet pelo endereço de teste do Android e pelo próprio serviço. Sem otimizar, ou se a rede bloquear esse DNS, o celular usa o DNS de sempre.
 
 A tela do aluno pode ser vista sem aviso na máquina dele; só o controle remoto mostra um aviso. Por isso, a escola deve informar alunos e responsáveis sobre o uso do Midview, como pede a cláusula 6 da [licença](LICENSE).
 
