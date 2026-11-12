@@ -120,9 +120,13 @@ class ApkUpdateStore(
         // stays as it is). An upload or a check that a restart cut short
         // failed. One being installed is done when this is the version it
         // installs, and failed when it is not and Android no longer installs
-        // it (the install failed, or the phone restarted while it ran).
+        // it (the install failed, or the phone restarted while it ran). One
+        // that failed (APPLY_TIMEOUT) while Android was still installing it
+        // is done too when this is its version: Android finished late.
         fun atStart(attempt: ApkAttempt?, runningVersionCode: Long, versionName: String, installing: Boolean, now: Instant): ApkAttempt? =
             when {
+                attempt?.state == UpdateStates.FAILED && attempt.expectedVersionCode == runningVersionCode ->
+                    attempt.copy(state = UpdateStates.COMMITTED, detail = "atualizado para $versionName", updatedAt = now)
                 attempt == null || UpdateStates.isFinal(attempt.state) -> null
                 attempt.state != UpdateStates.APPLYING ->
                     attempt.copy(state = UpdateStates.FAILED, detail = RESTARTED, updatedAt = now)

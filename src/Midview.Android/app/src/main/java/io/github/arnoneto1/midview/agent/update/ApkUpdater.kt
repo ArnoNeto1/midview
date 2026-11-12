@@ -95,8 +95,9 @@ class ApkUpdater(
     private val running: ApkFacts = apks.installed()
 
     // At the agent's start: the attempt a restart cut short, or the one that
-    // installed this version, is closed, and what an upload left is deleted.
-    // Never stops the agent's start: what fails here is tried at the next.
+    // installed this version, is closed, what an upload left is deleted, and
+    // so are the install sessions nobody uses any more. Never stops the
+    // agent's start: what fails here is tried at the next.
     init {
         try {
             store.update { ApkUpdateStore.atStart(it, running.versionCode, running.versionName, installer.installing(), clock()) }
@@ -104,6 +105,11 @@ class ApkUpdater(
             upload.delete()
         } catch (e: RuntimeException) {
             log("Couldn't close the last network update", e)
+        }
+        try {
+            installer.abandonStale()
+        } catch (e: RuntimeException) {
+            log("Couldn't abandon the old install sessions", e)
         }
     }
 
