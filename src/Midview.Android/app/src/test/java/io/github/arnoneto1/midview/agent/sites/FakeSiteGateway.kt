@@ -87,6 +87,16 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
     }
 
     override fun isDeviceOwner() = owner
+
+    // "Apagar e preparar de novo": how often the phone was erased, what runs
+    // as it is, and what the test saw then.
+    var wipes = 0
+    var sentWhenWiped = -1
+    var onWipe: () -> Unit = {}
+    override fun wipe() {
+        wipes++
+        onWipe()
+    }
     override fun addUserRestriction(r: String) = Unit
     override fun setUninstallBlocked(pkg: String, blocked: Boolean) = Unit
     override fun setUserControlDisabled(pkgs: List<String>) = Unit

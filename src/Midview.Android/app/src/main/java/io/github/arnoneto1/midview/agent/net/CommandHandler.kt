@@ -5,6 +5,7 @@ import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
+import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
@@ -27,7 +28,8 @@ import java.io.EOFException
 // teacher's command: the first optimization after pairing, a DNS to try
 // again); updater, "Atualizar celulares" (the agent's next version over the
 // network); listApps reads the apps the student can open (for the teacher's
-// list).
+// list); gateway erases the phone at "Apagar e preparar de novo", runLater
+// being how it is put off (the ack has to reach the teacher first).
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -36,6 +38,8 @@ class CommandHandler(
     private val sites: SiteBlockStore,
     private val optimizer: PhoneOptimizer,
     private val updater: PhoneUpdater,
+    private val gateway: DevicePolicyGateway,
+    private val runLater: (delayMillis: Long, task: () -> Unit) -> Unit = ::onNewThread,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -60,6 +64,18 @@ class CommandHandler(
                 return
             }
             channel.send(answer(message))
+            // After the ack is on the wire, and off this thread: the wipe
+            // kills the connection and the process with it.
+            if (message.type == MessageType.WIPE_PHONE && gateway.isDeviceOwner()) {
+                runLater(WIPE_DELAY_MILLIS) {
+                    // A refusal must not take the agent down with it.
+                    try {
+                        gateway.wipe()
+                    } catch (e: RuntimeException) {
+                        // Nothing to tell: the teacher already has the ack.
+                    }
+                }
+            }
             message = try {
                 channel.receive()
             } catch (e: EOFException) {
@@ -101,6 +117,14 @@ class CommandHandler(
             val done = sites.handle(message.type, message.payload)
             Message(MessageType.COMMAND_ACK, byteArrayOf(if (done) 1 else 0))
         }
+        // Only a Device Owner can erase the phone; the wipe itself is started
+        // by handle(), once this answer has been sent.
+        MessageType.WIPE_PHONE ->
+            if (gateway.isDeviceOwner()) {
+                Message(MessageType.COMMAND_ACK, CommandResult.encode(true, WIPING))
+            } else {
+                Message(MessageType.COMMAND_ACK, CommandResult.encode(false, NOT_PREPARED))
+            }
         // Everything a PC does and a phone doesn't yet: the teacher reads why.
         else -> Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
     }
@@ -115,6 +139,23 @@ class CommandHandler(
     companion object {
         const val REQUEST_SHOWN = "pedido mostrado"
         const val SCREEN_ALREADY_ALLOWED = "a tela já está liberada"
+        const val WIPING = "apagando"
+        const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."
+
+        // The wait between the ack and the wipe, for the ack to reach the Master.
+        const val WIPE_DELAY_MILLIS = 2_000L
+
+        private fun onNewThread(delayMillis: Long, task: () -> Unit) {
+            Thread {
+                try {
+                    Thread.sleep(delayMillis)
+                } catch (e: InterruptedException) {
+                    return@Thread
+                }
+                task()
+            }.apply { isDaemon = true; name = "midview-wipe" }.start()
+        }
+
         const val SCREEN_LOCKED = "a tela está bloqueada: o pedido aparece quando o celular for desbloqueado"
 
         // The first message of a teacher not trusted yet: only a PairRequest

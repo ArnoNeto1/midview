@@ -19,6 +19,7 @@ import io.github.arnoneto1.midview.agent.protocol.UpdateStatusReport
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import io.github.arnoneto1.midview.agent.sites.SiteBlockState
+import io.github.arnoneto1.midview.agent.sites.FakeSiteGateway
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
 import io.github.arnoneto1.midview.agent.update.PhoneUpdater
 import org.junit.Assert.assertArrayEquals
@@ -51,7 +52,17 @@ class CommandHandlerTest {
     private val sites by lazy { SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { sitesApplied += it; sitesWork }) }
     private val optimizer = FakeOptimizer()
     private val updater = FakeUpdater()
-    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater) { phoneApps } }
+    private val gateway = FakeSiteGateway()
+
+    // "Apagar e preparar de novo": the delays asked for, and the task run at
+    // once (so the tests do not wait the two seconds).
+    private val wipeDelays = mutableListOf<Long>()
+    private val handler by lazy {
+        CommandHandler(
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway,
+            runLater = { delay, task -> wipeDelays += delay; task() },
+        ) { phoneApps }
+    }
 
     // "Atualizar celulares": the offers it got (answered as accepted) and
     // the status it reports.
@@ -346,6 +357,38 @@ class CommandHandlerTest {
         assertEquals(1, optimizer.runs)
         val answer = channel.sent.single().also { assertEquals(MessageType.PHONE_OPTIMIZE_REPORT, it.type) }
         assertEquals(optimizer.report, PhoneOptimizeReport.decode(answer.payload))
+    }
+
+    @Test fun wipeFromTrustedAcksThenWipes() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.WIPE_PHONE))
+        gateway.onWipe = { gateway.sentWhenWiped = channel.sent.size }
+        handler.handle(channel)
+
+        val ack = channel.sent.single().also { assertEquals(MessageType.COMMAND_ACK, it.type) }
+        assertEquals(true to CommandHandler.WIPING, CommandResult.decode(ack.payload))
+        assertEquals(1, gateway.wipes)
+        assertEquals(1, gateway.sentWhenWiped)
+        assertEquals(listOf(CommandHandler.WIPE_DELAY_MILLIS), wipeDelays)
+    }
+
+    @Test fun wipeFromUntrustedNeverWipes() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.WIPE_PHONE))
+        handler.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertEquals(0, gateway.wipes)
+    }
+
+    @Test fun wipeWhenNotDeviceOwnerSaysWhy() {
+        trusted.add(teacher)
+        gateway.owner = false
+        val channel = FakeChannel(teacher, message(MessageType.WIPE_PHONE))
+        handler.handle(channel)
+
+        val ack = channel.sent.single()
+        assertEquals(false to "Este celular não foi preparado pelo Midview.", CommandResult.decode(ack.payload))
+        assertEquals(0, gateway.wipes)
     }
 
     @Test fun untrustedTeacherCannotOptimize() {

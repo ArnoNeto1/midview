@@ -54,6 +54,11 @@ interface DevicePolicyGateway {
     // Saves a Wi-Fi network and joins it (WPA2 with a password, open without).
     fun addWifi(ssid: String, password: String?)
     fun isDeviceOwner(): Boolean
+
+    // Erases the phone back to factory settings, keeping the data of a
+    // factory reset protection out of it (so the next owner is not asked for
+    // the old account). Device Owner only; the phone restarts into setup.
+    fun wipe()
     val sdkInt: Int
 
     // A debug build (ApplicationInfo.FLAG_DEBUGGABLE).

@@ -224,7 +224,7 @@ class AgentService : Service() {
             isDeviceOwner = policyGateway::isDeviceOwner,
             log = log,
         )
-        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, installedApps::list)
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway, listApps = installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,

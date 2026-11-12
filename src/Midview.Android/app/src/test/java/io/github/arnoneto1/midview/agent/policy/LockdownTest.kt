@@ -16,6 +16,7 @@ class LockdownTest {
         override val debuggable: Boolean = false,
     ) : DevicePolicyGateway {
         override fun addWifi(ssid: String, password: String?) {}
+        override fun wipe() {}
         val restrictions = mutableSetOf<String>()
         val uninstallBlocked = mutableMapOf<String, Boolean>()
         var controlDisabledPackages: List<String>? = null

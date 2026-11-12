@@ -72,4 +72,9 @@ object MessageType {
     // (a PhoneOptimizeReport). An older agent answers COMMAND_ACK.
     const val OPTIMIZE_PHONE = 98
     const val PHONE_OPTIMIZE_REPORT = 99
+
+    // Master -> Android agent (port 28900), trusted teacher only: erase the
+    // phone ("Apagar e preparar de novo", no payload). Answered with a
+    // COMMAND_ACK before the erasing starts. Number 100 as the C# WipePhone.
+    const val WIPE_PHONE = 100
 }
