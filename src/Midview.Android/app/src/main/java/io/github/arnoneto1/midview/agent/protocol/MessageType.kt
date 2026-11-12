@@ -31,12 +31,24 @@ object MessageType {
     const val CHAT_OPEN = 15
     const val CHAT_TEXT = 16
 
-    // Sending a file in chunks (the update's APK too).
+    // "Enviar arquivo", as on a PC (FileTransfer), from a trusted teacher
+    // only, on the commands port (28900): SEND_FILE (or SEND_FILE_WITH_OPTIONS)
+    // is answered with one CommandAck (accepted or refused), then the file
+    // comes as FILE_CHUNKs and one more CommandAck says how it ended. The
+    // file lands in Download/Midview (see FileHandler).
+    const val SEND_FILE = 17
+
+    // Sending a file in chunks (the teacher's files and the update's APK).
     const val FILE_CHUNK = 18
 
     // "Fechar programas", as on a PC (CloseAppsCommand's payload), from a
     // trusted teacher only; answered with a CommandAck (CommandResult).
     const val CLOSE_APPS = 19
+
+    // "Recolher arquivos", as on a PC (no payload), from a trusted teacher
+    // only: the files of Download/Midview go back as SEND_FILE headers (the
+    // path inside it) and FILE_CHUNKs, then one CommandAck (CommandResult).
+    const val COLLECT_FILES = 20
 
     // Updating the agent over the network, from a trusted teacher only (see
     // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
@@ -46,6 +58,13 @@ object MessageType {
     const val GET_UPDATE_STATUS = 27
     const val UPDATE_STATUS = 28
     const val LOCK_SCREEN = 34
+
+    // "Enviar arquivo" with its options (overwrite, then what to open), as
+    // SEND_FILE otherwise; and "Apagar as pastas dos alunos" (no payload),
+    // which empties Download/Midview, answered with one CommandAck
+    // (CommandResult).
+    const val SEND_FILE_WITH_OPTIONS = 35
+    const val CLEAR_DELIVERY_FOLDER = 36
 
     // Pairing a teacher with this device (see Pairing for the exchange).
     const val PAIR_REQUEST = 37

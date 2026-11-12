@@ -34,6 +34,8 @@ import java.io.EOFException
 // PC takes on its Session's port: on a phone the one app is both, and its
 // commands port answers everything (an agent from before them says "Ainda
 // não funciona em celular.", which the teacher's program can tell apart).
+// files is "Enviar arquivo", "Recolher arquivos" and "Apagar as pastas dos
+// alunos" (FileHandler), a PC Session's too; without it they get that answer.
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -58,6 +60,8 @@ class CommandHandler(
     private val chat: (Channel) -> Unit = {
         it.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE)))
     },
+    // "Enviar arquivo", "Recolher arquivos", "Apagar as pastas dos alunos".
+    private val files: FileHandler? = null,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -84,6 +88,12 @@ class CommandHandler(
             // The conversation keeps the connection until it ends.
             if (message.type == MessageType.CHAT_OPEN) {
                 chat(channel)
+                return
+            }
+            // A file each way is more than one message, and ends the
+            // connection, as on a PC.
+            if (files != null && message.type in FILE_TRANSFERS) {
+                if (message.type == MessageType.COLLECT_FILES) files.collect(channel) else files.receive(channel, message)
                 return
             }
             channel.send(answer(message))
@@ -141,6 +151,10 @@ class CommandHandler(
             val (closed, detail) = if (delay == null) false to INVALID_REQUEST else closeApps(delay)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(closed, detail))
         }
+        MessageType.CLEAR_DELIVERY_FOLDER -> {
+            val (cleared, detail) = files?.clear() ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(cleared, detail))
+        }
         MessageType.SHOW_MESSAGE -> {
             val (shown, detail) = showMessage(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(shown, detail))
@@ -182,6 +196,8 @@ class CommandHandler(
         const val WIPING = "apagando"
         const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."
         const val INVALID_REQUEST = "pedido inválido"
+
+        private val FILE_TRANSFERS = setOf(MessageType.SEND_FILE, MessageType.SEND_FILE_WITH_OPTIONS, MessageType.COLLECT_FILES)
 
         // CloseApps' payload, as src/Midview.Protocol/CloseAppsCommand.cs:
         // the mode (0 ask, 1 force), then the warning in seconds (uint16,

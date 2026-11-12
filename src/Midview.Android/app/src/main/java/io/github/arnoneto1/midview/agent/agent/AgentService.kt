@@ -23,6 +23,7 @@ import io.github.arnoneto1.midview.agent.apps.CloseCountdown
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
+import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
@@ -287,6 +288,8 @@ class AgentService : Service() {
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
+            // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
+            files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),
             listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames

@@ -44,6 +44,11 @@ public enum MessageType : byte
     // FileTransfer header: size and name), then carries FileChunk messages
     // until exactly that many bytes have arrived, and ends with one
     // CommandAck (see FileTransfer for its payload).
+    // A phone's agent (port 28900) takes it too, from a trusted teacher, and
+    // so CollectFiles, SendFileWithOptions and ClearDeliveryFolder, for its
+    // Download/Midview: the one folder the teacher's files land in and are
+    // collected from. An agent from before them answers "Ainda não funciona
+    // em celular.".
     SendFile = 17,
     FileChunk = 18,
 

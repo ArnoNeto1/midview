@@ -29,13 +29,20 @@ public static class FileCollector
     public static CollectResult Collect(
         KnownMachine machine, X509Certificate2 masterCertificate, string destinationDirectory,
         int port = ConnectionClient.SessionPort, int maxFiles = FileCollection.MaxFiles,
-        long maxTotalBytes = FileCollection.MaxTotalBytes)
+        long maxTotalBytes = FileCollection.MaxTotalBytes) =>
+        Collect(machine, machine.SessionThumbprint, masterCertificate, destinationDirectory, port, maxFiles, maxTotalBytes);
+
+    // From whoever answers at port with thumbprint: a PC's Session, or a
+    // phone's agent (FileTargets), which answer CollectFiles the same way.
+    public static CollectResult Collect(
+        KnownMachine machine, string thumbprint, X509Certificate2 masterCertificate, string destinationDirectory,
+        int port, int maxFiles = FileCollection.MaxFiles, long maxTotalBytes = FileCollection.MaxTotalBytes)
     {
         using var tcpClient = TcpConnect.WithTimeout(machine.HostAddress, port, ConnectTimeout);
         tcpClient.ReceiveTimeout = TimeoutMs;
         tcpClient.SendTimeout = TimeoutMs;
         using var channel = SecureChannel.AuthenticateAsClient(
-            tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
+            tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { thumbprint }));
 
         channel.Send(new Message(MessageType.CollectFiles, Array.Empty<byte>()));
 

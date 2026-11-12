@@ -31,13 +31,14 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
+                or ToolbarAction.SendFile or ToolbarAction.CollectFiles
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
@@ -77,12 +78,14 @@ public class DeviceSupportTests
     }
 
     // The sites window sends its commands to every machine it reaches; so do
-    // "Mensagem" and "Bate-papo".
+    // "Mensagem", "Bate-papo", "Enviar arquivo" and "Recolher arquivos".
     [Theory]
     [InlineData(ToolbarAction.BlockPrograms)]
     [InlineData(ToolbarAction.BlockSites)]
     [InlineData(ToolbarAction.Message)]
     [InlineData(ToolbarAction.Chat)]
+    [InlineData(ToolbarAction.SendFile)]
+    [InlineData(ToolbarAction.CollectFiles)]
     public void Blocking_messages_and_chat_leave_no_phone_out(ToolbarAction action)
     {
         var machines = new[] { Pc("PC 01"), Phone("Cel 01") };

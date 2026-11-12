@@ -300,6 +300,9 @@ public sealed class PhoneCableTests
             S + "install -r " + Apk,
             S + "shell cmd appops set " + Package + " 10008 allow",
             S + "shell cmd deviceidle whitelist +" + Package,
+            S + "shell cmd appops set --uid " + Package + " MANAGE_EXTERNAL_STORAGE allow",
+            S + "shell pm grant " + Package + " android.permission.READ_EXTERNAL_STORAGE",
+            S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
             ContentCall(),
@@ -479,6 +482,9 @@ public sealed class PhoneCableTests
         var adb = ReadyToPrepare()
             .Set(S + "shell cmd appops set " + Package + " 10008 allow", "Error: unknown op", 255)
             .Set(S + "shell cmd deviceidle whitelist +" + Package, "Error", 255)
+            .Set(S + "shell cmd appops set --uid " + Package + " MANAGE_EXTERNAL_STORAGE allow", "Error: Unknown operation string", 255)
+            .Set(S + "shell pm grant " + Package + " android.permission.READ_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
+            .Set(S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
             .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
             .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255);
         var result = Prepare(adb);

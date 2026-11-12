@@ -677,6 +677,79 @@ class CommandHandlerTest {
         assertEquals(1, chat.events.count { it.startsWith("receive") })
     }
 
+    // "Enviar arquivo", "Recolher arquivos", "Apagar as pastas dos alunos":
+    // over a real folder (FolderWalk), handed to the FileHandler.
+    private val filesFolder by lazy { folder.newFolder("Midview") }
+    private val fileNotices = mutableListOf<String>()
+    private val withFiles by lazy {
+        val phoneFolder = object : io.github.arnoneto1.midview.agent.files.PhoneFolder {
+            override val seesEverything = true
+            override fun refusalFor(size: Long): String? = null
+            override fun begin(safeName: String) = object : io.github.arnoneto1.midview.agent.files.IncomingFile {
+                val target = File(filesFolder, safeName)
+                override fun write(bytes: ByteArray) = target.appendBytes(bytes)
+                override fun complete(overwrite: Boolean) = safeName to null
+                override fun close() {}
+            }
+            override fun list(maxFiles: Int) = io.github.arnoneto1.midview.agent.files.FolderWalk.list(filesFolder, maxFiles)
+            override fun clear() = io.github.arnoneto1.midview.agent.files.FolderWalk.clear(filesFolder)
+        }
+        CommandHandler(
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway,
+            files = FileHandler(phoneFolder, notify = { fileNotices += it }, after = { _, _ -> null }),
+        ) { phoneApps }
+    }
+
+    @Test fun aFileFromTheTeacherLandsInTheFolder() {
+        trusted.add(teacher)
+        val header = message(MessageType.SEND_FILE, io.github.arnoneto1.midview.agent.protocol.FileTransfer.encodeHeader("aula.pdf", 3))
+        val channel = FakeChannel(teacher, header, message(MessageType.FILE_CHUNK, byteArrayOf(1, 2, 3)))
+        withFiles.handle(channel)
+        assertEquals(listOf(true to "", true to "aula.pdf"), channel.sent.map { CommandResult.decode(it.payload) })
+        assertArrayEquals(byteArrayOf(1, 2, 3), File(filesFolder, "aula.pdf").readBytes())
+        assertEquals(1, fileNotices.size)
+    }
+
+    @Test fun collectingSendsTheFolderBack() {
+        trusted.add(teacher)
+        File(filesFolder, "trabalho.txt").writeText("oi")
+        val channel = FakeChannel(teacher, message(MessageType.COLLECT_FILES))
+        withFiles.handle(channel)
+        assertEquals(listOf(MessageType.SEND_FILE, MessageType.FILE_CHUNK, MessageType.COMMAND_ACK), channel.sent.map { it.type })
+        assertEquals(true to "", CommandResult.decode(channel.sent.last().payload))
+    }
+
+    @Test fun clearingEmptiesTheFolder_andTheConnectionGoesOn() {
+        trusted.add(teacher)
+        File(filesFolder, "trabalho.txt").writeText("oi")
+        val channel = FakeChannel(teacher, message(MessageType.CLEAR_DELIVERY_FOLDER), message(MessageType.HEARTBEAT))
+        withFiles.handle(channel)
+        assertEquals(true to "1 item(ns) foram apagados", CommandResult.decode(channel.sent[0].payload))
+        assertEquals(MessageType.HEARTBEAT, channel.sent[1].type)
+        assertTrue(filesFolder.list()!!.isEmpty())
+    }
+
+    @Test fun filesFromAnUntrustedTeacherAreIgnored() {
+        trusted.add(teacher)
+        File(filesFolder, "trabalho.txt").writeText("oi")
+        for (type in listOf(MessageType.COLLECT_FILES, MessageType.CLEAR_DELIVERY_FOLDER)) {
+            val channel = FakeChannel(stranger, message(type))
+            withFiles.handle(channel)
+            assertTrue(channel.sent.isEmpty())
+        }
+        assertTrue(File(filesFolder, "trabalho.txt").exists())
+    }
+
+    // An agent built without them answers as one from before them.
+    @Test fun withoutFilesThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.SEND_FILE, MessageType.SEND_FILE_WITH_OPTIONS, MessageType.COLLECT_FILES, MessageType.CLEAR_DELIVERY_FOLDER)) {
+            val channel = FakeChannel(teacher, message(type, byteArrayOf(0, 0, 0, 0, 0, 0, 0, 1, 97)))
+            handler.handle(channel)
+            assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+        }
+    }
+
     private companion object {
         val identity: AgentIdentity by lazy {
             AgentIdentity(Files.createTempDirectory("command-handler").toFile().apply { deleteOnExit() }, "Cel 01")

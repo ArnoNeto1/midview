@@ -8,7 +8,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Sends one file to one machine or to the whole class (FileSender, one
-// connection per machine).
+// connection per machine); a phone gets it in its Download/Midview
+// (FileTargets).
 public partial class SendFileWindow : MidviewWindow
 {
     // Enough to keep the lab network busy without the teacher's PC uploading
@@ -25,7 +26,10 @@ public partial class SendFileWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.To, targets, wholeClass);
+        TargetsTextBlock.Text = FileTargets.Describe(TargetsPreposition.To, targets, wholeClass);
+        HintTextBlock.Text = FileTargets.SendHint(targets);
+        OpenFolderRadioButton.Content = FileTargets.OpenFolderChoice(targets);
+        OpenFileRadioButton.Content = FileTargets.OpenFileChoice(targets);
     }
 
     private void OnChooseFileClicked(object sender, RoutedEventArgs e)
@@ -90,7 +94,9 @@ public partial class SendFileWindow : MidviewWindow
         var failures = results.Where(result => !result.Saved).ToList();
         var delivered = results.Length - failures.Count;
         ProgressTextBlock.Text = failures.Count == 0
-            ? results.Length == 1 ? "Arquivo enviado." : $"Arquivo enviado para as {delivered} máquinas."
+            ? results.Length == 1 ? "Arquivo enviado."
+            : CloseAppsTargets.OnlyPhones(_targets) ? $"Arquivo enviado para os {delivered} celulares."
+            : $"Arquivo enviado para as {delivered} máquinas."
             : $"Enviado para {delivered} de {results.Length}.";
         ResultTextBlock.Text = string.Join("\n", results.Select(result => result.Saved
             ? $"✓ {result.Name}: salvo como {result.Detail}"
@@ -100,14 +106,7 @@ public partial class SendFileWindow : MidviewWindow
 
     private (string Name, bool Saved, string Detail) SendTo(KnownMachine machine, string filePath, SendFileOptions options)
     {
-        try
-        {
-            var (saved, detail) = FileSender.Send(machine, _masterCertificate, filePath, options);
-            return (machine.Name, saved, detail);
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, FailureText.Describe(ex));
-        }
+        var (saved, detail) = FileTargets.Send(machine, _masterCertificate, filePath, options);
+        return (machine.Name, saved, detail);
     }
 }

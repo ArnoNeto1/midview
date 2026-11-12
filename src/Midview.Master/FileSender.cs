@@ -19,10 +19,17 @@ public static class FileSender
     // when options were chosen; otherwise Detail says why not.
     public static (bool Saved, string Detail) Send(
         KnownMachine machine, X509Certificate2 masterCertificate, string filePath,
-        SendFileOptions? options = null, int port = ConnectionClient.SessionPort)
+        SendFileOptions? options = null, int port = ConnectionClient.SessionPort) =>
+        Send(machine, machine.SessionThumbprint, masterCertificate, filePath, options, port);
+
+    // To whoever answers at port with thumbprint: a PC's Session, or a
+    // phone's agent (FileTargets), which take the same exchange.
+    public static (bool Saved, string Detail) Send(
+        KnownMachine machine, string thumbprint, X509Certificate2 masterCertificate, string filePath,
+        SendFileOptions? options, int port)
     {
         options ??= SendFileOptions.Default;
-        var result = SendOnce(machine, masterCertificate, filePath, options, port, out var olderSession);
+        var result = SendOnce(machine, thumbprint, masterCertificate, filePath, options, port, out var olderSession);
         if (!olderSession)
         {
             return result;
@@ -30,13 +37,13 @@ public static class FileSender
 
         // A Session from before the options took them for a control
         // connection: the file goes again, as it always did.
-        var (saved, detail) = SendOnce(machine, masterCertificate, filePath, SendFileOptions.Default, port, out _);
+        var (saved, detail) = SendOnce(machine, thumbprint, masterCertificate, filePath, SendFileOptions.Default, port, out _);
         return (saved, saved ? $"{detail}; Midview antigo nesta máquina: sem as opções" : detail);
     }
 
     private static (bool Saved, string Detail) SendOnce(
-        KnownMachine machine, X509Certificate2 masterCertificate, string filePath, SendFileOptions options, int port,
-        out bool olderSession)
+        KnownMachine machine, string thumbprint, X509Certificate2 masterCertificate, string filePath, SendFileOptions options,
+        int port, out bool olderSession)
     {
         olderSession = false;
         using var file = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -49,7 +56,7 @@ public static class FileSender
         tcpClient.ReceiveTimeout = TimeoutMs;
         tcpClient.SendTimeout = TimeoutMs;
         using var channel = SecureChannel.AuthenticateAsClient(
-            tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
+            tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { thumbprint }));
 
         var name = Path.GetFileName(filePath);
         channel.Send(options == SendFileOptions.Default

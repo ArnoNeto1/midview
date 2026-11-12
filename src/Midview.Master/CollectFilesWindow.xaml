@@ -12,7 +12,7 @@
             <Border Style="{StaticResource Card}" Margin="0,16,0,10">
                 <StackPanel>
                     <TextBlock Text="Recolher" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                    <TextBlock x:Name="CollectHintTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,10"
                                Text="Traz o que cada aluno colocou na pasta &quot;Entregar ao professor&quot; da Área de Trabalho (subpastas também). Os arquivos continuam no aluno, que recebe um aviso. Até 1000 arquivos e 500 MB por máquina." />
                     <DockPanel>
                         <Button x:Name="OpenFolderButton" DockPanel.Dock="Right" Content="Abrir pasta" Click="OnOpenFolderClicked"
@@ -25,7 +25,7 @@
             <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                 <StackPanel>
                     <TextBlock Text="Para começar a próxima aula" Style="{StaticResource CardTitle}" Margin="0,0,0,4" />
-                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                    <TextBlock x:Name="ClearHintTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,10"
                                Text="Para começar a próxima aula com tudo vazio. Os arquivos vão para a Lixeira, de onde ainda podem ser recuperados." />
                     <DockPanel>
                         <Button x:Name="ClearCollectedButton" DockPanel.Dock="Right" Content="Apagar os recolhidos neste PC"

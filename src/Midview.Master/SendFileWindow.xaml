@@ -15,7 +15,7 @@
                         <Button DockPanel.Dock="Right" Content="Escolher arquivo..." Click="OnChooseFileClicked" Padding="14,6" Margin="8,0,0,0" />
                         <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum arquivo escolhido." />
                     </DockPanel>
-                    <TextBlock Style="{StaticResource Hint}"
+                    <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}"
                                Text="O arquivo é salvo na pasta &quot;Arquivos do professor&quot; na Área de Trabalho do aluno, que recebe um aviso." />
                 </StackPanel>
             </Border>

@@ -198,6 +198,14 @@ public sealed class PhoneCable
         // Keeps the phone's cleaner from killing the app. A failure here does not stop the setup.
         Shell(Short, "cmd", "appops", "set", package, "10008", "allow");
         Shell(Short, "cmd", "deviceidle", "whitelist", "+" + package);
+        // "Recolher arquivos": what other apps saved in Download/Midview is
+        // hidden from the agent without "acesso a todos os arquivos", which a
+        // Device Owner cannot grant itself (Android 11 or newer); Android 10
+        // has the older permissions instead (an error on the other one is
+        // expected and does not stop the setup).
+        Shell(Short, "cmd", "appops", "set", "--uid", package, "MANAGE_EXTERNAL_STORAGE", "allow");
+        Shell(Short, "pm", "grant", package, "android.permission.READ_EXTERNAL_STORAGE");
+        Shell(Short, "pm", "grant", package, "android.permission.WRITE_EXTERNAL_STORAGE");
         // The screen reader the agent shows the screen with (Android 11 or
         // newer): without it the phone asks "Iniciar agora" before the
         // teacher sees its screen. Only from the cable, so before the

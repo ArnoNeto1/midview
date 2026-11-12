@@ -8,8 +8,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Collects the "Entregar ao professor" folder of one machine or of the whole
-// class (FileCollector, one connection per machine) into
-// Documents\Midview\Recolhidos\<date time>\<machine>.
+// class (FileCollector, one connection per machine; a phone's Download/Midview,
+// FileTargets) into Documents\Midview\Recolhidos\<date time>\<machine>.
 public partial class CollectFilesWindow : MidviewWindow
 {
     // Like SendFileWindow: keeps the network busy without 25 machines
@@ -26,7 +26,9 @@ public partial class CollectFilesWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.From, targets, wholeClass);
+        TargetsTextBlock.Text = FileTargets.Describe(TargetsPreposition.From, targets, wholeClass);
+        CollectHintTextBlock.Text = FileTargets.CollectHint(targets);
+        ClearHintTextBlock.Text = FileTargets.ClearHint(targets);
     }
 
     public static string CollectionsDirectory => Path.Combine(
@@ -77,6 +79,12 @@ public partial class CollectFilesWindow : MidviewWindow
     // where the files can still be recovered.
     private async void OnClearStudentsClicked(object sender, RoutedEventArgs e)
     {
+        // A phone has no Recycle Bin: the teacher says yes first.
+        if (FileTargets.ClearConfirmation(_targets) is { } question && !QuestionWindow.Ask(this, question))
+        {
+            return;
+        }
+
         ClearStudentsButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
         ProgressTextBlock.Text = "Esvaziando as pastas dos alunos...";
@@ -95,17 +103,8 @@ public partial class CollectFilesWindow : MidviewWindow
 
     private (string Name, bool Succeeded, string Detail) ClearOn(KnownMachine machine)
     {
-        try
-        {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate,
-                MessageType.ClearDeliveryFolder, Array.Empty<byte>());
-            return (machine.Name, succeeded, detail);
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, FailureText.Describe(ex));
-        }
+        var (succeeded, detail) = FileTargets.Clear(machine, _masterCertificate);
+        return (machine.Name, succeeded, detail);
     }
 
     // Into this PC's Recycle Bin, where it can still be recovered.
@@ -147,17 +146,8 @@ public partial class CollectFilesWindow : MidviewWindow
         return directories;
     }
 
-    private CollectResult CollectFrom(KnownMachine machine, string destination)
-    {
-        try
-        {
-            return FileCollector.Collect(machine, _masterCertificate, destination);
-        }
-        catch (Exception ex)
-        {
-            return new CollectResult(false, 0, 0, FailureText.Describe(ex));
-        }
-    }
+    private CollectResult CollectFrom(KnownMachine machine, string destination) =>
+        FileTargets.Collect(machine, _masterCertificate, destination);
 
     private static string Describe(string name, CollectResult result)
     {
