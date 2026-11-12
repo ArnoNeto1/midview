@@ -30,14 +30,20 @@ public static class ClassFolderClient
 
     // An Agent from before the class folder doesn't know SetClassLesson and
     // answers a bare CommandAck, which decodes to (false, ""): said the way a
-    // Session from before it is, since the fix is the same.
+    // Session from before it is, since the fix is the same. So is a phone's
+    // agent from before it, which answers "Ainda não funciona em celular."
+    // (PhoneAgentCommand.NotOnPhone), a text no PC Agent sends.
     public static (bool Succeeded, string Detail) SetLesson(
         KnownMachine machine, X509Certificate2 masterCertificate, ClassLesson lesson, int port = ConnectionClient.AgentPort)
     {
         var (succeeded, detail) = CommandClient.SendCommandForResult(
             machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.SetClassLesson, lesson.Encode());
-        return !succeeded && detail.Length == 0 ? (false, CommandClient.OlderSession) : (succeeded, detail);
+        return !succeeded && IsOld(detail) ? (false, CommandClient.OlderSession) : (succeeded, detail);
     }
+
+    // A refusal that only an Agent from before the class folder answers: a
+    // PC's bare no, or an older phone's "Ainda não funciona em celular.".
+    private static bool IsOld(string detail) => detail.Length == 0 || detail == PhoneAgentCommand.NotOnPhone;
 
     // The lesson the machine's Agent follows (GetClassLesson); OldAgent, with
     // no lesson, for an Agent from before the class folder.
@@ -72,7 +78,7 @@ public static class ClassFolderClient
         var (succeeded, detail) = CommandClient.SendCommandForResult(
             machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ClaimClassHome, claim.Encode(),
             sending: sending);
-        return (succeeded, detail, !succeeded && detail.Length == 0);
+        return (succeeded, detail, !succeeded && IsOld(detail));
     }
 
     // The home the machine's Agent keeps (GetClassHome): null when it has none
@@ -102,7 +108,7 @@ public static class ClassFolderClient
         var (trusted, detail) = CommandClient.SendCommandForResult(
             machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.IsTeacherTrusted,
             Encoding.ASCII.GetBytes(thumbprint));
-        return trusted ? true : detail.Length == 0 ? false : null;
+        return trusted ? true : IsOld(detail) ? false : null;
     }
 
     // OldSession: a Session from before the class folder (it took the request
@@ -132,7 +138,18 @@ public static class ClassFolderClient
             tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
 
         channel.Send(new Message(MessageType.ListClassFolder, Array.Empty<byte>()));
-        var reply = channel.Receive();
+        Message reply;
+        try
+        {
+            reply = channel.Receive();
+        }
+        catch (EndOfStreamException) when (machine.IsPhone)
+        {
+            // A phone's agent from before the class folder hangs up on what
+            // it doesn't know on its screen port (a PC's Session would start
+            // sending its screen, FrameTile below): the same "Midview antigo".
+            return new ListResult(Guid.Empty, null, Array.Empty<ClassFolderEntry>(), OldSession: true);
+        }
         switch (reply.Type)
         {
             case MessageType.ClassFolderListing:

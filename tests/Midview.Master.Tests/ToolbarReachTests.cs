@@ -102,7 +102,7 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.Schedule, false)]
     [InlineData(ToolbarAction.SendFile, true)]
     [InlineData(ToolbarAction.CollectFiles, true)]
-    [InlineData(ToolbarAction.ClassFolder, false)]
+    [InlineData(ToolbarAction.ClassFolder, true)]
     [InlineData(ToolbarAction.OpenWebsite, true)]
     [InlineData(ToolbarAction.OpenProgram, true)]
     [InlineData(ToolbarAction.Install, true)]

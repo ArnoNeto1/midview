@@ -48,8 +48,10 @@ public enum ToolbarAction
 // apps installed and uninstalled ("Instalar programa": an .apk,
 // InstallWindow; "Desinstalar programa": PhoneUninstallWindow), takes the
 // lab panel's functions that mean something on a phone (LabConfigPhones),
-// and is optimized and updated (actions a PC has nothing to do with).
-// "Ligar", "Agendar" and the class folder stay for computers.
+// takes part in the class folder ("Pasta da turma": its Download/Midview/
+// Pasta da turma – <turma>, with the same messages as a PC's Agent and
+// Session), and is optimized and updated (actions a PC has nothing to do with).
+// "Ligar" and "Agendar" stay for computers.
 // WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
@@ -63,6 +65,7 @@ public static class DeviceSupport
             or ToolbarAction.Power or ToolbarAction.WipePhone
             or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram
             or ToolbarAction.Install or ToolbarAction.Uninstall or ToolbarAction.LabConfig
+            or ToolbarAction.ClassFolder
             || IsPhoneOnly(action),
         _ => false,
     };
@@ -83,7 +86,7 @@ public static class DeviceSupport
     public static bool HasAndroid(IEnumerable<KnownMachine> room) => room.Any(IsAndroid);
 
     // The machines that can do the action, in order: what a feature that
-    // phones do not take part in (the class folder, the Windows update) is fed.
+    // not every kind takes part in (the class folder, the Windows update) is fed.
     public static IReadOnlyList<KnownMachine> Only(IEnumerable<KnownMachine> machines, ToolbarAction action) =>
         machines.Where(machine => Supports(machine.Kind, action)).ToList();
 

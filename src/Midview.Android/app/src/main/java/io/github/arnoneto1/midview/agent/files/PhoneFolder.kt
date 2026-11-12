@@ -58,7 +58,17 @@ interface PhoneFolder {
 // DeliveryFolder walks its folder: files first, then subfolders, each in
 // name order ignoring case; hidden entries (a name starting with '.', such
 // as Android's ".pending-" and ".trashed-" files) and linked folders skipped.
+// The class folders ("Pasta da turma – <turma>", and their files set aside
+// in ".midview-turmas") live in Download/Midview too, but are not the
+// delivery folder: on a PC they are other folders, which "Recolher arquivos"
+// and "Apagar as pastas dos alunos" leave alone, and so are they here.
 object FolderWalk {
+    // A class folder, or the set-aside one, at the top of Download/Midview.
+    fun isClassFolder(name: String): Boolean = name.startsWith(CLASS_FOLDER_PREFIX) || name.startsWith(MIDVIEW_PREFIX)
+
+    private const val CLASS_FOLDER_PREFIX = "Pasta da turma – "
+    private const val MIDVIEW_PREFIX = ".midview-"
+
     fun list(root: File, maxFiles: Int): List<PhoneFile> {
         val files = mutableListOf<PhoneFile>()
         if (root.isDirectory) walk(root, "", 1, maxFiles, files)
@@ -77,6 +87,7 @@ object FolderWalk {
         if (depth >= FileTransfer.MAX_DEPTH) return
         for (subdirectory in entries.filter { it.isDirectory && !Files.isSymbolicLink(it.toPath()) }) {
             if (files.size > maxFiles) return
+            if (depth == 1 && isClassFolder(subdirectory.name)) continue
             walk(subdirectory, prefix + subdirectory.name + "/", depth + 1, maxFiles, files)
         }
     }
@@ -88,7 +99,7 @@ object FolderWalk {
     fun clear(root: File): Pair<Int, List<String>> {
         val problems = mutableListOf<String>()
         val entries = (root.listFiles() ?: return 0 to problems)
-            .filter { !it.name.startsWith(".pending-") }
+            .filter { !it.name.startsWith(".pending-") && !(it.isDirectory && isClassFolder(it.name)) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         var removed = 0
         for (entry in entries) {

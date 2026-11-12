@@ -1,6 +1,8 @@
 package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.classfolder.ClassHomeStore
+import io.github.arnoneto1.midview.agent.classfolder.ClassLessonStore
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lab.LabConfigStore
@@ -14,7 +16,11 @@ import io.github.arnoneto1.midview.agent.protocol.ProgramInstall
 import io.github.arnoneto1.midview.agent.update.ApkFacts
 import io.github.arnoneto1.midview.agent.update.ApkUpload
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
+import io.github.arnoneto1.midview.agent.protocol.ClassHome
+import io.github.arnoneto1.midview.agent.protocol.ClassHomeClaim
+import io.github.arnoneto1.midview.agent.protocol.ClassLesson
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
+import io.github.arnoneto1.midview.agent.protocol.LessonId
 import io.github.arnoneto1.midview.agent.protocol.LabConfig
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
@@ -968,6 +974,57 @@ class CommandHandlerTest {
             val channel = FakeChannel(teacher, message(type, LabConfig.DEFAULT.encode()))
             handler.handle(channel)
             assertEquals(MessageType.COMMAND_ACK, channel.sent.single().type)
+            assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+        }
+    }
+
+    // "Pasta da turma": the lesson and the class folders' home, as a PC Agent takes them.
+    private val classLesson by lazy {
+        val dir = folder.newFolder()
+        ClassLessonStore(File(dir, "class-lesson.bin"), ClassHomeStore(File(dir, "class-home.bin")))
+    }
+    private val withClassFolder by lazy {
+        CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway, classLesson = classLesson) { phoneApps }
+    }
+
+    @Test fun aTrustedTeacherClaimsTheHomeStartsAndReadsTheLesson() {
+        trusted.add(teacher)
+        val lesson = ClassLesson(1_800_000_000, LessonId(ByteArray(16) { 3 }), "3º A", 1_800_000_000, ended = false)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.CLAIM_CLASS_HOME, ClassHomeClaim("PROF-01", 28903, false, 5).encode()),
+            message(MessageType.SET_CLASS_LESSON, lesson.encode()),
+            message(MessageType.GET_CLASS_LESSON),
+            message(MessageType.GET_CLASS_HOME),
+            remoteAddress = "192.168.0.10",
+        )
+        withClassFolder.handle(channel)
+        assertEquals(true to "este PC guarda as pastas", CommandResult.decode(channel.sent[0].payload))
+        assertEquals(true to "aula do 3º A", CommandResult.decode(channel.sent[1].payload))
+        assertEquals(MessageType.CLASS_LESSON_STATUS, channel.sent[2].type)
+        assertEquals(lesson, ClassLesson.decode(channel.sent[2].payload))
+        assertEquals(MessageType.CLASS_HOME_STATUS, channel.sent[3].type)
+        assertEquals(true to ClassHome(teacher, "PROF-01", "192.168.0.10", 28903, 5), ClassHome.decode(channel.sent[3].payload))
+    }
+
+    @Test fun theHomeAsksWhetherAColleagueIsTrusted() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.IS_TEACHER_TRUSTED, teacher.toByteArray()),
+            message(MessageType.IS_TEACHER_TRUSTED, stranger.toByteArray()),
+            message(MessageType.IS_TEACHER_TRUSTED, "nada".toByteArray()),
+        )
+        handler.handle(channel)
+        assertEquals(listOf(true to "", false to "", false to "pedido inválido"), channel.sent.map { CommandResult.decode(it.payload) })
+    }
+
+    // An agent built without it answers as one from before it.
+    @Test fun withoutTheClassFolderThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.SET_CLASS_LESSON, MessageType.GET_CLASS_LESSON, MessageType.CLAIM_CLASS_HOME, MessageType.GET_CLASS_HOME)) {
+            val channel = FakeChannel(teacher, message(type))
+            handler.handle(channel)
             assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
         }
     }

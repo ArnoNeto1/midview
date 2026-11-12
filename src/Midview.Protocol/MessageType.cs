@@ -246,6 +246,10 @@ public enum MessageType : byte
     // with one CommandAck and a CommandResult); GetClassLesson, no payload, is
     // answered with one ClassLessonStatus carrying the ClassLesson the Agent
     // follows. An Agent from before this answers CommandAck to GetClassLesson.
+    // A phone's agent takes these (and the class folders' home's, below) on
+    // its commands port, and the Session messages on its screen port, as a
+    // PC; one from before them answers "Ainda não funciona em celular." to
+    // these and hangs up on those, which the Master shows as "Midview antigo".
     SetClassLesson = 65,
     GetClassLesson = 66,
     ClassLessonStatus = 67,

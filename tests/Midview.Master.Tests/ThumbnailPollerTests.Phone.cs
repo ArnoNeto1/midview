@@ -100,4 +100,24 @@ public partial class ThumbnailPollerTests
         Assert.True(followed.SameRulesAs(status.Policy!));
         Assert.False(pcObserved);
     }
+
+    // "Pasta da turma": a phone's agent holds the lesson as a PC Agent does,
+    // so a phone that was off when the lesson started gets it when it is on.
+    [Fact]
+    public async Task ClassLesson_IsHandedToAPhoneToo()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "aula do 3º A")));
+        var lesson = new ClassLesson(1000, Guid.NewGuid(), "3º A", 1, Ended: false);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint, Kind = DeviceKind.Android },
+            session.MasterCertificate, session.Port, agent.Port, classLesson: () => lesson);
+        var polls = new Polls(poller);
+
+        poller.Start();
+
+        await WaitUntil(() => agent.LessonsReceived.Length > 0);
+        await polls.OneMoreAsync();
+        Assert.Equal(new[] { 1000L }, agent.LessonsReceived);
+    }
 }

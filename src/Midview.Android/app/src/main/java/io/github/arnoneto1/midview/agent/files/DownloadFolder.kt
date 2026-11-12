@@ -228,6 +228,8 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
                     val name = it.getString(2) ?: continue
                     if (name.startsWith(".")) continue
                     val path = inside + name
+                    // A class folder's file is not the delivery folder's (FolderWalk.isClassFolder).
+                    if (inside.isNotEmpty() && FolderWalk.isClassFolder(inside)) continue
                     if (path.split('/').size > io.github.arnoneto1.midview.agent.protocol.FileTransfer.MAX_DEPTH) continue
                     rows += Row(ContentUris.withAppendedId(collection, it.getLong(0)), path, it.getLong(3))
                 }

@@ -2,9 +2,11 @@ package io.github.arnoneto1.midview.agent.net
 
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
+import io.github.arnoneto1.midview.agent.classfolder.ClassLessonStore
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lab.LabConfigStore
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
+import io.github.arnoneto1.midview.agent.protocol.ClassHome
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.programs.TeacherInstalls
 import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
@@ -45,6 +47,11 @@ import java.io.EOFException
 // (TeacherInstalls), a PC Agent's. lab is the "Painel do laboratório"
 // (LabConfigStore: "Travar downloads" and "Bloqueador de anúncios"), a PC
 // Agent's; without it its commands get "Ainda não funciona em celular.".
+// classLesson is "Pasta da turma"'s lesson and the class folders' home
+// (ClassLessonStore), a PC Agent's; the files themselves go on the screen
+// port, as on a PC's Session (ClassFolderHandler). IsTeacherTrusted, the
+// home PC asking whether a colleague's PC is a teacher this phone trusts,
+// is answered from the trust list.
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -81,6 +88,7 @@ class CommandHandler(
     // "Instalar programa" and "Desinstalar programa".
     private val installs: TeacherInstalls? = null,
     private val lab: LabConfigStore? = null,
+    private val classLesson: ClassLessonStore? = null,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -121,7 +129,7 @@ class CommandHandler(
                 if (message.type == MessageType.COLLECT_FILES) files.collect(channel) else files.receive(channel, message)
                 return
             }
-            channel.send(answer(message))
+            channel.send(answer(message, channel))
             // After the ack is on the wire, and off this thread: the wipe
             // kills the connection and the process with it.
             if (message.type == MessageType.WIPE_PHONE && gateway.isDeviceOwner()) {
@@ -148,8 +156,30 @@ class CommandHandler(
         }
     }
 
-    private fun answer(message: Message): Message = when (message.type) {
+    private fun answer(message: Message, channel: Channel): Message = when (message.type) {
         MessageType.HEARTBEAT -> Message(MessageType.HEARTBEAT, ByteArray(0))
+        MessageType.SET_CLASS_LESSON -> {
+            val (taken, detail) = classLesson?.handle(message.payload, channel.remoteThumbprint, channel.remoteAddress)
+                ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(taken, detail))
+        }
+        MessageType.GET_CLASS_LESSON ->
+            classLesson?.let { Message(MessageType.CLASS_LESSON_STATUS, it.current.encode()) }
+                ?: Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
+        MessageType.CLAIM_CLASS_HOME -> {
+            val (taken, detail) = classLesson?.claimHome(message.payload, channel.remoteThumbprint, channel.remoteAddress)
+                ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(taken, detail))
+        }
+        MessageType.GET_CLASS_HOME ->
+            classLesson?.let { Message(MessageType.CLASS_HOME_STATUS, ClassHome.encode(it.home.current)) }
+                ?: Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
+        // As the PC Agent: 1 or 0 with nothing more; a payload that is no thumbprint is refused.
+        MessageType.IS_TEACHER_TRUSTED -> {
+            val thumbprint = String(message.payload, Charsets.US_ASCII)
+            val answer = if (ClassHome.isThumbprint(thumbprint)) trusted.isTrusted(thumbprint) to "" else false to INVALID_REQUEST
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(answer.first, answer.second))
+        }
         MessageType.ALLOW_NEW_TEACHER -> {
             val (allowed, detail) = pairing.allowNewTeacher()
             Message(MessageType.COMMAND_ACK, CommandResult.encode(allowed, detail))

@@ -127,6 +127,21 @@ public partial class ClassFolderWindow : MidviewWindow
     // start, an end, a change to the list or a take-over running, once it is
     // over: what it shows at the end is about the controller it ran on. The
     // views are read again; the last result stays while the view does.
+    // The room has phones too (MainWindow sets it as the window opens): the
+    // texts then say "computadores e celulares", and count machines.
+    public bool RoomHasPhones
+    {
+        get => _roomHasPhones;
+        set
+        {
+            _roomHasPhones = value;
+            ClassesIntro.Text = ClassFolderText.ClassesIntro(value);
+            PcsTitle.Text = value ? "Computadores e celulares" : "Computadores";
+        }
+    }
+
+    private bool _roomHasPhones;
+
     public void Rebind(IClassFolderController controller)
     {
         _nextController = controller;
@@ -237,15 +252,17 @@ public partial class ClassFolderWindow : MidviewWindow
         HeaderText.Text = files is null
             ? string.Empty
             : ClassFolderText.Header(lesson, files.Files, files.Bytes, files.FreeBytes, home);
-        KeepHint.Text = ClassFolderText.EndChoiceHint(EndChoice.Keep, lesson.Turma, 0, 0, tooBigForTheBin: false);
+        KeepHint.Text = ClassFolderText.EndChoiceHint(EndChoice.Keep, lesson.Turma, 0, 0, tooBigForTheBin: false, phones: RoomHasPhones);
         DeleteTodayHint.Text = files is null
             ? string.Empty
             : ClassFolderText.EndChoiceHint(
-                EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteToday), home);
+                EndChoice.DeleteToday, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteToday), home,
+                RoomHasPhones);
         DeleteAllHint.Text = files is null
             ? string.Empty
             : ClassFolderText.EndChoiceHint(
-                EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll), home);
+                EndChoice.DeleteAll, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(EndChoice.DeleteAll), home,
+                RoomHasPhones);
     }
 
     // Every PC of the classroom list, as the controller says each stands.

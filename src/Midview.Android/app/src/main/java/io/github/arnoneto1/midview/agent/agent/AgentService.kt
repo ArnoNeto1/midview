@@ -12,9 +12,11 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.StatFs
 import android.util.Log
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.apps.AndroidCloseNotice
@@ -23,7 +25,14 @@ import io.github.arnoneto1.midview.agent.apps.CloseCountdown
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
+import io.github.arnoneto1.midview.agent.classfolder.ClassFileTimes
+import io.github.arnoneto1.midview.agent.classfolder.ClassFolderFollow
+import io.github.arnoneto1.midview.agent.classfolder.ClassHomeStore
+import io.github.arnoneto1.midview.agent.classfolder.ClassLessonNotice
+import io.github.arnoneto1.midview.agent.classfolder.ClassLessonStore
+import io.github.arnoneto1.midview.agent.classfolder.PhoneClassFolder
 import io.github.arnoneto1.midview.agent.control.AndroidControlTarget
+import io.github.arnoneto1.midview.agent.files.DownloadFolder
 import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
@@ -32,6 +41,7 @@ import io.github.arnoneto1.midview.agent.lab.LabConfigStore
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.lock.ScreenLock
 import io.github.arnoneto1.midview.agent.net.ChatHandler
+import io.github.arnoneto1.midview.agent.net.ClassFolderHandler
 import io.github.arnoneto1.midview.agent.net.CommandHandler
 import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
 import io.github.arnoneto1.midview.agent.net.LockScreenHandler
@@ -77,6 +87,8 @@ import java.net.DatagramSocket
 import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 // The Midview agent on the phone: always running (a foreground service with
@@ -92,6 +104,7 @@ class AgentService : Service() {
     private var packageWatcher: PackageWatcher? = null
     private var dnsWatcher: DnsWatcher? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var classFolderTimer: ScheduledExecutorService? = null
     private val main = Handler(Looper.getMainLooper())
     private var stopped = false
     private val stopping = CountDownLatch(1)
@@ -171,6 +184,8 @@ class AgentService : Service() {
     }
 
     private fun closeListeners() {
+        classFolderTimer?.shutdownNow()
+        classFolderTimer = null
         packageWatcher?.stop()
         packageWatcher = null
         dnsWatcher?.stop()
@@ -331,6 +346,36 @@ class AgentService : Service() {
             },
             log = log,
         )
+        // "Pasta da turma": the lesson and the class folders' home (a PC
+        // Agent's part, on the commands port) and the lesson's folder in
+        // Download/Midview (a PC Session's part, on the screen port),
+        // followed every few seconds and at once when the lesson changes.
+        val downloads = DownloadFolder(this)
+        lateinit var classLessons: ClassLessonStore
+        val classFolder = PhoneClassFolder(
+            downloads.directory, { classLessons.lessonOn }, ClassFileTimes(File(filesDir, CLASS_TIMES_FILE), log),
+            canSee = { downloads.seesEverything },
+            freeBytes = { StatFs(Environment.getExternalStorageDirectory().path).availableBytes },
+        )
+        val lessonNotice = ClassLessonNotice(this)
+        val follow = ClassFolderFollow(
+            classFolder, { classLessons.current }, File(filesDir, CLASS_FOLLOW_FILE), canSee = { downloads.seesEverything },
+            notice = { if (it == null) lessonNotice.hide() else lessonNotice.show(it) },
+            log = log,
+        )
+        val classTimer = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview class folder").apply { isDaemon = true } }
+        classLessons = ClassLessonStore(
+            File(filesDir, CLASS_LESSON_FILE), ClassHomeStore(File(filesDir, CLASS_HOME_FILE), log),
+            prepare = follow::prepare,
+            changed = {
+                try {
+                    classTimer.execute { follow.follow() }
+                } catch (e: RejectedExecutionException) {
+                    // The agent is stopping.
+                }
+            },
+            log = log,
+        )
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
@@ -340,6 +385,7 @@ class AgentService : Service() {
             files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),
             openWebsite = programs.launch::openWebsite, openApp = programs.launch::openApp, installs = programs.installs,
             lab = lab,
+            classLesson = classLessons,
             listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
@@ -361,11 +407,15 @@ class AgentService : Service() {
                 ).run()
             },
             lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
+            classFolder = ClassFolderHandler(classFolder)::serve,
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
         synchronized(lock) {
-            if (stopped) return
+            if (stopped) {
+                classTimer.shutdownNow()
+                return
+            }
             val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
             val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
@@ -374,6 +424,18 @@ class AgentService : Service() {
                 otherBrowsers.apply()
             }.also { it.start() }
             dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
+            classFolderTimer = classTimer
+            classTimer.scheduleWithFixedDelay(
+                {
+                    try {
+                        classLessons.endIfFromAnEarlierDay()
+                        follow.follow()
+                    } catch (e: RuntimeException) {
+                        log("The class folder's look failed", e)
+                    }
+                },
+                0, CLASS_FOLDER_LOOK_SECONDS, TimeUnit.SECONDS,
+            )
             agentServer.start()
             sessionServer.start()
 
@@ -493,6 +555,13 @@ class AgentService : Service() {
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val OPTIMIZE_FILE = "optimize.txt"
         private const val LAB_CONFIG_FILE = "lab-config.bin"
+        private const val CLASS_LESSON_FILE = "class-lesson.bin"
+        private const val CLASS_HOME_FILE = "class-home.bin"
+        private const val CLASS_FOLLOW_FILE = "class-folder-follow.txt"
+        private const val CLASS_TIMES_FILE = "class-folder-times.txt"
+
+        // As often as a PC's Session follows the lesson.
+        private const val CLASS_FOLDER_LOOK_SECONDS = 5L
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1

@@ -115,6 +115,8 @@ An Android phone (Android 10 or newer) shows up in the grid and is paired with t
 
 The app and website blocks stay in effect if the phone restarts.
 
+The **Class folder** (Pasta da turma) is for the whole room, phones included. On a phone it is Download/Midview/Pasta da turma – <class>, in the Files app, and whatever the student saves or moves there shows up on every computer and phone, as on the PCs. The phone's Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it to that folder in the Files app. It needs the all-files access that the cable setup turns on. **Collect files** and its **Apagar as pastas dos alunos** (empty the students' folders) leave it alone.
+
 These act on the selected phones or, with nothing selected, on every phone in the room:
 
 - **Telas** > **Otimizar celulares e tablets...** (optimize phones and tablets) hides the ad apps that come preinstalled (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.

@@ -110,10 +110,12 @@ public static partial class ClassFolderText
     // that choice deletes are more than the Recycle Bin of the PC that keeps
     // them holds (RecycleBinRoom), so Windows deletes them for good: the line
     // says so instead of promising the Recycle Bin.
+    // phones: the room has phones too, which the class's files go to as well.
     public static string EndChoiceHint(
-        EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin, string? home = null) => choice switch
+        EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin, string? home = null,
+        bool phones = false) => choice switch
     {
-        EndChoice.Keep => $"Voltam para todos os PCs na próxima aula do {turma}.",
+        EndChoice.Keep => $"Voltam para {Everywhere(phones)} na próxima aula do {turma}.",
         EndChoice.DeleteToday => (todayFiles, tooBigForTheBin) switch
         {
             (0, _) => "Nenhum arquivo chegou nesta aula; os das aulas anteriores ficam.",
@@ -125,23 +127,40 @@ public static partial class ClassFolderText
         _ => (allFiles, tooBigForTheBin) switch
         {
             (0, _) => "Não há arquivos na pasta da turma.",
-            (1, false) => $"O arquivo sai {Yours(home)} e de todos os PCs. Vai para a Lixeira {Of(home)}.",
-            (_, false) => $"Os {Count(allFiles)} arquivos saem {Yours(home)} e de todos os PCs. Vão para a Lixeira {Of(home)}.",
-            (1, true) => $"O arquivo sai {Yours(home)} e de todos os PCs. Não cabe na Lixeira {Of(home)}: será apagado de vez.",
-            _ => $"Os {Count(allFiles)} arquivos saem {Yours(home)} e de todos os PCs. Não cabem na Lixeira {Of(home)}: serão apagados de vez.",
+            (1, false) => $"O arquivo sai {Yours(home)} e de {Everywhere(phones)}. Vai para a Lixeira {Of(home)}.",
+            (_, false) => $"Os {Count(allFiles)} arquivos saem {Yours(home)} e de {Everywhere(phones)}. Vão para a Lixeira {Of(home)}.",
+            (1, true) => $"O arquivo sai {Yours(home)} e de {Everywhere(phones)}. Não cabe na Lixeira {Of(home)}: será apagado de vez.",
+            _ => $"Os {Count(allFiles)} arquivos saem {Yours(home)} e de {Everywhere(phones)}. Não cabem na Lixeira {Of(home)}: serão apagados de vez.",
         },
     };
 
     // Asked before a lesson ends deleting files; null for "Manter", which asks nothing.
     public static string? EndQuestion(
-        EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin, string? home = null) => choice switch
+        EndChoice choice, string turma, int todayFiles, int allFiles, bool tooBigForTheBin, string? home = null,
+        bool phones = false) => choice switch
     {
         EndChoice.Keep => null,
         EndChoice.DeleteToday => $"Encerrar a aula do {turma} e apagar os arquivos de hoje?\n\n"
-            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin, home),
+            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin, home, phones),
         _ => $"Encerrar a aula do {turma} e apagar tudo do {turma}?\n\n"
-            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin, home),
+            + EndChoiceHint(choice, turma, todayFiles, allFiles, tooBigForTheBin, home, phones),
     };
+
+    // Above the class list. A phone's Chrome has no download folder to point
+    // at the class folder: on it the student saves there, or moves a download
+    // there, in the Files app.
+    public static string ClassesIntro(bool phones) => phones
+        ? "Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os "
+          + "computadores e celulares (no celular, a pasta fica em Download/Midview, no app Arquivos)."
+        : "Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores.";
+
+    // Where the class's files are, for a room of PCs, or of PCs and phones.
+    private static string Everywhere(bool phones) => phones ? "todos os computadores e celulares" : "todos os PCs";
+
+    // Said when a selection or the "Telas" filter leaves some of the room out:
+    // a lesson is the whole room's.
+    public static string WholeRoom(bool phones) =>
+        $"A pasta da turma vale para todos os computadores{(phones ? " e celulares" : string.Empty)} da sala.";
 
     // --- What each PC answered ---
 
@@ -164,7 +183,9 @@ public static partial class ClassFolderText
     // the PCs because that home PC's Midview was closed; nothing hands it to
     // the PCs that were off until that Midview opens (or the day ends, when
     // each PC ends the lesson by itself).
-    public static string Outcome(bool started, string turma, int reached, int total, int offline, string? closedHome = null)
+    // phones: some of them are phones, and the count is of machines.
+    public static string Outcome(
+        bool started, string turma, int reached, int total, int offline, string? closedHome = null, bool phones = false)
     {
         var what = started ? $"A aula do {turma} começou" : $"A aula do {turma} foi encerrada";
         if (total == 0)
@@ -173,9 +194,16 @@ public static partial class ClassFolderText
         }
         if (reached == total)
         {
-            return total == 1 ? $"{what} no único PC da sala." : $"{what} em todos os {total} PCs.";
+            return (total, phones) switch
+            {
+                (1, false) => $"{what} no único PC da sala.",
+                (1, true) => $"{what} na única máquina da sala.",
+                (_, false) => $"{what} em todos os {total} PCs.",
+                _ => $"{what} em todas as {total} máquinas.",
+            };
         }
-        var count = $"{what} em {reached} de {total} {(total == 1 ? "PC" : "PCs")}";
+        var noun = phones ? (total == 1 ? "máquina" : "máquinas") : (total == 1 ? "PC" : "PCs");
+        var count = $"{what} em {reached} de {total} {noun}";
         if (reached + offline != total)
         {
             return count + ".";

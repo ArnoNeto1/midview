@@ -113,6 +113,8 @@ O celular Android (Android 10 ou mais novo) aparece na grade e é pareado com o 
 
 Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 
+A **Pasta da turma** vale para a sala toda, celulares também. No celular ela fica em Download/Midview/Pasta da turma – <turma>, no app Arquivos, e o que o aluno salva ou move para ela aparece em todos os computadores e celulares, como nos PCs. O Chrome do celular continua baixando em Download (no Android não há como mandar os downloads para outra pasta): para dividir um download com a turma, o aluno o move para essa pasta no app Arquivos. Ela precisa do acesso a todos os arquivos, que a preparação pelo cabo liga. **Recolher arquivos** e o seu **Apagar as pastas dos alunos** não mexem nela.
+
 Valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
 
 - **Telas** > **Otimizar celulares e tablets...** esconde os apps de propaganda que vêm de fábrica (eles não são apagados) e liga um DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps, quando a rede deixa. Se o DNS sem anúncios não funcionar na rede, o celular volta sozinho ao DNS de sempre e continua com internet. Com a internet bloqueada, ele liga sozinho ao desbloquear.

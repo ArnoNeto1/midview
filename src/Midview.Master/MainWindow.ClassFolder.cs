@@ -63,8 +63,8 @@ public partial class MainWindow
     }
 
     // After every change to _tiles.
-    // Only the machines that take part in the class folder: a phone has no
-    // Agent to hold a lesson, so it never gets a round.
+    // The machines that take part in the class folder: every PC and every
+    // phone (its agent holds the lesson, and its Download/Midview the folder).
     private void PublishRoster()
     {
         Volatile.Write(ref _roster, DeviceSupport.Only(_tiles.Select(tile => tile.Machine), ToolbarAction.ClassFolder));
@@ -83,21 +83,21 @@ public partial class MainWindow
     }
 
     // For the whole room, whichever machines are in it, like "Agendar": a
-    // lesson is the room's. Greyed like any button while it reaches phones
-    // alone (Celulares); with a selection or a filter leaving PCs out, it says
-    // it still goes to every PC. The window works what ClassFolderRole says
-    // now; a remote controller asks the home for its state only while a
-    // window shows it.
+    // lesson is the room's, its PCs' and its phones'. With a selection or a
+    // filter leaving some out, it says it still goes to every one. The
+    // window works what ClassFolderRole says now; a remote controller asks
+    // the home for its state only while a window shows it.
     private void OnClassFolderClicked(object sender, RoutedEventArgs e)
     {
+        var roomHasPhones = _roster.Any(machine => machine.IsPhone);
         if (_roster.Count > 0 && DeviceSupport.Only(ToolbarReach(ToolbarAction.ClassFolder), ToolbarAction.ClassFolder).Count < _roster.Count)
         {
-            ShowNotice("A pasta da turma vale para todos os computadores da sala.");
+            ShowNotice(ClassFolderText.WholeRoom(roomHasPhones));
         }
         ShowOnce("pasta-da-turma", Array.Empty<KnownMachine>(), () =>
         {
             var controller = _classRole.Controller;
-            var window = new ClassFolderWindow(controller, _classHandOver, _classAsideNote) { Owner = this };
+            var window = new ClassFolderWindow(controller, _classHandOver, _classAsideNote) { Owner = this, RoomHasPhones = roomHasPhones };
             (controller as RemoteClassFolderController)?.Start();
             _classWindow = window;
             window.Closed += (_, _) => OnClassFolderWindowClosed(window);

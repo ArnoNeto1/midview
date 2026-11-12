@@ -31,7 +31,7 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_control_screen_lock_blocking_closing_messages_chat_files_power_programs_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_control_screen_lock_blocking_closing_messages_chat_files_power_programs_class_folder_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
@@ -40,7 +40,7 @@ public class DeviceSupportTests
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
                 or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
                 or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram or ToolbarAction.Install or ToolbarAction.Uninstall
-                or ToolbarAction.LabConfig
+                or ToolbarAction.LabConfig or ToolbarAction.ClassFolder
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
@@ -139,15 +139,23 @@ public class DeviceSupportTests
     public void Nobody_left_out_is_no_notice() =>
         Assert.Null(DeviceSupport.LeftOutNotice(new[] { Pc("PC 01"), Pc("PC 02") }, ToolbarAction.Wake));
 
-    // What PublishRoster feeds the class folder, and the update window its targets.
-    [Theory]
-    [InlineData(ToolbarAction.ClassFolder)]
-    [InlineData(ToolbarAction.Update)]
-    public void Only_leaves_phones_out_of_the_class_folder_and_the_update(ToolbarAction action)
+    // What the update window gets as its targets.
+    [Fact]
+    public void Only_leaves_phones_out_of_the_update()
     {
         var machines = new[] { Pc("PC 01"), Phone("Cel 01"), Pc("PC 02") };
 
-        Assert.Equal(new[] { "PC 01", "PC 02" }, DeviceSupport.Only(machines, action).Select(machine => machine.Name));
+        Assert.Equal(new[] { "PC 01", "PC 02" }, DeviceSupport.Only(machines, ToolbarAction.Update).Select(machine => machine.Name));
+    }
+
+    // What PublishRoster feeds the class folder: the whole room, phones too, in its order.
+    [Fact]
+    public void The_class_folder_takes_the_phones_too()
+    {
+        var machines = new[] { Pc("PC 01"), Phone("Cel 01"), Pc("PC 02") };
+
+        Assert.Equal(new[] { "PC 01", "Cel 01", "PC 02" }, DeviceSupport.Only(machines, ToolbarAction.ClassFolder).Select(machine => machine.Name));
+        Assert.True(DeviceSupport.Supports(DeviceKind.Android, ToolbarAction.ClassFolder));
     }
 
     [Fact]

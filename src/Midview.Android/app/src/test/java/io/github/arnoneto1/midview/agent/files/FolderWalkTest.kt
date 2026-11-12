@@ -89,4 +89,22 @@ class FolderWalkTest {
         assertEquals(listOf(".pending-1700000000-chegando.pdf"), root.list()!!.toList())
         assertFalse(File(root, "sub").exists())
     }
+
+    // The class folders are other folders, as on a PC: neither collected nor emptied.
+    @Test
+    fun theClassFoldersAreLeftAlone() {
+        val root = temp.newFolder("Midview")
+        file(root, "entrega.txt")
+        file(root, "Pasta da turma – 3º A/trabalho.docx")
+        file(root, ".midview-turmas/0101/antigo.txt")
+        file(root, "Outra/Pasta da turma – nada.txt")
+
+        assertEquals(listOf("entrega.txt", "Outra/Pasta da turma – nada.txt"), FolderWalk.list(root, 100).map { it.relativePath })
+
+        val (removed, problems) = FolderWalk.clear(root)
+        assertEquals(2, removed)
+        assertTrue(problems.isEmpty())
+        assertTrue(File(root, "Pasta da turma – 3º A/trabalho.docx").exists())
+        assertTrue(File(root, ".midview-turmas/0101/antigo.txt").exists())
+    }
 }

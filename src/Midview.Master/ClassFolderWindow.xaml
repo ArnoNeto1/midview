@@ -79,7 +79,7 @@
 
             <!-- Before a lesson. -->
             <DockPanel x:Name="ClassesView">
-                <TextBlock DockPanel.Dock="Top" Style="{StaticResource Hint}" FontSize="13" Margin="0,0,0,10"
+                <TextBlock x:Name="ClassesIntro" DockPanel.Dock="Top" Style="{StaticResource Hint}" FontSize="13" Margin="0,0,0,10"
                            Text="Escolha a turma desta aula. Tudo o que os alunos baixarem ou salvarem na pasta da turma aparece em todos os computadores." />
 
                 <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -188,7 +188,7 @@
 
                 <Border Style="{StaticResource Card}">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Computadores" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
+                        <TextBlock x:Name="PcsTitle" DockPanel.Dock="Top" Text="Computadores" Style="{StaticResource CardTitle}" Margin="0,0,0,6" />
                         <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Note}" FontSize="11" Margin="0,6,0,0"
                                    Text="✓ em dia    ⟳ copiando    ○ desligado (recebe ao ligar)    ✗ com problema" />
                         <ScrollViewer VerticalScrollBarVisibility="Auto">

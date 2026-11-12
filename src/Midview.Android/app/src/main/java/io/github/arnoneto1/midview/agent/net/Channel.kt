@@ -11,6 +11,11 @@ interface Channel : Closeable {
     // that teacher may do here.
     val remoteThumbprint: String
 
+    // The teacher's IP address as text ("192.168.0.10"; an IPv4 address
+    // never in its IPv6-mapped form), as the PC Agent records a class
+    // folders' home; empty when not known.
+    val remoteAddress: String get() = ""
+
     // maxLength: for a teacher not trusted yet, a message whose type and
     // payload are longer is refused before it is read.
     fun receive(maxLength: Int = MessageFramer.MAX): Message

@@ -25,7 +25,8 @@ public partial class ClassFolderWindow
             var started = await Task.Run(() => _controller.StartAsync(turma));
             // Not started when another teacher PC keeps the class folders: each PC's line says which.
             headline = Lesson.IsOn && SameClass(Lesson.Turma, turma)
-                ? ClassFolderText.Outcome(started: true, turma, started.Count(result => result.Ok), started.Count, Offline(started))
+                ? ClassFolderText.Outcome(
+                    started: true, turma, started.Count(result => result.Ok), started.Count, Offline(started), phones: RoomHasPhones)
                 : ClassFolderText.NotStarted(turma);
             lines.AddRange(ResultLines(started));
         }
@@ -77,7 +78,7 @@ public partial class ClassFolderWindow
 
         SetBusy(true, closed
             ? $"Encerrando a aula do {lesson.Turma}..."
-            : $"Encerrando a aula do {lesson.Turma}: trazendo os últimos arquivos dos PCs...");
+            : $"Encerrando a aula do {lesson.Turma}: trazendo os últimos arquivos {(RoomHasPhones ? "dos computadores e celulares" : "dos PCs")}...");
         string headline;
         var lines = new List<string>();
         try
@@ -87,7 +88,7 @@ public partial class ClassFolderWindow
             var onTheAgents = _controller is RemoteClassFolderController { LastEndOnTheAgents: true };
             headline = ClassFolderText.Outcome(
                 started: false, lesson.Turma, ended.Count(result => result.Ok), ended.Count, Offline(ended),
-                onTheAgents ? _controller.HomeName ?? ClassHome.UnnamedText : null);
+                onTheAgents ? _controller.HomeName ?? ClassHome.UnnamedText : null, RoomHasPhones);
             if (nextClass)
             {
                 headline += " " + ClassFolderText.ChooseNextClass;
@@ -137,7 +138,7 @@ public partial class ClassFolderWindow
             return false;
         }
         var question = ClassFolderText.EndQuestion(
-            choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice), _controller.HomeName);
+            choice, lesson.Turma, files.Today, files.Files, files.TooBigForTheBin(choice), _controller.HomeName, RoomHasPhones);
         return question is null || MidviewMessage.Show(this, question, "Encerrar a aula", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }

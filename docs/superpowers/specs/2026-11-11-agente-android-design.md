@@ -208,6 +208,11 @@ Aplicada sozinha na primeira conexão com o professor e repetível por um botão
     que o aluno abre no app Arquivos. Para recolher o que outros apps salvaram
     nela, o assistente pelo cabo liga o "acesso a todos os arquivos" (appops
     MANAGE_EXTERNAL_STORAGE). A pasta da turma fica para depois.
+  - **Atualização 2026-11-12:** a Pasta da turma também vale nos celulares,
+    com as mesmas mensagens do Agent (28900) e do Session (5901) dos PCs. No
+    celular ela fica em Download/Midview/Pasta da turma – <turma>; o Chrome
+    continua baixando em Download (o Android não tem política de pasta de
+    downloads), e o aluno move o download para a pasta no app Arquivos.
 - Instalar apps novos, Play Store, contas Google nos celulares.
 - Os tablets da SED-SC (são gerenciados pela Secretaria; ficam de fora).
 - iPhone.
