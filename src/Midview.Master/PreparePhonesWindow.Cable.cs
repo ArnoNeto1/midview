@@ -90,7 +90,13 @@ public partial class PreparePhonesWindow
         {
             _checking = false;
         }
-        if (_closed || !OnCableStep)
+        if (_closed)
+        {
+            // Closed while the cable was looked at: the tool is stopped only now.
+            StopCableTool();
+            return;
+        }
+        if (!OnCableStep)
         {
             return;
         }
@@ -132,6 +138,19 @@ public partial class PreparePhonesWindow
     {
         if (_wifi is not { } wifi || _apkPath is not { } apk || _progress.Number is not { } number)
         {
+            // "Tentar de novo" without the phone app (or the Wi-Fi): back to
+            // the cable step, which says what lacks (no Wi-Fi: its page first,
+            // then back to the cable), instead of a page with no button.
+            _progress.CableStopped();
+            if (_wifi is null)
+            {
+                _progress.ChangeWifi();
+            }
+            ShowPage();
+            if (OnCableStep)
+            {
+                ShowCableWait(_appProblem ?? "Esperando o Midview baixar o app do celular...");
+            }
             return;
         }
         _preparing = true;
@@ -197,7 +216,8 @@ public partial class PreparePhonesWindow
         _pollTimer.Stop();
         StopReadyWatch();
         _appCancel.Cancel();
-        if (!_preparing)
+        // A look at the cable or a preparation still running stops the tool when it ends.
+        if (!_preparing && !_checking)
         {
             StopCableTool();
         }

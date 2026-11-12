@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Midview.Protocol;
 
 namespace Midview.Master;
@@ -15,6 +16,12 @@ public partial class MainWindow
     private static readonly HttpClient PhoneAppHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
 
     private PreparePhonesWindow? _preparePhonesWindow;
+
+    // The phones just prepared, searched for on the network until they
+    // answer (or for 5 minutes), whether or not the assistant is still open.
+    private readonly PhoneJoinWatch _phoneJoinWatch = new();
+    private DispatcherTimer? _phoneJoinTimer;
+    private bool _phoneJoinSearching;
 
     private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) => OpenPreparePhonesWindow();
 
@@ -36,7 +43,7 @@ public partial class MainWindow
             _masterCertificate.Thumbprint,
             AddPreparedPhone,
             IsPreparedPhoneOnline,
-            SearchForPreparedPhoneAsync,
+            WatchPreparedPhone,
             WipePhoneNamed))
         {
             Owner = this,
@@ -77,11 +84,60 @@ public partial class MainWindow
         {
             StatusTextBlock.Text = problem;
         }
+        WatchPreparedPhone(phone);
     }
 
     private bool IsPreparedPhoneOnline(KnownMachine phone) =>
+        phone.AgentThumbprint is { } thumbprint && IsPhoneOnline(thumbprint);
+
+    private bool IsPhoneOnline(string agentThumbprint) =>
         _tiles.Any(tile => tile.Machine.IsPhone && tile.Presence == TilePresence.Online
-                           && string.Equals(tile.Machine.AgentThumbprint, phone.AgentThumbprint, StringComparison.OrdinalIgnoreCase));
+                           && string.Equals(tile.Machine.AgentThumbprint, agentThumbprint, StringComparison.OrdinalIgnoreCase));
+
+    // Searches the network for a phone just prepared (again for 5 minutes on
+    // "Procurar de novo"): its tile was saved without an address, and only a
+    // search gives it one. Runs on its own, with the assistant closed too.
+    private void WatchPreparedPhone(KnownMachine phone)
+    {
+        if (phone.AgentThumbprint is not { } thumbprint)
+        {
+            return;
+        }
+        _phoneJoinWatch.Watch(thumbprint, DateTimeOffset.Now);
+        if (_phoneJoinTimer is null)
+        {
+            _phoneJoinTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = TimeSpan.FromSeconds(2) };
+            _phoneJoinTimer.Tick += (_, _) => OnPhoneJoinTick();
+            Closed += (_, _) => _phoneJoinTimer.Stop();
+        }
+        _phoneJoinTimer.Start();
+        OnPhoneJoinTick();
+    }
+
+    // One search at a time, at most every 10 s, for all the phones waited for.
+    private async void OnPhoneJoinTick()
+    {
+        var now = DateTimeOffset.Now;
+        var due = _phoneJoinWatch.Tick(now, IsPhoneOnline);
+        if (_phoneJoinWatch.IsEmpty)
+        {
+            _phoneJoinTimer?.Stop();
+        }
+        if (!due || _phoneJoinSearching)
+        {
+            return;
+        }
+        _phoneJoinSearching = true;
+        _phoneJoinWatch.Searched(now);
+        try
+        {
+            await SearchForPreparedPhoneAsync();
+        }
+        finally
+        {
+            _phoneJoinSearching = false;
+        }
+    }
 
     // A search of the network, as "Procurar máquinas na rede" does: the
     // phone prepared answers it from the address it got on the Wi-Fi.

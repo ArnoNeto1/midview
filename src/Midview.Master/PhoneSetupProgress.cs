@@ -272,6 +272,17 @@ internal sealed class PhoneSetupProgress
         Page = SetupPage.CableFailed;
     }
 
+    // The Midview could not start finishing the phone (the phone app is
+    // missing): back to the cable step, which says what lacks.
+    public void CableStopped()
+    {
+        if (Page == SetupPage.Cable)
+        {
+            Stage = null;
+            ShowStep(CableStep);
+        }
+    }
+
     // The phone is the school's own: "Pronto. Pode tirar o cabo."
     public void CablePrepared(DateTimeOffset at)
     {

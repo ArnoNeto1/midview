@@ -256,6 +256,27 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
+    public void Stopped_before_finishing_goes_back_to_the_cable_step()
+    {
+        var progress = Finishing();
+
+        progress.CableStopped();
+
+        Assert.Equal("cabo", progress.StepId);
+        Assert.Null(progress.Stage);
+    }
+
+    [Fact]
+    public void Stopped_outside_the_cable_page_changes_nothing()
+    {
+        var progress = ReadyFor07();
+
+        progress.CableStopped();
+
+        Assert.Equal(SetupPage.Ready, progress.Page);
+    }
+
+    [Fact]
     public void A_failure_outside_the_cable_page_changes_nothing()
     {
         var progress = AtCable();

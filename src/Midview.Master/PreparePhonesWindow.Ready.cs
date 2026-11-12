@@ -10,7 +10,10 @@ namespace Midview.Master;
 // fetched when the window opens.
 public partial class PreparePhonesWindow
 {
-    private static readonly TimeSpan SearchEvery = TimeSpan.FromSeconds(10);
+    // How often the ready pages look whether the phone answers. The search
+    // of the network itself is the main window's (PhoneJoinWatch), so it
+    // goes on after "Preparar o próximo" or "Terminei".
+    private static readonly TimeSpan CheckEvery = TimeSpan.FromSeconds(3);
 
     // The items of the list, in the order PhoneCable goes through them.
     private static readonly (CableStage Stage, string Text, string? Hint)[] CableItems =
@@ -23,7 +26,6 @@ public partial class PreparePhonesWindow
     };
 
     private DispatcherTimer _readyTimer = null!;
-    private bool _searching;
 
     private readonly CancellationTokenSource _appCancel = new();
     private string? _apkPath;
@@ -34,7 +36,7 @@ public partial class PreparePhonesWindow
 
     private void InitializeReady()
     {
-        _readyTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = SearchEvery };
+        _readyTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = CheckEvery };
         _readyTimer.Tick += (_, _) => WatchForPhone();
     }
 
@@ -54,7 +56,8 @@ public partial class PreparePhonesWindow
                 FailedTitle.Text = $"Não deu para terminar o {name}";
                 FailedText.Text = _progress.ProblemText ?? "";
                 FailedHint.Text = _progress.ProblemStepId is { } id
-                    ? $"Volte ao passo {stepNumber} ({PhoneSetupGuide.Steps[stepNumber!.Value - 1].Title}), confira e toque em \"Tentar de novo\". " +
+                    ? $"Volte ao passo {stepNumber} ({PhoneSetupGuide.Steps[stepNumber!.Value - 1].Title}) e confira; " +
+                      "ao ligar o cabo de novo, o Midview continua sozinho. Se já corrigiu, toque em \"Tentar de novo\". " +
                       "O celular ainda não é da escola: dá para recomeçar sem problema."
                     : _progress.Problem == CableProblem.TooOld ? "Separe este celular e prepare outro." : "";
                 FailedHint.Visibility = Shown(FailedHint.Text.Length > 0);
@@ -76,7 +79,6 @@ public partial class PreparePhonesWindow
                     NotAppearedList.Children.Add(new Border { Style = (Style)FindResource("Card"), Margin = new Thickness(0, 0, 0, 8), Child = HelpBlock(help) });
                 }
                 SearchAgainText.Text = "";
-                SearchAgainButton.IsEnabled = !_searching;
                 Footer(back: false, next: "Preparar o próximo", other: "Terminei");
                 break;
         }
@@ -125,11 +127,12 @@ public partial class PreparePhonesWindow
         var name = _progress.Name;
         ReadyStatus.Text = _progress.HasAppeared
             ? $"O {name} já entrou na turma, no filtro Celulares."
-            : $"Procurando o {name} na rede... Pode preparar o próximo enquanto isso.";
+            : $"Procurando o {name} na rede... Pode preparar o próximo enquanto isso: o Midview continua procurando, " +
+              "mesmo com esta janela fechada.";
     }
 
-    // While "Pronto" waits for the phone: a search of the network every 10 s
-    // for 5 minutes, and a look at whether it answers.
+    // While "Pronto" (or "ainda não apareceu") waits for the phone: a look,
+    // every few seconds, at whether it answers, and the 5 minutes.
     private void UpdateReadyWatch()
     {
         var watching = !_closed && _preparedPhone is not null && !_progress.HasAppeared
@@ -146,41 +149,19 @@ public partial class PreparePhonesWindow
 
     private void StopReadyWatch() => _readyTimer.Stop();
 
-    private async void WatchForPhone()
+    private void WatchForPhone()
     {
         if (_closed || _preparedPhone is null)
         {
             return;
         }
-        var now = DateTimeOffset.Now;
         var before = _progress.Page;
-        _progress.Tick(now);
+        _progress.Tick(DateTimeOffset.Now);
         if (_progress.Page != before)
         {
             ShowPage();
         }
-        if (_progress.Page == SetupPage.Ready && _progress.ReadyAt is { } ready && now - ready < PhoneSetupProgress.NotAppearedAfter)
-        {
-            await SearchNetwork();
-        }
         CheckAppeared();
-    }
-
-    private async Task SearchNetwork()
-    {
-        if (_searching)
-        {
-            return;
-        }
-        _searching = true;
-        try
-        {
-            await _host.SearchNetwork();
-        }
-        finally
-        {
-            _searching = false;
-        }
     }
 
     private void CheckAppeared()
@@ -202,21 +183,17 @@ public partial class PreparePhonesWindow
         }
     }
 
-    private async void OnSearchAgainClicked(object sender, RoutedEventArgs e)
+    // "Procurar de novo": the main window searches for this phone for 5 more
+    // minutes; this page turns into "Pronto" as soon as it answers.
+    private void OnSearchAgainClicked(object sender, RoutedEventArgs e)
     {
-        SearchAgainButton.IsEnabled = false;
-        SearchAgainText.Text = "Procurando...";
-        await SearchNetwork();
-        if (_closed)
+        if (_preparedPhone is not { } phone)
         {
             return;
         }
+        _host.WatchAgain(phone);
+        SearchAgainText.Text = $"Procurando o {_progress.Name} na rede de novo, por até 5 minutos...";
         CheckAppeared();
-        if (_progress.Page == SetupPage.NotAppeared)
-        {
-            SearchAgainButton.IsEnabled = true;
-            SearchAgainText.Text = $"O {_progress.Name} ainda não apareceu.";
-        }
     }
 
     // The phone app, fetched once when the window opens (and on "Tentar de novo").

@@ -12,9 +12,10 @@ namespace Midview.Master;
 // the class now. PhoneOnline: for a name, null when the class has no phone
 // with it, else whether it answers now. Adb: the cable tool, made when the
 // cable step first needs it. GetApp: the phone app, downloaded and checked.
-// AddPhone: puts a phone prepared over the cable in the class (and saves).
-// IsOnline: whether that phone answers now. SearchNetwork: a search of the
-// network that moves the class's phones to the addresses found. Wipe:
+// AddPhone: puts a phone prepared over the cable in the class (and saves),
+// and the main window searches the network for it for 5 minutes, open
+// assistant or not. IsOnline: whether that phone answers now. WatchAgain:
+// "Procurar de novo", those 5 minutes again. Wipe:
 // "Apagar e preparar de novo" for a phone of the class by name; without it,
 // a number already taken is prepared again by the normal steps.
 internal sealed record PreparePhonesHost(
@@ -25,7 +26,7 @@ internal sealed record PreparePhonesHost(
     string MasterThumbprint,
     Action<KnownMachine> AddPhone,
     Func<KnownMachine, bool> IsOnline,
-    Func<Task> SearchNetwork,
+    Action<KnownMachine> WatchAgain,
     Func<string, Task<(bool Ok, string Detail)>>? Wipe = null);
 
 // "Preparar celulares": one step per page, so a teacher who knows nothing of
