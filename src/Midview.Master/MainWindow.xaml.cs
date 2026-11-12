@@ -116,7 +116,6 @@ public partial class MainWindow : MidviewWindow
         UpdateEmptyHint();
         ShowClassLesson();
         _tiles.CollectionChanged += (_, _) => _machinesWindow?.ShowPhoneUpdateCard();
-        StartAddressSearch();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -647,7 +646,7 @@ public partial class MainWindow : MidviewWindow
         catch (Exception ex)
         {
             _openWindows.StopOpening(key);
-            StatusTextBlock.Text = $"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}";
+            ShowWarning($"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}");
         }
     }
 
@@ -1225,7 +1224,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio de programas não pôde ser lido: {ErrorText.Describe(ex)}";
+            ShowWarning($"O bloqueio de programas não pôde ser lido: {ErrorText.Describe(ex)}");
             return null;
         }
     }
@@ -1238,7 +1237,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}";
+            ShowWarning($"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}");
         }
     }
 
@@ -1250,7 +1249,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio de apps dos celulares não pôde ser lido: {ErrorText.Describe(ex)}";
+            ShowWarning($"O bloqueio de apps dos celulares não pôde ser lido: {ErrorText.Describe(ex)}");
             return null;
         }
     }
@@ -1263,7 +1262,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}";
+            ShowWarning($"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}");
         }
     }
 
@@ -1392,7 +1391,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"A placa de rede de {tile.Name} não pôde ser gravada na lista da sala: {ErrorText.Describe(ex)}";
+            ShowWarning($"A placa de rede de {tile.Name} não pôde ser gravada na lista da sala: {ErrorText.Describe(ex)}");
         }
     }
 
@@ -1475,7 +1474,7 @@ public partial class MainWindow : MidviewWindow
         if (window is null)
         {
             window = new MachinesWindow(
-                _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddresses,
+                _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddressesAsync,
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
                 () => OpenPhoneUpdateWindow(RoomPhones()), () => OpenPreparePhonesWindow()) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
@@ -1528,7 +1527,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"Removida da grade, mas a lista não pôde ser gravada em disco: {ErrorText.Describe(ex)}";
+            ShowWarning($"Removida da grade, mas a lista não pôde ser gravada em disco: {ErrorText.Describe(ex)}");
         }
     }
 
@@ -1602,14 +1601,14 @@ public partial class MainWindow : MidviewWindow
             var machines = KnownMachinesFile.Load(KnownMachinesFile.DefaultPath, out var corruptCopyPath);
             if (corruptCopyPath is not null)
             {
-                StatusTextBlock.Text =
-                    $"A lista da sala não pôde ser lida e foi guardada em {corruptCopyPath}; começando com a lista vazia.";
+                ShowWarning(
+                    $"A lista da sala não pôde ser lida e foi guardada em {corruptCopyPath}; começando com a lista vazia.");
             }
             return machines;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"A lista da sala não pôde ser lida: {ErrorText.Describe(ex)}";
+            ShowWarning($"A lista da sala não pôde ser lida: {ErrorText.Describe(ex)}");
             return new List<KnownMachine>();
         }
     }
@@ -1622,7 +1621,7 @@ public partial class MainWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O agendamento de ligar e desligar não pôde ser lido: {ErrorText.Describe(ex)}";
+            ShowWarning($"O agendamento de ligar e desligar não pôde ser lido: {ErrorText.Describe(ex)}");
             return null;
         }
     }

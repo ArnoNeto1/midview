@@ -25,7 +25,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly X509Certificate2 _masterCertificate;
     private readonly Func<IReadOnlyList<KnownMachine>> _roster;
     private readonly Action<KnownMachine> _addPaired;
-    private readonly Func<IReadOnlyList<FoundMachine>, int> _refreshAddresses;
+    private readonly Func<IReadOnlyList<FoundMachine>, Task<int>> _refreshAddresses;
     private readonly Action _openAdvanced;
     private readonly Action _openGiveAccess;
     private readonly Action _openJoinClass;
@@ -40,7 +40,7 @@ public partial class MachinesWindow : MidviewWindow
     // both may throw when the list can't be written to disk.
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
-        Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced,
+        Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, Task<int>> refreshAddresses, Action openAdvanced,
         Action openGiveAccess, Action openJoinClass, Action openPhoneUpdate, Action openPreparePhones)
     {
         InitializeComponent();
@@ -209,7 +209,7 @@ public partial class MachinesWindow : MidviewWindow
             var summary = FoundMachineText.SearchSummary(found.Count, 0);
             try
             {
-                summary = FoundMachineText.SearchSummary(found.Count, _refreshAddresses(found));
+                summary = FoundMachineText.SearchSummary(found.Count, await _refreshAddresses(found));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

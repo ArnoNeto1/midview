@@ -211,7 +211,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"O tamanho e o filtro das telas não puderam ser guardados: {ErrorText.Describe(ex)}";
+            ShowWarning($"O tamanho e o filtro das telas não puderam ser guardados: {ErrorText.Describe(ex)}");
         }
     }
 
@@ -379,7 +379,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"A posição das telas não pôde ser guardada: {ErrorText.Describe(ex)}";
+            ShowWarning($"A posição das telas não pôde ser guardada: {ErrorText.Describe(ex)}");
         }
     }
 

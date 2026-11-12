@@ -95,7 +95,7 @@ public class RosterTests
             new FoundMachine("Celular 35F7", "192.168.0.134", Y, "you", false, Midview.Protocol.DeviceKind.Android),
         };
 
-        var changes = Roster.NewAddressesOfOffline(roster, found, index => index == 1);
+        var changes = Roster.NewAddressesWhere(roster, found, index => index == 1);
 
         Assert.Equal(1, changes.Single().Index);
         Assert.Equal("192.168.0.134", changes.Single().Updated.HostAddress);
@@ -115,7 +115,7 @@ public class RosterTests
             new FoundMachine("Aluno-4", "10.0.0.11", new string('D', 40), "none", false),
         };
 
-        Assert.Empty(Roster.NewAddressesOfOffline(roster, found, _ => true));
+        Assert.Empty(Roster.NewAddressesWhere(roster, found, _ => true));
     }
 
     [Fact]

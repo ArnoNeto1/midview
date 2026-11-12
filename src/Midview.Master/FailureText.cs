@@ -38,6 +38,11 @@ public static class FailureText
     // trusting this teacher. Offline, no answer or not found is not.
     public static bool MeansMachineIsOn(string status) => status is NobodyLoggedIn or CertificateRefused;
 
+    // The same two, read the other way: what answers at the address may not
+    // be the machine any more, but another device that got the address
+    // (AddressCheck.MayHaveMoved).
+    public static bool MayBeAnotherDevice(string status) => status is NobodyLoggedIn or CertificateRefused;
+
     private static string? Known(Exception ex, string refused) => ex switch
     {
         // The machine is on, but nothing listens on the port: for the

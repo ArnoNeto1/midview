@@ -148,7 +148,7 @@ public partial class MainWindow
         {
             var found = await Task.Run(() => DiscoveryClient.Search(
                 thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime));
-            RefreshAddresses(found);
+            await RefreshAddressesAsync(found);
         }
         catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException)
         {
@@ -191,7 +191,7 @@ public partial class MainWindow
         var (ok, detail) = await WipePhone(tile.Machine);
         if (!ok)
         {
-            StatusTextBlock.Text = $"Não foi possível apagar o {tile.Machine.Name}: {detail}";
+            ShowWarning($"Não foi possível apagar o {tile.Machine.Name}: {detail}");
             return;
         }
         StatusTextBlock.Text = string.Empty;

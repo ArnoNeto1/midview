@@ -168,7 +168,7 @@ public partial class MainWindow
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            StatusTextBlock.Text = $"Não foi possível tirar \"{entry.Name}\" do menu: {ErrorText.Describe(ex)}";
+            ShowWarning($"Não foi possível tirar \"{entry.Name}\" do menu: {ErrorText.Describe(ex)}");
             return;
         }
 

@@ -61,11 +61,11 @@ public static class Roster
     }
 
     // The search the Master makes by itself (AddressSearchSchedule) moves
-    // only machines that aren't answering where the list says: one that is
-    // stays put, even when it answered from another of its network cards.
-    public static IReadOnlyList<(int Index, KnownMachine Updated)> NewAddressesOfOffline(
-        IReadOnlyList<KnownMachine> roster, IReadOnlyList<FoundMachine> found, Func<int, bool> offline) =>
-        NewAddresses(roster, found).Where(change => offline(change.Index)).ToList();
+    // only the machines it looked for (AddressCheck.MayHaveMoved): one
+    // answering at its address stays put.
+    public static IReadOnlyList<(int Index, KnownMachine Updated)> NewAddressesWhere(
+        IReadOnlyList<KnownMachine> roster, IReadOnlyList<FoundMachine> found, Func<int, bool> lookedFor) =>
+        NewAddresses(roster, found).Where(change => lookedFor(change.Index)).ToList();
 
     // Whether a search can give this entry a new address: kept by IP
     // address, with its Agent known (what an answer is matched by).

@@ -89,6 +89,7 @@ public partial class App : Application
         }
         window.ContentRendered += OnShown;
         window.Show();
+        window.StartAddressSearch();
     }
 
     // However the Master ends (its window closed, "Atualizar professor"),
