@@ -4,9 +4,9 @@
 
 **Goal:** O professor bloqueia apps e sites nos celulares da escola pelo Midview, com os mesmos modos dos PCs ("Bloquear só estes" / "Liberar só estes") e a mesma janela de sites.
 
-**Architecture:** Apps: uma política só de celular (nomes de pacote Android, não `.exe`), mensagens novas na porta `28900`, o celular informa a lista de apps com ícone, o Device Owner suspende os apps bloqueados (`setPackagesSuspended`). Sites: o celular aceita as mesmas mensagens 7–10 dos PCs; os domínios viram a lista de bloqueio do Chrome (configuração gerenciada) e "Bloquear a internet" corta o DNS do aparelho inteiro; outros navegadores ficam escondidos. No Master: janela de apps para celulares, envio e observação pelo `ThumbnailPoller`, selo no quadradinho, e as ações liberadas para celular.
+**Architecture:** Apps: uma política só de celular (nomes de pacote Android, não `.exe`), mensagens novas na porta `28900`, o celular informa a lista de apps com ícone, o Device Owner suspende os apps bloqueados (`setPackagesSuspended`). Sites: o celular aceita as mesmas mensagens 7–10 dos PCs; os domínios viram a lista de bloqueio do Chrome (configuração gerenciada) e "Bloquear a internet" liga a VPN do próprio Midview como VPN "sempre ativa", com bloqueio, que segura o tráfego de todos os apps (o Midview fica de fora); outros navegadores ficam escondidos. No Master: janela de apps para celulares, envio e observação pelo `ThumbnailPoller`, selo no quadradinho, e as ações liberadas para celular.
 
-**Tech Stack:** Kotlin (Android 10+, `DevicePolicyManager.setPackagesSuspended`, `setApplicationRestrictions`, `setApplicationHidden`, `setGlobalPrivateDnsModeSpecifiedHost`), JUnit 4 JVM; .NET 8 / WPF / xUnit; E2E em `tests/Midview.E2E`.
+**Tech Stack:** Kotlin (Android 10+, `DevicePolicyManager.setPackagesSuspended`, `setApplicationRestrictions`, `setApplicationHidden`, `setAlwaysOnVpnPackage` com um `VpnService`), JUnit 4 JVM; .NET 8 / WPF / xUnit; E2E em `tests/Midview.E2E`.
 
 **Spec:** `docs/superpowers/specs/2026-11-11-agente-android-design.md` (seções 6, 7 e 8).
 
@@ -18,7 +18,7 @@
 - Nunca suspensos (protegidos): o próprio Midview, a interface do sistema, a tela inicial em uso, Serviços do Google Play, WebView do Android, instalador de pacotes, configurações (já travadas pelo Device Owner), discador/emergência.
 - `PhoneApps` = `ver(1)=1 | count u16 BE | [pkgLen(1) pkg | labelLen(1) rótulo UTF-8 (≤ 64 chars) | iconLen u16 BE | PNG 48×48]*`, no máximo 300 apps; só apps que o aluno consegue abrir (com ícone na tela inicial), sem os protegidos.
 - Sites: `BlockDomain`/`UnblockDomain` com o texto que o professor digitou, normalizado como o `DomainNormalizer` do Windows (tirar `scheme://`, cortar em `/ ? # :`, minúsculas, nome DNS válido; inválido → `[0]`); bloquear o domínio e o `www.`; desbloquear algo ausente → `[1]`. O conjunto fica guardado no celular e volta ao ligar.
-- "Bloquear a internet" no celular: Chrome com `URLBlocklist = ["*"]` e o DNS do aparelho em modo estrito para um nome que não existe (`bloqueado.invalid`), o que corta a internet de todos os apps sem afetar o Midview (que fala por IP na rede local); desbloquear volta o DNS ao valor anterior (o do plano 4, se houver).
+- "Bloquear a internet" no celular: Chrome com `URLBlocklist = ["*"]` e a VPN do próprio Midview como VPN "sempre ativa" do aparelho, com bloqueio (`setAlwaysOnVpnPackage` com lockdown). Ela recebe o tráfego de todos os apps e não deixa nada sair; o DNS dela é o próprio endereço, onde nada responde, então os nomes também não resolvem. O agente fica fora da VPN, e o Midview continua falando com o professor pela rede local (por IP). Desbloquear volta a VPN "sempre ativa" que havia antes (normalmente nenhuma). O DNS privado não é mexido, então o do plano 4 continua valendo. (DNS estrito para um nome que não existe não serve: o Android recusa um servidor de DNS que não responde.)
 - Outros navegadores (todo app que abre `http/https`, menos o Chrome) ficam escondidos (`setApplicationHidden`) enquanto o celular for aparelho da escola.
 - Textos em português, no tom do Midview; nenhum produto concorrente citado; commits sem `Co-Authored-By`.
 
@@ -124,6 +124,7 @@ Durante "Bloquear a internet", os nomes dos sites ainda são resolvidos, mas nen
 - O Android consulta o DNS pela rede Wi-Fi quando a VPN não tem servidor de DNS.
 - A internet fica cortada; só a consulta de nomes passa.
 - Fica para a revisão final decidir se vale pôr um DNS dentro da VPN.
+- Corrigido na rodada final de correções: o DNS da VPN é o próprio endereço dela. Com a internet bloqueada, `ping wikipedia.org` falha na hora ("unknown host"), e o Midview continua vendo o celular.
 
 ### Pendente
 
