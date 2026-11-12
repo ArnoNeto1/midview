@@ -350,6 +350,13 @@ public enum MessageType : byte
     // PhoneOptimizeReport. Phone-only: an older agent answers CommandAck.
     OptimizePhone = 98,
     PhoneOptimizeReport = 99,
+
+    // Master -> Android agent (port 28900), trusted teacher only: the teacher's
+    // lock screen PIN (a PhoneScreenPassword payload: 4 ASCII digits, or empty
+    // to remove it). The agent sets it and keeps it, putting it back whenever
+    // the student changes or removes it. Answered with a CommandAck
+    // (CommandResult); an older agent answers "Ainda não funciona em celular.".
+    SetPhoneScreenPassword = 100,
 }
 
 public enum CloseAppsMode : byte
