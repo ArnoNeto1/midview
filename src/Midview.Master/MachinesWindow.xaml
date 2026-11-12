@@ -141,6 +141,15 @@
                                     HorizontalAlignment="Left" Padding="14,6" />
                         </StackPanel>
                     </Border>
+                    <!-- Only in a room with a phone (ShowPhoneUpdateCard): every phone of the room. -->
+                    <Border x:Name="PhoneUpdateCard" Style="{StaticResource Card}" Margin="0,12,0,0" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="Atualizar os celulares" Style="{StaticResource CardTitle}" />
+                            <TextBlock x:Name="PhoneVersionTextBlock" Style="{StaticResource Hint}" Margin="0,3,0,10" TextWrapping="Wrap" />
+                            <Button Content="Atualizar os celulares pela rede..." Click="OnPhoneUpdateClicked"
+                                    HorizontalAlignment="Left" Padding="14,6" />
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource Card}" Margin="0,12,0,0">
                         <StackPanel>
                             <TextBlock Text="Atualizar professor" Style="{StaticResource CardTitle}" />

@@ -106,42 +106,40 @@ Em **Máquinas da sala** > **Outro professor**:
 
 Em breve: o aplicativo do celular ainda não foi publicado.
 
-O celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celulares**, e é pareado com o código de 6 dígitos, como as máquinas. O professor vê a tela do celular, bloqueia a tela com o cadeado e bloqueia apps e sites:
+O celular Android (Android 10 ou mais novo) aparece na grade e é pareado com o código de 6 dígitos, como as máquinas. O botão **Telas** escolhe o que a grade mostra: **Todos**, **Computadores** ou **Celulares** (**Tablets**: em breve). O professor vê a tela do celular, bloqueia a tela com o cadeado e bloqueia apps e sites:
 
-- **Bloquear programas**, com só celulares selecionados (ou no filtro **Celulares**), mostra os apps do celular com os ícones. **Bloquear só estes** deixa os apps marcados cinza, sem abrir; **Liberar só estes** deixa abrir só os marcados (o Midview, a tela inicial, o telefone e as Configurações continuam funcionando).
+- **Bloquear programas**, com só celulares selecionados (ou com **Telas** em **Celulares**), mostra os apps do celular com os ícones. **Bloquear só estes** deixa os apps marcados cinza, sem abrir; **Liberar só estes** deixa abrir só os marcados (o Midview, a tela inicial, o telefone e as Configurações continuam funcionando).
 - **Bloquear sites** é a mesma janela dos PCs. No celular, os sites bloqueados não abrem no Chrome, e os outros navegadores ficam escondidos. **Bloquear a internet** corta a internet de todos os apps, e o Midview continua vendo o celular.
 
 Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 
-Para os celulares há também dois botões, que valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
+Valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
 
-- **Otimizar** esconde os apps de propaganda que vêm de fábrica no celular (eles não são apagados) e liga um DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps, quando a rede deixa. Se o DNS sem anúncios não funcionar na rede, o celular volta sozinho ao DNS de sempre e continua com internet. Com a internet bloqueada, ele liga sozinho ao desbloquear.
-- **Atualizar celulares** manda pela rede a versão nova do aplicativo do celular, a mesma versão do Midview do professor, baixada do GitHub. Um celular é atualizado primeiro, e os outros só depois que ele confirmar a versão nova. O aluno não precisa tocar em nada, e os bloqueios continuam valendo; o Android mostra ao aluno o aviso "Atualizado pelo seu administrador".
+- **Telas** > **Otimizar celulares e tablets...** esconde os apps de propaganda que vêm de fábrica (eles não são apagados) e liga um DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps, quando a rede deixa. Se o DNS sem anúncios não funcionar na rede, o celular volta sozinho ao DNS de sempre e continua com internet. Com a internet bloqueada, ele liga sozinho ao desbloquear.
+- **Máquinas da sala** > **Atualizações** > **Atualizar os celulares pela rede...** manda a versão nova do aplicativo do celular, a mesma versão do Midview do professor, baixada do GitHub. Um celular é atualizado primeiro, e os outros só depois que ele confirmar a versão nova. O aluno não precisa tocar em nada, e os bloqueios continuam valendo; o Android mostra ao aluno o aviso "Atualizado pelo seu administrador".
 
-Para preparar um celular:
+### Para preparar um celular
 
-1. No Midview, abra **Máquinas da sala** > **Procurar e parear** > **Preparar celular**. A janela pede primeiro o Wi-Fi do laboratório (nome da rede e senha); clique em **Gerar código** para aparecer o QR.
-2. No celular, saia antes da conta Mi (Xiaomi) em **Configurações**, se houver uma, e restaure o celular para o padrão de fábrica.
-3. Na primeira tela depois de reiniciar, toque 6 vezes em qualquer lugar da tela e escaneie o QR. O celular baixa o aplicativo do Midview e vira um aparelho da escola.
-4. Em **Procurar e parear** > **Procurar na rede**, selecione o celular e confira o código de 6 dígitos que aparece nele.
+O celular é preparado uma vez, pelo cabo USB ligado ao computador do professor. O QR da primeira tela (6 toques) não serve: o Google só deixa entrar por ele os aplicativos de gerenciamento da lista dele, e o Midview não está nela.
+
+1. Restaure o celular para o padrão de fábrica e, na configuração inicial, pule todas as contas.
+2. Ligue as **Opções do desenvolvedor** (toque 7 vezes em **Versão do MIUI**, na Xiaomi) e, dentro delas, a **Depuração USB**. Na Xiaomi, ligue também a **Depuração USB (configurações de segurança)**: ela só liga com uma conta Mi conectada, e às vezes com um chip no celular.
+3. Saia de todas as contas do celular (a conta Mi também). Sem nenhuma conta, o celular aceita o Midview como dono.
+4. Ligue o cabo e toque em **Permitir** no aviso de depuração. No computador, com o `adb` (Android SDK Platform Tools) e o `MidviewAgent.apk` da versão do Midview do professor (na página da versão no GitHub), rode nesta ordem:
+
+   ```
+   adb install MidviewAgent.apk
+   adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
+   adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
+   adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
+   adb shell settings put secure accessibility_enabled 1
+   adb shell dpm set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver
+   ```
+
+   O segundo tira o Midview da economia de bateria; o terceiro, só na Xiaomi (MIUI), deixa o Midview iniciar sozinho; o quarto e o quinto deixam o professor ver a tela sem o aluno tocar em "Iniciar agora" (Android 11 ou mais novo). O `dpm set-device-owner` vem **por último**: logo depois, as travas do celular desligam a depuração USB.
+5. Em **Máquinas da sala** > **Procurar e parear** > **Procurar na rede**, selecione o celular e confira o código de 6 dígitos que aparece nele.
 
 Se o aluno fechar todos os apps recentes ("Limpar tudo" na Xiaomi), o Midview do celular volta sozinho em poucos segundos (mais devagar com o celular parado).
-
-Fora dos passos do QR: num celular preparado pelo cabo USB, rode estes comandos com o cabo ligado **antes** do `dpm set-device-owner`, porque, no aplicativo publicado, as travas do celular desligam a depuração USB logo depois. O primeiro tira o Midview da economia de bateria; o segundo, só em celulares Xiaomi (MIUI), deixa o Midview iniciar sozinho:
-
-```
-adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
-adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
-```
-
-Para o professor ver a tela do celular sem o aluno precisar tocar em "Iniciar agora" (Android 11 ou mais novo), ligue também, pelo cabo e antes do `dpm set-device-owner`, o serviço de acessibilidade do Midview:
-
-```
-adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
-adb shell settings put secure accessibility_enabled 1
-```
-
-Sem ele (ou no Android 10), o celular pede ao aluno para tocar em "Iniciar agora".
 
 ## Desinstalação
 

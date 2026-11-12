@@ -60,21 +60,23 @@
         </Grid>
 
         <!-- Grouped like the actions they hold, each group a panel in its color; one row
-             from about 1312 px wide (so on a 1366px screen, and the window opens 1340 wide
-             to fit one), and whole groups move to a second row on a narrower window. -->
+             from about 1322 px wide (so on a 1366px screen, and the window opens 1340 wide
+             to fit one), and whole groups move to a second row on a narrower window. The
+             buttons whose words are short ("Ligar", "Abrir site", "Telas"...) are 54 wide
+             instead of the shared 58, which leaves room for "Telas" on that row. -->
         <Border DockPanel.Dock="Top" Padding="2,0,2,6">
             <WrapPanel x:Name="ToolbarPanel">
                 <!-- Energia first, as the owner asked. -->
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource EnergiaBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Desligar" Icon="&#xE7E8;" local:DeviceActions.Action="Power" Click="OnPowerClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Desligar" Width="54" Icon="&#xE7E8;" local:DeviceActions.Action="Power" Click="OnPowerClassClicked" OpensOptions="True"
                                                  ToolTip="Desliga a turma, com aviso aos alunos." />
-                            <local:ToolbarButton Content="Reiniciar" Icon="&#xE72C;" local:DeviceActions.Action="Power" Click="OnRestartClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Reiniciar" Width="54" Icon="&#xE72C;" local:DeviceActions.Action="Power" Click="OnRestartClassClicked" OpensOptions="True"
                                                  ToolTip="Reinicia a turma, com aviso aos alunos." />
-                            <local:ToolbarButton Content="Ligar" Icon="&#xE945;" local:DeviceActions.Action="Wake" Click="OnWakeClassClicked"
+                            <local:ToolbarButton Content="Ligar" Width="54" Icon="&#xE945;" local:DeviceActions.Action="Wake" Click="OnWakeClassClicked"
                                                  ToolTip="Liga na hora, pela rede, as máquinas desligadas da sala. Elas precisam estar na tomada, no cabo de rede e com o Wake-on-LAN ativado na BIOS." />
-                            <local:ToolbarButton Content="Agendar" Icon="&#xE787;" local:DeviceActions.Action="Schedule" Click="OnScheduleClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Agendar" Width="54" Icon="&#xE787;" local:DeviceActions.Action="Schedule" Click="OnScheduleClicked" OpensOptions="True"
                                                  ToolTip="Escolhe dias e horários para ligar e desligar o laboratório." />
                         </StackPanel>
                         <ContentControl Content="Energia" Style="{StaticResource ToolbarGroupCaption}" />
@@ -84,9 +86,9 @@
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource TelaBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton x:Name="ViewButton" Content="Ver a tela" Icon="&#xE890;" Click="OnViewSelectedClicked"
+                            <local:ToolbarButton x:Name="ViewButton" Width="54" Content="Ver a tela" Icon="&#xE890;" Click="OnViewSelectedClicked"
                                                  IsEnabled="False" ToolTip="Abre a tela da máquina selecionada, só para ver." />
-                            <local:ToolbarButton x:Name="ControlButton" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
+                            <local:ToolbarButton x:Name="ControlButton" Width="54" Content="Controlar" Icon="&#xE7C9;" Click="OnControlSelectedClicked"
                                                  IsEnabled="False" ToolTip="Controla a máquina selecionada e trava o teclado e o mouse do aluno." />
                             <!-- Becomes "Desbloquear telas" while any screen is locked, with the padlock in
                                  its screen closed instead of open (UpdateScreenLockButton, ScreenLockText).
@@ -109,9 +111,9 @@
                             <!-- No options arrow: like "Ligar", it acts right away, opening the chat on every student's screen. -->
                             <local:ToolbarButton Content="Bate-papo" Icon="&#xE8F2;" local:DeviceActions.Action="Chat" Click="OnChatClassClicked"
                                                  ToolTip="Abre uma conversa com a turma toda: o que você escreve aparece para todos os alunos, e as respostas deles só para você." />
-                            <local:ToolbarButton Content="Enviar arquivo" Icon="&#xE898;" local:DeviceActions.Action="SendFile" Click="OnFileClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Enviar arquivo" Width="54" Icon="&#xE898;" local:DeviceActions.Action="SendFile" Click="OnFileClassClicked" OpensOptions="True"
                                                  ToolTip="Envia um arquivo para a turma toda." />
-                            <local:ToolbarButton Content="Recolher arquivos" Icon="&#xE896;" local:DeviceActions.Action="CollectFiles" Click="OnCollectClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Recolher arquivos" Width="54" Icon="&#xE896;" local:DeviceActions.Action="CollectFiles" Click="OnCollectClassClicked" OpensOptions="True"
                                                  ToolTip="Recolhe o que os alunos colocaram em &quot;Entregar ao professor&quot;." />
                             <!-- Wider than the shared 64 so "Pasta da turma" (76px) stays on one line: while a
                                  lesson is on, the class's name (Caption) takes the label's second line. -->
@@ -126,7 +128,7 @@
                 <Border Style="{StaticResource ToolbarGroupPanel}" local:ToolbarButton.IconBrush="{StaticResource ProgramasBrush}">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Abrir site" Icon="&#xE774;" local:DeviceActions.Action="OpenWebsite" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
+                            <local:ToolbarButton Content="Abrir site" Width="54" Icon="&#xE774;" local:DeviceActions.Action="OpenWebsite" Click="OnOpenWebsiteClassClicked" OpensOptions="True"
                                                  ToolTip="Abre um site no navegador da turma toda." />
                             <local:ToolbarButton Content="Abrir programa" Icon="&#xE756;" local:DeviceActions.Action="OpenProgram" Click="OnOpenProgramClassClicked" OpensOptions="True"
                                                  ToolTip="Abre um programa na turma toda, como o Executar do Windows (ex.: powershell)." />
@@ -137,9 +139,9 @@
                             <local:ToolbarButton Content="Fechar programas" Icon="&#xE711;" local:DeviceActions.Action="CloseApps" Click="OnCloseAppsClassClicked" OpensOptions="True"
                                                  ToolTip="Fecha os programas abertos pelos alunos, depois de avisá-los." />
                             <local:ToolbarButton Content="Bloquear programas" Icon="&#xECAA;" Badge="&#xE733;" local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsClassClicked" OpensOptions="True"
-                                                 ToolTip="Impede programas de abrir nas máquinas da turma. Com só celulares selecionados, ou no filtro Celulares, bloqueia apps nos celulares." />
-                            <local:ToolbarButton Content="Bloquear sites" Icon="&#xE774;" Badge="&#xE733;" local:DeviceActions.Action="BlockSites" Click="OnSiteBlockClassClicked" OpensOptions="True"
-                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma, celulares também. Com só celulares selecionados, ou no filtro Celulares, vale só para eles; no filtro Computadores, só para os computadores." />
+                                                 ToolTip="Impede programas de abrir nas máquinas da turma. Com só celulares selecionados, ou com Telas em Celulares, bloqueia apps nos celulares." />
+                            <local:ToolbarButton Content="Bloquear sites" Width="54" Icon="&#xE774;" Badge="&#xE733;" local:DeviceActions.Action="BlockSites" Click="OnSiteBlockClassClicked" OpensOptions="True"
+                                                 ToolTip="Bloqueia a internet inteira ou alguns sites na turma, celulares também. Com só celulares selecionados, ou com Telas em Celulares, vale só para eles; com Telas em Computadores, só para os computadores." />
                         </StackPanel>
                         <ContentControl Content="Programas e sites" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
@@ -150,27 +152,15 @@
                         <StackPanel Orientation="Horizontal">
                             <local:ToolbarButton Content="Painel do laboratório" Icon="&#xE713;" local:DeviceActions.Action="LabConfig" Click="OnLabConfigClassClicked" OpensOptions="True"
                                                  ToolTip="Configura o navegador e o Windows dos alunos: limpeza, blindagem, Edge, sites de distração, travas (barra de tarefas, Área de Trabalho e downloads) e limpar os perfis do Chrome." />
-                            <local:ToolbarButton Content="Máquinas da sala" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
-                                                 ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
+                            <local:ToolbarButton Content="Máquinas da sala" Width="54" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
+                                                 ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos e dos celulares, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
+                            <!-- A menu (MainWindow.Screens.cs): which screens the grid shows
+                                 (DeviceFilter), and "Otimizar celulares e tablets...". The filter's badge
+                                 shows on the icon while the grid leaves some machines out. -->
+                            <local:ToolbarButton x:Name="ScreensButton" Width="54" Content="Telas" Icon="&#xE975;" Click="OnScreensClicked" OpensOptions="True"
+                                                 ToolTip="Escolhe as telas que aparecem: todas, só os computadores ou só os celulares. Também otimiza celulares e tablets." />
                         </StackPanel>
                         <ContentControl Content="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Only in a room with a phone (DeviceSupport.ShowsPhoneGroup): a room of PCs
-                     keeps its toolbar as it was. Last, so that on a 1366px screen it is the one
-                     group that goes to a second row, and the first row stays as it always was.
-                     Acts on the selected phones, or on every phone of the room when none is selected. -->
-                <Border x:Name="PhoneGroupPanel" Style="{StaticResource ToolbarGroupPanel}" Visibility="Collapsed"
-                        local:ToolbarButton.IconBrush="{StaticResource CelularesBrush}">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <local:ToolbarButton Content="Otimizar" Icon="&#xE8EA;" Badge="&#xE73E;" local:DeviceActions.Action="Optimize" Click="OnOptimizePhonesClicked" OpensOptions="True"
-                                                 ToolTip="Esconde os apps de propaganda dos celulares e liga o DNS sem anúncios. Com celulares selecionados, só neles." />
-                            <local:ToolbarButton Content="Atualizar celulares" Icon="&#xE8EA;" Badge="&#xE895;" local:DeviceActions.Action="UpdatePhones" Click="OnUpdatePhonesClicked" OpensOptions="True"
-                                                 ToolTip="Manda pela rede o Midview desta versão para os celulares. Com celulares selecionados, só para eles." />
-                        </StackPanel>
-                        <ContentControl Content="Celulares" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
                 </Border>
             </WrapPanel>
@@ -209,21 +199,6 @@
                 <TextBlock x:Name="StatusTextBlock" Foreground="{StaticResource TextMutedBrush}" FontSize="13" TextWrapping="Wrap"
                            VerticalAlignment="Center" />
             </DockPanel>
-        </Border>
-
-        <!-- DeviceFilter: all the machines, only the computers or only the phones. -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource BackgroundBrush}" Padding="14,0,14,6">
-            <StackPanel Orientation="Horizontal">
-                <ToggleButton x:Name="AllDevicesButton" Content="Todos" Click="OnAllDevicesClicked" Padding="10,2" FontSize="12"
-                              Style="{StaticResource FilterToggleButton}"
-                              ToolTip="Mostra computadores e celulares." />
-                <ToggleButton x:Name="ComputersButton" Content="Computadores" Click="OnComputersClicked" Padding="10,2" FontSize="12"
-                              Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
-                              ToolTip="Mostra só os computadores." />
-                <ToggleButton x:Name="PhonesButton" Content="Celulares" Click="OnPhonesClicked" Padding="10,2" FontSize="12"
-                              Margin="6,0,0,0" Style="{StaticResource FilterToggleButton}"
-                              ToolTip="Mostra só os celulares. Os celulares ficam de fora das ações que ainda não funcionam neles." />
-            </StackPanel>
         </Border>
 
         <Grid Background="{StaticResource BackgroundBrush}">
@@ -340,7 +315,7 @@
                                             <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
                                             <!-- Phones only, and only with the phone setup ready (OnMachineMenuOpening). -->
                                             <MenuItem Tag="uma" Header="Apagar e preparar de novo..." local:DeviceActions.Action="WipePhone" Click="OnWipePhoneMachineClicked" />
-                                            <!-- The CELULARES group, shown only when a phone is among the machines. -->
+                                            <!-- Made for phones: shown only when a phone is among the machines. -->
                                             <Separator Tag="celular" Visibility="Collapsed" />
                                             <MenuItem Tag="celular" Header="Otimizar..." local:DeviceActions.Action="Optimize" Visibility="Collapsed" Click="OnOptimizeMachineClicked" />
                                             <MenuItem Tag="celular" Header="Atualizar o Midview do celular..." local:DeviceActions.Action="UpdatePhones" Visibility="Collapsed" Click="OnUpdatePhonesMachineClicked" />

@@ -96,21 +96,29 @@ public class GridFilterTests
     public void Device_filter_and_online_only_both_apply() =>
         Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: true, DeviceFilter.Phones)); // a phone not heard from yet is still connecting
 
+    // The app published, the assistant not out yet: the README's cable steps.
+    [Fact]
+    public void Empty_notice_when_filter_leaves_no_phones_points_to_the_cable_once_the_phone_app_is_out()
+    {
+        var onlyComputers = new[] { Tile(TilePresence.Online) };
+        Assert.Equal("Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Cable));
+    }
+
     // The big "Preparar celulares" button beside it says the rest.
     [Fact]
-    public void Empty_notice_when_filter_leaves_no_phones()
+    public void Empty_notice_for_phones_with_the_assistant_out_leaves_the_rest_to_its_button()
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
         Assert.Equal("Nenhum celular nesta sala ainda.",
-                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Wizard));
     }
 
     [Fact]
-    public void Empty_notice_for_phones_shows_even_with_no_machines_at_all()
+    public void Empty_notice_for_phones_shows_even_with_no_machines_at_all_with_the_assistant_out()
     {
         Assert.Equal("Nenhum celular nesta sala ainda.",
-                     GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones));
-        Assert.Null(GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones, phonesReady: false));
+                     GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Wizard));
     }
 
     [Fact]
@@ -142,8 +150,30 @@ public class GridFilterTests
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
         Assert.Equal("Nenhum celular nesta sala ainda.",
-                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, phonesReady: false));
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Soon));
+        Assert.Equal("Nenhum celular nesta sala ainda.",
+                     GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones));
     }
+
+    // What this build says: "Preparar celular" only with the assistant out.
+    [Fact]
+    public void Empty_notice_for_phones_in_this_build_offers_the_assistant_only_when_it_is_out()
+    {
+        var notice = GridFilter.EmptyNotice(new[] { Tile(TilePresence.Online) }, onlineOnly: false, DeviceFilter.Phones, PhoneProvisioning.Setup);
+        if (!PhoneProvisioning.WizardReady)
+        {
+            Assert.DoesNotContain("Preparar celular", notice);
+        }
+        Assert.Equal(PhoneProvisioning.WizardReady,
+            GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online) }, DeviceFilter.Phones, PhoneProvisioning.Setup == PhoneSetupOffer.Wizard));
+    }
+
+    // Only the assistant brings the big button: not the cable steps by hand.
+    [Theory]
+    [InlineData(PhoneSetupOffer.Soon)]
+    [InlineData(PhoneSetupOffer.Cable)]
+    public void Empty_notice_for_phones_without_the_assistant_keeps_the_classroom_hint_with_no_machines(PhoneSetupOffer setup) =>
+        Assert.Null(GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones, setup));
 
     [Fact]
     public void Empty_notice_when_filter_leaves_no_computers() =>

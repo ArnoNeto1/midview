@@ -108,24 +108,40 @@ In **Máquinas da sala** > **Outro professor**:
 
 Coming soon: the phone app hasn't been published yet.
 
-An Android phone (Android 10 or newer) shows up in the grid, under the **Celulares** (phones) filter, and is paired with the 6-digit code, like the machines. The teacher sees the phone's screen, locks it with the padlock and blocks apps and websites:
+An Android phone (Android 10 or newer) shows up in the grid and is paired with the 6-digit code, like the machines. The **Telas** (screens) button picks what the grid shows: **Todos** (all), **Computadores** (computers) or **Celulares** (phones); **Tablets** is coming soon. The teacher sees the phone's screen, locks it with the padlock and blocks apps and websites:
 
-- **Block programs** (Bloquear programas), with only phones selected (or under the **Celulares** filter), shows the phone's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
+- **Block programs** (Bloquear programas), with only phones selected (or with **Telas** on **Celulares**), shows the phone's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
 - **Block websites** (Bloquear sites) is the same window as for the PCs. On the phone, blocked websites don't open in Chrome, and the other browsers are hidden. **Bloquear a internet** (block the internet) cuts the internet for every app, and Midview keeps seeing the phone.
 
 The app and website blocks stay in effect if the phone restarts.
 
-Phones also have two buttons of their own, which act on the selected phones or, with nothing selected, on every phone in the room:
+These act on the selected phones or, with nothing selected, on every phone in the room:
 
-- **Otimizar** (optimize) hides the ad apps that come preinstalled on the phone (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
-- **Atualizar celulares** (update phones) sends the new version of the phone app over the network: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
+- **Telas** > **Otimizar celulares e tablets...** (optimize phones and tablets) hides the ad apps that come preinstalled (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
+- **Máquinas da sala** > **Atualizações** > **Atualizar os celulares pela rede...** (update the phones over the network) sends the new version of the phone app: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
 
-To prepare a phone:
+### To prepare a phone
 
-1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). The window first asks for the lab Wi-Fi (network name and password); click **Gerar código** (generate code) and the QR appears.
-2. On the phone, first sign out of the Mi account (Xiaomi) in **Settings**, if there is one, and factory reset the phone.
-3. On the first screen after it restarts, tap 6 times anywhere on the screen and scan the QR. The phone downloads the Midview app and becomes a school device.
-4. In **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.
+A phone is prepared once, over a USB cable plugged into the teacher's computer. The QR on the first screen (6 taps) doesn't work: Google only lets device-management apps on its own list in that way, and Midview isn't on it.
+
+1. Factory reset the phone and skip every account during setup.
+2. Turn on **Developer options** (tap **MIUI version** 7 times, on Xiaomi) and, inside them, **USB debugging**. On Xiaomi, also turn on **USB debugging (Security settings)**: it only turns on with a Mi account signed in, and sometimes with a SIM card in the phone.
+3. Sign out of every account on the phone (the Mi account too). With no account, the phone accepts Midview as its owner.
+4. Plug in the cable and tap **Allow** on the debugging prompt. On the computer, with `adb` (Android SDK Platform Tools) and the `MidviewAgent.apk` of the teacher's Midview version (on that version's GitHub release page), run, in this order:
+
+   ```
+   adb install MidviewAgent.apk
+   adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
+   adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
+   adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
+   adb shell settings put secure accessibility_enabled 1
+   adb shell dpm set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver
+   ```
+
+   The second takes Midview out of battery saving; the third, only on Xiaomi (MIUI), lets Midview start on its own; the fourth and fifth let the teacher see the screen without the student tapping "Start now" (Android 11 or newer). `dpm set-device-owner` comes **last**: right after it, the phone's locks turn USB debugging off.
+5. In **Máquinas da sala** > **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.
+
+If the student closes every recent app ("Clear all" on Xiaomi), Midview on the phone comes back by itself within a few seconds (more slowly when the phone is idle).
 
 ## Uninstalling
 

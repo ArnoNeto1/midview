@@ -27,7 +27,9 @@ public enum ToolbarAction
     Update,
     // A tile's menu only: erase a school phone so it can be prepared again.
     WipePhone,
-    // The CELULARES group: made for phones only.
+    // Made for phones only: "Otimizar celulares..." in the "Telas" menu and
+    // on a phone's tile menu, and updating the phones' Midview ("Atualizações"
+    // in "Máquinas da sala", and the tile menu).
     Optimize,
     UpdatePhones,
 }
@@ -35,8 +37,8 @@ public enum ToolbarAction
 // What each kind of device accepts. A phone can have its screen watched and
 // locked, its apps blocked (its own window: PhoneAppBlockWindow) and its
 // sites blocked (the same commands as a PC's), and is optimized and updated
-// (the CELULARES group, which a PC has nothing to do with). Control stays for computers.
-// WipePhone (a tile's menu only) is for phones alone.
+// (actions a PC has nothing to do with). Control stays for computers.
+// WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
@@ -49,12 +51,19 @@ public static class DeviceSupport
         _ => false,
     };
 
-    // The actions of the CELULARES group.
+    // The actions made for phones only.
     public static bool IsPhoneOnly(ToolbarAction action) => action is ToolbarAction.Optimize or ToolbarAction.UpdatePhones;
 
-    // The CELULARES group shows only in a room with at least one phone: a room
-    // of PCs alone keeps the toolbar it always had.
-    public static bool ShowsPhoneGroup(IEnumerable<KnownMachine> room) => room.Any(machine => machine.IsPhone);
+    // "Celulares" in the "Telas" menu, and the "Atualizar os celulares" card
+    // of "Máquinas da sala", are for a room with at least one phone.
+    public static bool HasPhones(IEnumerable<KnownMachine> room) => room.Any(machine => machine.IsPhone);
+
+    // An Android device: a phone or a tablet, which run the same agent and
+    // are optimized alike. A tablet kind of its own, when there is one, goes here too.
+    public static bool IsAndroid(KnownMachine machine) => machine.Kind is DeviceKind.Android;
+
+    // "Otimizar celulares e tablets..." in the "Telas" menu: a room with an Android device.
+    public static bool HasAndroid(IEnumerable<KnownMachine> room) => room.Any(IsAndroid);
 
     // The machines that can do the action, in order: what a feature that
     // phones do not take part in (the class folder, the Windows update) is fed.
@@ -84,16 +93,16 @@ public static class DeviceSupport
     // programas" then opens the phones' window); and when the grid shows only
     // computers: then every PC and no phone, which the teacher cannot see
     // there (none when the room has no PC). PCs are reached as before. The
-    // CELULARES group reaches the selected phones, or every phone of the room.
+    // phone actions reach the selected phones, or every phone of the room.
     public static IReadOnlyList<KnownMachine> ToolbarReach(
         ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
     {
-        // The CELULARES group: the selected phones, or every phone of the room
-        // when none is selected.
+        // The phone actions: the selected Android devices (phones and
+        // tablets), or every one of the room when none is selected.
         if (IsPhoneOnly(action))
         {
-            var chosen = selected.Where(machine => machine.IsPhone).ToList();
-            return chosen.Count > 0 ? chosen : room.Where(machine => machine.IsPhone).ToList();
+            var chosen = selected.Where(IsAndroid).ToList();
+            return chosen.Count > 0 ? chosen : room.Where(IsAndroid).ToList();
         }
         if (action is not (ToolbarAction.BlockPrograms or ToolbarAction.BlockSites))
         {

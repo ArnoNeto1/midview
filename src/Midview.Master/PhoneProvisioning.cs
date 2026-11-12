@@ -1,8 +1,27 @@
 namespace Midview.Master;
 
-// What it takes to turn a factory-reset Android phone into a Midview phone:
-// the Midview app, where to download it, and the gates that say the phone
-// preparation is ready to be offered.
+// How a phone becomes a Midview phone. Two gates:
+// - SignatureChecksum (IsReady): the phone app is published. It lets CI attach
+//   MidviewAgent.apk to the release and "Atualizar os celulares" work.
+// - CableReady: the "Preparar celulares" assistant (PreparePhonesWindow), which
+//   prepares a factory-reset phone over a USB cable, is built.
+// The QR of the phone's first screen is gone: Google lets only the
+// device-policy apps on its approved list in through it, and Midview is not
+// on it. Which of the gates the Master offers is Setup (PhoneSetupOffer).
+public enum PhoneSetupOffer
+{
+    // The phone app is not published yet: "Celulares: em breve".
+    Soon = 0,
+
+    // The app is published but the assistant is not out yet: the phone is
+    // prepared by USB cable by hand (adb, dpm set-device-owner), and the
+    // Master points to the README's steps.
+    Cable = 1,
+
+    // The "Preparar celulares" assistant (WizardReady).
+    Wizard = 2,
+}
+
 public static class PhoneProvisioning
 {
     public const string AgentPackage = "io.github.arnoneto1.midview.agent";
@@ -32,4 +51,21 @@ public static class PhoneProvisioning
 
     public static bool WizardReadyWith(string checksum, bool cableReady) =>
         cableReady && IsReadyWith(checksum);
+
+    public static PhoneSetupOffer Setup => SetupWith(IsReady, WizardReady);
+
+    // The assistant needs the app published too (WizardReady implies IsReady).
+    public static PhoneSetupOffer SetupWith(bool appReady, bool wizardReady) =>
+        !appReady ? PhoneSetupOffer.Soon : wizardReady ? PhoneSetupOffer.Wizard : PhoneSetupOffer.Cable;
+
+    // The README's "Celulares" section, with the cable steps.
+    public const string CableStepsUrl = "https://github.com/ArnoNeto1/midview#celulares";
+
+    // Said where the room has no phone yet (the grid, the Telas menu).
+    public static string NoPhoneYet(PhoneSetupOffer setup) => setup switch
+    {
+        PhoneSetupOffer.Wizard => "Nenhum celular nesta sala ainda. Para colocar o primeiro, escolha \"Celulares\" e use \"Preparar celulares\".",
+        PhoneSetupOffer.Cable => "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+        _ => "Nenhum celular nesta sala ainda.",
+    };
 }

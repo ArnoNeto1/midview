@@ -57,4 +57,52 @@ public class PhoneProvisioningTests
         Assert.Equal(
             PhoneProvisioning.WizardReadyWith(PhoneProvisioning.SignatureChecksum, PhoneProvisioning.CableReady),
             PhoneProvisioning.WizardReady);
+
+    // Google blocks the QR for device-policy apps off its approved list: the
+    // QR path is gone, and nothing offers it.
+    [Fact]
+    public void There_is_no_qr_offer_any_more() =>
+        Assert.DoesNotContain("Qr", Enum.GetNames<PhoneSetupOffer>());
+
+    [Fact]
+    public void Setup_is_em_breve_until_the_phone_app_is_published()
+    {
+        Assert.Equal(PhoneSetupOffer.Soon, PhoneProvisioning.SetupWith(appReady: false, wizardReady: false));
+        Assert.Equal(PhoneSetupOffer.Soon, PhoneProvisioning.SetupWith(appReady: false, wizardReady: true));
+    }
+
+    [Fact]
+    public void Published_phone_app_without_the_assistant_is_prepared_by_cable_by_hand() =>
+        Assert.Equal(PhoneSetupOffer.Cable, PhoneProvisioning.SetupWith(appReady: true, wizardReady: false));
+
+    [Fact]
+    public void Assistant_is_offered_only_with_the_app_published_and_the_wizard_ready() =>
+        Assert.Equal(PhoneSetupOffer.Wizard, PhoneProvisioning.SetupWith(appReady: true, wizardReady: true));
+
+    // Setup follows the two gates: the assistant exactly when WizardReady.
+    [Fact]
+    public void Setup_follows_the_gates()
+    {
+        Assert.Equal(PhoneProvisioning.SetupWith(PhoneProvisioning.IsReady, PhoneProvisioning.WizardReady), PhoneProvisioning.Setup);
+        Assert.Equal(PhoneProvisioning.WizardReady, PhoneProvisioning.Setup == PhoneSetupOffer.Wizard);
+    }
+
+    // Nobody is sent to a preparation that is not out yet.
+    [Theory]
+    [InlineData(PhoneSetupOffer.Soon)]
+    [InlineData(PhoneSetupOffer.Cable)]
+    public void No_phone_hint_sends_nobody_to_the_assistant_unless_it_is_out(PhoneSetupOffer setup) =>
+        Assert.DoesNotContain("Preparar celular", PhoneProvisioning.NoPhoneYet(setup));
+
+    [Fact]
+    public void Wizard_hint_points_to_the_assistant() =>
+        Assert.Contains("\"Preparar celulares\"", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Wizard));
+
+    [Fact]
+    public void Cable_hint_says_where_the_steps_are()
+    {
+        Assert.Contains("cabo USB", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Cable));
+        Assert.Equal("Nenhum celular nesta sala ainda.", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Soon));
+        Assert.Equal("https://github.com/ArnoNeto1/midview#celulares", PhoneProvisioning.CableStepsUrl);
+    }
 }

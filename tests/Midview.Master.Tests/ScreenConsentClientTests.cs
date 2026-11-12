@@ -91,7 +91,7 @@ public sealed class ScreenConsentClientTests
         });
     }
 
-    // The CELULARES items of a tile's menu come with their own separator, shown and hidden with them.
+    // The phone items of a tile's menu come with their own separator, shown and hidden with them.
     [Fact]
     public void Phone_separator_follows_the_phone_items()
     {

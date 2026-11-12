@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -28,6 +29,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly Action _openAdvanced;
     private readonly Action _openGiveAccess;
     private readonly Action _openJoinClass;
+    private readonly Action _openPhoneUpdate;
     private readonly Action _openPreparePhones;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
@@ -39,18 +41,14 @@ public partial class MachinesWindow : MidviewWindow
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
         Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced,
-        Action openGiveAccess, Action openJoinClass, Action openPreparePhones)
+        Action openGiveAccess, Action openJoinClass, Action openPhoneUpdate, Action openPreparePhones)
     {
         InitializeComponent();
-        if (!PhoneProvisioning.WizardReady)
-        {
-            // No phone app published yet: no link to a factory reset that would be for nothing.
-            PreparePhoneSpan.Inlines.Clear();
-            PreparePhoneSpan.Inlines.Add(new Run("  Celulares: em breve."));
-        }
+        ShowPhoneSetup(PreparePhoneSpan, PhoneProvisioning.Setup, OpenCableSteps);
         _openAdvanced = openAdvanced;
         _openGiveAccess = openGiveAccess;
         _openJoinClass = openJoinClass;
+        _openPhoneUpdate = openPhoneUpdate;
         _openPreparePhones = openPreparePhones;
         _masterCertificate = masterCertificate;
         _roster = roster;
@@ -58,6 +56,7 @@ public partial class MachinesWindow : MidviewWindow
         _refreshAddresses = refreshAddresses;
         FoundItemsControl.ItemsSource = _rows;
         ShowStudentProgramVersion();
+        ShowPhoneUpdateCard();
         CheckTeacherVersion();
         RefreshAdminPasswordStatus();
         ShowPage(MachinesPage.Search);
@@ -73,6 +72,10 @@ public partial class MachinesWindow : MidviewWindow
             panels[i].Visibility = i == (int)page ? Visibility.Visible : Visibility.Collapsed;
         }
         navs[(int)page].IsChecked = true;
+        if (page == MachinesPage.Updates)
+        {
+            ShowPhoneUpdateCard(); // the phone app may have been downloaded since
+        }
     }
 
     private void OnNavChecked(object sender, RoutedEventArgs e)
@@ -96,9 +99,49 @@ public partial class MachinesWindow : MidviewWindow
             : "Nenhuma senha salva ainda.";
     }
 
+    // What the line under the list says about phones (PhoneSetupOffer): "em
+    // breve" while the phone app is not published (no link to a factory reset
+    // that would be for nothing); the README's cable steps once it is, while
+    // the assistant is not out; the XAML's "Preparar celular..." link (the
+    // "Preparar celulares" assistant) only with PhoneProvisioning.WizardReady.
+    internal static void ShowPhoneSetup(Span span, PhoneSetupOffer setup, Action openCableSteps)
+    {
+        if (setup == PhoneSetupOffer.Wizard)
+        {
+            return;
+        }
+        span.Inlines.Clear();
+        if (setup == PhoneSetupOffer.Soon)
+        {
+            span.Inlines.Add(new Run("  Celulares: em breve."));
+            return;
+        }
+        span.Inlines.Add(new Run("  Celular novo?"));
+        span.Inlines.Add(new Run(" "));
+        var link = new Hyperlink(new Run("Como preparar pelo cabo USB..."))
+        {
+            ToolTip = "Abre no navegador os passos do README do Midview: o celular é preparado pelo cabo USB, ligado a este computador.",
+        };
+        link.Click += (_, _) => openCableSteps();
+        span.Inlines.Add(link);
+    }
+
+    private void OpenCableSteps()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(PhoneProvisioning.CableStepsUrl) { UseShellExecute = true });
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            MidviewMessage.Show(this, $"Não foi possível abrir o navegador. Os passos estão em {PhoneProvisioning.CableStepsUrl}",
+                "Preparar celular", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     // The "Preparar celulares" assistant (PreparePhonesWindow, owned by the
-    // classroom window); it is here, not on the toolbar, which would wrap onto
-    // a second row at 1340 px.
+    // classroom window; only with PhoneProvisioning.WizardReady); it is here,
+    // not on the toolbar, which would wrap onto a second row at 1340 px.
     private void OnPreparePhoneClicked(object sender, RoutedEventArgs e) => _openPreparePhones();
 
     private void OnSetAdminPasswordClicked(object sender, RoutedEventArgs e)
@@ -361,6 +404,25 @@ public partial class MachinesWindow : MidviewWindow
             OnUpdateClicked(this, new RoutedEventArgs());
         }
     }
+
+    // "Atualizar os celulares": shown only while the room has a phone (the
+    // classroom calls it again when its list changes), with the version of
+    // the phone app this PC sends and whether it is already downloaded.
+    public void ShowPhoneUpdateCard()
+    {
+        if (!DeviceSupport.HasPhones(_roster()))
+        {
+            PhoneUpdateCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var version = TeacherUpdate.CurrentVersion;
+        PhoneVersionTextBlock.Text = PhoneUpdateText.ApkLine(
+            version.ToString(), PhoneAgentApk.IsKept(PhoneAgentApk.DefaultFolder, version));
+        PhoneUpdateCard.Visibility = Visibility.Visible;
+    }
+
+    // The classroom's own window (one at a time, as from a phone's menu).
+    private void OnPhoneUpdateClicked(object sender, RoutedEventArgs e) => _openPhoneUpdate();
 
     // One at a time: asking again brings it back.
     private void OnUpdateClicked(object sender, RoutedEventArgs e)
