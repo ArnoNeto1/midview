@@ -294,6 +294,8 @@ public sealed class PhoneCableTests
         Assert.Equal(new[]
         {
             S + "shell pm list packages " + Package,
+            S + "shell input keyevent KEYCODE_WAKEUP",
+            S + "shell wm dismiss-keyguard",
             S + "install -r " + Apk,
             S + "shell cmd appops set " + Package + " 10008 allow",
             S + "shell cmd deviceidle whitelist +" + Package,
@@ -403,26 +405,68 @@ public sealed class PhoneCableTests
         Assert.DoesNotContain(adb.Calls, c => c.Contains("install -r"));
     }
 
+    // What the Redmi 10C (MIUI 14) answered on 2026-11-12 when nobody touched
+    // "Instalar" in its "Instalar via USB" question (it says no by itself
+    // after 10 s), and when its screen was locked (no question at all). The
+    // "Instalar via USB" switch was on: Check had read it.
     [Fact]
-    public void Install_blocked_by_the_phone_means_install_switch_off()
+    public void Install_question_not_answered_means_declined()
     {
         var adb = ReadyToPrepare().Set(S + "install -r " + Apk,
-            "Performing Streamed Install\nadb: failed to install x.apk: Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]\n", 1);
-        Assert.Equal(CableProblem.InstallOff, Prepare(adb).Problem);
+            "Performing Streamed Install\nadb.exe: failed to install C:\\x\\MidviewAgent.apk: Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]\n", 1);
+        Assert.Equal(CableProblem.InstallDeclined, Prepare(adb).Problem);
         Assert.DoesNotContain(adb.Calls, c => c.Contains("content call"));
+    }
+
+    // Google Play Protect may ask first ("Enviar o app para uma verificação
+    // de segurança?") and the install waits for the answer: on the Redmi 10C
+    // it never ended by itself.
+    [Fact]
+    public void Install_left_waiting_on_the_phone_means_declined()
+    {
+        var adb = ReadyToPrepare().Set(S + "install -r " + Apk, "", -1, timedOut: true);
+        Assert.Equal(CableProblem.InstallDeclined, Prepare(adb).Problem);
+    }
+
+    // Every answer exactly as the Redmi 10C (MIUI 14) gave it on 2026-11-12,
+    // preparing it over the cable from start to end (number and thumbprints
+    // swapped for this test's).
+    [Fact]
+    public void Real_redmi_answers_of_a_whole_preparation()
+    {
+        var adb = Redmi()
+            .Set(S + "shell pm list packages " + Package, "package:" + Package + "\n")
+            .Set(S + "shell pm uninstall " + Package, "Success\n")
+            .Set(S + "install -r " + Apk, "Performing Streamed Install\nSuccess\n")
+            .Set(S + "shell cmd deviceidle whitelist +" + Package, "Added: " + Package + "\n")
+            .Set(ContentCall(), "Result: Bundle[{thumbprint=" + Thumb + ", ok=true, name=Celular 07}]\n")
+            .Set(SetDeviceOwner,
+                "Success: Device owner set to package " + Admin + "\nActive admin set to component " + Admin + "\n");
+
+        var result = Prepare(adb);
+
+        Assert.Null(result.Problem);
+        Assert.False(result.OwnerUnconfirmed);
+        Assert.Equal("Celular 07", result.Phone!.Name);
+        Assert.Equal(Thumb, result.Phone.AgentThumbprint);
+    }
+
+    // The phone asks only with its screen on and unlocked: woken first.
+    [Fact]
+    public void Screen_is_woken_and_unlocked_before_installing()
+    {
+        var adb = ReadyToPrepare();
+        Prepare(adb);
+        var wake = adb.Calls.IndexOf(S + "shell input keyevent KEYCODE_WAKEUP");
+        var unlock = adb.Calls.IndexOf(S + "shell wm dismiss-keyguard");
+        var install = adb.Calls.IndexOf(S + "install -r " + Apk);
+        Assert.True(wake >= 0 && wake < unlock && unlock < install);
     }
 
     [Fact]
     public void Other_install_failure()
     {
         var adb = ReadyToPrepare().Set(S + "install -r " + Apk, "Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]\n", 1);
-        Assert.Equal(CableProblem.InstallFailed, Prepare(adb).Problem);
-    }
-
-    [Fact]
-    public void Install_that_times_out_fails()
-    {
-        var adb = ReadyToPrepare().Set(S + "install -r " + Apk, "", -1, timedOut: true);
         Assert.Equal(CableProblem.InstallFailed, Prepare(adb).Problem);
     }
 
@@ -545,6 +589,7 @@ public sealed class PhoneCableTests
     [InlineData(CableProblem.HasAccounts, "Ainda h\u00e1 uma conta neste celular.", "sair-contas")]
     [InlineData(CableProblem.HasUsers, "O celular tem um Segundo espa\u00e7o ou Apps duplos. Apague-os nas Configura\u00e7\u00f5es e tente de novo.", null)]
     [InlineData(CableProblem.AlreadySchool, "Este celular j\u00e1 \u00e9 da escola. Para prepar\u00e1-lo de novo, use \"Apagar e preparar de novo\" no Midview.", null)]
+    [InlineData(CableProblem.InstallDeclined, "O celular não deixou instalar. Deixe a tela dele acesa e responda às perguntas: em \"Enviar o app para uma verificação de segurança?\", toque em Não enviar; em \"Instalar via USB\", toque em Instalar (não em Recusar) antes de 10 segundos.", "cabo")]
     [InlineData(CableProblem.InstallFailed, "O Midview n\u00e3o foi instalado no celular. Se apareceu uma pergunta no celular, toque em Instalar e tente de novo.", "cabo")]
     [InlineData(CableProblem.Refused, "O celular recusou a prepara\u00e7\u00e3o. Tente de novo.", "cabo")]
     [InlineData(CableProblem.Lost, "O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo")]

@@ -355,6 +355,16 @@ celular perto do roteador), não de preparação: o celular já confia neste PC.
   chip e sem conta Mi depois de ligadas; o agente já foi feito dono do
   aparelho pelo cabo (`dpm list-owners`: `DeviceOwner,Affiliated`); driver USB
   `winusb.inf` da Microsoft.
+- **Preparação real pelo cabo (2026-11-12, Redmi 10C, sem apagar):** o passo
+  do cabo levou 13 a 16 s e o celular entrou na rede sozinho em 27 a 30 s. A
+  instalação abre duas perguntas no celular: às vezes o Google Play Protect
+  ("Enviar o app para uma verificação de segurança?", a instalação espera até
+  alguém responder; "Não enviar" segue) e sempre a MIUI ("Instalar via USB",
+  com "Recusar (10)" que recusa sozinho em 10 s). Com a tela apagada ou
+  bloqueada a MIUI nem pergunta e recusa depois de ~1 min. Por isso o Master
+  acende e desbloqueia a tela antes de instalar e diz ao professor o que
+  tocar. A MIUI só deixa o novo dono abrir telas ~1 s depois de virar dono, então
+  o agente pede a tela "Pronto" de novo em 2, 5 e 10 s.
 - **Versões:** os três modelos param no MIUI 14. Redmi 10C → Android 13;
   Redmi Note 10S → Android 13; Redmi Note 9 Pro → Android 12. Todos atendem ao
   mínimo Android 10 do agente.

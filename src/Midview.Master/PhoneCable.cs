@@ -11,7 +11,7 @@ namespace Midview.Master;
 public enum CableProblem
 {
     NoPhone, TooMany, Unauthorized, TooOld, SecurityOff, InstallOff,
-    HasAccounts, HasUsers, AlreadySchool, InstallFailed, Refused, Lost,
+    HasAccounts, HasUsers, AlreadySchool, InstallDeclined, InstallFailed, Refused, Lost,
 }
 
 public enum CableStage { Checking, Installing, Wifi, Pairing, Owner }
@@ -172,11 +172,24 @@ public sealed class PhoneCable
             Shell(Short, "pm", "uninstall", package);
         }
 
+        // A Xiaomi asks "Instalar via USB" on its screen and says no by itself
+        // after 10 s; with the screen off or locked it does not ask at all and
+        // says no about a minute later. So the screen is woken and unlocked
+        // (a phone being prepared has no screen lock) before installing.
+        Shell(Short, "input", "keyevent", "KEYCODE_WAKEUP");
+        Shell(Short, "wm", "dismiss-keyguard");
+
         var install = Run(InstallTime, "install", "-r", apkPath);
         if (install.TimedOut || !install.Text.Contains("Success", StringComparison.Ordinal))
         {
-            return Fail(install.Text.Contains("INSTALL_FAILED_USER_RESTRICTED", StringComparison.Ordinal)
-                ? CableProblem.InstallOff
+            // The "Instalar via USB" switch is on (Check read it), so a refusal
+            // here is the phone's question left unanswered or answered no.
+            // An install still running after the wait is held by Google Play
+            // Protect's question ("Enviar o app para uma verificação de
+            // segurança?"), which never answers itself.
+            return Fail(install.TimedOut
+                        || install.Text.Contains("INSTALL_FAILED_USER_RESTRICTED", StringComparison.Ordinal)
+                ? CableProblem.InstallDeclined
                 : CableProblem.InstallFailed);
         }
 
@@ -275,6 +288,7 @@ public sealed class PhoneCable
         CableProblem.HasAccounts => ("Ainda há uma conta neste celular.", "sair-contas"),
         CableProblem.HasUsers => ("O celular tem um Segundo espaço ou Apps duplos. Apague-os nas Configurações e tente de novo.", null),
         CableProblem.AlreadySchool => ("Este celular já é da escola. Para prepará-lo de novo, use \"Apagar e preparar de novo\" no Midview.", null),
+        CableProblem.InstallDeclined => ("O celular não deixou instalar. Deixe a tela dele acesa e responda às perguntas: em \"Enviar o app para uma verificação de segurança?\", toque em Não enviar; em \"Instalar via USB\", toque em Instalar (não em Recusar) antes de 10 segundos.", "cabo"),
         CableProblem.InstallFailed => ("O Midview não foi instalado no celular. Se apareceu uma pergunta no celular, toque em Instalar e tente de novo.", "cabo"),
         CableProblem.Refused => ("O celular recusou a preparação. Tente de novo.", "cabo"),
         CableProblem.Lost => ("O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo"),
