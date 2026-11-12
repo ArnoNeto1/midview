@@ -344,6 +344,12 @@ public enum MessageType : byte
     PhoneAppBlockStatus = 95,
     GetPhoneApps = 96,
     PhoneApps = 97,
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Otimizar"
+    // the phone (hide ad apps, ad-free DNS). No payload; answered with one
+    // PhoneOptimizeReport. Phone-only: an older agent answers CommandAck.
+    OptimizePhone = 98,
+    PhoneOptimizeReport = 99,
 }
 
 public enum CloseAppsMode : byte

@@ -19,6 +19,17 @@ object MessageType {
     const val COMMAND_ACK = 11
     const val REQUEST_THUMBNAIL = 12
     const val THUMBNAIL_FRAME = 13
+
+    // Sending a file in chunks (the update's APK too).
+    const val FILE_CHUNK = 18
+
+    // Updating the agent over the network, from a trusted teacher only (see
+    // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
+    // GET_UPDATE_STATUS -> UPDATE_STATUS.
+    const val UPDATE_OFFER = 25
+    const val UPDATE_ACCEPTED = 26
+    const val GET_UPDATE_STATUS = 27
+    const val UPDATE_STATUS = 28
     const val LOCK_SCREEN = 34
 
     // Pairing a teacher with this device (see Pairing for the exchange).
@@ -55,4 +66,10 @@ object MessageType {
     const val PHONE_APP_BLOCK_STATUS = 95
     const val GET_PHONE_APPS = 96
     const val PHONE_APPS = 97
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Otimizar"
+    // the phone (no payload), answered with one PHONE_OPTIMIZE_REPORT
+    // (a PhoneOptimizeReport). An older agent answers COMMAND_ACK.
+    const val OPTIMIZE_PHONE = 98
+    const val PHONE_OPTIMIZE_REPORT = 99
 }
