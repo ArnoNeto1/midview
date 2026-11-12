@@ -46,6 +46,9 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         }
     }
 
+    override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> =
+        dpm.setPackagesSuspended(admin, pkgs.toTypedArray(), suspended).toList()
+
     // Whether "Bloquear telas" can hold this phone: the Device Owner, with
     // lock task mode allowed for the app (Lockdown).
     fun canLockScreen(): Boolean = isDeviceOwner() && dpm.isLockTaskPermitted(app.packageName)

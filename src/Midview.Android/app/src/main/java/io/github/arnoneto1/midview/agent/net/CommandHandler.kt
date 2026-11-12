@@ -1,10 +1,13 @@
 package io.github.arnoneto1.midview.agent.net
 
+import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import java.io.EOFException
@@ -14,10 +17,14 @@ import java.io.EOFException
 // phone trusts, and from anyone else ends the connection unanswered. Any
 // certificate gets through the handshake, so this is what keeps strangers
 // out. A trusted teacher may send several messages on one connection.
+// appBlock holds the phone's app block; listApps reads the apps the student
+// can open (for the teacher's list).
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
     private val consent: ScreenConsent,
+    private val appBlock: AppBlockStore,
+    private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
         val isTrusted = trusted.isTrusted(channel.remoteThumbprint)
@@ -56,6 +63,12 @@ class CommandHandler(
             val (shown, detail) = askForScreen()
             Message(MessageType.COMMAND_ACK, CommandResult.encode(shown, detail))
         }
+        MessageType.SET_PHONE_APP_BLOCK -> {
+            val (applied, detail) = appBlock.handle(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(applied, detail))
+        }
+        MessageType.GET_PHONE_APP_BLOCK -> Message(MessageType.PHONE_APP_BLOCK_STATUS, appBlock.current.encode())
+        MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
         // Everything a PC does and a phone doesn't yet: the teacher reads why.
         else -> Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
     }

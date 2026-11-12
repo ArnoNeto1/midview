@@ -58,6 +58,8 @@ class LockdownTest {
             accessibilityPermitted = pkgs
         }
 
+        override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> = emptyList()
+
         override fun isDeviceOwner(): Boolean = owner
     }
 

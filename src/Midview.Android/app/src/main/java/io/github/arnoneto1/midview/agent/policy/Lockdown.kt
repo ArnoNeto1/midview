@@ -16,6 +16,10 @@ interface DevicePolicyGateway {
 
     // The accessibility services allowed (null: all of them).
     fun setPermittedAccessibilityServices(pkgs: List<String>?)
+
+    // Suspends (or lifts the suspension of) apps; returns those Android
+    // would not change.
+    fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String>
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
 

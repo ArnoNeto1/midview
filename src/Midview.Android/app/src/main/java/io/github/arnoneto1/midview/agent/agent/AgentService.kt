@@ -15,6 +15,10 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.apps.AppSuspender
+import io.github.arnoneto1.midview.agent.apps.InstalledApps
+import io.github.arnoneto1.midview.agent.apps.PackageWatcher
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lock.LockActivity
@@ -51,6 +55,7 @@ class AgentService : Service() {
     private var tlsServers = emptyList<TlsServer>()
     private var discoverySocket: DatagramSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+    private var packageWatcher: PackageWatcher? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private val main = Handler(Looper.getMainLooper())
     private var stopped = false
@@ -129,6 +134,8 @@ class AgentService : Service() {
     }
 
     private fun closeListeners() {
+        packageWatcher?.stop()
+        packageWatcher = null
         tlsServers.forEach { it.close() }
         tlsServers = emptyList()
         discoverySocket?.close()
@@ -151,7 +158,14 @@ class AgentService : Service() {
             deviceName = { DeviceName.read(this) },
         )
         val consent = ScreenCaptureService.consent
-        val commands = CommandHandler(trusted, pairing, consent)
+        // The app block: kept in the app's storage, applied again now (it
+        // holds after a restart, or MIUI ending the app) and whenever an app
+        // is installed, updated or removed.
+        val installedApps = InstalledApps(this)
+        val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
+        val suspender = AppSuspender(installedApps, AndroidDevicePolicyGateway(this), log)
+        val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,
@@ -174,6 +188,7 @@ class AgentService : Service() {
             val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
             val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
+            packageWatcher = PackageWatcher(this) { suspender.apply(appBlock.current) }.also { it.start() }
             agentServer.start()
             sessionServer.start()
 
@@ -279,6 +294,7 @@ class AgentService : Service() {
         // to show the code.
         private const val SHOW_TIMEOUT_MILLIS = 3_000L
         private const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
+        private const val APP_BLOCK_FILE = "app-block.bin"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1

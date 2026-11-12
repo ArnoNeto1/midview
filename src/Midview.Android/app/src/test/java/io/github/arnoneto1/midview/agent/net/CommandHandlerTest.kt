@@ -1,11 +1,16 @@
 package io.github.arnoneto1.midview.agent.net
 
+import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
+import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.protocol.PhoneApp
+import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
+import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import org.junit.Assert.assertEquals
@@ -28,7 +33,10 @@ class CommandHandlerTest {
     private val pairing by lazy { PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }) }
     private var shown = 0
     private val consent = ScreenConsent(clock = { 0L }) { shown++ }
-    private val handler by lazy { CommandHandler(trusted, pairing, consent) }
+    private val applied = mutableListOf<PhoneAppPolicy>()
+    private val appBlock by lazy { AppBlockStore(File(folder.newFolder(), "app-block.bin"), apply = { applied += it; null }) }
+    private var phoneApps = listOf(PhoneApp("com.android.chrome", "Chrome", byteArrayOf(1, 2, 3)))
+    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock) { phoneApps } }
 
     private fun message(type: Int, payload: ByteArray = ByteArray(0)) = Message(type, payload)
 
@@ -174,6 +182,62 @@ class CommandHandlerTest {
         handler.handle(FakeChannel(stranger, message(MessageType.REQUEST_SCREEN_CONSENT)))
         assertEquals(0, shown)
         assertEquals(ConsentState.NotAsked, consent.state)
+    }
+
+    @Test fun setPhoneAppBlockAppliesAndAcks() {
+        trusted.add(teacher)
+        val policy = PhoneAppPolicy(10, AppBlockMode.BLOCK_LIST, listOf("com.whatsapp"))
+        val channel = FakeChannel(teacher, message(MessageType.SET_PHONE_APP_BLOCK, policy.encode()))
+        handler.handle(channel)
+
+        assertEquals(listOf(policy), applied)
+        val ack = channel.sent.single().also { assertEquals(MessageType.COMMAND_ACK, it.type) }
+        assertEquals(true to "bloqueando 1 app(s)", CommandResult.decode(ack.payload))
+    }
+
+    @Test fun setPhoneAppBlockRefusesNonsense() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.SET_PHONE_APP_BLOCK, byteArrayOf(1)))
+        handler.handle(channel)
+        assertEquals(false to "pedido inválido", CommandResult.decode(channel.sent.single().payload))
+        assertTrue(applied.isEmpty())
+    }
+
+    @Test fun getPhoneAppBlockAnswersTheHeldPolicy() {
+        trusted.add(teacher)
+        val policy = PhoneAppPolicy(10, AppBlockMode.ALLOW_ONLY, listOf("com.android.chrome"))
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.GET_PHONE_APP_BLOCK),
+            message(MessageType.SET_PHONE_APP_BLOCK, policy.encode()),
+            message(MessageType.GET_PHONE_APP_BLOCK),
+        )
+        handler.handle(channel)
+
+        assertEquals(
+            listOf(MessageType.PHONE_APP_BLOCK_STATUS, MessageType.COMMAND_ACK, MessageType.PHONE_APP_BLOCK_STATUS),
+            channel.sent.map { it.type },
+        )
+        assertEquals(PhoneAppPolicy.lifted(0), PhoneAppPolicy.decode(channel.sent[0].payload))
+        assertEquals(policy, PhoneAppPolicy.decode(channel.sent[2].payload))
+    }
+
+    @Test fun getPhoneAppsAnswersTheList() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.GET_PHONE_APPS))
+        handler.handle(channel)
+
+        val answer = channel.sent.single().also { assertEquals(MessageType.PHONE_APPS, it.type) }
+        assertEquals(phoneApps, PhoneAppList.decode(answer.payload))
+    }
+
+    @Test fun untrustedTeacherCannotBlockApps() {
+        trusted.add(teacher)
+        val policy = PhoneAppPolicy(10, AppBlockMode.ALLOW_ONLY, emptyList())
+        val channel = FakeChannel(stranger, message(MessageType.SET_PHONE_APP_BLOCK, policy.encode()))
+        handler.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertTrue(applied.isEmpty())
     }
 
     private companion object {
