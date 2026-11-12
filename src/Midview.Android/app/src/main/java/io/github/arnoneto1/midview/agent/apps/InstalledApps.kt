@@ -8,10 +8,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.provider.MediaStore
 import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
+import io.github.arnoneto1.midview.agent.optimize.BloatCatalog
+import io.github.arnoneto1.midview.agent.optimize.BloatList
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
@@ -23,8 +26,9 @@ import java.util.Locale
 
 // The phone's apps as the PackageManager sees them: what the student can open
 // (with its label and icon, for the teacher's list), what is never suspended
-// and what is suspended now; and its browsers (OtherBrowsers).
-class InstalledApps(context: Context) : AppCatalog, BrowserCatalog {
+// and what is suspended now; its browsers (OtherBrowsers); and, for
+// "Otimizar", which listed apps it has and what is never hidden (Optimizer).
+class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog {
     private val app = context.applicationContext
     private val pm = app.packageManager
 
@@ -83,6 +87,27 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog {
         } catch (_: PackageManager.NameNotFoundException) {
             false
         }
+
+    // Hidden apps too (Android lists them only with MATCH_UNINSTALLED_PACKAGES),
+    // not one removed for this user (which comes without FLAG_INSTALLED).
+    override fun isPresent(pkg: String): Boolean =
+        try {
+            (pm.getApplicationInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES).flags and ApplicationInfo.FLAG_INSTALLED) != 0
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+
+    override fun neverHide(): Set<String> = BloatList.neverHide(protected(), cameras())
+
+    // The phone's own cameras: the system apps that take a picture for
+    // another app or open as the camera.
+    private fun cameras(): Set<String> =
+        listOf(Intent(MediaStore.ACTION_IMAGE_CAPTURE), Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA))
+            .flatMap { pm.queryIntentActivities(it, PackageManager.MATCH_DEFAULT_ONLY) }
+            .map { candidate(it.activityInfo.applicationInfo) }
+            .filter { it.system }
+            .map { it.pkg }
+            .toSet()
 
     private fun candidate(info: ApplicationInfo) = ProtectedApps.Candidate(
         info.packageName,

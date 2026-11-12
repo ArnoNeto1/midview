@@ -18,7 +18,11 @@ class InternetBlockTest {
     private val file by lazy { File(folder.root, "internet-block.txt") }
     private val vpn = mutableListOf<String>()
 
-    private fun block() = InternetBlock(gw, file, startVpn = { vpn += "start" }, stopVpn = { vpn += "stop" }, own = own)
+    private var freed = 0
+
+    private fun block() = InternetBlock(
+        gw, file, startVpn = { vpn += "start" }, stopVpn = { vpn += "stop" }, own = own, freed = { freed++ },
+    )
 
     @Test fun blockingTurnsOnTheAgentsVpnWithNothingElseLetThrough() {
         assertTrue(block().apply(true))
@@ -62,6 +66,23 @@ class InternetBlockTest {
         assertEquals(theirs, gw.alwaysOn)
         assertTrue(gw.alwaysOnCalls.isEmpty())
         assertEquals(listOf("stop"), vpn)
+    }
+
+    // "Otimizar" tries the ad-free DNS it left off while the internet was
+    // blocked (Optimizer.internetFreed).
+    @Test fun freeingABlockedInternetSaysSo() {
+        block().apply(true)
+        assertEquals(0, freed)
+        block().apply(false)
+        assertEquals(1, freed)
+    }
+
+    // The agent starting with nothing blocked frees nothing.
+    @Test fun freeingWhatWasNotBlockedSaysNothing() {
+        block().apply(false)
+        gw.alwaysOn = AlwaysOnVpn("com.example.vpn", lockdown = true)
+        block().apply(false)
+        assertEquals(0, freed)
     }
 
     @Test fun notTheDeviceOwnerCannotBlockButIsFree() {

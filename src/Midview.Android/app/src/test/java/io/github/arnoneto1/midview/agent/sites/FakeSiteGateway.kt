@@ -1,9 +1,10 @@
 package io.github.arnoneto1.midview.agent.sites
 
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 
-// The DevicePolicyManager calls of the site block, recorded; the rest does
-// nothing.
+// The DevicePolicyManager calls of the site block and of "Otimizar" (hidden
+// apps, the private DNS), recorded; the rest does nothing.
 class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
     var alwaysOn: AlwaysOnVpn? = null
     val alwaysOnCalls = mutableListOf<AlwaysOnVpn?>()
@@ -12,6 +13,14 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
     val hidden = mutableSetOf<String>()
     val hiddenCalls = mutableListOf<Pair<String, Boolean>>()
     var refuseHiding = emptySet<String>()
+
+    // The private DNS as Settings has it (Android's default: automatic), what
+    // setting a host answers (a PRIVATE_DNS_SET_* value; only NO_ERROR
+    // changes it, as on Android), and every set, in order.
+    var privateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
+    var setHostResult = PrivateDns.SET_NO_ERROR
+    var refuseDns = false
+    val dnsCalls = mutableListOf<String>()
 
     override fun alwaysOnVpn(): AlwaysOnVpn? = alwaysOn
 
@@ -32,6 +41,31 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
         if (pkg in refuseHiding) return false
         if (hidden) this.hidden += pkg else this.hidden -= pkg
         return true
+    }
+
+    override fun isApplicationHidden(pkg: String): Boolean {
+        if (!owner) throw SecurityException("not the device owner")
+        return pkg in hidden
+    }
+
+    override fun privateDns(): PrivateDns {
+        if (!owner) throw SecurityException("not the device owner")
+        return privateDns
+    }
+
+    override fun setPrivateDnsHost(host: String): Int {
+        if (!owner) throw SecurityException("not the device owner")
+        if (refuseDns) throw IllegalStateException("refused")
+        dnsCalls += "host $host"
+        if (setHostResult == PrivateDns.SET_NO_ERROR) privateDns = PrivateDns(PrivateDns.MODE_PROVIDER_HOSTNAME, host)
+        return setHostResult
+    }
+
+    override fun setPrivateDnsAutomatic(): Int {
+        if (!owner) throw SecurityException("not the device owner")
+        dnsCalls += "automatic"
+        privateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
+        return PrivateDns.SET_NO_ERROR
     }
 
     override fun isDeviceOwner() = owner

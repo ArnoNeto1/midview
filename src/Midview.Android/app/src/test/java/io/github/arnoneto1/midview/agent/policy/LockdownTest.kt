@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,6 +65,14 @@ class LockdownTest {
         override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) = Unit
 
         override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean = true
+
+        override fun isApplicationHidden(pkg: String): Boolean = false
+
+        override fun privateDns(): PrivateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
+
+        override fun setPrivateDnsHost(host: String): Int = PrivateDns.SET_NO_ERROR
+
+        override fun setPrivateDnsAutomatic(): Int = PrivateDns.SET_NO_ERROR
 
         override fun alwaysOnVpn(): AlwaysOnVpn? = null
 

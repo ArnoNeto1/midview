@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.apps
 
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
@@ -195,6 +196,10 @@ class AppSuspenderTest {
         override fun setPermittedAccessibilityServices(pkgs: List<String>?) = Unit
         override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) = Unit
         override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean = true
+        override fun isApplicationHidden(pkg: String): Boolean = false
+        override fun privateDns(): PrivateDns = PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null)
+        override fun setPrivateDnsHost(host: String): Int = PrivateDns.SET_NO_ERROR
+        override fun setPrivateDnsAutomatic(): Int = PrivateDns.SET_NO_ERROR
         override fun alwaysOnVpn(): AlwaysOnVpn? = null
         override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) = Unit
         override val sdkInt = 33

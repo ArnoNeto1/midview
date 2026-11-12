@@ -21,7 +21,10 @@ data class Previous(val vpn: AlwaysOnVpn?)
 // the school's network. Unblocking puts back the always-on VPN the phone had
 // before (normally none), remembered in file so a restart in between does
 // not lose it. The phone's private DNS is not touched, so whatever DNS it
-// uses (the ad-blocking one of "Otimizar") is still there afterwards.
+// uses (the ad-blocking one of "Otimizar") is still there afterwards; freed
+// is told when a blocked internet is freed, for the ad-free DNS "Otimizar"
+// left off while it was blocked (Optimizer.internetFreed). It must return at
+// once.
 //
 // Android does not let a Device Owner point the private DNS at a host that
 // does not exist (setGlobalPrivateDnsModeSpecifiedHost first checks that the
@@ -33,6 +36,7 @@ class InternetBlock(
     private val stopVpn: () -> Unit,
     private val own: String = Lockdown.PACKAGE,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val freed: () -> Unit = {},
 ) {
     // True when this phone's internet is blocked by the agent now.
     val isBlocked: Boolean get() = gw.alwaysOnVpn()?.pkg == own
@@ -69,7 +73,8 @@ class InternetBlock(
     }
 
     private fun free() {
-        if (gw.alwaysOnVpn()?.pkg == own) {
+        val wasBlocked = gw.alwaysOnVpn()?.pkg == own
+        if (wasBlocked) {
             val previous = toRestore(loadPrevious(file), own)
             try {
                 gw.setAlwaysOnVpn(previous)
@@ -83,6 +88,8 @@ class InternetBlock(
         }
         stopVpn()
         file.delete()
+        // Freed is freed, whatever the listener does.
+        if (wasBlocked) runCatching(freed).onFailure { log("Freeing the internet was not passed on", it) }
     }
 
     companion object {

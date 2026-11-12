@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 
 // What the school phone's locks need from Android's DevicePolicyManager,
@@ -27,8 +28,20 @@ interface DevicePolicyGateway {
     // String, a Boolean or an Array<String>; empty clears it.
     fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>)
 
-    // Hides (or shows again) an app; false when Android would not.
+    // Hides (or shows again) an app; false when Android would not, and also
+    // when the app already was so.
     fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean
+
+    // Whether an app is hidden now.
+    fun isApplicationHidden(pkg: String): Boolean
+
+    // The phone's private DNS ("Otimizar"): as Settings has it, set to a
+    // host (strict) or back to automatic (opportunistic). Each set returns a
+    // DevicePolicyManager.PRIVATE_DNS_SET_* value; setting a host first
+    // connects to it, so never on the main thread.
+    fun privateDns(): PrivateDns
+    fun setPrivateDnsHost(host: String): Int
+    fun setPrivateDnsAutomatic(): Int
 
     // The phone's always-on VPN (null: none), and setting it.
     fun alwaysOnVpn(): AlwaysOnVpn?

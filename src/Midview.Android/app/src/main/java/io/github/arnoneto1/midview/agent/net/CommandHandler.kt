@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.net
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
@@ -19,14 +20,17 @@ import java.io.EOFException
 // certificate gets through the handshake, so this is what keeps strangers
 // out. A trusted teacher may send several messages on one connection.
 // appBlock holds the phone's app block; sites, the sites and internet the
-// teacher blocked; listApps reads the apps the student can open (for the
-// teacher's list).
+// teacher blocked; optimizer, "Otimizar" (which also catches up at a trusted
+// teacher's command: the first optimization after pairing, a DNS to try
+// again); listApps reads the apps the student can open (for the teacher's
+// list).
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
     private val consent: ScreenConsent,
     private val appBlock: AppBlockStore,
     private val sites: SiteBlockStore,
+    private val optimizer: PhoneOptimizer,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -42,6 +46,7 @@ class CommandHandler(
 
         channel.setTimeout(IDLE_TIMEOUT_MILLIS)
         while (true) {
+            if (message.type != MessageType.OPTIMIZE_PHONE) optimizer.teacherSeen()
             channel.send(answer(message))
             message = try {
                 channel.receive()
@@ -72,6 +77,8 @@ class CommandHandler(
         }
         MessageType.GET_PHONE_APP_BLOCK -> Message(MessageType.PHONE_APP_BLOCK_STATUS, appBlock.current.encode())
         MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
+        // On this connection's own thread: up to ~30 s checking the network.
+        MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())
         // As the Windows AgentServer: the answer is the single byte 1 or 0.
         MessageType.BLOCK_INTERNET, MessageType.UNBLOCK_INTERNET, MessageType.BLOCK_DOMAIN, MessageType.UNBLOCK_DOMAIN -> {
             val done = sites.handle(message.type, message.payload)

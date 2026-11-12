@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.net
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
@@ -11,6 +12,8 @@ import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
+import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
+import io.github.arnoneto1.midview.agent.protocol.PhoneOptimizeReport
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import io.github.arnoneto1.midview.agent.sites.SiteBlockState
@@ -24,6 +27,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.time.Instant
 
 class CommandHandlerTest {
     @get:Rule val folder = TemporaryFolder()
@@ -41,7 +45,26 @@ class CommandHandlerTest {
     private val sitesApplied = mutableListOf<SiteBlockState>()
     private var sitesWork = true
     private val sites by lazy { SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { sitesApplied += it; sitesWork }) }
-    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites) { phoneApps } }
+    private val optimizer = FakeOptimizer()
+    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer) { phoneApps } }
+
+    // "Otimizar": what the phone answers, and how often a trusted command
+    // let it catch up (the first optimization, a DNS retry).
+    private class FakeOptimizer : PhoneOptimizer {
+        val report = PhoneOptimizeReport(
+            Instant.parse("2026-11-12T13:00:00Z"), listOf("com.miui.msa.global"), listOf("com.facebook.system"),
+            PhoneDnsStates.ON, "dns.adguard-dns.com",
+        )
+        var runs = 0
+        var seen = 0
+        override fun run(): PhoneOptimizeReport {
+            runs++
+            return report
+        }
+        override fun teacherSeen() {
+            seen++
+        }
+    }
 
     private fun message(type: Int, payload: ByteArray = ByteArray(0)) = Message(type, payload)
 
@@ -289,6 +312,59 @@ class CommandHandlerTest {
         handler.handle(channel)
         assertTrue(channel.sent.isEmpty())
         assertTrue(sitesApplied.isEmpty())
+    }
+
+    @Test fun optimizePhoneRunsAndAnswersTheReport() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.OPTIMIZE_PHONE))
+        handler.handle(channel)
+
+        assertEquals(1, optimizer.runs)
+        val answer = channel.sent.single().also { assertEquals(MessageType.PHONE_OPTIMIZE_REPORT, it.type) }
+        assertEquals(optimizer.report, PhoneOptimizeReport.decode(answer.payload))
+    }
+
+    @Test fun untrustedTeacherCannotOptimize() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.OPTIMIZE_PHONE))
+        handler.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertEquals(0, optimizer.runs)
+        assertEquals(0, optimizer.seen)
+    }
+
+    // The first optimization after pairing and the DNS retries start from
+    // here; "Otimizar" itself runs anyway.
+    @Test fun everyOtherTrustedCommandLetsTheOptimizerCatchUp() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.GET_PHONE_APP_BLOCK),
+            message(MessageType.HEARTBEAT),
+            message(MessageType.OPTIMIZE_PHONE),
+        )
+        handler.handle(channel)
+        assertEquals(2, optimizer.seen)
+        assertEquals(1, optimizer.runs)
+    }
+
+    @Test fun anUntrustedCommandDoesNotStartTheOptimizer() {
+        trusted.add(teacher)
+        handler.handle(FakeChannel(stranger, message(MessageType.GET_PHONE_APP_BLOCK)))
+        assertEquals(0, optimizer.seen)
+    }
+
+    @Test fun pairingDoesNotStartTheOptimizer() {
+        handler.handle(
+            FakeChannel(
+                stranger,
+                message(MessageType.PAIR_REQUEST, "PROF".toByteArray()),
+                message(MessageType.PAIR_NONCE, ByteArray(32)),
+                message(MessageType.PAIR_CONFIRM),
+            ),
+        )
+        assertTrue(trusted.isTrusted(stranger))
+        assertEquals(0, optimizer.seen)
     }
 
     private companion object {

@@ -29,6 +29,11 @@ import io.github.arnoneto1.midview.agent.net.LockScreenHandler
 import io.github.arnoneto1.midview.agent.net.ScreenStreamHandler
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
+import io.github.arnoneto1.midview.agent.optimize.AdblockDns
+import io.github.arnoneto1.midview.agent.optimize.AndroidDnsNetwork
+import io.github.arnoneto1.midview.agent.optimize.DnsWatcher
+import io.github.arnoneto1.midview.agent.optimize.OptimizeStore
+import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.Discovery
@@ -61,6 +66,7 @@ class AgentService : Service() {
     private var discoverySocket: DatagramSocket? = null
     private var multicastLock: WifiManager.MulticastLock? = null
     private var packageWatcher: PackageWatcher? = null
+    private var dnsWatcher: DnsWatcher? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private val main = Handler(Looper.getMainLooper())
     private var stopped = false
@@ -141,6 +147,8 @@ class AgentService : Service() {
     private fun closeListeners() {
         packageWatcher?.stop()
         packageWatcher = null
+        dnsWatcher?.stop()
+        dnsWatcher = null
         tlsServers.forEach { it.close() }
         tlsServers = emptyList()
         discoverySocket?.close()
@@ -170,20 +178,33 @@ class AgentService : Service() {
         val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
         val suspender = AppSuspender(installedApps, AndroidDevicePolicyGateway(this), log)
         val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
+        // "Otimizar": the ad apps hidden and the ad-free DNS, run by itself at
+        // the first command of a trusted teacher and repeated by "Otimizar";
+        // the DNS is tried again when the internet block is freed, and goes
+        // back to automatic if the network stops validating it (DnsWatcher).
+        val policyGateway = AndroidDevicePolicyGateway(this)
+        lateinit var internet: InternetBlock
+        val internetBlocked = { internet.isBlocked }
+        val optimizer = Optimizer(
+            installedApps, policyGateway,
+            AdblockDns(policyGateway, AndroidDnsNetwork(this), internetBlocked, log),
+            OptimizeStore(File(filesDir, OPTIMIZE_FILE), log),
+            internetBlocked, log = log,
+        )
         // The site block: Chrome's policy and the internet block, kept the
         // same way and applied again now. Other browsers are hidden, checked
         // again with every app installed (the package watcher).
-        val policyGateway = AndroidDevicePolicyGateway(this)
-        val internet = InternetBlock(
+        internet = InternetBlock(
             policyGateway, File(filesDir, INTERNET_BLOCK_FILE),
             startVpn = { BlockVpnService.start(this) },
             stopVpn = { BlockVpnService.stop(this) },
             log = log,
+            freed = optimizer::internetFreed,
         )
         val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(policyGateway, internet, log)::apply, log = log)
         sites.reapply()
         val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
-        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, installedApps::list)
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,
@@ -210,6 +231,7 @@ class AgentService : Service() {
                 appBlock.reapply()
                 otherBrowsers.apply()
             }.also { it.start() }
+            dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
             agentServer.start()
             sessionServer.start()
 
@@ -319,6 +341,7 @@ class AgentService : Service() {
         private const val SITE_BLOCK_FILE = "site-block.txt"
         private const val INTERNET_BLOCK_FILE = "internet-block.txt"
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
+        private const val OPTIMIZE_FILE = "optimize.txt"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1

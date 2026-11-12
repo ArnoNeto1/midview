@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 
 // DevicePolicyManager for Lockdown, as the app's AdminReceiver.
@@ -67,6 +68,18 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean =
         dpm.setApplicationHidden(admin, pkg, hidden)
+
+    override fun isApplicationHidden(pkg: String): Boolean = dpm.isApplicationHidden(admin, pkg)
+
+    override fun privateDns(): PrivateDns =
+        PrivateDns(dpm.getGlobalPrivateDnsMode(admin), dpm.getGlobalPrivateDnsHost(admin))
+
+    // Android first connects to the host (DNS over TLS, port 853) from this
+    // app's process and answers PRIVATE_DNS_SET_ERROR_HOST_NOT_SERVING,
+    // changing nothing, if it cannot.
+    override fun setPrivateDnsHost(host: String): Int = dpm.setGlobalPrivateDnsModeSpecifiedHost(admin, host)
+
+    override fun setPrivateDnsAutomatic(): Int = dpm.setGlobalPrivateDnsModeOpportunistic(admin)
 
     override fun alwaysOnVpn(): AlwaysOnVpn? {
         val pkg = dpm.getAlwaysOnVpnPackage(admin) ?: return null
