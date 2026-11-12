@@ -14,7 +14,7 @@ public class PhoneWipeTests
 
     [Fact]
     public void The_wipe_command_has_its_own_message_number() =>
-        Assert.Equal(100, (int)MessageType.WipePhone);
+        Assert.Equal(101, (int)MessageType.WipePhone);
 
     [Theory]
     [InlineData("Celular 07", "07")]

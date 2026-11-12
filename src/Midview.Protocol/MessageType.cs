@@ -356,7 +356,7 @@ public enum MessageType : byte
     // with one CommandAck carrying a CommandResult. An agent from before this
     // answers CommandAck with a refusal, which the Master shows as a phone that
     // cannot be erased from here yet.
-    WipePhone = 100,
+    WipePhone = 101,
 }
 
 public enum CloseAppsMode : byte

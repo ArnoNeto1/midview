@@ -75,6 +75,6 @@ object MessageType {
 
     // Master -> Android agent (port 28900), trusted teacher only: erase the
     // phone ("Apagar e preparar de novo", no payload). Answered with a
-    // COMMAND_ACK before the erasing starts. Number 100 as the C# WipePhone.
-    const val WIPE_PHONE = 100
+    // COMMAND_ACK before the erasing starts. Number 101 as the C# WipePhone (100 is SetPhoneScreenPassword).
+    const val WIPE_PHONE = 101
 }
