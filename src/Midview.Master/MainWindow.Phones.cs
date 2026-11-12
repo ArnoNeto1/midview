@@ -35,7 +35,7 @@ public partial class MainWindow
     {
         if (DeviceSupport.PhoneOnlyLeftOutNotice(targets) is { } notice)
         {
-            StatusTextBlock.Text = notice;
+            ShowNotice(notice);
         }
         return targets.Where(machine => machine.IsPhone).ToList();
     }

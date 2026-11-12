@@ -82,6 +82,50 @@ public class RosterTests
         Assert.Empty(Roster.NewAddresses(roster, found));
     }
 
+    // The Master's own search (AddressSearchSchedule) moves only machines that
+    // aren't answering: a PC answering at its address stays, even when it
+    // answered the search from its other network card.
+    [Fact]
+    public void TheMastersOwnSearch_MovesOnlyOfflineMachines()
+    {
+        var roster = new[] { Machine("Aluno-2", "10.0.0.2", X), Machine("Celular 35F7", "192.168.15.13", Y) };
+        var found = new[]
+        {
+            new FoundMachine("Aluno-2", "10.0.0.77", X, "you", false),
+            new FoundMachine("Celular 35F7", "192.168.0.134", Y, "you", false, Midview.Protocol.DeviceKind.Android),
+        };
+
+        var changes = Roster.NewAddressesOfOffline(roster, found, index => index == 1);
+
+        Assert.Equal(1, changes.Single().Index);
+        Assert.Equal("192.168.0.134", changes.Single().Updated.HostAddress);
+        Assert.Equal(roster[1] with { HostAddress = "192.168.0.134" }, changes.Single().Updated);
+    }
+
+    // Matched by Agent only, as "Procurar na rede": an answer with the same
+    // name but another Agent moves nothing, and nothing found is ever added.
+    [Fact]
+    public void TheMastersOwnSearch_NeverMatchesByName_NorAddsMachines()
+    {
+        var roster = new[] { Machine("Aluno-2", "10.0.0.2", X), Machine("Aluno-3", "10.0.0.3", null) };
+        var found = new[]
+        {
+            new FoundMachine("Aluno-2", "10.0.0.9", Y, "you", false),
+            new FoundMachine("Aluno-3", "10.0.0.10", new string('C', 40), "you", false),
+            new FoundMachine("Aluno-4", "10.0.0.11", new string('D', 40), "none", false),
+        };
+
+        Assert.Empty(Roster.NewAddressesOfOffline(roster, found, _ => true));
+    }
+
+    [Fact]
+    public void OnlyEntriesKeptByAddress_WithTheirAgent_MoveBySearch()
+    {
+        Assert.True(Roster.MovesBySearch(Machine("Aluno-2", "10.0.0.2", X)));
+        Assert.False(Roster.MovesBySearch(Machine("Aluno-2", "ALUNO-02", X)));
+        Assert.False(Roster.MovesBySearch(Machine("Aluno-2", "10.0.0.2", null)));
+    }
+
     // How MainWindow takes a colleague's class: Place, one machine at a time,
     // in the colleague's order, touching only what changes.
     [Fact]

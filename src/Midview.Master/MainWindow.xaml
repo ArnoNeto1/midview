@@ -390,9 +390,10 @@
                                                 <!-- The screen is locked: a red pill over its corner, dark enough to
                                                      read over any screen; a muted "Bloqueando..." one while the lock
                                                      is still being put on. A lock that failed or that the student got
-                                                     out of is a warning under the card instead. -->
+                                                     out of is a warning under the card instead. A phone's tile is too
+                                                     narrow for the words: just the padlock, the words as its tooltip. -->
                                                 <Border x:Name="LockPill" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6"
-                                                        Padding="8,2" CornerRadius="10" BorderThickness="1">
+                                                        CornerRadius="10" BorderThickness="1">
                                                     <TextBlock FontSize="10.5" FontWeight="SemiBold">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -403,12 +404,16 @@
                                                                         <Setter Property="Text" Value="{x:Static local:ScreenLockText.Locking}" />
                                                                         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
                                                                     </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                                        <Setter Property="Text" Value="{x:Static local:ScreenLockText.PhonePill}" />
+                                                                    </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                     <Border.Style>
                                                         <Style TargetType="Border">
+                                                            <Setter Property="Padding" Value="8,2" />
                                                             <Setter Property="Background" Value="#E6341C26" />
                                                             <Setter Property="BorderBrush">
                                                                 <Setter.Value>
@@ -425,6 +430,10 @@
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding ScreenLockAlert}" Value="True">
                                                                     <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsPhone}" Value="True">
+                                                                    <Setter Property="Padding" Value="6,2" />
+                                                                    <Setter Property="ToolTip" Value="{Binding ScreenLockBadge}" />
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>

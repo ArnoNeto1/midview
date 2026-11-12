@@ -46,7 +46,7 @@ public static class Roster
         for (var i = 0; i < roster.Count; i++)
         {
             var entry = roster[i];
-            if (!IPAddress.TryParse(entry.HostAddress, out _))
+            if (!MovesBySearch(entry))
             {
                 continue;
             }
@@ -59,6 +59,18 @@ public static class Roster
         }
         return changes;
     }
+
+    // The search the Master makes by itself (AddressSearchSchedule) moves
+    // only machines that aren't answering where the list says: one that is
+    // stays put, even when it answered from another of its network cards.
+    public static IReadOnlyList<(int Index, KnownMachine Updated)> NewAddressesOfOffline(
+        IReadOnlyList<KnownMachine> roster, IReadOnlyList<FoundMachine> found, Func<int, bool> offline) =>
+        NewAddresses(roster, found).Where(change => offline(change.Index)).ToList();
+
+    // Whether a search can give this entry a new address: kept by IP
+    // address, with its Agent known (what an answer is matched by).
+    public static bool MovesBySearch(KnownMachine entry) =>
+        entry.AgentThumbprint is not null && IPAddress.TryParse(entry.HostAddress, out _);
 
     private static bool SameAgent(KnownMachine entry, string? agentThumbprint) =>
         entry.AgentThumbprint is not null && agentThumbprint is not null

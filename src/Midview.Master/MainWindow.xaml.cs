@@ -116,6 +116,7 @@ public partial class MainWindow : MidviewWindow
         UpdateEmptyHint();
         ShowClassLesson();
         _tiles.CollectionChanged += (_, _) => _machinesWindow?.ShowPhoneUpdateCard();
+        StartAddressSearch();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -184,7 +185,13 @@ public partial class MainWindow : MidviewWindow
         ViewButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.View);
         ControlButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.Control);
         UpdateActionButtons();
-        StatusTextBlock.Text = selected.Count switch
+        StatusTextBlock.Text = SelectionStatus();
+    }
+
+    private string SelectionStatus()
+    {
+        var selected = _selection.Selected;
+        return selected.Count switch
         {
             0 => string.Empty,
             1 => $"Selecionada: {selected[0].Name}",
@@ -680,6 +687,7 @@ public partial class MainWindow : MidviewWindow
     // brought back, or a new one from create.
     private void ShowOnce(string action, IEnumerable<KnownMachine> targets, Func<Window> create)
     {
+        ClearEarlierStatus(); // the window says how it goes (MainWindow.StatusBar.cs)
         var key = OpenOnce<Window>.Key(action, targets.Select(machine => machine.Name));
         if (_openWindows.TryGet(key, out var open))
         {
@@ -714,7 +722,7 @@ public partial class MainWindow : MidviewWindow
         notice = DeviceSupport.LeftOutNotice(targets, action);
         if (notice is not null)
         {
-            StatusTextBlock.Text = notice;
+            ShowNotice(notice);
         }
         targets = targets.Where(machine => DeviceSupport.Supports(machine.Kind, action)).ToList();
         return targets.Count > 0;
@@ -1032,7 +1040,7 @@ public partial class MainWindow : MidviewWindow
         }
         if (PhoneAppBlockText.LeftOutNotice(phones.Count) is { } notice)
         {
-            StatusTextBlock.Text = notice;
+            ShowNotice(notice);
         }
         targets = targets.Where(machine => !machine.IsPhone).ToList();
         if (targets.Count == 0)
@@ -1462,6 +1470,7 @@ public partial class MainWindow : MidviewWindow
     // One at a time: asking again brings it to the front.
     private async void OpenMachinesWindow(bool search)
     {
+        ClearEarlierStatus();
         var window = _machinesWindow;
         if (window is null)
         {
@@ -1582,23 +1591,6 @@ public partial class MainWindow : MidviewWindow
         }
         UpdateEmptyHint();
         SaveRoster();
-    }
-
-    // Called by MachinesWindow after a search: machines found at another
-    // address (see Roster.NewAddresses). Returns how many moved.
-    private int RefreshAddresses(IReadOnlyList<FoundMachine> found)
-    {
-        var changes = Roster.NewAddresses(_tiles.Select(tile => tile.Machine).ToList(), found);
-        foreach (var (index, updated) in changes)
-        {
-            RemoveTileAt(index);
-            InsertTile(index, updated);
-        }
-        if (changes.Count > 0)
-        {
-            SaveRoster();
-        }
-        return changes.Count;
     }
 
     // Never keeps Master from starting: at worst the grid starts empty and
@@ -1778,6 +1770,8 @@ public partial class MainWindow : MidviewWindow
 
     private void OnWindowClosed(object sender, EventArgs e)
     {
+        StopAddressSearch();
+
         // A size still settling is saved now.
         if (_saveTimer.IsEnabled)
         {

@@ -68,7 +68,12 @@
             </Border>
             <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12,10">
                 <RadioButton x:Name="AllowOnlyRadioButton" GroupName="PhoneMode">
-                    <TextBlock TextWrapping="Wrap" Text="Liberar só estes — todos os outros apps ficam cinza e não abrem (o Midview, a tela inicial, o telefone e as Configurações continuam funcionando)." />
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Text="Liberar só estes — todos os outros apps ficam cinza e não abrem." />
+                        <!-- What the phone never suspends (ProtectedApps on the phone): Android refuses to suspend the Play Store. -->
+                        <TextBlock x:Name="AlwaysOpenTextBlock" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,3,0,0"
+                                   Text="Sempre abrem: o Midview, a tela inicial, o telefone, as Configurações, a Play Store e o app de segurança do celular." />
+                    </StackPanel>
                 </RadioButton>
             </Border>
             <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"

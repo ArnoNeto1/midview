@@ -12,6 +12,10 @@ public static class ScreenLockText
     // red dot goes by this one, not by Locking).
     public const string Locked = "🔒 Tela bloqueada";
 
+    // The pill over a phone's narrow tile: the padlock alone ("Bloqueada"
+    // was cut to "Bloque…"); the badge's words go in its tooltip.
+    public const string PhonePill = "🔒";
+
     public static (string Text, bool Alert) Badge(bool locked, bool wasLocked, string detail) =>
         locked ? (Locked, false)
         : wasLocked ? ($"⚠ Saiu do bloqueio ({detail})", true)
