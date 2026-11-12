@@ -15,14 +15,16 @@ import android.webkit.WebView
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
+import io.github.arnoneto1.midview.agent.sites.BrowserCatalog
+import io.github.arnoneto1.midview.agent.sites.ChromePolicy
 import java.io.ByteArrayOutputStream
 import java.text.Collator
 import java.util.Locale
 
 // The phone's apps as the PackageManager sees them: what the student can open
 // (with its label and icon, for the teacher's list), what is never suspended
-// and what is suspended now.
-class InstalledApps(context: Context) : AppCatalog {
+// and what is suspended now; and its browsers (OtherBrowsers).
+class InstalledApps(context: Context) : AppCatalog, BrowserCatalog {
     private val app = context.applicationContext
     private val pm = app.packageManager
 
@@ -61,6 +63,16 @@ class InstalledApps(context: Context) : AppCatalog {
         )
         return ProtectedApps.resolve(candidates, inUse)
     }
+
+    // What opens a web address of any site: a site of its own would not
+    // match example.com.
+    override fun browsers(): Set<String> =
+        listOf("http://www.example.com/", "https://www.example.com/").flatMap { address ->
+            val view = Intent(Intent.ACTION_VIEW, Uri.parse(address)).addCategory(Intent.CATEGORY_BROWSABLE)
+            pm.queryIntentActivities(view, PackageManager.MATCH_ALL).map { it.activityInfo.packageName }
+        }.toSet()
+
+    override fun isChromeInstalled(): Boolean = isInstalled(ChromePolicy.PACKAGE)
 
     override fun isInstalled(pkg: String): Boolean =
         try {

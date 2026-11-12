@@ -68,6 +68,21 @@
                 android:resource="@xml/accessibility_capture" />
         </service>
 
+        <!-- "Bloquear a internet": the phone's always-on VPN, set by the
+             Device Owner, which lets nothing out but the agent. Only the
+             system may bind it (BIND_VPN_SERVICE). -->
+        <service
+            android:name=".sites.BlockVpnService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
+        </service>
+
         <!-- Android's request to see the screen, nothing of its own to show. -->
         <activity
             android:name=".screen.ConsentActivity"

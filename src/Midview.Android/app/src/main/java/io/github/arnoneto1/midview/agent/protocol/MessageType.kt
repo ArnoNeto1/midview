@@ -8,6 +8,14 @@ object MessageType {
     const val START_CONTROL = 3
     const val STOP_CONTROL = 4
     const val INPUT_EVENT = 6
+
+    // The teacher's "Bloquear sites" window, as on a PC: the internet as a
+    // whole (no payload), or one site (what the teacher typed, UTF-8). Each
+    // is acknowledged with a CommandAck of a single byte, 1 or 0.
+    const val BLOCK_INTERNET = 7
+    const val UNBLOCK_INTERNET = 8
+    const val BLOCK_DOMAIN = 9
+    const val UNBLOCK_DOMAIN = 10
     const val COMMAND_ACK = 11
     const val REQUEST_THUMBNAIL = 12
     const val THUMBNAIL_FRAME = 13

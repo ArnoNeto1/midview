@@ -1,6 +1,7 @@
 package io.github.arnoneto1.midview.agent.apps
 
 import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
 import org.junit.Assert.assertEquals
@@ -164,6 +165,10 @@ class AppSuspenderTest {
         override fun setLockTaskPackages(pkgs: List<String>) = Unit
         override fun setLockTaskFeatures(features: Int) = Unit
         override fun setPermittedAccessibilityServices(pkgs: List<String>?) = Unit
+        override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) = Unit
+        override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean = true
+        override fun alwaysOnVpn(): AlwaysOnVpn? = null
+        override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) = Unit
         override val sdkInt = 33
         override val debuggable = true
     }

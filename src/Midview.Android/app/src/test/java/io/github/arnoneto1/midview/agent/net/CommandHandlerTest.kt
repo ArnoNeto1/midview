@@ -13,6 +13,8 @@ import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
+import io.github.arnoneto1.midview.agent.sites.SiteBlockState
+import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,7 +38,10 @@ class CommandHandlerTest {
     private val applied = mutableListOf<PhoneAppPolicy>()
     private val appBlock by lazy { AppBlockStore(File(folder.newFolder(), "app-block.bin"), apply = { applied += it; null }) }
     private var phoneApps = listOf(PhoneApp("com.android.chrome", "Chrome", byteArrayOf(1, 2, 3)))
-    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock) { phoneApps } }
+    private val sitesApplied = mutableListOf<SiteBlockState>()
+    private var sitesWork = true
+    private val sites by lazy { SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { sitesApplied += it; sitesWork }) }
+    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites) { phoneApps } }
 
     private fun message(type: Int, payload: ByteArray = ByteArray(0)) = Message(type, payload)
 
@@ -90,8 +95,8 @@ class CommandHandlerTest {
 
     @Test fun unknownCommandGetsNotOnPhoneAck() {
         trusted.add(teacher)
-        // GetWakeAddress (22) and BlockInternet (7): PC commands.
-        val channel = FakeChannel(teacher, message(22), message(7, byteArrayOf(1, 2)))
+        // GetWakeAddress (22) and ClearChromeProfiles (91): PC commands.
+        val channel = FakeChannel(teacher, message(22), message(91, byteArrayOf(1, 2)))
         handler.handle(channel)
 
         assertEquals(listOf(MessageType.COMMAND_ACK, MessageType.COMMAND_ACK), channel.sent.map { it.type })
@@ -238,6 +243,52 @@ class CommandHandlerTest {
         handler.handle(channel)
         assertTrue(channel.sent.isEmpty())
         assertTrue(applied.isEmpty())
+    }
+
+    // As the Windows AgentServer: the site commands are acknowledged with a
+    // single byte, 1 or 0.
+    @Test fun siteCommandsAreAckedWithOneByte() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.BLOCK_DOMAIN, "YouTube.com".toByteArray()),
+            message(MessageType.BLOCK_DOMAIN, "not a domain".toByteArray()),
+            message(MessageType.BLOCK_INTERNET),
+            message(MessageType.UNBLOCK_INTERNET),
+            message(MessageType.UNBLOCK_DOMAIN, "facebook.com".toByteArray()),
+            message(MessageType.UNBLOCK_DOMAIN, "youtube.com".toByteArray()),
+        )
+        handler.handle(channel)
+
+        assertTrue(channel.sent.all { it.type == MessageType.COMMAND_ACK })
+        assertEquals(listOf(1, 0, 1, 1, 1, 1), channel.sent.map { it.payload.single().toInt() })
+        assertEquals(SiteBlockState.EMPTY, sites.current)
+        assertEquals(
+            listOf(
+                SiteBlockState(setOf("youtube.com"), false),
+                SiteBlockState(setOf("youtube.com"), true),
+                SiteBlockState(setOf("youtube.com"), false),
+                SiteBlockState(setOf("youtube.com"), false),
+                SiteBlockState.EMPTY,
+            ),
+            sitesApplied,
+        )
+    }
+
+    @Test fun aSiteBlockThePhoneCannotApplyIsAckedWithZero() {
+        trusted.add(teacher)
+        sitesWork = false
+        val channel = FakeChannel(teacher, message(MessageType.BLOCK_INTERNET))
+        handler.handle(channel)
+        assertEquals(0, channel.sent.single().payload.single().toInt())
+    }
+
+    @Test fun untrustedTeacherCannotBlockSites() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.BLOCK_INTERNET))
+        handler.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertTrue(sitesApplied.isEmpty())
     }
 
     private companion object {

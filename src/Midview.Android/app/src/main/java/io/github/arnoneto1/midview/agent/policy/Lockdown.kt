@@ -1,5 +1,7 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
+
 // What the school phone's locks need from Android's DevicePolicyManager,
 // behind an interface so the decisions are tested on the JVM.
 interface DevicePolicyGateway {
@@ -20,6 +22,17 @@ interface DevicePolicyGateway {
     // Suspends (or lifts the suspension of) apps; returns those Android
     // would not change.
     fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String>
+
+    // An app's managed configuration (Chrome's policies), each value a
+    // String, a Boolean or an Array<String>; empty clears it.
+    fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>)
+
+    // Hides (or shows again) an app; false when Android would not.
+    fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean
+
+    // The phone's always-on VPN (null: none), and setting it.
+    fun alwaysOnVpn(): AlwaysOnVpn?
+    fun setAlwaysOnVpn(vpn: AlwaysOnVpn?)
     fun isDeviceOwner(): Boolean
     val sdkInt: Int
 
@@ -29,7 +42,8 @@ interface DevicePolicyGateway {
 
 // The locks of a school phone, so a student cannot remove the agent or get
 // around it: no factory reset, no developer options or USB debugging, no
-// safe mode, no other users, no files over USB, the app cannot be
+// safe mode, no other users, no files over USB, no changing the private DNS
+// or the VPN (the internet block is the agent's VPN), the app cannot be
 // uninstalled, force-stopped nor have its data cleared. The teacher's
 // "Bloquear telas" is allowed too: this app alone may hold the phone in lock
 // task mode, with nothing of the system's left to reach (no home, recents,
@@ -88,14 +102,19 @@ class Lockdown(
         const val PACKAGE = "io.github.arnoneto1.midview.agent"
 
         // The values of UserManager.DISALLOW_FACTORY_RESET,
-        // DISALLOW_DEBUGGING_FEATURES, DISALLOW_SAFE_BOOT, DISALLOW_ADD_USER
-        // and DISALLOW_USB_FILE_TRANSFER.
+        // DISALLOW_DEBUGGING_FEATURES, DISALLOW_SAFE_BOOT, DISALLOW_ADD_USER,
+        // DISALLOW_USB_FILE_TRANSFER, DISALLOW_CONFIG_PRIVATE_DNS and
+        // DISALLOW_CONFIG_VPN. The last one keeps the student out of the VPN
+        // settings, where the agent's VPN is while the internet is blocked;
+        // Android still starts an always-on VPN the Device Owner sets.
         val RESTRICTIONS = listOf(
             "no_factory_reset",
             "no_debugging_features",
             "no_safe_boot",
             "no_add_user",
             "no_usb_file_transfer",
+            "disallow_config_private_dns",
+            "no_config_vpn",
         )
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,

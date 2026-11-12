@@ -10,6 +10,7 @@ import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
+import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
 import java.io.EOFException
 
 // The commands port (28900), as the Windows AgentServer: anyone may ask to
@@ -17,13 +18,15 @@ import java.io.EOFException
 // phone trusts, and from anyone else ends the connection unanswered. Any
 // certificate gets through the handshake, so this is what keeps strangers
 // out. A trusted teacher may send several messages on one connection.
-// appBlock holds the phone's app block; listApps reads the apps the student
-// can open (for the teacher's list).
+// appBlock holds the phone's app block; sites, the sites and internet the
+// teacher blocked; listApps reads the apps the student can open (for the
+// teacher's list).
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
     private val consent: ScreenConsent,
     private val appBlock: AppBlockStore,
+    private val sites: SiteBlockStore,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -69,6 +72,11 @@ class CommandHandler(
         }
         MessageType.GET_PHONE_APP_BLOCK -> Message(MessageType.PHONE_APP_BLOCK_STATUS, appBlock.current.encode())
         MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
+        // As the Windows AgentServer: the answer is the single byte 1 or 0.
+        MessageType.BLOCK_INTERNET, MessageType.UNBLOCK_INTERNET, MessageType.BLOCK_DOMAIN, MessageType.UNBLOCK_DOMAIN -> {
+            val done = sites.handle(message.type, message.payload)
+            Message(MessageType.COMMAND_ACK, byteArrayOf(if (done) 1 else 0))
+        }
         // Everything a PC does and a phone doesn't yet: the teacher reads why.
         else -> Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
     }

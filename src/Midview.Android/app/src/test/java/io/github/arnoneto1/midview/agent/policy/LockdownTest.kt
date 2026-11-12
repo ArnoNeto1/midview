@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +61,14 @@ class LockdownTest {
 
         override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> = emptyList()
 
+        override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) = Unit
+
+        override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean = true
+
+        override fun alwaysOnVpn(): AlwaysOnVpn? = null
+
+        override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) = Unit
+
         override fun isDeviceOwner(): Boolean = owner
     }
 
@@ -70,6 +79,8 @@ class LockdownTest {
         "no_safe_boot",
         "no_add_user",
         "no_usb_file_transfer",
+        "disallow_config_private_dns",
+        "no_config_vpn",
     )
 
     @Test fun appliesAllRestrictionsWhenDeviceOwner() {

@@ -37,6 +37,11 @@ import io.github.arnoneto1.midview.agent.screen.CaptureCadence
 import io.github.arnoneto1.midview.agent.screen.FrameCredit
 import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
 import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
+import io.github.arnoneto1.midview.agent.sites.BlockVpnService
+import io.github.arnoneto1.midview.agent.sites.InternetBlock
+import io.github.arnoneto1.midview.agent.sites.OtherBrowsers
+import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
+import io.github.arnoneto1.midview.agent.sites.SitePolicy
 import io.github.arnoneto1.midview.agent.status.StatusImage
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
 import java.io.File
@@ -165,7 +170,20 @@ class AgentService : Service() {
         val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
         val suspender = AppSuspender(installedApps, AndroidDevicePolicyGateway(this), log)
         val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
-        val commands = CommandHandler(trusted, pairing, consent, appBlock, installedApps::list)
+        // The site block: Chrome's policy and the internet block, kept the
+        // same way and applied again now. Other browsers are hidden, checked
+        // again with every app installed (the package watcher).
+        val policyGateway = AndroidDevicePolicyGateway(this)
+        val internet = InternetBlock(
+            policyGateway, File(filesDir, INTERNET_BLOCK_FILE),
+            startVpn = { BlockVpnService.start(this) },
+            stopVpn = { BlockVpnService.stop(this) },
+            log = log,
+        )
+        val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(policyGateway, internet, log)::apply, log = log)
+        sites.reapply()
+        val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,
@@ -188,7 +206,10 @@ class AgentService : Service() {
             val agentServer = TlsServer(identity, AGENT_PORT) { commands.handle(it) }
             val sessionServer = TlsServer(identity, SESSION_PORT) { thumbnails.handle(it) }
             tlsServers = listOf(agentServer, sessionServer)
-            packageWatcher = PackageWatcher(this) { appBlock.reapply() }.also { it.start() }
+            packageWatcher = PackageWatcher(this) {
+                appBlock.reapply()
+                otherBrowsers.apply()
+            }.also { it.start() }
             agentServer.start()
             sessionServer.start()
 
@@ -295,6 +316,9 @@ class AgentService : Service() {
         private const val SHOW_TIMEOUT_MILLIS = 3_000L
         private const val TRUSTED_MASTERS_FILE = "trusted-masters.txt"
         private const val APP_BLOCK_FILE = "app-block.bin"
+        private const val SITE_BLOCK_FILE = "site-block.txt"
+        private const val INTERNET_BLOCK_FILE = "internet-block.txt"
+        private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1

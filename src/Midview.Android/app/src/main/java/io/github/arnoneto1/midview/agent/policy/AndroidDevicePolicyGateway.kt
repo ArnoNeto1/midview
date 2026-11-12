@@ -4,9 +4,12 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 
 // DevicePolicyManager for Lockdown, as the app's AdminReceiver.
 class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
@@ -48,6 +51,35 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> =
         dpm.setPackagesSuspended(admin, pkgs.toTypedArray(), suspended).toList()
+
+    override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) {
+        val bundle = Bundle()
+        for ((key, value) in restrictions) {
+            when (value) {
+                is String -> bundle.putString(key, value)
+                is Boolean -> bundle.putBoolean(key, value)
+                is Array<*> -> bundle.putStringArray(key, value.map { it as String }.toTypedArray())
+                else -> throw IllegalArgumentException("Restriction $key of an unknown type")
+            }
+        }
+        dpm.setApplicationRestrictions(admin, pkg, bundle)
+    }
+
+    override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean =
+        dpm.setApplicationHidden(admin, pkg, hidden)
+
+    override fun alwaysOnVpn(): AlwaysOnVpn? {
+        val pkg = dpm.getAlwaysOnVpnPackage(admin) ?: return null
+        return AlwaysOnVpn(pkg, dpm.isAlwaysOnVpnLockdownEnabled(admin))
+    }
+
+    override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) {
+        try {
+            dpm.setAlwaysOnVpnPackage(admin, vpn?.pkg, vpn?.lockdown ?: false)
+        } catch (e: PackageManager.NameNotFoundException) {
+            throw IllegalStateException("The VPN app ${vpn?.pkg} is not installed", e)
+        }
+    }
 
     // Whether "Bloquear telas" can hold this phone: the Device Owner, with
     // lock task mode allowed for the app (Lockdown).
