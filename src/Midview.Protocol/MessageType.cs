@@ -351,15 +351,6 @@ public enum MessageType : byte
     OptimizePhone = 98,
     PhoneOptimizeReport = 99,
 
-    // Master -> Android agent, over TLS, from a teacher it doesn't trust yet:
-    // a PhoneClaimRequest with a fresh nonce and the teacher's name, sent to
-    // the phone whose discovery reply carried the claim id of this Master's QR.
-    // The QR's token is never sent. The phone answers PairDone (a PairingResult)
-    // whose Proof is HMAC-SHA256 keyed by the token over the nonce and both
-    // thumbprints (PhoneClaim.Proof), and now trusts the Master; or it answers
-    // PairRefused (why, in Portuguese). The token works once.
-    ClaimPhone = 101,
-
     // Master -> Android agent, from a trusted teacher only: erase the phone
     // and set it up again ("Apagar e preparar de novo"), no payload. Answered
     // with one CommandAck carrying a CommandResult. An agent from before this

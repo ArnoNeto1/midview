@@ -4,7 +4,7 @@ using System.Windows.Threading;
 
 namespace Midview.Master;
 
-// The numbered lists of the pages (the taps, "ainda não apareceu") and
+// The numbered lists of the pages (the taps) and
 // "Deu errado?", which opens the helps of the page.
 public partial class PreparePhonesWindow
 {
@@ -32,15 +32,6 @@ public partial class PreparePhonesWindow
         }
     }
 
-    private void FillNumbered(Panel panel, IReadOnlyList<GuideHelp> helps)
-    {
-        panel.Children.Clear();
-        for (var i = 0; i < helps.Count; i++)
-        {
-            panel.Children.Add(NumberedRow(i + 1, HelpBlock(helps[i])));
-        }
-    }
-
     private FrameworkElement NumberedRow(int number, FrameworkElement content)
     {
         var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
@@ -64,9 +55,8 @@ public partial class PreparePhonesWindow
         return block;
     }
 
-    // "Deu errado?" for this page: the step's helps (the Wi-Fi's; the six
-    // taps' while waiting for the phone), and the fixed helps they point to,
-    // so none is a dead end.
+    // "Deu errado?" for this page: the step's helps (the Wi-Fi's), and the
+    // fixed helps they point to, so none is a dead end.
     private void ShowHelp()
     {
         var helps = HelpsOfPage();
@@ -91,7 +81,6 @@ public partial class PreparePhonesWindow
         {
             SetupPage.Wifi => PhoneSetupGuide.WifiHelp.ToList(),
             SetupPage.Step => _progress.Step!.Help.ToList(),
-            SetupPage.Waiting => PhoneSetupGuide.Steps.Single(step => step.Id == "seis-toques").Help.ToList(),
             _ => new List<GuideHelp>(),
         };
         if (_progress.Page == SetupPage.ConfirmRedo

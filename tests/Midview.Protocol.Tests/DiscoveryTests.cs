@@ -106,11 +106,15 @@ public class DiscoveryTests
     }
 
     [Fact]
-    public void Reply_claim_round_trips_and_is_absent_when_null()
+    public void A_reply_from_an_older_phone_with_a_claim_is_still_read_and_the_claim_ignored()
     {
-        var r = new DiscoveryReply(Guid.NewGuid(), "Celular 07", "AB", TeacherStatus.None, false, DeviceKind.Android, "0123456789ABCDEF");
-        Assert.Equal("0123456789ABCDEF", Discovery.ParseReply(Discovery.Encode(r))!.ClaimId);
-        Assert.DoesNotContain("claim", Encoding.UTF8.GetString(Discovery.Encode(r with { ClaimId = null })));
-        Assert.Null(Discovery.ParseReply(Discovery.Encode(r with { ClaimId = null }))!.ClaimId);
+        var json = "{\"midview\":1,\"probe\":\"" + Probe + "\",\"name\":\"Celular 07\",\"agent\":\"" + Agent
+                   + "\",\"teachers\":\"none\",\"newTeacherOpen\":false,\"kind\":\"android\",\"claim\":\"0123456789ABCDEF\"}";
+
+        var reply = Discovery.ParseReply(Encoding.UTF8.GetBytes(json));
+
+        Assert.NotNull(reply);
+        Assert.Equal("Celular 07", reply!.Name);
+        Assert.Equal(DeviceKind.Android, reply.Kind);
     }
 }

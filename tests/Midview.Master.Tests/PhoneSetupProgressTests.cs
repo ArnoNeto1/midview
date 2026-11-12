@@ -3,8 +3,6 @@ using Xunit;
 
 public class PhoneSetupProgressTests
 {
-    private static readonly DateTimeOffset Shown = new(2026, 11, 11, 14, 0, 0, TimeSpan.Zero);
-
     private static int IndexOf(string id) =>
         PhoneSetupGuide.Steps.Select(step => step.Id).ToList().IndexOf(id);
 
@@ -17,15 +15,21 @@ public class PhoneSetupProgressTests
         return progress;
     }
 
-    // Through every step up to the six taps, with the QR shown.
-    private static PhoneSetupProgress WaitingFor07()
+    // Through every step up to the six taps (the last one of the guide).
+    private static PhoneSetupProgress AtSixTaps()
     {
         var progress = AtNumber();
         while (progress.StepId != "seis-toques")
         {
             progress.Next();
         }
-        progress.QrShown(Shown);
+        return progress;
+    }
+
+    // Past the last step: the phone 07 is ready.
+    private static PhoneSetupProgress ReadyFor07()
+    {
+        var progress = AtSixTaps();
         progress.Next();
         return progress;
     }
@@ -116,124 +120,26 @@ public class PhoneSetupProgressTests
         Assert.Equal("conta-mi", progress.StepId);
     }
 
-    // "Apareceu um erro no celular?" on the waiting page: no need to wait 15 minutes.
     [Fact]
-    public void Waiting_can_go_to_not_appeared_right_away()
+    public void Next_on_the_last_step_of_the_guide_is_ready()
     {
-        var progress = WaitingFor07();
+        var progress = AtSixTaps();
 
-        progress.NotAppearedNow();
+        progress.Next();
 
-        Assert.Equal(SetupPage.NotAppeared, progress.Page);
+        Assert.Equal(SetupPage.Ready, progress.Page);
+        Assert.Equal("Celular 07", progress.Name);
     }
 
     [Fact]
-    public void Not_appeared_now_does_nothing_outside_the_wait()
+    public void Changing_the_wifi_on_the_last_step_comes_back_to_it()
     {
-        var progress = AtNumber();
-
-        progress.NotAppearedNow();
-
-        Assert.Equal("numero", progress.StepId);
-    }
-
-    // The Wi-Fi changed after the QR: back to the six taps, for a new QR.
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Changing_the_wifi_while_waiting_comes_back_to_the_six_taps(bool late)
-    {
-        var progress = WaitingFor07();
-        if (late)
-        {
-            progress.Tick(Shown + TimeSpan.FromMinutes(15));
-        }
+        var progress = AtSixTaps();
 
         progress.ChangeWifi();
         progress.Next();
 
         Assert.Equal("seis-toques", progress.StepId);
-    }
-
-    [Fact]
-    public void The_six_taps_need_the_qr_before_waiting()
-    {
-        var progress = AtNumber();
-        while (progress.StepId != "seis-toques")
-        {
-            progress.Next();
-        }
-
-        progress.Next();
-        Assert.Equal("seis-toques", progress.StepId);
-
-        progress.QrShown(Shown);
-        progress.Next();
-        Assert.Equal(SetupPage.Waiting, progress.Page);
-    }
-
-    [Fact]
-    public void Tick_before_15_minutes_keeps_waiting()
-    {
-        var progress = WaitingFor07();
-
-        progress.Tick(Shown + TimeSpan.FromMinutes(14));
-
-        Assert.Equal(SetupPage.Waiting, progress.Page);
-    }
-
-    [Fact]
-    public void Tick_after_15_minutes_says_it_has_not_appeared()
-    {
-        var progress = WaitingFor07();
-
-        progress.Tick(Shown + TimeSpan.FromMinutes(15));
-
-        Assert.Equal(SetupPage.NotAppeared, progress.Page);
-    }
-
-    [Fact]
-    public void Another_phone_joining_changes_nothing()
-    {
-        var progress = WaitingFor07();
-
-        Assert.False(progress.Joined("Celular 08"));
-
-        Assert.Equal(SetupPage.Waiting, progress.Page);
-    }
-
-    [Fact]
-    public void The_phone_being_prepared_joining_makes_it_ready()
-    {
-        var progress = WaitingFor07();
-
-        Assert.True(progress.Joined("Celular 07"));
-
-        Assert.Equal(SetupPage.Ready, progress.Page);
-    }
-
-    [Fact]
-    public void It_is_ready_even_from_the_not_appeared_page_or_the_qr()
-    {
-        var late = WaitingFor07();
-        late.Tick(Shown + TimeSpan.FromMinutes(20));
-        Assert.True(late.Joined("Celular 07"));
-        Assert.Equal(SetupPage.Ready, late.Page);
-
-        var onQr = WaitingFor07();
-        onQr.Back();
-        Assert.True(onQr.Joined("Celular 07"));
-        Assert.Equal(SetupPage.Ready, onQr.Page);
-    }
-
-    [Fact]
-    public void A_phone_with_the_same_name_before_any_qr_is_not_this_one()
-    {
-        var progress = AtNumber();
-        progress.Next();
-
-        Assert.False(progress.Joined("Celular 07"));
-        Assert.Equal("bateria", progress.StepId);
     }
 
     [Fact]
@@ -246,7 +152,6 @@ public class PhoneSetupProgressTests
 
         Assert.Equal("seis-toques", progress.StepId);
         Assert.Equal("07", progress.Number);
-        Assert.Null(progress.QrShownAt);
     }
 
     [Fact]
@@ -296,37 +201,21 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
-    public void Restart_goes_back_to_the_reset_with_a_new_qr_to_come()
-    {
-        var progress = WaitingFor07();
-        progress.Tick(Shown + TimeSpan.FromMinutes(15));
-
-        progress.Restart();
-
-        Assert.Equal("restaurar", progress.StepId);
-        Assert.Equal("07", progress.Number);
-        Assert.Null(progress.QrShownAt);
-    }
-
-    [Fact]
     public void Again_starts_the_next_phone_at_the_number()
     {
-        var progress = WaitingFor07();
-        progress.Joined("Celular 07");
+        var progress = ReadyFor07();
 
         progress.Again();
 
         Assert.Equal("numero", progress.StepId);
         Assert.Null(progress.Number);
-        Assert.Null(progress.QrShownAt);
         Assert.False(progress.OffersWipe);
     }
 
     [Fact]
     public void Ready_text_counts_against_the_total()
     {
-        var progress = WaitingFor07();
-        progress.Joined("Celular 07");
+        var progress = ReadyFor07();
 
         Assert.Equal("Celular 07 pronto ✓ (3 de 11)", progress.ReadyText(phonesInClass: 3, total: 11));
     }
@@ -334,8 +223,7 @@ public class PhoneSetupProgressTests
     [Fact]
     public void Ready_text_without_a_total_counts_the_phones_in_the_class()
     {
-        var progress = WaitingFor07();
-        progress.Joined("Celular 07");
+        var progress = ReadyFor07();
 
         Assert.Equal("Celular 07 pronto ✓ (3 celulares na turma)", progress.ReadyText(phonesInClass: 3, total: null));
         Assert.Equal("Celular 07 pronto ✓ (1 celular na turma)", progress.ReadyText(phonesInClass: 1, total: null));
@@ -370,21 +258,6 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
-    public void A_wiped_phone_does_not_offer_the_wipe_again_after_waiting_and_going_back()
-    {
-        var progress = OfferedWipe();
-        progress.WipeStarted();
-        progress.WipeSucceeded();
-        progress.QrShown(Shown);
-
-        progress.Next();
-        progress.Back();
-
-        Assert.Equal("seis-toques", progress.StepId);
-        Assert.Equal(WipeState.Done, progress.Wipe);
-    }
-
-    [Fact]
     public void A_failed_wipe_keeps_its_reason_and_can_try_again()
     {
         var progress = OfferedWipe();
@@ -400,22 +273,7 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
-    public void After_a_failed_wipe_the_way_forward_is_the_reset_step_without_the_offer()
-    {
-        var progress = OfferedWipe();
-        progress.WipeStarted();
-        progress.WipeFailed("sem resposta");
-
-        progress.Restart();
-
-        Assert.Equal("restaurar", progress.StepId);
-        Assert.False(progress.OffersWipe);
-        Assert.Equal(WipeState.None, progress.Wipe);
-        Assert.Null(progress.WipeFailure);
-    }
-
-    [Fact]
-    public void A_phone_restored_by_hand_after_a_failed_wipe_stays_on_the_six_taps_with_a_new_qr()
+    public void A_phone_restored_by_hand_after_a_failed_wipe_stays_on_the_six_taps()
     {
         var progress = OfferedWipe();
         progress.WipeStarted();
@@ -426,7 +284,6 @@ public class PhoneSetupProgressTests
         Assert.Equal("seis-toques", progress.StepId);
         Assert.Equal(WipeState.None, progress.Wipe);
         Assert.Null(progress.WipeFailure);
-        Assert.Null(progress.QrShownAt);
     }
 
     [Fact]

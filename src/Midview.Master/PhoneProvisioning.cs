@@ -1,15 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-
 namespace Midview.Master;
 
-// The text of the QR code a factory-reset Android phone scans on its first
-// screen to become a Midview phone: it names the Midview app, where to
-// download it, the lab Wi-Fi to join first, and keeps the phone's own apps.
+// What it takes to turn a factory-reset Android phone into a Midview phone:
+// the Midview app, where to download it, and the gates that say the phone
+// preparation is ready to be offered.
 public static class PhoneProvisioning
 {
-    private const string Extra = "android.app.extra.";
-
     public const string AgentPackage = "io.github.arnoneto1.midview.agent";
 
     public const string AdminComponent = AgentPackage + "/.AdminReceiver";
@@ -27,48 +22,14 @@ public static class PhoneProvisioning
     public static bool IsReadyWith(string checksum) =>
         !string.IsNullOrWhiteSpace(checksum) && checksum != "PREENCHER-NA-TASK-9";
 
-    // Second gate: the phone app that answers ClaimPhone (joins the class) and
-    // WipePhone (erases the phone) is released. The Android agent plan's
-    // claim and wipe tasks flip this to true when that APK ships; until then
-    // a phone prepared here could never join the class.
-    public const bool ClaimsReady = false;
+    // Second gate: the phone is prepared over a USB cable (the cable path of
+    // the assistant). Until that path is built, the wizard stays hidden.
+    public const bool CableReady = false;
 
     // The wizard button, the "Preparar celular..." link and the "Apagar e
     // preparar de novo" menu item need both gates.
-    public static bool WizardReady => WizardReadyWith(SignatureChecksum, ClaimsReady);
+    public static bool WizardReady => WizardReadyWith(SignatureChecksum, CableReady);
 
-    public static bool WizardReadyWith(string checksum, bool claimsReady) =>
-        claimsReady && IsReadyWith(checksum);
-
-    // How long the one-use proof in a QR stays valid.
-    public static readonly TimeSpan ClaimLifetime = TimeSpan.FromHours(1);
-
-    // The QR's JSON, with the phone's number, the one-use token and the
-    // Master's certificate thumbprint handed to the phone app as admin extras.
-    // Throws ArgumentException when the Wi-Fi name is empty; quotes, accents
-    // and ";" in the name or password are escaped by the JSON.
-    public static string QrJson(string ssid, string password, string number, string token, string masterThumbprint)
-    {
-        if (string.IsNullOrWhiteSpace(ssid))
-        {
-            throw new ArgumentException("O nome do Wi-Fi não pode ficar vazio.", nameof(ssid));
-        }
-        var root = new JsonObject
-        {
-            [Extra + "PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME"] = AdminComponent,
-            [Extra + "PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION"] = ApkUrl,
-            [Extra + "PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM"] = SignatureChecksum,
-            [Extra + "PROVISIONING_WIFI_SSID"] = ssid,
-            [Extra + "PROVISIONING_WIFI_PASSWORD"] = password ?? "",
-            [Extra + "PROVISIONING_WIFI_SECURITY_TYPE"] = "WPA",
-            [Extra + "PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED"] = true,
-            [Extra + "PROVISIONING_ADMIN_EXTRAS_BUNDLE"] = new JsonObject
-            {
-                ["midview.number"] = number,
-                ["midview.token"] = token,
-                ["midview.master"] = masterThumbprint.ToUpperInvariant(),
-            },
-        };
-        return root.ToJsonString(new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
-    }
+    public static bool WizardReadyWith(string checksum, bool cableReady) =>
+        cableReady && IsReadyWith(checksum);
 }

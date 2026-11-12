@@ -11,7 +11,7 @@ public partial class PreparePhonesWindow
 {
     // Called by ShowStep (so, on a step page) and when a wipe changes.
     // The wipe offer, or what became of it, and what the six taps page shows
-    // with it: the steps and the QR assume the phone is at "Bem-vindo", so
+    // with it: the steps assume the phone is at "Bem-vindo", so
     // after a failed wipe the page shows only the way forward.
     private void ShowWipe()
     {
@@ -32,7 +32,6 @@ public partial class PreparePhonesWindow
         var failed = state == WipeState.Failed;
         WipeCard.Visibility = Shown(state != WipeState.None);
         StepBody.Visibility = Shown(!failed);
-        QrCard.Visibility = Shown(!failed);
         WipeText.Text = state switch
         {
             WipeState.Offered => $"O {name} ainda está ligado e na turma. O Midview apaga o celular daqui e ele volta ao \"Bem-vindo\" sozinho.",
@@ -54,8 +53,6 @@ public partial class PreparePhonesWindow
         // After a failed wipe the footer's button says the phone was restored by hand.
         Footer(back: _progress.StepIndex > 0, next: failed ? "Já restaurei, apareceu o Bem-vindo" : step.NextText, primary: !failed);
         ShowHelp(); // the failure adds "Restaurar sem o PIN" to the helps
-        // The card got shorter or longer: the QR takes what is left.
-        Dispatcher.BeginInvoke(FitQr, DispatcherPriority.Loaded);
     }
 
     // The question before wiping; replaced only by a visual check that cannot answer a dialog.

@@ -8,7 +8,7 @@
     <DockPanel Margin="24,18,24,18">
         <local:DialogHeader DockPanel.Dock="Top" Icon="&#xE8EA;" Heading="Preparar celulares" Accent="{StaticResource ConfigurarBrush}" />
 
-        <!-- Where the teacher is, and the Wi-Fi the QR carries ("trocar" goes back to it). -->
+        <!-- Where the teacher is, and the lab Wi-Fi ("trocar" goes back to it). -->
         <DockPanel DockPanel.Dock="Top" Margin="0,10,0,0">
             <TextBlock x:Name="WifiLine" DockPanel.Dock="Right" Style="{StaticResource Hint}" TextWrapping="NoWrap"
                        TextTrimming="CharacterEllipsis" MaxWidth="240" Margin="12,0,0,0">
@@ -49,7 +49,7 @@
                 <!-- One step of PhoneSetupGuide -->
                 <StackPanel x:Name="StepPage">
                     <!-- "Apagar e preparar de novo": the number is a phone of the class, online. Kept to a few
-                         lines (a line once started) so the QR below stays in sight. -->
+                         lines (a line once started). -->
                     <Border x:Name="WipeCard" Style="{StaticResource Card}" Margin="0,0,0,10">
                         <DockPanel>
                             <StackPanel x:Name="WipeButtons" Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="12,0,0,0">
@@ -102,66 +102,12 @@
                             </StackPanel>
                         </StackPanel>
                     </Grid>
-
-                    <!-- seis-toques: the QR with this phone's number and a one-use proof -->
-                    <Border x:Name="QrCard" Style="{StaticResource Card}" Margin="0,14,0,0">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <!-- Light on purpose: a QR code needs a light margin around it to be read. -->
-                            <!-- The code's own white border (4 squares) is in the image; this only rounds it.
-                                 Layout rounding keeps the image on whole screen pixels (FitQr). -->
-                            <Border Background="#FFFFFF" CornerRadius="8" Padding="4" VerticalAlignment="Top" UseLayoutRounding="True">
-                                <Image x:Name="QrImage" Width="320" Height="320" RenderOptions.BitmapScalingMode="NearestNeighbor"
-                                       SnapsToDevicePixels="True" />
-                            </Border>
-                            <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                                <TextBlock x:Name="QrText" TextWrapping="Wrap" />
-                                <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0"
-                                           Text="Aproxime o celular da tela, a um palmo de distância." />
-                                <TextBlock x:Name="QrWarningText" Style="{StaticResource WarningText}" FontSize="12" Margin="0,8,0,0" />
-                            </StackPanel>
-                        </Grid>
-                    </Border>
                 </StackPanel>
 
                 <!-- Já existe um Celular 07 -->
                 <StackPanel x:Name="ConfirmRedoPage">
                     <TextBlock x:Name="ConfirmRedoTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock x:Name="ConfirmRedoHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
-                </StackPanel>
-
-                <!-- Esperando o Celular 07 -->
-                <StackPanel x:Name="WaitingPage">
-                    <TextBlock Text="&#xE823;" FontFamily="{StaticResource IconFont}" FontSize="36" Foreground="{StaticResource AccentBrush}"
-                               Margin="0,4,0,12" HorizontalAlignment="Left" />
-                    <TextBlock x:Name="WaitingTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0"
-                               Text="O celular está entrando no Wi-Fi e baixando o Midview; isso leva alguns minutos." />
-                    <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0"
-                               Text="Se o celular mostrar telas pedindo para aceitar, toque em &quot;Aceitar&quot; ou &quot;Continuar&quot; até aparecer a tela do Midview." />
-                    <TextBlock x:Name="WaitingJoinText" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
-                    <TextBlock FontSize="13" Margin="0,14,0,0">
-                        <Hyperlink Click="OnNotAppearedNowClicked">Apareceu um erro no celular?</Hyperlink>
-                    </TextBlock>
-                </StackPanel>
-
-                <!-- O Celular 07 ainda não apareceu -->
-                <StackPanel x:Name="NotAppearedPage">
-                    <TextBlock x:Name="NotAppearedTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,12" Text="Confira, nesta ordem:" />
-                    <StackPanel x:Name="NotAppearedList" />
-                    <Border Style="{StaticResource Card}" Margin="0,6,0,0">
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource CardTitle}" Text="Se o celular terminar depois de 1 hora" />
-                            <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,4,0,0"
-                                       Text="O código vale por 1 hora. Se o celular terminar depois disso, ele não entra sozinho na turma: abra &quot;Máquinas da sala&quot;, use &quot;Procurar e parear&quot;, escolha o celular e confira o código de 6 dígitos que aparece nele." />
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,12,0,0"
-                               Text="O Midview continua esperando: se o celular aparecer, esta tela muda sozinha." />
                 </StackPanel>
 
                 <!-- Celular 07 pronto -->

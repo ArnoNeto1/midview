@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace Midview.Master;
 
-// The lab Wi-Fi (name and password) the "Preparar celular" QR carries, asked
+// The lab Wi-Fi (name and password) the "Preparar celular" assistant keeps, asked
 // once and remembered. On disk it exists only as a DPAPI CurrentUser blob, like
 // the admin password: another Windows user (or PC) can't open it.
 public static class PhoneWifiFile

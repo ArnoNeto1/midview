@@ -162,13 +162,10 @@ public class PairingTests
     }
 
     [Fact]
-    public void PairingResult_decodes_with_and_without_proof()
+    public void PairingResult_ignores_a_proof_from_an_older_phone()
     {
-        var withProof = new PairingResult("Cel 01", Agent, null, DeviceKindText.AndroidWire, "p-roof");
-        Assert.Equal(withProof, PairingResult.Decode(withProof.Encode()));
-        var without = new PairingResult("ALUNO-01", Agent, null);
-        Assert.DoesNotContain("proof", Encoding.UTF8.GetString(without.Encode()));
-        Assert.Null(PairingResult.Decode(without.Encode())!.Proof);
-        Assert.Equal("x", PairingResult.Decode(Encoding.UTF8.GetBytes("{\"name\":\"a\",\"session\":\"b\",\"mac\":null,\"proof\":\"x\"}"))!.Proof);
+        var result = PairingResult.Decode(Encoding.UTF8.GetBytes("{\"name\":\"a\",\"session\":\"b\",\"mac\":null,\"proof\":\"x\"}"));
+        Assert.Equal("a", result!.Name);
+        Assert.DoesNotContain("proof", Encoding.UTF8.GetString(new PairingResult("ALUNO-01", Agent, null).Encode()));
     }
 }

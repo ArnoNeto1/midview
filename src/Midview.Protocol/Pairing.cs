@@ -81,9 +81,7 @@ public sealed record PairingResult(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("session")] string SessionThumbprint,
     [property: JsonPropertyName("mac")] string? MacAddress,
-    [property: JsonPropertyName("kind"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null,
-    // Only a phone answering ClaimPhone sends one (see PhoneClaim.Proof).
-    [property: JsonPropertyName("proof"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Proof = null)
+    [property: JsonPropertyName("kind"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Kind = null)
 {
     // Old Agents send no kind: they are Windows machines.
     [JsonIgnore]

@@ -4,8 +4,7 @@ using System.Windows.Controls;
 namespace Midview.Master;
 
 // "Preparar celulares" (PreparePhonesWindow): opened by the big button of the
-// empty "Celulares" filter and by the link in "Máquinas da sala". It hears
-// from here when a prepared phone joins the class (PhoneJoined).
+// empty "Celulares" filter and by the link in "Máquinas da sala".
 public partial class MainWindow
 {
     private PreparePhonesWindow? _preparePhonesWindow;
@@ -23,18 +22,11 @@ public partial class MainWindow
         }
 
         var window = new PreparePhonesWindow(
-            _masterCertificate.Thumbprint, () => _tiles.Count(tile => tile.Machine.IsPhone), PhoneOnline, KickPhoneClaims,
-            WipePhoneNamed)
+            () => _tiles.Count(tile => tile.Machine.IsPhone), PhoneOnline, WipePhoneNamed)
         {
             Owner = this,
         };
-        Action<KnownMachine> joined = machine => window.PhoneJoined(machine.Name);
-        PhoneJoined += joined;
-        window.Closed += (_, _) =>
-        {
-            PhoneJoined -= joined;
-            _preparePhonesWindow = null;
-        };
+        window.Closed += (_, _) => _preparePhonesWindow = null;
         _preparePhonesWindow = window;
         OwnedWindow.ReturnToOwnerWhenClosed(window);
         window.Show();
@@ -68,13 +60,6 @@ public partial class MainWindow
             || !PhoneWipe.CanWipe(tile.Machine, tile.Presence == TilePresence.Online)
             || PhoneWipe.NumberOf(tile.Machine.Name) is not { } number
             || !PhoneWipe.Confirm(this, tile.Machine.Name))
-        {
-            return;
-        }
-        // The open assistant is waiting for another phone: StartAt would drop it.
-        if (_preparePhonesWindow?.WaitingForName is { } waiting
-            && !string.Equals(waiting, tile.Machine.Name, StringComparison.OrdinalIgnoreCase)
-            && !PhoneWipe.ConfirmSwitch(this, waiting, tile.Machine.Name))
         {
             return;
         }

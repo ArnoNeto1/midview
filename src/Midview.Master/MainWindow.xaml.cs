@@ -24,7 +24,6 @@ public partial class MainWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate = MasterIdentity.LoadOrCreate(MasterIdentity.DefaultCertificatePath);
     private readonly ObservableCollection<MachineTile> _tiles = new();
-    private PhoneClaimWatcher? _phoneClaims;
     private readonly Dictionary<MachineTile, ThumbnailPoller> _pollers = new();
 
     // At most one conversation per machine: asking again brings the open
@@ -116,47 +115,6 @@ public partial class MainWindow : MidviewWindow
         }
         UpdateEmptyHint();
         ShowClassLesson();
-        StartPhoneClaims();
-    }
-
-    // The assistant that prepares phones listens here for a prepared phone
-    // joining the class (see PhoneClaimWatcher).
-    public event Action<KnownMachine>? PhoneJoined;
-
-    // The assistant calls this when it shows a QR, to look right away.
-    public void KickPhoneClaims() => _phoneClaims?.Kick();
-
-    private void StartPhoneClaims()
-    {
-        var thumbprint = _masterCertificate.Thumbprint;
-        _phoneClaims = new PhoneClaimWatcher(
-            () => DiscoveryClient.Search(
-                thumbprint, WakeOnLanSender.DiscoveryTargets(WakeOnLanSender.LocalNetworks(), Discovery.Port), Discovery.ListenTime),
-            (found, pending) => PhoneClaimer.Claim(found.Address, _masterCertificate, Environment.MachineName, pending.Token, pending.Number),
-            machine => Dispatcher.Invoke(() => AddJoinedPhone(machine)),
-            () => DateTimeOffset.UtcNow);
-    }
-
-    // A phone with the same name (the same one, wiped and prepared again)
-    // gives its tile to the new entry; a computer with that name is left to
-    // Roster.Place as for any pairing.
-    private void AddJoinedPhone(KnownMachine machine)
-    {
-        var roster = _tiles.Select(tile => tile.Machine).ToList();
-        var kept = PhoneJoinRoster.ReplacingSameName(roster, machine);
-        for (var i = roster.Count - 1; i >= 0; i--)
-        {
-            if (!kept.Contains(roster[i]))
-            {
-                RemoveTileAt(i);
-            }
-        }
-        if (PhoneJoinRoster.AddAndSave(() => AddMachines(new[] { machine })) is { } saveError)
-        {
-            // The phone is in the grid and trusts this PC; only the file failed.
-            StatusTextBlock.Text = saveError;
-        }
-        PhoneJoined?.Invoke(machine);
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -1856,6 +1814,5 @@ public partial class MainWindow : MidviewWindow
         // host closes first, so no colleague's command reaches a sync stopping.
         _classRole.Dispose();
         _classSync.Dispose();
-        _phoneClaims?.Dispose();
     }
 }
