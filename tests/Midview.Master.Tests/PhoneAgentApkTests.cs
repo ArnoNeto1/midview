@@ -149,6 +149,48 @@ public sealed class PhoneAgentApkTests : IDisposable
         Assert.Empty(Directory.GetFiles(_folder));
     }
 
+    // The connection drops in the middle: the teacher reads Portuguese, never
+    // .NET's English message, and nothing is kept.
+    [Fact]
+    public async Task A_download_that_drops_says_it_did_not_finish()
+    {
+        var github = new FakeGitHub(Release(), _apk) { ApkStream = () => new DroppingStream(_apk, after: 1000) };
+        using var client = Client(github);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => PhoneAgentApk.ForVersionAsync(V, client, _folder, CancellationToken.None));
+
+        Assert.Equal("o download do app do celular não terminou (confira a internet deste PC)", error.Message);
+        Assert.Empty(Directory.GetFiles(_folder));
+    }
+
+    // The connection stays open but nothing more arrives: the download gives
+    // up after the read timeout (60 s in the program) with the same text.
+    [Fact]
+    public async Task A_download_that_stalls_gives_up_with_the_same_text()
+    {
+        var github = new FakeGitHub(Release(), _apk) { ApkStream = () => new StallingStream(_apk, after: 1000) };
+        using var client = Client(github);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            PhoneAgentApk.ForVersionAsync(V, client, _folder, CancellationToken.None, readTimeout: TimeSpan.FromMilliseconds(200)));
+
+        Assert.Equal("o download do app do celular não terminou (confira a internet deste PC)", error.Message);
+        Assert.Empty(Directory.GetFiles(_folder));
+    }
+
+    // The teacher's own cancel is not a stall: it stays a cancellation.
+    [Fact]
+    public async Task Cancelling_a_stalled_download_stays_a_cancellation()
+    {
+        var github = new FakeGitHub(Release(), _apk) { ApkStream = () => new StallingStream(_apk, after: 1000) };
+        using var client = Client(github);
+        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PhoneAgentApk.ForVersionAsync(V, client, _folder, cancel.Token, readTimeout: TimeSpan.FromMinutes(1)));
+        Assert.Empty(Directory.GetFiles(_folder));
+    }
+
     [Fact]
     public async Task An_asset_too_big_is_refused()
     {
@@ -219,6 +261,9 @@ public sealed class PhoneAgentApkTests : IDisposable
 
         public HttpStatusCode ReleaseStatus { get; init; } = HttpStatusCode.OK;
 
+        // The APK's body, when it must misbehave.
+        public Func<Stream>? ApkStream { get; init; }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Asked.Add(request.RequestUri!);
@@ -231,7 +276,33 @@ public sealed class PhoneAgentApkTests : IDisposable
                 Assert.Contains("Midview", request.Headers.UserAgent.ToString());
                 return Task.FromResult(new HttpResponseMessage(ReleaseStatus) { Content = new StringContent(release) });
             }
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(apk) });
+            HttpContent content = ApkStream is null ? new ByteArrayContent(apk) : new StreamContent(ApkStream());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }
+    }
+
+    // Gives the first bytes, then fails as a dropped connection does.
+    private sealed class DroppingStream(byte[] apk, int after) : MemoryStream(apk, 0, after)
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = await base.ReadAsync(buffer, cancellationToken);
+            return read > 0 ? read : throw new IOException("Unable to read data from the transport connection: An existing connection was forcibly closed by the remote host.");
+        }
+    }
+
+    // Gives the first bytes, then waits forever (until cancelled).
+    private sealed class StallingStream(byte[] apk, int after) : MemoryStream(apk, 0, after)
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var read = await base.ReadAsync(buffer, cancellationToken);
+            if (read > 0)
+            {
+                return read;
+            }
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
         }
     }
 }

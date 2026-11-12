@@ -14,9 +14,11 @@ public static class PhoneOptimizeText
     public static string Line(PhoneOptimizeReport? report) =>
         report is null ? OldAgent : $"{Apps(report.Hidden.Count, report.Failed.Count)} · {Dns(report.Dns)}";
 
-    // Fully optimized: every ad app hidden and the ad-free DNS on.
+    // Fully optimized: every ad app hidden and the ad-free DNS on. With the
+    // internet blocked the phone checks the DNS again by itself when it is
+    // released, so that counts as done too.
     public static bool IsDone(PhoneOptimizeReport? report) =>
-        report is { Dns: PhoneDnsStates.On, Failed.Count: 0 };
+        report is { Failed.Count: 0, Dns: PhoneDnsStates.On or PhoneDnsStates.OffInternetBlocked };
 
     public static string Apps(int hidden, int failed)
     {
@@ -40,7 +42,7 @@ public static class PhoneOptimizeText
         PhoneDnsStates.On => "DNS sem anúncios ligado",
         PhoneDnsStates.OffNetworkBlocks => "DNS sem anúncios desligado: a rede bloqueou",
         PhoneDnsStates.OffNoInternet => "DNS sem anúncios desligado: o celular estava sem internet",
-        PhoneDnsStates.OffInternetBlocked => "DNS sem anúncios desligado: a internet está bloqueada; liga sozinho ao desbloquear",
+        PhoneDnsStates.OffInternetBlocked => "DNS sem anúncios: conferido de novo quando a internet for liberada",
         _ => "DNS sem anúncios desligado: o celular não conseguiu ligá-lo",
     };
 

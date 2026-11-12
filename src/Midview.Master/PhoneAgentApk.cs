@@ -20,6 +20,13 @@ public sealed class PhoneAgentApk : IUpdatePayload, IDisposable
     public const string AssetName = "MidviewAgent.apk";
     public const string ReleaseUrlFormat = "https://api.github.com/repos/ArnoNeto1/midview/releases/tags/v{0}";
 
+    // The connection dropped or stalled in the middle of the download.
+    public const string DownloadUnfinished = "o download do app do celular não terminou (confira a internet deste PC)";
+
+    // How long one read of the download may wait for data: the client from
+    // TeacherUpdate never times out, so a stalled connection would hang.
+    public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(60);
+
     private static readonly Regex Sha256Digest = new("^sha256:([0-9a-fA-F]{64})$", RegexOptions.CultureInvariant);
 
     private PhoneAgentApk(string path, long size, byte[] sha256)
@@ -74,9 +81,11 @@ public sealed class PhoneAgentApk : IUpdatePayload, IDisposable
     // there has that SHA-256, downloaded and checked otherwise. With GitHub
     // out of reach, the one kept there (checked when it was saved) is used.
     // InvalidDataException, in the teacher's words, for anything else.
-    // percent: 0 to 100 while downloading.
+    // percent: 0 to 100 while downloading. readTimeout: ReadTimeout unless a
+    // test shortens it.
     public static async Task<PhoneAgentApk> ForVersionAsync(
-        Version version, HttpClient client, string folder, CancellationToken cancellation, IProgress<int>? percent = null)
+        Version version, HttpClient client, string folder, CancellationToken cancellation, IProgress<int>? percent = null,
+        TimeSpan? readTimeout = null)
     {
         var kept = KeptPath(folder, version);
         Asset asset;
@@ -119,11 +128,16 @@ public sealed class PhoneAgentApk : IUpdatePayload, IDisposable
 
         try
         {
-            await DownloadAsync(client, asset, folder, kept, percent, cancellation);
+            await DownloadAsync(client, asset, folder, kept, percent, readTimeout ?? ReadTimeout, cancellation);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
-            throw new InvalidDataException("o download do app do celular não terminou (confira a internet deste PC)", ex);
+            throw new InvalidDataException(DownloadUnfinished, ex);
+        }
+        catch (OperationCanceledException ex) when (!cancellation.IsCancellationRequested)
+        {
+            // A read that waited longer than readTimeout.
+            throw new InvalidDataException(DownloadUnfinished, ex);
         }
         return FromFile(kept);
     }
@@ -191,7 +205,8 @@ public sealed class PhoneAgentApk : IUpdatePayload, IDisposable
     // Into a ".part" first: only an APK of the published size and SHA-256
     // ever gets the kept name.
     private static async Task DownloadAsync(
-        HttpClient client, Asset asset, string folder, string kept, IProgress<int>? percent, CancellationToken cancellation)
+        HttpClient client, Asset asset, string folder, string kept, IProgress<int>? percent, TimeSpan readTimeout,
+        CancellationToken cancellation)
     {
         Directory.CreateDirectory(folder);
         var partial = kept + ".part";
@@ -208,9 +223,15 @@ public sealed class PhoneAgentApk : IUpdatePayload, IDisposable
                 var buffer = new byte[81920];
                 long total = 0;
                 var reported = -1;
-                int read;
-                while ((read = await source.ReadAsync(buffer, cancellation)) > 0)
+                using var stalled = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+                while (true)
                 {
+                    stalled.CancelAfter(readTimeout);
+                    var read = await source.ReadAsync(buffer, stalled.Token);
+                    if (read == 0)
+                    {
+                        break;
+                    }
                     total += read;
                     if (total > asset.Size)
                     {

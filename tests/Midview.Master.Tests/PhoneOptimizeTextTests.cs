@@ -18,10 +18,16 @@ public class PhoneOptimizeTextTests
     [Theory]
     [InlineData(PhoneDnsStates.OffNetworkBlocks, "15 apps de anúncios escondidos · DNS sem anúncios desligado: a rede bloqueou")]
     [InlineData(PhoneDnsStates.OffNoInternet, "15 apps de anúncios escondidos · DNS sem anúncios desligado: o celular estava sem internet")]
-    [InlineData(PhoneDnsStates.OffInternetBlocked, "15 apps de anúncios escondidos · DNS sem anúncios desligado: a internet está bloqueada; liga sozinho ao desbloquear")]
     [InlineData(PhoneDnsStates.OffError, "15 apps de anúncios escondidos · DNS sem anúncios desligado: o celular não conseguiu ligá-lo")]
     public void Dns_off_says_why(string dns, string expected) =>
         Assert.Equal(expected, PhoneOptimizeText.Line(Report(15, dns)));
+
+    // With the internet blocked the phone cannot check the DNS now; it does so
+    // by itself when the internet is released, so this is not a failure.
+    [Fact]
+    public void Internet_blocked_is_checked_again_later() =>
+        Assert.Equal("15 apps de anúncios escondidos · DNS sem anúncios: conferido de novo quando a internet for liberada",
+                     PhoneOptimizeText.Line(Report(15, PhoneDnsStates.OffInternetBlocked)));
 
     [Fact]
     public void One_app_is_singular() =>
@@ -42,11 +48,14 @@ public class PhoneOptimizeTextTests
         Assert.Equal("o Midview deste celular é de uma versão anterior e ainda não otimiza", PhoneOptimizeText.Line(null));
 
     [Fact]
-    public void Only_a_report_with_the_dns_on_is_done()
+    public void Only_a_report_with_the_dns_on_or_waiting_for_the_internet_is_done()
     {
         Assert.True(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.On)));
+        Assert.True(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffInternetBlocked)));
         Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffNetworkBlocks)));
+        Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffNoInternet)));
         Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.On, failed: 1)));
+        Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffInternetBlocked, failed: 1)));
         Assert.False(PhoneOptimizeText.IsDone(null));
     }
 

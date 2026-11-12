@@ -27,7 +27,7 @@ public class DeviceSupportTests
     [InlineData(ToolbarAction.Power)]
     [InlineData(ToolbarAction.BlockSites)]
     [InlineData(ToolbarAction.Update)]
-    public void Computers_support_every_action(ToolbarAction action) =>
+    public void Computers_support_every_action_but_the_phone_group(ToolbarAction action) =>
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
