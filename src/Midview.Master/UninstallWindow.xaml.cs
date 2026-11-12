@@ -6,7 +6,7 @@ using System.Windows.Controls;
 namespace Midview.Master;
 
 // Lists the programs installed on one machine and uninstalls the ones the
-// teacher marks, on that machine or the whole class, through each Agent
+// teacher marks, on that machine, the PCs selected or the whole class, through each Agent
 // (GetInstalledPrograms / UninstallPrograms on port 28900). The list is read
 // from one machine; the uninstall goes by display name, so each machine
 // removes the ones it actually has. Phones among the machines have a list
@@ -20,9 +20,10 @@ public partial class UninstallWindow : MidviewWindow
     private readonly Action? _openPhones;
 
     // phones: the phones that were among the machines, left to openPhones.
+    // wholeClass: classTargets is every PC of the room, not some selected.
     public UninstallWindow(
         KnownMachine listFrom, IReadOnlyList<KnownMachine> classTargets, X509Certificate2 masterCertificate,
-        int phones = 0, Action? openPhones = null)
+        int phones = 0, Action? openPhones = null, bool wholeClass = true)
     {
         InitializeComponent();
         _listFrom = listFrom;
@@ -30,7 +31,14 @@ public partial class UninstallWindow : MidviewWindow
         _masterCertificate = masterCertificate;
         _openPhones = openPhones;
         TargetsTextBlock.Text = $"Programas instalados em {listFrom.Name}";
-        WholeClassCheckBox.Content = $"Aplicar na turma toda ({classTargets.Count} máquinas)";
+        if (ApplyToAllText(classTargets.Count, wholeClass) is { } applyToAll)
+        {
+            WholeClassCheckBox.Content = applyToAll;
+        }
+        else
+        {
+            WholeClassCheckBox.Visibility = Visibility.Collapsed;
+        }
         if (phones > 0 && openPhones is not null)
         {
             PhonesTextBlock.Text = PhoneProgramsText.UninstallPhonesNote(phones);
@@ -39,6 +47,15 @@ public partial class UninstallWindow : MidviewWindow
             Height += 60;
         }
     }
+
+    // The box that takes the uninstall past the machine the list came from:
+    // to the whole class, or to the PCs selected on the grid ("Aplicar nas 3
+    // máquinas selecionadas"). Null when the one selected PC is that machine:
+    // there is no one else to apply it to.
+    public static string? ApplyToAllText(int machines, bool wholeClass) =>
+        wholeClass ? $"Aplicar na turma toda ({machines} máquinas)"
+        : machines > 1 ? $"Aplicar nas {machines} máquinas selecionadas"
+        : null;
 
     private void OnPhonesClicked(object sender, RoutedEventArgs e) => _openPhones?.Invoke();
 

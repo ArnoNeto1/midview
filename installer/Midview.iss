@@ -335,8 +335,9 @@ end;
 
 { Professor: an adb left running from the program's adb folder (the phone
   cable tool, after a crash) holds adb.exe and its DLLs; it is stopped so
-  they can be replaced. Only that folder's adb, never another program's.
-  A failure here is only logged: the copy then says what it could not replace. }
+  they can be replaced, or removed by the uninstaller. Only that folder's
+  adb, never another program's. A failure here is only logged: the copy
+  then says what it could not replace, and the uninstaller what it left. }
 procedure PararAdbDoProfessor;
 var
   Pasta: String;
@@ -422,8 +423,10 @@ begin
       'Para trazer as máquinas, instale o Midview Aluno nelas e clique em "Máquinas da sala" > "Procurar na rede".';
 end;
 
-{ Professor: close the ports of the invite and of the class folders. Aluno:
-  undo what a lesson left and remove the service, before the files go. }
+{ Professor: close the ports of the invite and of the class folders, and
+  stop an adb left running from the program's adb folder, which would hold
+  its files. Aluno: undo what a lesson left and remove the service, before
+  the files go. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Argumentos, ArquivoDeErro: String;
@@ -433,6 +436,7 @@ begin
     Exit;
   if TipoInstalado = TipoProfessor then begin
     ApagarRegrasDoConvite;
+    PararAdbDoProfessor;
     Exit;
   end;
   if TipoInstalado <> TipoAluno then

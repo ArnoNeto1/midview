@@ -7,7 +7,8 @@ namespace Midview.Master;
 // Selected is always returned in grid order. Anchor is the tile Shift extends
 // from. "Ver a tela" / "Controlar" act on the selection only while it is one
 // tile; a tile's menu acts on TargetsOf that tile. A drag over the grid's
-// empty space selects what its rectangle touches (BeginBand, Band).
+// empty space selects what its rectangle touches (BeginBand, Band). Save and
+// Restore put the selection back after a tile's menu or a double click.
 public sealed class GridSelection<T> where T : class
 {
     private static readonly EqualityComparer<T> Same = EqualityComparer<T>.Default;
@@ -135,6 +136,24 @@ public sealed class GridSelection<T> where T : class
         }
         Click(item);
     }
+
+    // The selection and anchor as they are now, to put back with Restore: a
+    // tile's menu and the two clicks that open a screen select the tile only
+    // while they last, so the toolbar's next press does not reach just that
+    // tile, left selected by accident.
+    public Saved Save() => new(Selected, _anchor);
+
+    // Back to what Save kept, less what has left the grid since.
+    public void Restore(Saved saved)
+    {
+        _selected.Clear();
+        _selected.UnionWith(saved.Items.Where(item => IndexOf(item) >= 0));
+        _anchor = saved.Anchor is not null && IndexOf(saved.Anchor) >= 0
+            ? saved.Anchor
+            : _items.LastOrDefault(_selected.Contains);
+    }
+
+    public sealed record Saved(IReadOnlyList<T> Items, T? Anchor);
 
     // What a tile's menu acts on: the whole selection, in grid order, when the
     // tile is one of several selected; otherwise just that tile.

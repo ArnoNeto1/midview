@@ -275,4 +275,68 @@ public sealed class GridSelectionTests
 
         Assert.Equal(new[] { "B" }, grid.TargetsOf("B"));
     }
+
+    // The menu and the two clicks that open a screen leave no selection behind.
+
+    [Fact]
+    public void Restore_DepoisDoBotaoDireito_VoltaANadaSelecionado()
+    {
+        var grid = Grid("A", "B", "C", "D");
+        var before = grid.Save();
+
+        grid.RightClick("B");
+        Assert.Equal(new[] { "B" }, grid.Selected);
+        grid.Restore(before);
+
+        Assert.Empty(grid.Selected);
+        Assert.Null(grid.Anchor);
+    }
+
+    [Fact]
+    public void Restore_VoltaASelecaoEAAncoraDeAntes()
+    {
+        var grid = Grid("A", "B", "C", "D");
+        grid.Click("A");
+        grid.CtrlClick("C");  // {A, C}, âncora C
+        var before = grid.Save();
+
+        grid.Click("D");
+        grid.Restore(before);
+
+        Assert.Equal(new[] { "A", "C" }, grid.Selected);
+        Assert.Equal("C", grid.Anchor);
+    }
+
+    // The menu's actions go by TargetsOf: the same before and after Restore.
+    [Fact]
+    public void Restore_NaoMudaOQueOMenuAlcanca()
+    {
+        var grid = Grid("A", "B", "C", "D");
+        grid.Click("A");
+        var before = grid.Save();
+
+        grid.RightClick("C");
+        var whileOpen = grid.TargetsOf("C");
+        grid.Restore(before);
+
+        Assert.Equal(new[] { "C" }, whileOpen);
+        Assert.Equal(new[] { "C" }, grid.TargetsOf("C"));
+        Assert.Equal(new[] { "A" }, grid.Selected);
+    }
+
+    [Fact]
+    public void Restore_DeixaDeForaOQueSaiuDaGrade()
+    {
+        var items = new List<string> { "A", "B", "C", "D" };
+        var grid = new GridSelection<string>(items);
+        grid.Click("B");
+        grid.CtrlClick("D");  // {B, D}, âncora D
+        var before = grid.Save();
+
+        items.Remove("D");
+        grid.Restore(before);
+
+        Assert.Equal(new[] { "B" }, grid.Selected);
+        Assert.Equal("B", grid.Anchor);
+    }
 }

@@ -272,7 +272,7 @@
                                 <Button Style="{StaticResource MachineTileButton}" Click="OnMachineClicked"
                                         MouseDoubleClick="OnMachineDoubleClicked"
                                         PreviewMouseLeftButtonDown="OnTilePressed"
-                                        PreviewMouseRightButtonDown="OnMachineRightClicked" ContextMenuOpening="OnMachineMenuOpening"
+                                        ContextMenuOpening="OnMachineMenuOpening"
                                         ToolTip="Clique para selecionar, dois cliques para ver a tela. Botão direito para mais opções.">
                                     <Button.ContextMenu>
                                         <!-- With several machines selected (OnMachineMenuOpening) the items

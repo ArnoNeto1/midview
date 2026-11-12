@@ -32,7 +32,7 @@ Passo a passo, com narração, de todas as funções, no visual escuro da versã
 
 ## O que o professor pode fazer
 
-A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os botões da barra de ferramentas agem na turma toda; o botão direito sobre uma máquina age só nas selecionadas.
+A janela "Midview - Sala de aula" mostra a tela de cada máquina numa grade. Os botões da barra de ferramentas agem nas máquinas selecionadas, se houver alguma (a barra de baixo avisa, por exemplo "Só na seleção (2)."); sem seleção, agem em todas as que a grade mostra (com o botão **Telas** em **Todos**, a turma toda). O botão direito sobre uma máquina age nela, ou em todas as selecionadas quando ela faz parte da seleção; fechado o menu, ou aberta a tela com dois cliques, a seleção volta a ser a de antes.
 
 | Grupo | Funções |
 | --- | --- |

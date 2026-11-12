@@ -54,5 +54,25 @@ public sealed class TargetsTextTests
             TargetsText.Describe(TargetsPreposition.To, Names(8), wholeClass: false));
     }
 
+    // "Desinstalar programa" never says "turma toda" for only some PCs.
+    [Fact]
+    public void Desinstalar_TresSelecionadas_NaoDizTurmaToda()
+    {
+        Assert.Equal("Aplicar nas 3 máquinas selecionadas", UninstallWindow.ApplyToAllText(3, wholeClass: false));
+    }
+
+    [Fact]
+    public void Desinstalar_TurmaToda_ComoAntes()
+    {
+        Assert.Equal("Aplicar na turma toda (20 máquinas)", UninstallWindow.ApplyToAllText(20, wholeClass: true));
+    }
+
+    // One PC selected: it is the one the list comes from, so there is no box.
+    [Fact]
+    public void Desinstalar_UmaSelecionada_SemCaixa()
+    {
+        Assert.Null(UninstallWindow.ApplyToAllText(1, wholeClass: false));
+    }
+
     private static string[] Names(int count) => Enumerable.Range(1, count).Select(n => $"ALUNO-{n:00}").ToArray();
 }

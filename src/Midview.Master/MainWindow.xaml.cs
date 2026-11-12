@@ -118,25 +118,44 @@ public partial class MainWindow : MidviewWindow
         _tiles.CollectionChanged += (_, _) => _machinesWindow?.ShowPhoneUpdateCard();
     }
 
-    // A click, left or right, only selects the machine. Watching its screen
+    // A click only selects the machine (the right button marks it while its
+    // menu is open, OnMachineMenuOpening). Watching its screen
     // or controlling it -- which locks the student's keyboard and mouse -- is
     // chosen on purpose with the toolbar's buttons or the tile's menu.
     private void OnMachineClicked(object sender, RoutedEventArgs e) => SelectTileOf(sender);
 
     // Two clicks open the screen, as "Ver a tela" does. With Shift or Ctrl
-    // they stay selection clicks.
+    // they stay selection clicks. The selection goes back to what it was
+    // before the first of them: the tile is not left selected, or the
+    // toolbar's next press would reach only it.
     private void OnMachineDoubleClicked(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton == MouseButton.Left && Keyboard.Modifiers == ModifierKeys.None
             && ((FrameworkElement)sender).DataContext is MachineTile tile)
         {
+            if (_selectionBeforeClick is { } before && before.Tile == tile)
+            {
+                _selection.Restore(before.Saved);
+                RefreshSelection();
+            }
+            _selectionBeforeClick = null;
+            // The second release would select the tile again (SelectTileOf).
+            _doubleClickedTile = tile;
             OpenScreen(tile, control: false);
         }
     }
 
-    // The right button keeps a selection of several that the tile is part of,
-    // for its menu to act on all of them; otherwise it selects just this tile.
-    private void OnMachineRightClicked(object sender, MouseButtonEventArgs e) => RightClickTileOf(sender);
+    // The selection before the last plain click on a tile, for a double click
+    // to put back.
+    private (MachineTile Tile, GridSelection<MachineTile>.Saved Saved)? _selectionBeforeClick;
+
+    // The tile just double-clicked, whose second release is no selection
+    // click; let go at the next first press (OnTilePressed).
+    private MachineTile? _doubleClickedTile;
+
+    // The selection before a tile's menu opened: the menu marks its tile only
+    // while it is open (OnMachineMenuClosed puts the selection back).
+    private GridSelection<MachineTile>.Saved? _selectionBeforeMenu;
 
     private void SelectTileOf(object sender)
     {
@@ -144,6 +163,12 @@ public partial class MainWindow : MidviewWindow
         {
             return;
         }
+        if (_doubleClickedTile == tile)
+        {
+            _doubleClickedTile = null;
+            return;
+        }
+        _selectionBeforeClick = (tile, _selection.Save());
         var modifiers = Keyboard.Modifiers;
         if (modifiers.HasFlag(ModifierKeys.Shift))
         {
@@ -160,39 +185,34 @@ public partial class MainWindow : MidviewWindow
         RefreshSelection();
     }
 
-    private void RightClickTileOf(object sender)
-    {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
-        {
-            _selection.RightClick(tile);
-            RefreshSelection();
-        }
-    }
-
     // Paints the tiles, enables the buttons that need one machine, and shows
-    // what is selected -- after any change to _selection.
-    private void RefreshSelection()
+    // what is selected -- after any change to _selection. sayIt false leaves
+    // the status bar as it is (a tile's menu, marking its tile for a moment).
+    private void RefreshSelection(bool sayIt = true)
     {
-        var selected = _selection.Selected;
-        var marked = new HashSet<MachineTile>(selected);
+        var marked = new HashSet<MachineTile>(_selection.Selected);
         foreach (var tile in _tiles)
         {
             tile.IsSelected = marked.Contains(tile);
         }
 
+        var selected = ToolbarSelection();
         var machines = selected.Select(tile => tile.Machine).ToList();
         ViewButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.View);
         ControlButton.IsEnabled = selected.Count == 1 && DeviceSupport.IsEnabled(machines, ToolbarAction.Control);
         ControlButton.ToolTip = selected.Count == 1 && machines[0].IsPhone ? PhoneControl.ToolbarToolTip : PcControlToolTip;
         UpdateActionButtons();
-        StatusTextBlock.Text = SelectionStatus();
+        if (sayIt)
+        {
+            StatusTextBlock.Text = SelectionStatus();
+        }
     }
 
     // With nothing selected, whom the toolbar reaches while "Telas" leaves
     // machines out ("Só nos celulares (3).").
     private string SelectionStatus()
     {
-        var selected = _selection.Selected;
+        var selected = ToolbarSelection();
         return selected.Count switch
         {
             0 => ReachNotice() ?? string.Empty,
@@ -201,8 +221,15 @@ public partial class MainWindow : MidviewWindow
         };
     }
 
+    // The selection the toolbar goes by: while a tile's menu is open and marks
+    // its tile, the one there was before (the menu's own actions go by
+    // TargetsOf), so neither the toolbar's buttons nor what the status bar
+    // says of its reach change with the menu.
+    private IReadOnlyList<MachineTile> ToolbarSelection() =>
+        _selectionBeforeMenu is { } before ? before.Items.Where(_tiles.Contains).ToList() : _selection.Selected;
+
     private string? ReachNotice() =>
-        DeviceSupport.ReachNotice(_devices, _selection.Selected.Count, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
+        DeviceSupport.ReachNotice(_devices, ToolbarSelection().Count, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
 
     // Greys the toolbar buttons that do not work on the machines they would
     // reach (ToolbarReach: the selection, or every machine the "Telas" filter
@@ -225,7 +252,7 @@ public partial class MainWindow : MidviewWindow
         }
 
         var (label, badge, toolTip) = ScreenLockText.ClassButton(
-            ScreenLockReach.Releases(ToolbarTiles(ToolbarAction.ScreenLock), tile => tile.Machine, _screenLocks.ContainsKey));
+            ScreenLockReach.Releases(ToolbarTiles(ToolbarAction.ScreenLock), tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0));
         ScreenLockButton.Content = label;
         ScreenLockButton.Badge = badge;
         ScreenLockButton.ToolTip = toolTip;
@@ -501,8 +528,11 @@ public partial class MainWindow : MidviewWindow
     private IReadOnlyList<KnownMachine> MachinesOf(MachineTile tile) =>
         TargetsOf(tile).Select(target => target.Machine).ToList();
 
-    // Also reached from the keyboard (the menu key), with no right-click
-    // before it to settle the selection.
+    // From the right button or the menu key. A tile that is part of a
+    // selection of several keeps it, for the menu to act on all of them;
+    // otherwise the tile alone is marked while the menu is open, and the
+    // selection there was comes back when it closes (OnMachineMenuClosed):
+    // a right-click leaves no selection behind for the toolbar to act on.
     private void OnMachineMenuOpening(object sender, ContextMenuEventArgs e)
     {
         var element = (FrameworkElement)sender;
@@ -510,7 +540,11 @@ public partial class MainWindow : MidviewWindow
         {
             return;
         }
-        RightClickTileOf(sender);
+        _selectionBeforeMenu = _selection.Save();
+        menu.Closed -= OnMachineMenuClosed;
+        menu.Closed += OnMachineMenuClosed;
+        _selection.RightClick(tile);
+        RefreshSelection(sayIt: false);
         var targets = TargetsOf(tile);
         ShowMenuFor(menu, targets.Count);
         GreyUnsupportedItems(menu.Items, targets);
@@ -529,6 +563,20 @@ public partial class MainWindow : MidviewWindow
         {
             item.Header = PhoneControl.MenuItem(targets.Select(target => target.Machine).ToList());
         }
+    }
+
+    // Whether the item's click comes before or after this, it acts on the
+    // same machines (GridSelection.TargetsOf). The status bar keeps what the
+    // item wrote.
+    private void OnMachineMenuClosed(object sender, RoutedEventArgs e)
+    {
+        if (_selectionBeforeMenu is not { } before)
+        {
+            return;
+        }
+        _selectionBeforeMenu = null;
+        _selection.Restore(before);
+        RefreshSelection(sayIt: false);
     }
 
     // "Bloquear apps..." when the menu acts on phones alone (the phones'
@@ -618,7 +666,7 @@ public partial class MainWindow : MidviewWindow
 
     private void OnViewSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selection.Selected is [var tile])
+        if (ToolbarSelection() is [var tile])
         {
             OpenScreen(tile, control: false);
         }
@@ -629,7 +677,7 @@ public partial class MainWindow : MidviewWindow
 
     private void OnControlSelectedClicked(object sender, RoutedEventArgs e)
     {
-        if (_selection.Selected is [var tile])
+        if (ToolbarSelection() is [var tile])
         {
             OpenScreen(tile, control: true);
         }
@@ -686,7 +734,8 @@ public partial class MainWindow : MidviewWindow
         catch (Exception ex)
         {
             _openWindows.StopOpening(key);
-            ShowWarning($"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}");
+            // An action's result, not a warning: it goes like any other (MainWindow.StatusBar.cs).
+            StatusTextBlock.Text = $"Não foi possível conectar a {machine.Name}: {FailureText.Describe(ex)}";
         }
     }
 
@@ -785,16 +834,16 @@ public partial class MainWindow : MidviewWindow
     }
 
     // One button for both, for the machines it reaches (the selection, or
-    // every one the "Telas" filter shows): it locks them, or, while every one
-    // of them is locked, gives them back (ScreenLockReach). The others keep
-    // what they have.
+    // every one the "Telas" filter shows): it locks them, or gives them back
+    // -- while any is locked with nothing selected, while every one is with
+    // a selection (ScreenLockReach). The others keep what they have.
     private void OnScreenLockClassClicked(object sender, RoutedEventArgs e)
     {
         if (ToolbarTileTargets(ToolbarAction.ScreenLock, "bloquear") is not { } reach)
         {
             return;
         }
-        var (_, unlock) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
+        var (_, unlock) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0);
         if (unlock.Count > 0)
         {
             Unlock(unlock);
@@ -813,7 +862,7 @@ public partial class MainWindow : MidviewWindow
             return;
         }
         _screenLockLeftOut = leftOut;
-        var (toLock, _) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
+        var (toLock, _) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0);
         foreach (var tile in toLock)
         {
             LockScreen(tile);
@@ -1088,7 +1137,7 @@ public partial class MainWindow : MidviewWindow
     // The machines a toolbar button acts on (DeviceSupport.ToolbarReach): the
     // selection, or every machine the "Telas" filter shows.
     private IReadOnlyList<MachineTile> ToolbarTiles(ToolbarAction action) =>
-        DeviceSupport.ToolbarReach(action, _selection.Selected, _tiles, _devices, tile => tile.Machine);
+        DeviceSupport.ToolbarReach(action, ToolbarSelection(), _tiles, _devices, tile => tile.Machine);
 
     private IReadOnlyList<KnownMachine> ToolbarReach(ToolbarAction action) =>
         ToolbarTiles(action).Select(tile => tile.Machine).ToList();
@@ -1375,7 +1424,7 @@ public partial class MainWindow : MidviewWindow
     {
         if (ToolbarTargets(ToolbarAction.Wake, "ligar") is { } targets)
         {
-            Wake(targets);
+            Wake(targets, ReachNotice());
         }
     }
 
@@ -1389,12 +1438,15 @@ public partial class MainWindow : MidviewWindow
 
     // Over the network (Wake-on-LAN), to every machine whose network card
     // the Master has learned (RememberMacAddress); the status bar says who.
-    private async void Wake(IReadOnlyList<KnownMachine> machines)
+    // reach: from the toolbar, whom it reached when not the whole room
+    // ("Só na seleção (1).").
+    private async void Wake(IReadOnlyList<KnownMachine> machines, string? reach = null)
     {
-        if (!SupportedTargets(ref machines, ToolbarAction.Wake, out var leftOut))
+        if (!SupportedTargets(ref machines, ToolbarAction.Wake, out var supportNotice))
         {
             return;
         }
+        var leftOut = Joined(supportNotice, reach);
         var known = machines
             .Select(machine => (machine.Name, MacAddress: WakeOnLan.TryParseMacAddress(machine.MacAddress, out var mac) ? mac : null))
             .ToList();

@@ -58,7 +58,8 @@ public partial class MainWindow
         }
         var from = listFrom is { IsPhone: false } ? listFrom : pcs[0];
         ShowOnce("desinstalar", new[] { from }, () => new UninstallWindow(
-            from, pcs, _masterCertificate, phones.Count, phones.Count > 0 ? () => OpenPhoneUninstallWindow(phones) : null)
+            from, pcs, _masterCertificate, phones.Count, phones.Count > 0 ? () => OpenPhoneUninstallWindow(phones) : null,
+            wholeClass: pcs.Count == _tiles.Count(tile => !tile.Machine.IsPhone))
         {
             Owner = this,
         });

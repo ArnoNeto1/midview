@@ -31,12 +31,13 @@ public static class ScreenLockText
     private const string OpenPadlock = "";
 
     // The toolbar's one screen-lock button, for the machines it reaches (the
-    // selection, or every one the "Telas" filter shows: ScreenLockReach): it
-    // locks them, and while every one of them is locked it gives them back
-    // instead. The padlock shows how those screens are now: open while any is
-    // free, closed while all are locked. The label keeps one word per line in
-    // both, so the button doesn't change shape when it flips ("Bloquear telas"
-    // alone would fit on one line, "Desbloquear telas" not).
+    // selection, or every one the "Telas" filter shows): it locks them, and
+    // gives them back instead while any is locked with nothing selected, or
+    // every one is with a selection (ScreenLockReach). The padlock shows
+    // which: closed while it gives back, open while it locks. The label keeps
+    // one word per line in both, so the button doesn't change shape when it
+    // flips ("Bloquear telas" alone would fit on one line, "Desbloquear
+    // telas" not).
     public static (string Label, string Badge, string ToolTip) ClassButton(bool releases) =>
         releases
             ? ("Desbloquear\ntelas", ClosedPadlock, "Devolve a tela, o teclado e o mouse aos alunos: os selecionados, ou todos os que a grade mostra.")

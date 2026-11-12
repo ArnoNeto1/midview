@@ -34,7 +34,7 @@ A step-by-step, narrated walkthrough of every feature, in the dark look of versi
 
 ## What the teacher can do
 
-The "Midview - Sala de aula" (classroom) window shows every machine's screen in a grid. The toolbar buttons act on the whole class; right-clicking a machine acts only on the selected ones.
+The "Midview - Sala de aula" (classroom) window shows every machine's screen in a grid. The toolbar buttons act on the selected machines, if any (the bottom bar says so, for example "Só na seleção (2)." (only on the selection)); with nothing selected, they act on every machine the grid shows (with the **Telas** button on **Todos**, the whole class). Right-clicking a machine acts on it, or on every selected one when it is part of the selection; once the menu closes, or the screen is opened with a double click, the selection goes back to what it was.
 
 | Group | Features |
 | --- | --- |

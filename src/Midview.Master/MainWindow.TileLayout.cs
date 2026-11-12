@@ -384,9 +384,14 @@ public partial class MainWindow
     }
 
     // A press on a tile, which still selects it on release unless the mouse
-    // moves far enough first to drag it (OnGridSurfacePreviewMouseMove).
+    // moves far enough first to drag it (OnGridSurfacePreviewMouseMove). A
+    // first press (not the second of a double click) selects again on release.
     private void OnTilePressed(object sender, MouseButtonEventArgs e)
     {
+        if (e.ClickCount == 1)
+        {
+            _doubleClickedTile = null;
+        }
         if (_arranged && ((FrameworkElement)sender).DataContext is MachineTile tile)
         {
             _dragStart = e.GetPosition(GridSurface);
