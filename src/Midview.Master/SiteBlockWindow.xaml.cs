@@ -8,8 +8,10 @@ namespace Midview.Master;
 
 // Blocks the whole internet or one site on one machine or on the whole
 // class, through each machine's Agent (hosts file and firewall; see the
-// site-blocking design). Takes the Agent's thumbprint from the classroom
-// list, filled in by "Importar máquinas instaladas".
+// site-blocking design). Phones take the same commands from this window and
+// answer them the same way (their agent blocks the sites in Chrome and the
+// internet for the whole phone). Takes the Agent's thumbprint from the
+// classroom list, filled in by "Importar máquinas instaladas" or pairing.
 public partial class SiteBlockWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;

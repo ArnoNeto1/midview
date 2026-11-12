@@ -31,13 +31,27 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_and_screen_lock_only()
+    public void Phone_supports_view_screen_lock_and_blocking_apps_and_sites_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
-            var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock;
+            var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
+                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
+    }
+
+    // The sites window sends its commands to every machine it reaches.
+    [Theory]
+    [InlineData(ToolbarAction.BlockPrograms)]
+    [InlineData(ToolbarAction.BlockSites)]
+    public void Blocking_leaves_no_phone_out(ToolbarAction action)
+    {
+        var machines = new[] { Pc("PC 01"), Phone("Cel 01") };
+
+        Assert.Null(DeviceSupport.LeftOutNotice(machines, action));
+        Assert.True(DeviceSupport.IsEnabled(new[] { Phone("Cel 01") }, action));
+        Assert.Equal(new[] { "PC 01", "Cel 01" }, DeviceSupport.Only(machines, action).Select(machine => machine.Name));
     }
 
     [Fact]

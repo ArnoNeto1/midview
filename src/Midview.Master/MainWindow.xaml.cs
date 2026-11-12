@@ -37,6 +37,8 @@ public partial class MainWindow : MidviewWindow
     // threads to hand it to each machine's Agent.
     private PowerSchedule? _powerSchedule;
     private AppBlockPolicy? _appBlockPolicy;
+    // The class's app block for phones (PhoneAppBlockFile), apart from the PCs' one.
+    private PhoneAppPolicy? _phoneAppPolicy;
 
     // The grid's selection: a plain click picks one, Ctrl/Shift add more, and a
     // rectangle dragged over the grid's empty space picks every tile it
@@ -103,6 +105,7 @@ public partial class MainWindow : MidviewWindow
         CheckDeviceButtons();
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
+        _phoneAppPolicy = LoadPhoneAppBlockPolicy();
         _classSync = StartClassFolder();
         StartClassHome();
 
@@ -1000,19 +1003,33 @@ public partial class MainWindow : MidviewWindow
             StatusTextBlock.Text = "Nenhuma máquina na lista da sala para bloquear programas.";
             return;
         }
-        OpenAppBlockWindow(_tiles.Select(tile => tile.Machine).ToList());
+        OpenAppBlockWindow(PhoneAppBlockText.ToolbarReach(
+            _selection.Selected.Select(tile => tile.Machine).ToList(), _tiles.Select(tile => tile.Machine).ToList(), _devices));
     }
 
     // The block is remembered and resent (onClassPolicyApplied) only for the
     // whole class, whether it came from the toolbar or from a tile's menu with
     // every machine selected: both are the same window (ShowOnce's key).
+    // Phones alone get the phones' window; PCs and phones together get the
+    // PCs' one, and the status bar says the phones were left out.
     private void OpenAppBlockWindow(IReadOnlyList<KnownMachine> targets)
     {
-        if (!SupportedTargets(ref targets, ToolbarAction.BlockPrograms))
+        var phones = targets.Where(machine => machine.IsPhone).ToList();
+        if (phones.Count > 0 && phones.Count == targets.Count)
+        {
+            OpenPhoneAppBlockWindow(phones);
+            return;
+        }
+        if (PhoneAppBlockText.LeftOutNotice(phones.Count) is { } notice)
+        {
+            StatusTextBlock.Text = notice;
+        }
+        targets = targets.Where(machine => !machine.IsPhone).ToList();
+        if (targets.Count == 0)
         {
             return;
         }
-        var wholeClass = IsWholeClass(targets, ToolbarAction.BlockPrograms);
+        var wholeClass = targets.Count == _tiles.Count(tile => !tile.Machine.IsPhone);
         ShowOnce("programas", targets, () => new AppBlockWindow(
             targets, wholeClass, _masterCertificate,
             wholeClass
@@ -1020,6 +1037,24 @@ public partial class MainWindow : MidviewWindow
                 {
                     Volatile.Write(ref _appBlockPolicy, policy);
                     SaveAppBlockPolicy(policy);
+                }
+                : null)
+        {
+            Owner = this,
+        });
+    }
+
+    // Remembered and resent to phones that were off only when it is for every phone of the room.
+    private void OpenPhoneAppBlockWindow(IReadOnlyList<KnownMachine> phones)
+    {
+        var allPhones = phones.Count == _tiles.Count(tile => tile.Machine.IsPhone);
+        ShowOnce("apps-celular", phones, () => new PhoneAppBlockWindow(
+            phones, allPhones, _masterCertificate, () => Volatile.Read(ref _phoneAppPolicy),
+            allPhones
+                ? policy =>
+                {
+                    Volatile.Write(ref _phoneAppPolicy, policy);
+                    SavePhoneAppBlockPolicy(policy);
                 }
                 : null)
         {
@@ -1170,6 +1205,31 @@ public partial class MainWindow : MidviewWindow
         try
         {
             AppBlockFile.Save(AppBlockFile.DefaultPath, policy);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O bloqueio foi enviado, mas não pôde ser guardado neste PC: {ErrorText.Describe(ex)}";
+        }
+    }
+
+    private PhoneAppPolicy? LoadPhoneAppBlockPolicy()
+    {
+        try
+        {
+            return PhoneAppBlockFile.Load(PhoneAppBlockFile.DefaultPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = $"O bloqueio de apps dos celulares não pôde ser lido: {ErrorText.Describe(ex)}";
+            return null;
+        }
+    }
+
+    private void SavePhoneAppBlockPolicy(PhoneAppPolicy policy)
+    {
+        try
+        {
+            PhoneAppBlockFile.Save(PhoneAppBlockFile.DefaultPath, policy);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -1592,7 +1652,7 @@ public partial class MainWindow : MidviewWindow
                 ? TileSize.PhoneRequest(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale))
                 : TileSize.Request(Volatile.Read(ref _drawnTileWidth), Volatile.Read(ref _dpiScale)),
             classLesson: LessonForPollers, classHomeClaim: StragglerClaim, classLessonOver: EndOfLessonOver,
-            classLessonHeldEnd: IsHeldEnd);
+            classLessonHeldEnd: IsHeldEnd, phoneAppPolicy: () => Volatile.Read(ref _phoneAppPolicy));
         // Decoded on the poller's own thread (frozen, so the UI thread may
         // use it); only the swap onto the tile happens on the UI thread.
         poller.ThumbnailReceived += jpeg =>
@@ -1614,6 +1674,8 @@ public partial class MainWindow : MidviewWindow
         poller.MacAddressLearned += macAddress => Dispatcher.InvokeAsync(() => RememberMacAddress(tile, macAddress));
         poller.AppBlockObserved += status => Dispatcher.InvokeAsync(() =>
             tile.BlockBadge = AppBlockText.Badge(status, classBlockExpected: Volatile.Read(ref _appBlockPolicy) is { IsActive: true }));
+        poller.PhoneAppBlockObserved += status => Dispatcher.InvokeAsync(() =>
+            tile.BlockBadge = PhoneAppBlockText.Badge(status, classBlockExpected: Volatile.Read(ref _phoneAppPolicy) is { IsActive: true }));
         _pollers.Add(tile, poller);
         poller.Start();
     }

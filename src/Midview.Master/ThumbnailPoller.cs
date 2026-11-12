@@ -41,6 +41,7 @@ public sealed partial class ThumbnailPoller : IDisposable
     private readonly Thread _thread;
     private readonly Func<PowerSchedule?>? _powerSchedule;
     private readonly Func<AppBlockPolicy?>? _appBlockPolicy;
+    private readonly Func<PhoneAppPolicy?>? _phoneAppPolicy;
     private readonly Func<(int Width, int Height)>? _thumbnailSize;
     private readonly Func<ClassLesson?>? _classLesson;
     private readonly Func<ClassHomeClaim?>? _classHomeClaim;
@@ -72,14 +73,17 @@ public sealed partial class ThumbnailPoller : IDisposable
     // when this PC knows it is over (ClassFolderRole.EndOfLessonOver); null otherwise. classLessonHeldEnd:
     // whether a lesson classLesson gave is the end of a lesson this PC held for the room
     // while another PC is the home (ClassFolderRole.IsHeldEnd), handed
-    // only to an Agent still in that lesson.
+    // only to an Agent still in that lesson. phoneAppPolicy: the class's app
+    // block for phones (PhoneAppBlockFile), handed to a phone like the
+    // program block to a PC; a PC never gets it, nor a phone the PCs' one.
     public ThumbnailPoller(
         KnownMachine machine, X509Certificate2 masterCertificate,
         int port = ConnectionClient.SessionPort, int agentPort = ConnectionClient.AgentPort,
         Func<PowerSchedule?>? powerSchedule = null, Func<AppBlockPolicy?>? appBlockPolicy = null,
         TimeSpan? agentRetryInterval = null, Func<(int Width, int Height)>? thumbnailSize = null,
         Func<ClassLesson?>? classLesson = null, Func<ClassHomeClaim?>? classHomeClaim = null,
-        Func<ClassLesson, ClassHome?, ClassLesson?>? classLessonOver = null, Func<ClassLesson, bool>? classLessonHeldEnd = null)
+        Func<ClassLesson, ClassHome?, ClassLesson?>? classLessonOver = null, Func<ClassLesson, bool>? classLessonHeldEnd = null,
+        Func<PhoneAppPolicy?>? phoneAppPolicy = null)
     {
         _machine = machine;
         _masterCertificate = masterCertificate;
@@ -87,6 +91,7 @@ public sealed partial class ThumbnailPoller : IDisposable
         _agentPort = agentPort;
         _powerSchedule = powerSchedule;
         _appBlockPolicy = appBlockPolicy;
+        _phoneAppPolicy = phoneAppPolicy;
         _thumbnailSize = thumbnailSize;
         _classLesson = classLesson;
         _classHomeClaim = classHomeClaim;
@@ -153,8 +158,13 @@ public sealed partial class ThumbnailPoller : IDisposable
                     ThumbnailReceived?.Invoke(reply.Payload);
                 }
 
-                // A phone has no PC Agent: none of the steps below apply to it.
-                if (!_machine.IsPhone)
+                // A phone has no PC Agent: only its own app block applies to it.
+                if (_machine.IsPhone)
+                {
+                    SendPhoneAppBlockIfChanged();
+                    ObservePhoneAppBlock();
+                }
+                else
                 {
                     AskForMacAddressOnce();
                     SendPowerScheduleIfChanged();

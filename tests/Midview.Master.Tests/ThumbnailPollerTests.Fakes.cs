@@ -91,6 +91,7 @@ public partial class ThumbnailPollerTests
         private readonly System.Security.Cryptography.X509Certificates.X509Certificate2 _certificate;
         private readonly List<long> _schedulesReceived = new();
         private readonly List<long> _blocksReceived = new();
+        private readonly List<long> _phoneBlocksReceived = new();
         private readonly List<long> _lessonsReceived = new();
         private readonly bool _ownsCertificate;
         private int _questions;
@@ -138,6 +139,14 @@ public partial class ThumbnailPollerTests
                                     _blocksReceived.Add(block.SavedAt);
                                 }
                             }
+                            else if (message.Type == MessageType.SetPhoneAppBlock
+                                     && PhoneAppPolicy.Decode(message.Payload) is { } phoneBlock)
+                            {
+                                lock (_phoneBlocksReceived)
+                                {
+                                    _phoneBlocksReceived.Add(phoneBlock.SavedAt);
+                                }
+                            }
                             else if (message.Type == MessageType.SetPowerSchedule
                                      && PowerSchedule.TryDecode(message.Payload, out var schedule))
                             {
@@ -154,7 +163,12 @@ public partial class ThumbnailPollerTests
                                     _lessonsReceived.Add(lesson.SavedAt);
                                 }
                             }
-                            channel.Send(message.Type == MessageType.GetAppBlock && StatusReply is { } status ? status : reply);
+                            channel.Send(message.Type switch
+                            {
+                                MessageType.GetAppBlock when StatusReply is { } status => status,
+                                MessageType.GetPhoneAppBlock when PhoneStatusReply is { } phoneStatus => phoneStatus,
+                                _ => reply,
+                            });
                         }
                         catch (Exception)
                         {
@@ -172,7 +186,22 @@ public partial class ThumbnailPollerTests
         // What GetAppBlock is answered with, when it isn't the same as everything else.
         public Message? StatusReply { get; set; }
 
+        // What GetPhoneAppBlock is answered with, when it isn't the same as everything else.
+        public Message? PhoneStatusReply { get; set; }
+
         public int Questions => Volatile.Read(ref _questions);
+
+        // The SavedAt of each SetPhoneAppBlock received, in order.
+        public long[] PhoneBlocksReceived
+        {
+            get
+            {
+                lock (_phoneBlocksReceived)
+                {
+                    return _phoneBlocksReceived.ToArray();
+                }
+            }
+        }
 
         // The SavedAt of each SetAppBlock received, in order.
         public long[] BlocksReceived
