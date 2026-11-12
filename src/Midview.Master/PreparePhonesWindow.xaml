@@ -46,7 +46,7 @@
                 <StackPanel x:Name="WifiPage">
                     <TextBlock Text="Wi-Fi do laboratório" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,14"
-                               Text="O celular usa esta rede para entrar na internet e baixar o Midview. Use a mesma rede deste computador. Ela fica guardada só neste computador, protegida pelo Windows." />
+                               Text="Depois de preparado, o celular entra nesta rede para aparecer no Midview. Use a mesma rede deste computador. Ela fica guardada só neste computador, protegida pelo Windows." />
                     <TextBlock Style="{StaticResource Hint}" Text="Nome da rede" />
                     <TextBox x:Name="SsidInput" Margin="0,3,0,10" Padding="6,4" />
                     <TextBlock Style="{StaticResource Hint}" Text="Senha" />

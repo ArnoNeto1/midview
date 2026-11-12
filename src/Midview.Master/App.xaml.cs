@@ -91,6 +91,15 @@ public partial class App : Application
         window.Show();
     }
 
+    // However the Master ends (its window closed, "Atualizar professor"),
+    // the phone-cable tool it may have started stops with it: a server left
+    // running would hold the adb folder's files and fail the next update.
+    protected override void OnExit(ExitEventArgs e)
+    {
+        AdbProcess.StopLeftovers();
+        base.OnExit(e);
+    }
+
     // The classroom opens as the splash ends, before it closes, so the
     // program is never left without a window (which would end it).
     private static bool TryShowSplash(Action then)

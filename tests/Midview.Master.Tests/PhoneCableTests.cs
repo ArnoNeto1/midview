@@ -9,11 +9,14 @@ namespace Midview.Master.Tests;
 
 public sealed class PhoneCableTests
 {
+    // Every command after "devices" names the phone the check found.
+    private const string Serial = "79a61f85";
+    private const string S = "-s " + Serial + " ";
     private const string Apk = @"C:\Midview\agent.apk";
     private const string Package = "io.github.arnoneto1.midview.agent";
     private const string Admin = "io.github.arnoneto1.midview.agent/.AdminReceiver";
     private const string Thumb = "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12";
-    private const string SetDeviceOwner = "shell dpm set-device-owner " + Admin;
+    private const string SetDeviceOwner = S + "shell dpm set-device-owner " + Admin;
 
     // Answers by the exact arguments, joined with spaces; whatever is not set
     // answers an empty success. Records every call in order.
@@ -34,7 +37,7 @@ public sealed class PhoneCableTests
         {
             var key = string.Join(' ', args);
             Calls.Add(key);
-            if (args[0] == "install")
+            if (args.Contains("install"))
             {
                 LastInstallTimeout = timeout;
             }
@@ -72,23 +75,73 @@ public sealed class PhoneCableTests
         }
     }
 
+    // After the given command has run, "devices" lists what is given instead.
+    private class DevicesAfter : IAdb
+    {
+        private readonly FakeAdb _inner;
+        private readonly string _after;
+        private readonly string _listed;
+        private bool _changed;
+
+        protected DevicesAfter(FakeAdb inner, string after, string listed)
+        {
+            _inner = inner;
+            _after = after;
+            _listed = listed;
+        }
+
+        public AdbOutput Run(TimeSpan timeout, params string[] args)
+        {
+            var key = string.Join(' ', args);
+            if (_changed && key == "devices")
+            {
+                _inner.Calls.Add(key);
+                return new AdbOutput(0, _listed, false);
+            }
+            var output = _inner.Run(timeout, args);
+            if (key == _after)
+            {
+                _changed = true;
+            }
+            return output;
+        }
+    }
+
+    // A second phone is plugged in beside the one being prepared.
+    private sealed class SecondPhoneAfter : DevicesAfter
+    {
+        public SecondPhoneAfter(FakeAdb inner, string after)
+            : base(inner, after, "List of devices attached\n" + Serial + "\tdevice\n0123456789\tdevice\n\n")
+        {
+        }
+    }
+
+    // The phone being prepared left, and another one is on the cable.
+    private sealed class OtherPhoneOnlyAfter : DevicesAfter
+    {
+        public OtherPhoneOnlyAfter(FakeAdb inner, string after)
+            : base(inner, after, "List of devices attached\n0123456789\tdevice\n\n")
+        {
+        }
+    }
+
     // The real answers of the school's Redmi 10C (MIUI 14, Android 13), freshly reset.
     private static FakeAdb Redmi() => new FakeAdb()
         .Set("devices", "List of devices attached\n79a61f85\tdevice\n\n")
-        .Set("shell getprop ro.build.version.sdk", "33\r\n")
-        .Set("shell getprop ro.miui.ui.version.name", "V140\n")
-        .Set("shell getprop persist.security.adbinput", "1\n")
-        .Set("shell getprop persist.security.adbinstall", "1\n")
-        .Set("shell dumpsys account", "Accounts: 0\n  Accounts: 0\n  Active Sync Adapters\n")
-        .Set("shell pm list users", "Users:\n\tUserInfo{0:Propriet\u00e1rio:c13} running\n")
-        .Set("shell dpm list-owners", "no owners\n");
+        .Set(S + "shell getprop ro.build.version.sdk", "33\r\n")
+        .Set(S + "shell getprop ro.miui.ui.version.name", "V140\n")
+        .Set(S + "shell getprop persist.security.adbinput", "1\n")
+        .Set(S + "shell getprop persist.security.adbinstall", "1\n")
+        .Set(S + "shell dumpsys account", "Accounts: 0\n  Accounts: 0\n  Active Sync Adapters\n")
+        .Set(S + "shell pm list users", "Users:\n\tUserInfo{0:Propriet\u00e1rio:c13} running\n")
+        .Set(S + "shell dpm list-owners", "no owners\n");
 
     private static string ContentCall() =>
-        "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+        S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
         + CableSetupPayload.Encode("07", Thumb, "Lab", "pw");
 
     private static FakeAdb ReadyToPrepare() => Redmi()
-        .Set("install -r " + Apk, "Performing Streamed Install\nSuccess\n")
+        .Set(S + "install -r " + Apk, "Performing Streamed Install\nSuccess\n")
         .Set(ContentCall(), "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n")
         .Set(SetDeviceOwner, "Success: Device owner set to package ComponentInfo{" + Admin + "}\nActive admin set to component {" + Admin + "}\n");
 
@@ -141,35 +194,35 @@ public sealed class PhoneCableTests
     [Fact]
     public void Too_old_below_android_10()
     {
-        var adb = Redmi().Set("shell getprop ro.build.version.sdk", "28\n");
+        var adb = Redmi().Set(S + "shell getprop ro.build.version.sdk", "28\n");
         Assert.Equal(CableProblem.TooOld, new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void Android_10_is_enough()
     {
-        var adb = Redmi().Set("shell getprop ro.build.version.sdk", "29\n");
+        var adb = Redmi().Set(S + "shell getprop ro.build.version.sdk", "29\n");
         Assert.Null(new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void Security_switch_off_on_miui()
     {
-        var adb = Redmi().Set("shell getprop persist.security.adbinput", "0\n");
+        var adb = Redmi().Set(S + "shell getprop persist.security.adbinput", "0\n");
         Assert.Equal(CableProblem.SecurityOff, new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void Security_switch_missing_on_miui_counts_as_off()
     {
-        var adb = Redmi().Set("shell getprop persist.security.adbinput", "\n");
+        var adb = Redmi().Set(S + "shell getprop persist.security.adbinput", "\n");
         Assert.Equal(CableProblem.SecurityOff, new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void Install_switch_off_on_miui()
     {
-        var adb = Redmi().Set("shell getprop persist.security.adbinstall", "0\n");
+        var adb = Redmi().Set(S + "shell getprop persist.security.adbinstall", "0\n");
         Assert.Equal(CableProblem.InstallOff, new PhoneCable(adb).Check());
     }
 
@@ -177,32 +230,32 @@ public sealed class PhoneCableTests
     public void Phone_without_miui_does_not_check_the_switches()
     {
         var adb = Redmi()
-            .Set("shell getprop ro.miui.ui.version.name", "\n")
-            .Set("shell getprop persist.security.adbinput", "")
-            .Set("shell getprop persist.security.adbinstall", "");
+            .Set(S + "shell getprop ro.miui.ui.version.name", "\n")
+            .Set(S + "shell getprop persist.security.adbinput", "")
+            .Set(S + "shell getprop persist.security.adbinstall", "");
         Assert.Null(new PhoneCable(adb).Check());
-        Assert.DoesNotContain("shell getprop persist.security.adbinput", adb.Calls);
-        Assert.DoesNotContain("shell getprop persist.security.adbinstall", adb.Calls);
+        Assert.DoesNotContain(S + "shell getprop persist.security.adbinput", adb.Calls);
+        Assert.DoesNotContain(S + "shell getprop persist.security.adbinstall", adb.Calls);
     }
 
     [Fact]
     public void An_account_on_the_phone()
     {
-        var adb = Redmi().Set("shell dumpsys account", "Accounts: 1\n  Account {name=a@b.c, type=com.google}\n");
+        var adb = Redmi().Set(S + "shell dumpsys account", "Accounts: 1\n  Account {name=a@b.c, type=com.google}\n");
         Assert.Equal(CableProblem.HasAccounts, new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void An_account_with_extra_whitespace_and_indent()
     {
-        var adb = Redmi().Set("shell dumpsys account", "User UserInfo{0:x:c13}:\r\n    Accounts:   2\r\n");
+        var adb = Redmi().Set(S + "shell dumpsys account", "User UserInfo{0:x:c13}:\r\n    Accounts:   2\r\n");
         Assert.Equal(CableProblem.HasAccounts, new PhoneCable(adb).Check());
     }
 
     [Fact]
     public void Dual_apps_user_means_has_users()
     {
-        var adb = Redmi().Set("shell pm list users",
+        var adb = Redmi().Set(S + "shell pm list users",
             "Users:\n\tUserInfo{0:Propriet\u00e1rio:c13} running\n\tUserInfo{999:XSpace:801013} running\n");
         Assert.Equal(CableProblem.HasUsers, new PhoneCable(adb).Check());
     }
@@ -210,7 +263,7 @@ public sealed class PhoneCableTests
     [Fact]
     public void Phone_already_owned_by_the_school_app()
     {
-        var adb = Redmi().Set("shell dpm list-owners",
+        var adb = Redmi().Set(S + "shell dpm list-owners",
             "1 owner:\nUser  0: admin=" + Admin + ",DeviceOwner,Affiliated\n");
         Assert.Equal(CableProblem.AlreadySchool, new PhoneCable(adb).Check());
     }
@@ -218,7 +271,7 @@ public sealed class PhoneCableTests
     [Fact]
     public void Another_owner_is_not_the_school()
     {
-        var adb = Redmi().Set("shell dpm list-owners", "1 owner:\nUser  0: admin=com.other/.Admin,DeviceOwner\n");
+        var adb = Redmi().Set(S + "shell dpm list-owners", "1 owner:\nUser  0: admin=com.other/.Admin,DeviceOwner\n");
         Assert.Null(new PhoneCable(adb).Check());
     }
 
@@ -237,13 +290,13 @@ public sealed class PhoneCableTests
         Assert.Equal(
             new KnownMachine("Celular 07", "0.0.0.0", Thumb, Thumb, null, DeviceKind.Android), result.Phone);
 
-        var afterCheck = adb.Calls.SkipWhile(c => c != "shell dpm list-owners").Skip(1).ToList();
+        var afterCheck = adb.Calls.SkipWhile(c => c != S + "shell dpm list-owners").Skip(1).ToList();
         Assert.Equal(new[]
         {
-            "shell pm list packages " + Package,
-            "install -r " + Apk,
-            "shell cmd appops set " + Package + " 10008 allow",
-            "shell cmd deviceidle whitelist +" + Package,
+            S + "shell pm list packages " + Package,
+            S + "install -r " + Apk,
+            S + "shell cmd appops set " + Package + " 10008 allow",
+            S + "shell cmd deviceidle whitelist +" + Package,
             ContentCall(),
             "devices",
             SetDeviceOwner,
@@ -263,39 +316,97 @@ public sealed class PhoneCableTests
     }
 
     [Fact]
-    public void Installed_package_is_cleared_before_the_install()
+    public void Installed_package_is_uninstalled_before_the_install()
     {
-        var adb = ReadyToPrepare().Set("shell pm list packages " + Package, "package:" + Package + "\n");
+        var adb = ReadyToPrepare().Set(S + "shell pm list packages " + Package, "package:" + Package + "\n");
 
         Assert.Null(Prepare(adb).Problem);
 
-        var clear = adb.Calls.IndexOf("shell pm clear " + Package);
-        Assert.True(clear >= 0);
-        Assert.True(clear < adb.Calls.IndexOf("install -r " + Apk));
+        var uninstall = adb.Calls.IndexOf(S + "shell pm uninstall " + Package);
+        Assert.True(uninstall >= 0);
+        Assert.True(uninstall < adb.Calls.IndexOf(S + "install -r " + Apk));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("pm clear"));
     }
 
     [Fact]
-    public void Fresh_phone_is_not_cleared()
+    public void Fresh_phone_is_not_uninstalled()
     {
         var adb = ReadyToPrepare();
         Prepare(adb);
-        Assert.DoesNotContain("shell pm clear " + Package, adb.Calls);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("pm uninstall") || c.Contains("pm clear"));
+    }
+
+    [Fact]
+    public void Every_command_after_devices_names_the_phone()
+    {
+        var adb = ReadyToPrepare();
+        Assert.Null(Prepare(adb).Problem);
+        Assert.All(adb.Calls.Where(c => c != "devices"), c => Assert.StartsWith(S, c));
+    }
+
+    [Fact]
+    public void A_second_phone_plugged_in_after_the_check_does_not_stop_the_setup()
+    {
+        // The check saw one phone; from the content call on, two are listed.
+        var adb = ReadyToPrepare();
+        var result = Prepare(new SecondPhoneAfter(adb, ContentCall()));
+        Assert.Null(result.Problem);
+        Assert.False(result.OwnerUnconfirmed);
+        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+    }
+
+    [Fact]
+    public void The_prepared_phone_gone_and_another_one_left_is_lost()
+    {
+        var adb = ReadyToPrepare();
+        var result = Prepare(new OtherPhoneOnlyAfter(adb, ContentCall()));
+        Assert.Equal(CableProblem.Lost, result.Problem);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("set-device-owner"));
+    }
+
+    [Fact]
+    public void More_than_one_device_from_the_dpm_means_it_did_not_run()
+    {
+        var adb = ReadyToPrepare().Set(SetDeviceOwner, "adb: error: more than one device/emulator\n", 1);
+        var result = Prepare(adb);
+        Assert.Equal(CableProblem.Refused, result.Problem);
+        Assert.Null(result.Phone);
+        Assert.False(result.OwnerUnconfirmed);
+    }
+
+    [Fact]
+    public void A_closed_connection_during_the_dpm_is_unconfirmed()
+    {
+        var adb = ReadyToPrepare().Set(SetDeviceOwner, "error: closed\n", 1);
+        var result = Prepare(adb);
+        Assert.True(result.OwnerUnconfirmed);
+        Assert.NotNull(result.Phone);
+    }
+
+    [Fact]
+    public void Closed_inside_another_failure_is_not_a_lost_cable()
+    {
+        var adb = ReadyToPrepare().Set(SetDeviceOwner,
+            "java.lang.IllegalStateException: Trying to set the device owner, but the session is closed\n", 255);
+        var result = Prepare(adb);
+        Assert.Equal(CableProblem.Refused, result.Problem);
+        Assert.False(result.OwnerUnconfirmed);
     }
 
     [Fact]
     public void A_check_problem_stops_before_any_change()
     {
-        var adb = ReadyToPrepare().Set("shell dumpsys account", "Accounts: 1\n");
+        var adb = ReadyToPrepare().Set(S + "shell dumpsys account", "Accounts: 1\n");
         var result = Prepare(adb);
         Assert.Equal(CableProblem.HasAccounts, result.Problem);
         Assert.Null(result.Phone);
-        Assert.DoesNotContain(adb.Calls, c => c.StartsWith("install"));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("install -r"));
     }
 
     [Fact]
     public void Install_blocked_by_the_phone_means_install_switch_off()
     {
-        var adb = ReadyToPrepare().Set("install -r " + Apk,
+        var adb = ReadyToPrepare().Set(S + "install -r " + Apk,
             "Performing Streamed Install\nadb: failed to install x.apk: Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]\n", 1);
         Assert.Equal(CableProblem.InstallOff, Prepare(adb).Problem);
         Assert.DoesNotContain(adb.Calls, c => c.Contains("content call"));
@@ -304,14 +415,14 @@ public sealed class PhoneCableTests
     [Fact]
     public void Other_install_failure()
     {
-        var adb = ReadyToPrepare().Set("install -r " + Apk, "Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]\n", 1);
+        var adb = ReadyToPrepare().Set(S + "install -r " + Apk, "Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]\n", 1);
         Assert.Equal(CableProblem.InstallFailed, Prepare(adb).Problem);
     }
 
     [Fact]
     public void Install_that_times_out_fails()
     {
-        var adb = ReadyToPrepare().Set("install -r " + Apk, "", -1, timedOut: true);
+        var adb = ReadyToPrepare().Set(S + "install -r " + Apk, "", -1, timedOut: true);
         Assert.Equal(CableProblem.InstallFailed, Prepare(adb).Problem);
     }
 
@@ -319,8 +430,8 @@ public sealed class PhoneCableTests
     public void Release_commands_failing_do_not_stop_the_setup()
     {
         var adb = ReadyToPrepare()
-            .Set("shell cmd appops set " + Package + " 10008 allow", "Error: unknown op", 255)
-            .Set("shell cmd deviceidle whitelist +" + Package, "Error", 255);
+            .Set(S + "shell cmd appops set " + Package + " 10008 allow", "Error: unknown op", 255)
+            .Set(S + "shell cmd deviceidle whitelist +" + Package, "Error", 255);
         var result = Prepare(adb);
         Assert.Null(result.Problem);
         Assert.NotNull(result.Phone);

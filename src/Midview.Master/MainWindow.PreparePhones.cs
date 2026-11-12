@@ -163,8 +163,9 @@ public partial class MainWindow
             ? tile.Presence == TilePresence.Online
             : null;
 
-    // The tile menu's "Apagar e preparar de novo...": only for one phone, and
-    // only once the phone setup is ready; active when the phone answers now.
+    // The tile menu's "Apagar e preparar de novo...": only for one school
+    // phone (named from a number; not one paired earlier by code), and only
+    // once the phone setup is ready; active when the phone answers now.
     private static void ShowWipePhoneItem(ItemCollection items, IReadOnlyList<MachineTile> targets)
     {
         var item = items.OfType<MenuItem>().FirstOrDefault(item => DeviceActions.Of(item) == ToolbarAction.WipePhone);
@@ -172,7 +173,7 @@ public partial class MainWindow
         {
             return;
         }
-        var phone = targets is [{ Machine.IsPhone: true } only] ? only : null;
+        var phone = targets is [var only] && PhoneWipe.ShowsItem(only.Machine) ? only : null;
         item.Visibility = PhoneProvisioning.WizardReady && phone is not null ? Visibility.Visible : Visibility.Collapsed;
         item.IsEnabled = phone is not null && PhoneWipe.CanWipe(phone.Machine, phone.Presence == TilePresence.Online);
     }

@@ -563,6 +563,69 @@ public class PhoneSetupProgressTests
     }
 
     [Fact]
+    public void A_wipe_acked_but_not_done_turns_into_a_failure_on_turning_it_on()
+    {
+        var progress = OfferedWipe();
+        progress.WipeStarted();
+        progress.WipeSucceeded();
+        // The teacher went on meanwhile.
+        progress.Next();
+        Assert.Equal("conta-google", progress.StepId);
+
+        progress.WipeNotDone("o celular não se apagou");
+
+        Assert.Equal("ligar", progress.StepId);
+        Assert.Equal(WipeState.Failed, progress.Wipe);
+        Assert.Equal("o celular não se apagou", progress.WipeFailure);
+        Assert.False(progress.OpensWelcomeHelp);
+    }
+
+    [Fact]
+    public void A_wipe_not_done_changes_nothing_unless_the_wipe_was_done()
+    {
+        var progress = OfferedWipe();
+        progress.WipeNotDone("o celular não se apagou");
+        Assert.Equal(WipeState.Offered, progress.Wipe);
+        Assert.Null(progress.WipeFailure);
+
+        var plain = AtNumber();
+        plain.WipeNotDone("o celular não se apagou");
+        Assert.Equal(WipeState.None, plain.Wipe);
+        Assert.Equal("numero", plain.StepId);
+    }
+
+    [Fact]
+    public void A_wipe_from_the_menu_not_done_is_shown_after_the_wifi_page()
+    {
+        var progress = new PhoneSetupProgress();
+        progress.Start(hasWifi: false, gathered: true);
+        progress.StartAt("07", wiped: true);
+        progress.ChangeWifi();
+
+        progress.WipeNotDone("o celular não se apagou");
+        Assert.Equal(SetupPage.Wifi, progress.Page);
+
+        progress.Next();
+        Assert.Equal("ligar", progress.StepId);
+        Assert.Equal(WipeState.Failed, progress.Wipe);
+    }
+
+    [Fact]
+    public void Ready_remembers_an_unconfirmed_owner_until_the_next_phone()
+    {
+        var progress = Finishing();
+        progress.CablePrepared(ReadyAt, ownerUnconfirmed: true);
+        Assert.True(progress.OwnerUnconfirmed);
+
+        progress.Again();
+        Assert.False(progress.OwnerUnconfirmed);
+
+        var confirmed = Finishing();
+        confirmed.CablePrepared(ReadyAt);
+        Assert.False(confirmed.OwnerUnconfirmed);
+    }
+
+    [Fact]
     public void Starting_at_a_phone_wiped_from_its_menu_shows_the_wipe_done()
     {
         var progress = new PhoneSetupProgress();

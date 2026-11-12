@@ -188,7 +188,7 @@ public partial class PreparePhonesWindow
         }
         if (result.Phone is not null)
         {
-            _progress.CablePrepared(DateTimeOffset.Now);
+            _progress.CablePrepared(DateTimeOffset.Now, result.OwnerUnconfirmed);
         }
         else
         {

@@ -23,10 +23,13 @@ public class PhoneSetupGuideTests
         {
             yield return h.Problem; yield return h.Answer;
         }
-        foreach (var h in PhoneSetupGuide.NotAppeared.Concat(PhoneSetupGuide.WifiHelp))
+        foreach (var h in PhoneSetupGuide.NotAppeared.Concat(PhoneSetupGuide.WifiHelp)
+                     .Concat(PhoneSetupGuide.NotAppearedFor("Celular 07", ownerUnconfirmed: true)))
         {
             yield return h.Problem; yield return h.Answer;
         }
+        yield return PhoneSetupGuide.NotAppearedHint(false);
+        yield return PhoneSetupGuide.NotAppearedHint(true);
     }
 
     private static HashSet<string> ResourceNames()
@@ -155,6 +158,34 @@ public class PhoneSetupGuideTests
             var step = PhoneSetupGuide.Steps.Single(s => s.Id == id);
             Assert.Contains(step.Help, h => h.Answer.Contains("Pesquisar nas Configurações"));
         }
+    }
+
+    [Fact]
+    public void Not_appeared_after_an_unconfirmed_owner_says_to_prepare_again_if_the_phone_did_not_say_ready()
+    {
+        var helps = PhoneSetupGuide.NotAppearedFor("Celular 07", ownerUnconfirmed: true);
+        var text = string.Join(" ", helps.Select(h => h.Problem + " " + h.Answer));
+        Assert.Contains("Se o celular não mostrou \"Pronto. Este é o Celular 07 da escola.\", ligue o cabo de novo e prepare outra vez.", text);
+        Assert.DoesNotContain("não adianta", text);
+        Assert.DoesNotContain("já confia", PhoneSetupGuide.NotAppearedHint(true));
+        // The network helps stay.
+        Assert.Contains("mesmo Wi-Fi", text);
+        Assert.Contains("roteador", text);
+    }
+
+    [Fact]
+    public void Not_appeared_after_a_confirmed_owner_is_unchanged()
+    {
+        Assert.Same(PhoneSetupGuide.NotAppeared, PhoneSetupGuide.NotAppearedFor("Celular 07", ownerUnconfirmed: false));
+        Assert.Contains("já confia", PhoneSetupGuide.NotAppearedHint(false));
+    }
+
+    [Fact]
+    public void The_cable_step_helps_when_another_phone_program_is_open()
+    {
+        var step = PhoneSetupGuide.Steps.Single(s => s.Id == "cabo");
+        Assert.Contains(step.Help, h =>
+            h.Answer == "Feche outros programas de celular abertos neste computador e ligue o cabo de novo.");
     }
 
     [Fact]

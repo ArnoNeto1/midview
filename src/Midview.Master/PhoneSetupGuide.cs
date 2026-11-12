@@ -100,6 +100,28 @@ internal static class PhoneSetupGuide
             "A preparação deu certo: o celular já confia neste computador. O problema é de rede, e não adianta apagar nem preparar outra vez."),
     };
 
+    /// <summary>
+    /// The page's helps for a phone. ownerUnconfirmed: the cable dropped during the last command,
+    /// so whether the preparation ended is told only by the phone's screen.
+    /// </summary>
+    public static IReadOnlyList<GuideHelp> NotAppearedFor(string name, bool ownerUnconfirmed)
+    {
+        if (!ownerUnconfirmed)
+        {
+            return NotAppeared;
+        }
+        var ready = $"\"Pronto. Este é o {name} da escola.\"";
+        return NotAppeared.Take(NotAppeared.Count - 1).Append(new GuideHelp(
+            "Veja a tela do celular",
+            $"Se o celular mostrou {ready}, a preparação deu certo e o problema é de rede: não prepare o celular de novo. " +
+            $"Se o celular não mostrou {ready}, ligue o cabo de novo e prepare outra vez.")).ToList();
+    }
+
+    /// <summary>The NotAppeared page's line above the helps.</summary>
+    public static string NotAppearedHint(bool ownerUnconfirmed) => ownerUnconfirmed
+        ? "O cabo soltou bem no fim, e o Midview não viu se a preparação terminou. Confira:"
+        : "A preparação deu certo: o celular já confia neste computador. Falta ele entrar no Wi-Fi. Confira:";
+
     public static IReadOnlyList<GuideHelp> WifiHelp { get; } = new GuideHelp[]
     {
         new("Que Wi-Fi posso usar?",
@@ -277,6 +299,8 @@ internal static class PhoneSetupGuide
                     "Troque de porta USB ou de cabo (um cabo só de carregar não serve) e desbloqueie a tela do celular."),
                 new("Toquei em Cancelar",
                     "Desligue o cabo e ligue de novo: a pergunta volta a aparecer."),
+                new("Outro programa de celular está aberto",
+                    "Feche outros programas de celular abertos neste computador e ligue o cabo de novo."),
             }),
     };
 }

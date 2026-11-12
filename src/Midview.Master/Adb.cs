@@ -26,7 +26,7 @@ public sealed class AdbProcess : IAdb, IDisposable
     private readonly string _adbPath;
     private bool _used;
 
-    public AdbProcess() : this(Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe"))
+    public AdbProcess() : this(Path.Combine(Folder, "adb.exe"))
     {
     }
 
@@ -98,5 +98,73 @@ public sealed class AdbProcess : IAdb, IDisposable
         {
             Run(TimeSpan.FromSeconds(10), "kill-server");
         }
+    }
+
+    // The folder of the adb.exe that ships beside the program.
+    public static string Folder => Path.Combine(AppContext.BaseDirectory, "adb");
+
+    // On the Master's exit, synchronously: an adb server (or call) left
+    // running from the program's adb folder would hold adb.exe and its DLLs
+    // and make the next update of the teacher's program fail. The server is
+    // asked to stop, then whatever still runs from that folder is killed.
+    // Only adb.exe from that folder is touched, never another program's adb.
+    public static void StopLeftovers() => StopLeftovers(Folder, TimeSpan.FromSeconds(5));
+
+    internal static void StopLeftovers(string folder, TimeSpan killServerTimeout)
+    {
+        if (!AnyRunningFrom(folder))
+        {
+            return;
+        }
+        new AdbProcess(Path.Combine(folder, "adb.exe")).Run(killServerTimeout, "kill-server");
+        foreach (var process in Process.GetProcessesByName("adb"))
+        {
+            using (process)
+            {
+                try
+                {
+                    if (IsUnder(process.MainModule?.FileName, folder))
+                    {
+                        process.Kill(entireProcessTree: true);
+                        process.WaitForExit(2000);
+                    }
+                }
+                catch (Exception e) when (e is Win32Exception or InvalidOperationException or NotSupportedException)
+                {
+                    // Gone meanwhile, or not ours to look at.
+                }
+            }
+        }
+    }
+
+    private static bool AnyRunningFrom(string folder)
+    {
+        var found = false;
+        foreach (var process in Process.GetProcessesByName("adb"))
+        {
+            using (process)
+            {
+                try
+                {
+                    found |= IsUnder(process.MainModule?.FileName, folder);
+                }
+                catch (Exception e) when (e is Win32Exception or InvalidOperationException or NotSupportedException)
+                {
+                }
+            }
+        }
+        return found;
+    }
+
+    // Whether a program's full path is inside folder (not merely beside it:
+    // "adb2\adb.exe" is not in "adb").
+    internal static bool IsUnder(string? path, string folder)
+    {
+        if (string.IsNullOrEmpty(path) || string.IsNullOrEmpty(folder))
+        {
+            return false;
+        }
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 }

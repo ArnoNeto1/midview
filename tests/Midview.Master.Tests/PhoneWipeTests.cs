@@ -83,4 +83,13 @@ public class PhoneWipeTests
         Assert.False(PhoneWipe.CanWipe(new KnownMachine("LAB-01", "192.0.2.1", "ANY", "AB12"), online: true));
         Assert.False(PhoneWipe.CanWipe(new KnownMachine("Pixel de Ana", "192.0.2.9", "ANY", "AB12", Kind: DeviceKind.Android), online: true));
     }
+
+    [Fact]
+    public void The_menu_item_is_shown_only_for_a_school_phone()
+    {
+        Assert.True(PhoneWipe.ShowsItem(Phone("AB12")));
+        // Paired earlier by code: no number, so no item to grey with no reason.
+        Assert.False(PhoneWipe.ShowsItem(new KnownMachine("Celular 549C", "192.0.2.9", "ANY", "AB12", Kind: DeviceKind.Android)));
+        Assert.False(PhoneWipe.ShowsItem(new KnownMachine("Celular 07", "192.0.2.1", "ANY", "AB12")));
+    }
 }

@@ -5,9 +5,10 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // "Apagar e preparar de novo": the Master asks a school phone's Agent to erase
-// the phone (back to factory settings), and the assistant then goes on at the
-// six taps with the same number. The words and the sending live here, apart
-// from the windows that use them.
+// the phone (back to factory settings), and the assistant then goes on at
+// turning it on ("ligar"), with the same number, to prepare it again over the
+// cable. The words and the sending live here, apart from the windows that use
+// them.
 public static class PhoneWipe
 {
     // What a phone with an Agent from before this command answers: an empty
@@ -37,6 +38,11 @@ public static class PhoneWipe
     // answers now.
     public static bool CanWipe(KnownMachine machine, bool online) =>
         machine.IsPhone && online && NumberOf(machine.Name) is not null;
+
+    // The menu item is shown only for a school phone (named from a number):
+    // a phone paired earlier by code ("Celular 549C") could never use it.
+    public static bool ShowsItem(KnownMachine machine) =>
+        machine.IsPhone && NumberOf(machine.Name) is not null;
 
     // Blocks for the connection and the answer: call it off the UI thread.
     public static (bool Ok, string Detail) Send(KnownMachine phone, X509Certificate2 cert) =>

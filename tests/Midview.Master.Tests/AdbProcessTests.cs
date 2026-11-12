@@ -46,6 +46,77 @@ public sealed class AdbProcessTests
         Assert.True(output.TimedOut);
     }
 
+    [Theory]
+    [InlineData(@"C:\Program Files\Midview Professor\adb\adb.exe", @"C:\Program Files\Midview Professor\adb", true)]
+    [InlineData(@"c:\program files\midview professor\ADB\adb.exe", @"C:\Program Files\Midview Professor\adb\", true)]
+    [InlineData(@"C:\Program Files\Midview Professor\adb2\adb.exe", @"C:\Program Files\Midview Professor\adb", false)]
+    [InlineData(@"C:\Android\platform-tools\adb.exe", @"C:\Program Files\Midview Professor\adb", false)]
+    [InlineData(null, @"C:\Program Files\Midview Professor\adb", false)]
+    [InlineData("", @"C:\Program Files\Midview Professor\adb", false)]
+    public void Only_programs_inside_the_adb_folder_are_ours(string? path, string folder, bool ours)
+    {
+        Assert.Equal(ours, AdbProcess.IsUnder(path, folder));
+    }
+
+    [Fact]
+    public void Leftovers_from_the_adb_folder_are_stopped_and_others_are_not()
+    {
+        // A copy of ping named adb.exe stands in for a server left running:
+        // the real adb is never started here.
+        var root = Path.Combine(Path.GetTempPath(), "midview-adb-" + Guid.NewGuid().ToString("N"));
+        var ours = Path.Combine(root, "adb");
+        var other = Path.Combine(root, "adb2");
+        Directory.CreateDirectory(ours);
+        Directory.CreateDirectory(other);
+        var ping = Path.Combine(Environment.SystemDirectory, "PING.EXE");
+        File.Copy(ping, Path.Combine(ours, "adb.exe"));
+        File.Copy(ping, Path.Combine(other, "adb.exe"));
+        using var left = StartHidden(Path.Combine(ours, "adb.exe"));
+        using var notOurs = StartHidden(Path.Combine(other, "adb.exe"));
+        try
+        {
+            AdbProcess.StopLeftovers(ours, TimeSpan.FromSeconds(3));
+
+            Assert.True(left.WaitForExit(5000));
+            Assert.False(notOurs.HasExited);
+        }
+        finally
+        {
+            foreach (var process in new[] { left, notOurs })
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+            }
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Nothing_left_running_means_nothing_is_run()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "midview-adb-" + Guid.NewGuid().ToString("N"));
+        // No adb.exe there at all: a call would only fail, and none is made.
+        AdbProcess.StopLeftovers(folder, TimeSpan.FromSeconds(1));
+        Assert.False(Directory.Exists(folder));
+    }
+
+    private static System.Diagnostics.Process StartHidden(string program)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(program)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+        };
+        start.ArgumentList.Add("-n");
+        start.ArgumentList.Add("60");
+        start.ArgumentList.Add("127.0.0.1");
+        return System.Diagnostics.Process.Start(start)!;
+    }
+
     [Fact]
     public void Missing_program_is_reported_not_thrown()
     {

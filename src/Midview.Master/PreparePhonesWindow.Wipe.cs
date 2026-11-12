@@ -90,10 +90,58 @@ public partial class PreparePhonesWindow
             _progress.WipeSucceeded();
             // The phone is on its way to "Bem-vindo": that help opens.
             ShowPage();
+            WatchWipe(name);
             return;
         }
         _progress.WipeFailed(result.Detail);
         ShowWipe();
+    }
+
+    // How often the phone told to wipe is looked at (its tile's presence).
+    private static readonly TimeSpan WipeCheckEvery = TimeSpan.FromSeconds(3);
+
+    public const string NotWipedText = "o celular não se apagou";
+
+    private DispatcherTimer? _wipeTimer;
+    private PhoneWipeWatch? _wipeWatch;
+    private string? _wipeWatchName;
+
+    // The phone acked the wipe (here or from its tile's menu): it acks
+    // before wiping, so whether it really wipes is seen only from the class.
+    // Still answering 90 s later, it did not: the page says so.
+    private void WatchWipe(string name)
+    {
+        _wipeWatch = new PhoneWipeWatch(DateTimeOffset.Now);
+        _wipeWatchName = name;
+        if (_wipeTimer is null)
+        {
+            _wipeTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = WipeCheckEvery };
+            _wipeTimer.Tick += (_, _) => LookAtWipe();
+            Closed += (_, _) => _wipeTimer?.Stop();
+        }
+        _wipeTimer.Start();
+    }
+
+    private void LookAtWipe()
+    {
+        if (_closed || _wipeWatch is not { } watch || _wipeWatchName is not { } name
+            || _progress.Name != name || _progress.Wipe != WipeState.Done)
+        {
+            // Closed, or the teacher moved to another phone.
+            _wipeTimer?.Stop();
+            return;
+        }
+        switch (watch.Tick(DateTimeOffset.Now, _phoneOnline(name) == true))
+        {
+            case WipeWatchResult.Wiping:
+                _wipeTimer?.Stop();
+                break;
+            case WipeWatchResult.NotWiped:
+                _wipeTimer?.Stop();
+                _progress.WipeNotDone(NotWipedText);
+                ShowPage();
+                break;
+        }
     }
 
     // After a failed wipe: "Celular travado com PIN" (recovery mode), the way that

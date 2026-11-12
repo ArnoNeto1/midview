@@ -72,9 +72,9 @@ public partial class PreparePhonesWindow
                 break;
             case SetupPage.NotAppeared:
                 NotAppearedTitle.Text = $"O {name} ainda não apareceu no Midview";
-                NotAppearedHint.Text = "A preparação deu certo: o celular já confia neste computador. Falta ele entrar no Wi-Fi. Confira:";
+                NotAppearedHint.Text = PhoneSetupGuide.NotAppearedHint(_progress.OwnerUnconfirmed);
                 NotAppearedList.Children.Clear();
-                foreach (var help in PhoneSetupGuide.NotAppeared)
+                foreach (var help in PhoneSetupGuide.NotAppearedFor(name ?? "", _progress.OwnerUnconfirmed))
                 {
                     NotAppearedList.Children.Add(new Border { Style = (Style)FindResource("Card"), Margin = new Thickness(0, 0, 0, 8), Child = HelpBlock(help) });
                 }

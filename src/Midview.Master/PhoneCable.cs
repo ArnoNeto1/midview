@@ -29,29 +29,39 @@ public sealed class PhoneCable
     private static readonly TimeSpan Short = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan InstallTime = TimeSpan.FromMinutes(3);
     private static readonly Regex AccountsLine = new(@"Accounts:\s*(\d+)", RegexOptions.Compiled);
+    // What adb says when the phone left the cable while a command ran.
+    // "more than one device" is not here: it means the command never ran.
     private static readonly Regex GoneText = new(
-        "device offline|no devices|device .* not found|device not found|closed|disconnected|more than one device",
+        "device offline|no devices|device .* not found|device not found|error: closed|disconnected",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private const string Authority = "content://io.github.arnoneto1.midview.agent.setup";
 
     private readonly IAdb _adb;
 
+    // The serial of the phone the last Check found. Every command after the
+    // check names it ("-s"), so a second phone plugged in meanwhile is never
+    // the one changed, nor makes adb refuse the command.
+    private string? _serial;
+
     public PhoneCable(IAdb adb)
     {
         _adb = adb;
     }
 
+    private AdbOutput Run(TimeSpan timeout, params string[] args) =>
+        _adb.Run(timeout, new[] { "-s", _serial! }.Concat(args).ToArray());
+
     private AdbOutput Shell(TimeSpan timeout, params string[] command) =>
-        _adb.Run(timeout, new[] { "shell" }.Concat(command).ToArray());
+        Run(timeout, new[] { "shell" }.Concat(command).ToArray());
 
     private string Prop(string name) => Shell(Short, "getprop", name).Text.Trim();
 
-    // The single phone on the cable and its state, or the problem when there is not exactly one.
-    private (CableProblem? Problem, bool Present) Devices()
+    // What "adb devices" lists: each serial with its state.
+    private List<(string Serial, string State)> Listed()
     {
         var output = _adb.Run(Short, "devices");
-        var states = new List<string>();
+        var devices = new List<(string Serial, string State)>();
         foreach (var line in output.Text.Split('\n'))
         {
             var parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
@@ -59,27 +69,40 @@ public sealed class PhoneCable
             {
                 continue;
             }
-            states.Add(parts[1]);
+            devices.Add((parts[0], parts[1]));
         }
-        if (states.Count == 0)
+        return devices;
+    }
+
+    // The single phone on the cable, ready for commands, or the problem when
+    // there is not exactly one.
+    private (CableProblem? Problem, string? Serial) Devices()
+    {
+        var devices = Listed();
+        if (devices.Count == 0)
         {
-            return (CableProblem.NoPhone, false);
+            return (CableProblem.NoPhone, null);
         }
-        if (states.Count > 1)
+        if (devices.Count > 1)
         {
-            return (CableProblem.TooMany, false);
+            return (CableProblem.TooMany, null);
         }
-        return states[0] switch
+        return devices[0].State switch
         {
-            "device" => (null, true),
-            "unauthorized" => (CableProblem.Unauthorized, false),
-            _ => (CableProblem.NoPhone, false),
+            "device" => (null, devices[0].Serial),
+            "unauthorized" => (CableProblem.Unauthorized, null),
+            _ => (CableProblem.NoPhone, null),
         };
     }
 
+    // Whether the phone being prepared is still on the cable, ready. Another
+    // phone plugged in beside it changes nothing.
+    private bool Present() => Listed().Any(d => d.Serial == _serial && d.State == "device");
+
     public CableProblem? Check()
     {
-        var (problem, _) = Devices();
+        var (problem, serial) = Devices();
+        _serial = serial;
         if (problem is not null)
         {
             return problem;
@@ -142,10 +165,14 @@ public sealed class PhoneCable
             .Split('\n').Any(l => l.Trim() == "package:" + package);
         if (installed)
         {
-            Shell(Short, "pm", "clear", package);
+            // The phone is not the school's yet (Check), so this app is left
+            // over: removed, not just cleared, so an install signed or
+            // versioned differently cannot fail, and its update cannot start
+            // the agent before the setup is handed over.
+            Shell(Short, "pm", "uninstall", package);
         }
 
-        var install = _adb.Run(InstallTime, "install", "-r", apkPath);
+        var install = Run(InstallTime, "install", "-r", apkPath);
         if (install.TimedOut || !install.Text.Contains("Success", StringComparison.Ordinal))
         {
             return Fail(install.Text.Contains("INSTALL_FAILED_USER_RESTRICTED", StringComparison.Ordinal)
@@ -165,7 +192,7 @@ public sealed class PhoneCable
         if (!bundle.TryGetValue("ok", out var ok))
         {
             // No answer from the door: the cable dropped, or the app did not answer.
-            return Fail(Devices().Present ? CableProblem.Refused : CableProblem.Lost);
+            return Fail(Present() ? CableProblem.Refused : CableProblem.Lost);
         }
         if (!ok.Equals("true", StringComparison.OrdinalIgnoreCase)
             || !bundle.TryGetValue("thumbprint", out var thumbprint) || thumbprint.Length == 0)
@@ -177,7 +204,7 @@ public sealed class PhoneCable
         var phone = new KnownMachine(
             PhoneNumber.NameOf(number), "0.0.0.0", thumbprint, thumbprint, null, DeviceKind.Android);
 
-        if (!Devices().Present)
+        if (!Present())
         {
             return Fail(CableProblem.Lost);
         }

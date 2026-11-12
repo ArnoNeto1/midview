@@ -81,6 +81,10 @@ internal sealed class PhoneSetupProgress
 
     public bool HasAppeared { get; private set; }
 
+    // The cable dropped during the last command: whether the phone became
+    // the school's own is told only by its screen.
+    public bool OwnerUnconfirmed { get; private set; }
+
     // The "ligar" page opens with "Apareceu Bem-vindo" in sight: the phone was
     // just wiped (or restored by hand) and is on that screen.
     public bool OpensWelcomeHelp { get; private set; }
@@ -121,6 +125,24 @@ internal sealed class PhoneSetupProgress
         {
             Wipe = WipeState.Failed;
             WipeFailure = reason;
+        }
+    }
+
+    // The phone acked the wipe but still answers long after (PhoneWipeWatch):
+    // the wipe failed on the phone. A step page goes back to "ligar", where
+    // the failure and its way out (recovery mode) are shown.
+    public void WipeNotDone(string reason)
+    {
+        if (Wipe != WipeState.Done)
+        {
+            return;
+        }
+        Wipe = WipeState.Failed;
+        WipeFailure = reason;
+        OpensWelcomeHelp = false;
+        if (Page == SetupPage.Step)
+        {
+            ShowStep(TurnOnStep);
         }
     }
 
@@ -284,7 +306,8 @@ internal sealed class PhoneSetupProgress
     }
 
     // The phone is the school's own: "Pronto. Pode tirar o cabo."
-    public void CablePrepared(DateTimeOffset at)
+    // ownerUnconfirmed: as far as the Midview knows (see CableResult).
+    public void CablePrepared(DateTimeOffset at, bool ownerUnconfirmed = false)
     {
         if (Page != SetupPage.Cable)
         {
@@ -292,6 +315,7 @@ internal sealed class PhoneSetupProgress
         }
         ReadyAt = at;
         HasAppeared = false;
+        OwnerUnconfirmed = ownerUnconfirmed;
         Page = SetupPage.Ready;
     }
 
@@ -386,6 +410,7 @@ internal sealed class PhoneSetupProgress
         ProblemStepId = null;
         ReadyAt = null;
         HasAppeared = false;
+        OwnerUnconfirmed = false;
         OpensWelcomeHelp = false;
     }
 

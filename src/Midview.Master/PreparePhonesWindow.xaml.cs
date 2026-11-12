@@ -72,6 +72,10 @@ public partial class PreparePhonesWindow : MidviewWindow
             _progress.ChangeWifi();
         }
         ShowPage();
+        if (wiped && _progress.Name is { } name)
+        {
+            WatchWipe(name);
+        }
     }
 
     private void OnNextClicked(object sender, RoutedEventArgs e)
