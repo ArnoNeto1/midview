@@ -19,8 +19,8 @@ import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 // came back when the lock was lifted), so a closing asked for then waits for
 // the lock to go (unlocked, called by the lock's last release) and is done
 // a moment later, once the lock task has ended.
-// A phone has no warning nor question before it: the apps close at once
-// (the Master says so), whatever the mode and the time the teacher picked.
+// The student's warning and the wait before it are CloseCountdown's; the
+// pick between asking and forcing has no meaning here: the apps close.
 class AppCloser(
     private val suspender: AppSuspender,
     private val gw: DevicePolicyGateway,
@@ -37,6 +37,9 @@ class AppCloser(
     @Volatile private var pending = false
 
     val isPending: Boolean get() = pending
+
+    // Whether this phone can close apps at all (it is the Device Owner).
+    fun canClose(): Boolean = gw.isDeviceOwner()
 
     // The CommandAck's result: whether it was done, and what the teacher reads.
     @Synchronized

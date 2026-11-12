@@ -44,8 +44,9 @@ class CommandHandler(
     // The teacher's lock screen PIN (LockScreenKeeper): the payload in, the
     // CommandAck's result out.
     private val screenPin: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
-    // "Fechar programas" (AppCloser): the CommandAck's result.
-    private val closeApps: () -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Fechar programas" (CloseCountdown): the warning's time in seconds in,
+    // the CommandAck's result out.
+    private val closeApps: (delaySeconds: Int) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -116,16 +117,14 @@ class CommandHandler(
             val (done, detail) = screenPin(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
-        // The PC's payload (the mode and the warning's time) is checked, but
-        // a phone closes its apps at once, with no question (AppCloser). On
-        // this connection's thread: about a second.
-        MessageType.CLOSE_APPS ->
-            if (isValidCloseApps(message.payload)) {
-                val (closed, detail) = closeApps()
-                Message(MessageType.COMMAND_ACK, CommandResult.encode(closed, detail))
-            } else {
-                Message(MessageType.COMMAND_ACK, CommandResult.encode(false, INVALID_REQUEST))
-            }
+        // The PC's payload: the student is warned for the time in it, then
+        // the apps close; asking or forcing (the mode) has no meaning on a
+        // phone. "Agora" closes on this connection's thread: about a second.
+        MessageType.CLOSE_APPS -> {
+            val delay = closeAppsDelay(message.payload)
+            val (closed, detail) = if (delay == null) false to INVALID_REQUEST else closeApps(delay)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(closed, detail))
+        }
         // On this connection's own thread: up to ~30 s checking the network.
         MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())
         // The payload (the attempt's id, from a Master following one) is
@@ -166,13 +165,14 @@ class CommandHandler(
 
         // CloseApps' payload, as src/Midview.Protocol/CloseAppsCommand.cs:
         // the mode (0 ask, 1 force), then the warning in seconds (uint16,
-        // big-endian, at most 10 minutes); an older Master sends the mode alone.
-        fun isValidCloseApps(payload: ByteArray): Boolean {
-            if (payload.size != 1 && payload.size != 3) return false
-            if (payload[0].toInt() != 0 && payload[0].toInt() != 1) return false
-            if (payload.size == 1) return true
+        // big-endian, at most 10 minutes); an older Master sends the mode
+        // alone, which means now. The warning's seconds, or null if invalid.
+        fun closeAppsDelay(payload: ByteArray): Int? {
+            if (payload.size != 1 && payload.size != 3) return null
+            if (payload[0].toInt() != 0 && payload[0].toInt() != 1) return null
+            if (payload.size == 1) return 0
             val seconds = ((payload[1].toInt() and 0xFF) shl 8) or (payload[2].toInt() and 0xFF)
-            return seconds <= MAX_CLOSE_DELAY_SECONDS
+            return if (seconds <= MAX_CLOSE_DELAY_SECONDS) seconds else null
         }
 
         const val MAX_CLOSE_DELAY_SECONDS = 10 * 60

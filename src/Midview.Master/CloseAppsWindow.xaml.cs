@@ -8,9 +8,10 @@ namespace Midview.Master;
 // Closes the student's programs on one machine or on the whole class (the
 // Session's WindowsAppCloser), after warning the student for the time the
 // teacher picks. Forcing goes ahead without asking the teacher: the choice
-// itself says that unsaved work is lost. A phone closes all its apps at once
-// (CloseAppsTargets): for phones alone the choices are not shown, and with
-// PCs a line says they are for the PCs.
+// itself says that unsaved work is lost. A phone warns the student for the
+// same time and then closes all its apps (CloseAppsTargets): for phones
+// alone the asking-or-forcing card is not shown, and with PCs a line says
+// that card is for the PCs.
 public partial class CloseAppsWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -28,11 +29,10 @@ public partial class CloseAppsWindow : MidviewWindow
         if (CloseAppsTargets.OnlyPhones(targets))
         {
             ModeCard.Visibility = Visibility.Collapsed;
-            DelayCard.Visibility = Visibility.Collapsed;
-            CloseButton.Margin = new Thickness(0, 14, 0, 10);
-            // Without the choices, a shorter window: one line per phone below.
-            MinHeight = 360;
-            Height = 440;
+            DelayCard.Margin = new Thickness(0, 12, 0, 14);
+            // Without the asking-or-forcing card, a shorter window.
+            MinHeight = 460;
+            Height = 560;
         }
         if (CloseAppsTargets.Note(targets) is { } note)
         {
@@ -49,7 +49,7 @@ public partial class CloseAppsWindow : MidviewWindow
             : 0;
         CloseButton.IsEnabled = false;
         ResultTextBlock.Text = string.Empty;
-        ProgressTextBlock.Text = CloseAppsTargets.Progress(_targets, delaySeconds);
+        ProgressTextBlock.Text = CloseAppsTargets.Progress(delaySeconds);
 
         // All machines at once: an offline one must not hold up the rest.
         var payload = CloseAppsCommand.Encode(mode, delaySeconds);

@@ -22,22 +22,22 @@ public class CloseAppsTargetsTests
         Assert.Equal(CloseAppsTargets.PcHint, CloseAppsTargets.Hint(Pcs));
         Assert.Null(CloseAppsTargets.Note(Pcs));
         Assert.Equal("Fechar programas", CloseAppsTargets.Button(Pcs));
-        Assert.Equal("Avisando os alunos...", CloseAppsTargets.Progress(Pcs, 60));
-        Assert.Equal("Fechando...", CloseAppsTargets.Progress(Pcs, 0));
+        Assert.Equal("Avisando os alunos...", CloseAppsTargets.Progress(60));
+        Assert.Equal("Fechando...", CloseAppsTargets.Progress(0));
     }
 
-    // Phones alone: no choices to make, all their apps close at once.
+    // Phones alone: the student is warned for the time picked, then all the apps close.
     [Fact]
-    public void Phones_alone_close_all_their_apps_at_once()
+    public void Phones_alone_are_warned_and_then_closed()
     {
         Assert.True(CloseAppsTargets.OnlyPhones(Phones));
         Assert.Equal(CloseAppsTargets.PhoneHint, CloseAppsTargets.Hint(Phones));
         Assert.Null(CloseAppsTargets.Note(Phones));
         Assert.Equal("Fechar apps", CloseAppsTargets.Button(Phones));
-        Assert.Equal("Fechando...", CloseAppsTargets.Progress(Phones, 60));
+        Assert.Contains("Avisa o aluno", CloseAppsTargets.PhoneHint);
     }
 
-    // PCs and phones: the PCs' choices, and a line saying the phones don't wait.
+    // PCs and phones: the PCs' choices, and a line saying asking or forcing is for the PCs.
     [Fact]
     public void Phones_with_pcs_are_told_apart()
     {
@@ -45,7 +45,7 @@ public class CloseAppsTargetsTests
         Assert.Equal(CloseAppsTargets.PcHint, CloseAppsTargets.Hint(Mixed));
         Assert.Equal(CloseAppsTargets.PhoneNote, CloseAppsTargets.Note(Mixed));
         Assert.Equal("Fechar programas", CloseAppsTargets.Button(Mixed));
-        Assert.Equal("Avisando os alunos...", CloseAppsTargets.Progress(Mixed, 30));
+        Assert.Contains("o aluno também é avisado", CloseAppsTargets.PhoneNote);
     }
 
     [Fact]

@@ -22,8 +22,10 @@ import java.util.concurrent.atomic.AtomicReference
 // (takeScreenshot, Android 11 and newer) only when a thumbnail or a big
 // window asks for one, at most every MIN_SHOT_INTERVAL_MILLIS, into the
 // same LatestFrame as the "Iniciar agora" capture. It reads nothing else of
-// the screen and does nothing on it: no events, no window content, no
-// gestures, no keys (res/xml/accessibility_capture.xml). Android binds it
+// the screen: no events, no window content, no gestures, no keys
+// (res/xml/accessibility_capture.xml). The one thing it puts on the screen
+// is the teacher's warning before "Fechar programas" (CloseOverlay), a strip
+// that lets every touch through. Android binds it
 // in the app's own process; the agent is started there as for any start of
 // the process (MidviewApplication).
 class AccessibilityCapture : AccessibilityService() {
@@ -34,6 +36,7 @@ class AccessibilityCapture : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.i(TAG, "Accessibility on, but this Android takes no screenshots: the student is asked instead.")
             return
@@ -66,6 +69,7 @@ class AccessibilityCapture : AccessibilityService() {
     }
 
     private fun gone() {
+        if (instance === this) instance = null
         val executor = shots ?: return
         shots = null
         connected = false
@@ -155,6 +159,11 @@ class AccessibilityCapture : AccessibilityService() {
 
         // The service is connected and taking the pictures.
         @Volatile var connected = false
+            private set
+
+        // The service while Android has it connected (any Android version):
+        // what draws the warning strip (CloseOverlay).
+        @Volatile var instance: AccessibilityCapture? = null
             private set
 
         // Turned on in the settings (by cable), connected or not yet.

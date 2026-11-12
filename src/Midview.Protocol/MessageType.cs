@@ -44,9 +44,9 @@ public enum MessageType : byte
 
     // Close the student's programs, after warning them (CloseAppsCommand),
     // answered with one CommandAck carrying a CommandResult. A phone's agent
-    // (port 28900) takes it too, from a trusted teacher: it closes all the
-    // student's apps at once, whatever the mode and the warning's time. An
-    // agent from before that answers "Ainda não funciona em celular.".
+    // (port 28900) takes it too, from a trusted teacher: it warns the student
+    // for the time in it, then closes all the student's apps, whatever the
+    // mode. An agent from before that answers "Ainda não funciona em celular.".
     CloseApps = 19,
 
     // Collect the files in the student's "Entregar ao professor" folder:

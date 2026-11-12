@@ -427,10 +427,11 @@ class CommandHandlerTest {
 
     // "Fechar programas": the PC's payload (mode, then the warning's time);
     // the phone closes at once and answers with the closer's result.
-    private var closes = 0
+    private val delays = mutableListOf<Int>()
+    private val closes get() = delays.size
     private val closing by lazy {
         CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway, closeApps = {
-            closes++
+            delays += it
             true to "apps fechados; tela inicial na frente"
         }) { phoneApps }
     }
@@ -445,7 +446,8 @@ class CommandHandlerTest {
         )
         closing.handle(channel)
 
-        assertEquals(2, closes)
+        // The warning's time goes to the countdown; the mode alone means now.
+        assertEquals(listOf(60, 0), delays)
         assertEquals(2, channel.sent.size)
         channel.sent.forEach {
             assertEquals(MessageType.COMMAND_ACK, it.type)
@@ -477,9 +479,11 @@ class CommandHandlerTest {
     }
 
     @Test fun theLongestWarningIsStillAValidRequest() {
-        assertTrue(CommandHandler.isValidCloseApps(byteArrayOf(1, 0x02, 0x58)))
-        assertFalse(CommandHandler.isValidCloseApps(byteArrayOf(1, 0x02, 0x59)))
-        assertFalse(CommandHandler.isValidCloseApps(byteArrayOf(-1)))
+        assertEquals(600, CommandHandler.closeAppsDelay(byteArrayOf(1, 0x02, 0x58)))
+        assertEquals(30, CommandHandler.closeAppsDelay(byteArrayOf(0, 0, 30)))
+        assertEquals(0, CommandHandler.closeAppsDelay(byteArrayOf(1)))
+        assertEquals(null, CommandHandler.closeAppsDelay(byteArrayOf(1, 0x02, 0x59)))
+        assertEquals(null, CommandHandler.closeAppsDelay(byteArrayOf(-1)))
     }
 
     // Without a closer (as a JVM test builds it), the phone says it doesn't yet.

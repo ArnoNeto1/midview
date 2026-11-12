@@ -17,7 +17,9 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
+import io.github.arnoneto1.midview.agent.apps.AndroidCloseNotice
 import io.github.arnoneto1.midview.agent.apps.AppCloser
+import io.github.arnoneto1.midview.agent.apps.CloseCountdown
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
@@ -63,6 +65,7 @@ import java.io.File
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 // The Midview agent on the phone: always running (a foreground service with
@@ -246,9 +249,27 @@ class AgentService : Service() {
             killBackground = { getSystemService(ActivityManager::class.java).killBackgroundProcesses(it) },
             log = log,
         )
+        // The student's warning and the wait, then the closing, on one thread of its own.
+        val closing = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview close apps").apply { isDaemon = true } }
+        val countdown = CloseCountdown(
+            closer, AndroidCloseNotice(this),
+            schedule = { delay, task ->
+                closing.schedule(
+                    Runnable {
+                        try {
+                            task()
+                        } catch (e: RuntimeException) {
+                            log("The warning before closing the apps failed", e)
+                        }
+                    },
+                    delay, TimeUnit.MILLISECONDS,
+                )
+            },
+            log = log,
+        )
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
-            log = log, screenPin = lockScreen::setTeacherPin, closeApps = closer::close, listApps = installedApps::list,
+            log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
