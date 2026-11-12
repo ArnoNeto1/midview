@@ -156,6 +156,23 @@
                         <ContentControl Content="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
                 </Border>
+
+                <!-- Only in a room with a phone (DeviceSupport.ShowsPhoneGroup): a room of PCs
+                     keeps its toolbar as it was. Last, so that on a 1366px screen it is the one
+                     group that goes to a second row, and the first row stays as it always was.
+                     Acts on the selected phones, or on every phone of the room when none is selected. -->
+                <Border x:Name="PhoneGroupPanel" Style="{StaticResource ToolbarGroupPanel}" Visibility="Collapsed"
+                        local:ToolbarButton.IconBrush="{StaticResource CelularesBrush}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <local:ToolbarButton Content="Otimizar" Icon="&#xE8EA;" Badge="&#xE73E;" local:DeviceActions.Action="Optimize" Click="OnOptimizePhonesClicked" OpensOptions="True"
+                                                 ToolTip="Esconde os apps de propaganda dos celulares e liga o DNS sem anúncios. Com celulares selecionados, só neles." />
+                            <local:ToolbarButton Content="Atualizar celulares" Icon="&#xE8EA;" Badge="&#xE895;" local:DeviceActions.Action="UpdatePhones" Click="OnUpdatePhonesClicked" OpensOptions="True"
+                                                 ToolTip="Manda pela rede o Midview desta versão para os celulares. Com celulares selecionados, só para eles." />
+                        </StackPanel>
+                        <ContentControl Content="Celulares" Style="{StaticResource ToolbarGroupCaption}" />
+                    </StackPanel>
+                </Border>
             </WrapPanel>
         </Border>
 
@@ -311,6 +328,10 @@
                                             <MenuItem Header="Painel do laboratório..." local:DeviceActions.Action="LabConfig" Click="OnLabConfigMachineClicked" />
                                             <MenuItem Header="Instalar programa..." local:DeviceActions.Action="Install" Click="OnInstallMachineClicked" />
                                             <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
+                                            <!-- The CELULARES group, shown only when a phone is among the machines. -->
+                                            <Separator Tag="celular" Visibility="Collapsed" />
+                                            <MenuItem Tag="celular" Header="Otimizar..." local:DeviceActions.Action="Optimize" Visibility="Collapsed" Click="OnOptimizeMachineClicked" />
+                                            <MenuItem Tag="celular" Header="Atualizar o Midview do celular..." local:DeviceActions.Action="UpdatePhones" Visibility="Collapsed" Click="OnUpdatePhonesMachineClicked" />
                                             <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
                                             <Separator Tag="uma" />
                                             <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />

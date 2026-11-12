@@ -31,14 +31,56 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_and_blocking_apps_and_sites_only()
+    public void Phone_supports_view_screen_lock_blocking_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
-                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites;
+                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
+                or ToolbarAction.Optimize or ToolbarAction.UpdatePhones;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
+    }
+
+    // "Otimizar" and "Atualizar celulares" are made for phones: a PC has nothing to do with them.
+    [Theory]
+    [InlineData(ToolbarAction.Optimize)]
+    [InlineData(ToolbarAction.UpdatePhones)]
+    public void Phone_actions_are_for_phones_only(ToolbarAction action)
+    {
+        Assert.False(DeviceSupport.Supports(DeviceKind.Windows, action));
+        Assert.False(DeviceSupport.IsEnabled(new[] { Pc("PC 01") }, action));
+        Assert.True(DeviceSupport.IsEnabled(new[] { Pc("PC 01"), Phone("Cel 01") }, action));
+    }
+
+    // The CELULARES group: the selected phones, or every phone of the room
+    // when no phone is selected (a selection of PCs alone included).
+    [Theory]
+    [InlineData(ToolbarAction.Optimize)]
+    [InlineData(ToolbarAction.UpdatePhones)]
+    public void Phone_actions_reach_the_selected_phones_or_every_phone(ToolbarAction action)
+    {
+        var pc = Pc("PC 01");
+        var cel1 = Phone("Cel 01");
+        var cel2 = Phone("Cel 02");
+        var room = new[] { pc, cel1, cel2 };
+
+        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.All));
+        Assert.Equal(new[] { cel2 }, DeviceSupport.ToolbarReach(action, new[] { cel2 }, room, DeviceFilter.All));
+        Assert.Equal(new[] { cel1 }, DeviceSupport.ToolbarReach(action, new[] { pc, cel1 }, room, DeviceFilter.All));
+        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, new[] { pc }, room, DeviceFilter.All));
+        Assert.Equal(new[] { cel1, cel2 }, DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), room, DeviceFilter.Computers));
+        Assert.Empty(DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), new[] { pc }, DeviceFilter.All));
+    }
+
+    // The CELULARES group shows only in a room with a phone: a room of PCs stays as it was.
+    [Fact]
+    public void Phone_group_shows_only_with_a_phone_in_the_room()
+    {
+        Assert.False(DeviceSupport.ShowsPhoneGroup(Array.Empty<KnownMachine>()));
+        Assert.False(DeviceSupport.ShowsPhoneGroup(new[] { Pc("PC 01"), Pc("PC 02") }));
+        Assert.True(DeviceSupport.ShowsPhoneGroup(new[] { Pc("PC 01"), Phone("Cel 01") }));
+        Assert.True(DeviceSupport.ShowsPhoneGroup(new[] { Phone("Cel 01") }));
     }
 
     // The sites window sends its commands to every machine it reaches.

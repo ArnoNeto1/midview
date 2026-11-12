@@ -25,21 +25,32 @@ public enum ToolbarAction
     LabConfig,
     ClassFolder,
     Update,
+    // The CELULARES group: made for phones only.
+    Optimize,
+    UpdatePhones,
 }
 
 // What each kind of device accepts. A phone can have its screen watched and
 // locked, its apps blocked (its own window: PhoneAppBlockWindow) and its
-// sites blocked (the same commands as a PC's); the plan that teaches the
-// Android agent to update itself turns that on here. Control stays for computers.
+// sites blocked (the same commands as a PC's), and is optimized and updated
+// (the CELULARES group, which a PC has nothing to do with). Control stays for computers.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
     {
-        DeviceKind.Windows => true,
+        DeviceKind.Windows => !IsPhoneOnly(action),
         DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.ScreenLock
-            or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites,
+            or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
+            || IsPhoneOnly(action),
         _ => false,
     };
+
+    // The actions of the CELULARES group.
+    public static bool IsPhoneOnly(ToolbarAction action) => action is ToolbarAction.Optimize or ToolbarAction.UpdatePhones;
+
+    // The CELULARES group shows only in a room with at least one phone: a room
+    // of PCs alone keeps the toolbar it always had.
+    public static bool ShowsPhoneGroup(IEnumerable<KnownMachine> room) => room.Any(machine => machine.IsPhone);
 
     // The machines that can do the action, in order: what a feature that
     // phones do not take part in (the class folder, the Windows update) is fed.
@@ -68,10 +79,18 @@ public static class DeviceSupport
     // selected and the grid shows only phones: then those phones ("Bloquear
     // programas" then opens the phones' window); and when the grid shows only
     // computers: then every PC and no phone, which the teacher cannot see
-    // there (none when the room has no PC). PCs are reached as before.
+    // there (none when the room has no PC). PCs are reached as before. The
+    // CELULARES group reaches the selected phones, or every phone of the room.
     public static IReadOnlyList<KnownMachine> ToolbarReach(
         ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown)
     {
+        // The CELULARES group: the selected phones, or every phone of the room
+        // when none is selected.
+        if (IsPhoneOnly(action))
+        {
+            var chosen = selected.Where(machine => machine.IsPhone).ToList();
+            return chosen.Count > 0 ? chosen : room.Where(machine => machine.IsPhone).ToList();
+        }
         if (action is not (ToolbarAction.BlockPrograms or ToolbarAction.BlockSites))
         {
             return room;

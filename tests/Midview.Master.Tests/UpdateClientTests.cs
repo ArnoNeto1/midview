@@ -260,6 +260,45 @@ public class UpdateClientTests : IDisposable
         await Assert.ThrowsAnyAsync<Exception>(() => push.WaitAsync(Timeout));
     }
 
+    // A phone's agent gets its APK the same way (IUpdatePayload): the APK's
+    // SHA-256 as fingerprint and zip hash, its size as both sizes.
+    [Fact]
+    public async Task Push_SendsAPhoneApk_ThroughTheSamePayload()
+    {
+        Directory.CreateDirectory(_temp);
+        var path = Path.Combine(_temp, "MidviewAgent.apk");
+        File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(FileTransfer.ChunkSize * 3 + 5));
+        using var apk = PhoneAgentApk.FromFile(path);
+        var attemptId = RandomNumberGenerator.GetBytes(NetworkUpdate.AttemptIdLength);
+        UpdateOffer? offered = null;
+        var received = new MemoryStream();
+        using var phone = new ScriptedAgent(_agentCertificate, _masterCertificate, channel =>
+        {
+            var offer = channel.Receive();
+            Assert.True(NetworkUpdate.TryDecodeOffer(offer.Payload, out var decoded));
+            offered = decoded;
+            channel.Send(new Message(MessageType.UpdateAccepted, Array.Empty<byte>()));
+            while (received.Length < decoded.ZipSize)
+            {
+                received.Write(channel.Receive().Payload);
+            }
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(true, "recebido")));
+        });
+
+        IUpdatePayload payload = apk;
+        var result = await Task.Run(() => UpdateClient.Push(
+            Machine with { Kind = DeviceKind.Android }, _masterCertificate, payload, attemptId, port: phone.Port)).WaitAsync(Timeout);
+        await phone.Done.WaitAsync(Timeout);
+
+        var sha = SHA256.HashData(File.ReadAllBytes(path));
+        Assert.Equal(new PushResult(PushOutcome.Received, "recebido"), result);
+        Assert.Equal(sha, offered!.Fingerprint);
+        Assert.Equal(sha, offered.ZipSha256);
+        Assert.Equal(new FileInfo(path).Length, offered.ZipSize);
+        Assert.Equal(new FileInfo(path).Length, offered.UncompressedSize);
+        Assert.Equal(File.ReadAllBytes(path), received.ToArray());
+    }
+
     private static void DrainZip(SecureChannel channel, long zipSize)
     {
         long received = 0;

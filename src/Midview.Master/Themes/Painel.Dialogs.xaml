@@ -152,4 +152,60 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- One phone's line in the CELULARES windows (PhoneRow): a mark colored by
+         how it went, the phone's name, what happened and, while its app is
+         being sent, a thin bar. -->
+    <DataTemplate x:Key="PhoneRowTemplate" DataType="{x:Type local:PhoneRow}">
+        <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1"
+                CornerRadius="10" Padding="12,9" Margin="0,0,0,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="MarkDisc" Width="24" Height="24" CornerRadius="12" VerticalAlignment="Top" Margin="0,1,12,0"
+                        Background="{StaticResource LineBrush}">
+                    <TextBlock x:Name="MarkText" Text="{Binding Mark}" FontWeight="Bold" FontSize="13"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" />
+                </Border>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="DetailText" Text="{Binding Detail}" TextWrapping="Wrap" Margin="0,2,0,0"
+                               Foreground="{StaticResource TextMutedBrush}" />
+                    <Grid x:Name="Bar" Height="4" Margin="0,7,0,1" Visibility="Collapsed">
+                        <Border Background="{StaticResource LineBrush}" CornerRadius="2" />
+                        <Border Background="{StaticResource AccentBrush}" CornerRadius="2" RenderTransformOrigin="0,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="{Binding ProgressScale}" />
+                            </Border.RenderTransform>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding HasProgress}" Value="True">
+                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static local:PhoneRowState.Working}">
+                <Setter TargetName="MarkText" Property="Foreground" Value="{StaticResource AccentTextBrush}" />
+                <Setter TargetName="DetailText" Property="Foreground" Value="{StaticResource TextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static local:PhoneRowState.Done}">
+                <Setter TargetName="MarkDisc" Property="Background" Value="{StaticResource AccentSoftBrush}" />
+                <Setter TargetName="MarkText" Property="Foreground" Value="{StaticResource OnlineBrush}" />
+                <Setter TargetName="DetailText" Property="Foreground" Value="{StaticResource TextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static local:PhoneRowState.Partial}">
+                <Setter TargetName="MarkText" Property="Foreground" Value="{StaticResource WarningBrush}" />
+                <Setter TargetName="DetailText" Property="Foreground" Value="{StaticResource TextBrush}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="{x:Static local:PhoneRowState.Failed}">
+                <Setter TargetName="MarkDisc" Property="Background" Value="{StaticResource DangerSoftBrush}" />
+                <Setter TargetName="MarkText" Property="Foreground" Value="{StaticResource ErrorBrush}" />
+                <Setter TargetName="DetailText" Property="Foreground" Value="{StaticResource ErrorBrush}" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
 </ResourceDictionary>

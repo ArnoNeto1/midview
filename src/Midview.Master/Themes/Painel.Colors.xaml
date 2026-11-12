@@ -21,6 +21,7 @@
     <SolidColorBrush x:Key="TurmaBrush" Color="#FFC53D" />
     <SolidColorBrush x:Key="ProgramasBrush" Color="#3DDC97" />
     <SolidColorBrush x:Key="ConfigurarBrush" Color="#A78BFA" />
+    <SolidColorBrush x:Key="CelularesBrush" Color="#F472B6" />
 
     <SolidColorBrush x:Key="ErrorBrush" Color="#FF8A80" />
     <SolidColorBrush x:Key="WarningBrush" Color="#FFC53D" />
