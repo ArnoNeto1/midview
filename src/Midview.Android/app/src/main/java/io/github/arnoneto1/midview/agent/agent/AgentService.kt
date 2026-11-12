@@ -28,6 +28,7 @@ import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.lock.ScreenLock
+import io.github.arnoneto1.midview.agent.net.ChatHandler
 import io.github.arnoneto1.midview.agent.net.CommandHandler
 import io.github.arnoneto1.midview.agent.net.DiscoveryResponder
 import io.github.arnoneto1.midview.agent.net.LockScreenHandler
@@ -42,6 +43,7 @@ import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
@@ -54,6 +56,7 @@ import io.github.arnoneto1.midview.agent.sites.OtherBrowsers
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
 import io.github.arnoneto1.midview.agent.sites.SitePolicy
 import io.github.arnoneto1.midview.agent.status.StatusImage
+import io.github.arnoneto1.midview.agent.talk.TeacherTalk
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
 import io.github.arnoneto1.midview.agent.update.ApkFingerprint
 import io.github.arnoneto1.midview.agent.update.ApkUpdateStore
@@ -234,8 +237,18 @@ class AgentService : Service() {
         )
         val lockScreen = LockScreenKeeper.get(this)
         lateinit var closer: AppCloser
-        // A closing asked for under the lock is done when it goes.
-        val screenLock = ScreenLock(show = { LockActivity.show(this) }, hide = { LockActivity.hide(); closer.unlocked() })
+        // A closing asked for under the lock is done when it goes, and the
+        // teacher's messages and conversations come up then.
+        val screenLock = ScreenLock(
+            show = { LockActivity.show(this) },
+            hide = {
+                LockActivity.hide()
+                closer.unlocked()
+                TeacherTalk.unlocked()
+            },
+        )
+        // "Mensagem" and "Bate-papo": never over the teacher's lock screen.
+        TeacherTalk.start(this, isLocked = { screenLock.locked })
         // "Fechar programas": the home screen in front, the student's apps
         // closed by suspending them for a moment, and the app block applied
         // again; under the teacher's lock screen, once it goes.
@@ -244,6 +257,8 @@ class AgentService : Service() {
             reapplyBlock = appBlock::reapply,
             isScreenLocked = { screenLock.locked },
             goHome = {
+                // As on a PC, the teacher's messages close with the apps.
+                TeacherTalk.closeMessages()
                 startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
             killBackground = { getSystemService(ActivityManager::class.java).killBackgroundProcesses(it) },
@@ -269,7 +284,10 @@ class AgentService : Service() {
         )
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
-            log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, listApps = installedApps::list,
+            log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request,
+            showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
+            chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
+            listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(

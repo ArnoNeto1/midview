@@ -609,6 +609,74 @@ class CommandHandlerTest {
         assertEquals(0, updater.statusAsked)
     }
 
+    // "Mensagem" and "Bate-papo": a PC takes them on its Session's port; a
+    // phone on this one, from a trusted teacher only.
+    private val shownMessages = mutableListOf<String>()
+    private val chats = mutableListOf<Channel>()
+    private val talking by lazy {
+        CommandHandler(
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway,
+            showMessage = { shownMessages += String(it, Charsets.UTF_8); true to "mensagem mostrada" },
+            chat = { chats += it; it.send(message(MessageType.COMMAND_ACK, CommandResult.encode(true, "conversa aberta"))) },
+        ) { phoneApps }
+    }
+
+    @Test fun aMessageFromATrustedTeacherIsShownAndAcked() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.SHOW_MESSAGE, "Atenção, turma!".toByteArray()))
+        talking.handle(channel)
+
+        assertEquals(listOf("Atenção, turma!"), shownMessages)
+        val ack = channel.sent.single()
+        assertEquals(MessageType.COMMAND_ACK, ack.type)
+        // Its first byte is the PC Session's 1 or 0.
+        assertEquals(1, ack.payload[0].toInt())
+        assertEquals(true to "mensagem mostrada", CommandResult.decode(ack.payload))
+    }
+
+    @Test fun aMessageFromAnUntrustedTeacherIsNeverShown() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.SHOW_MESSAGE, "oi".toByteArray()))
+        talking.handle(channel)
+        assertTrue(shownMessages.isEmpty())
+        assertTrue(channel.sent.isEmpty())
+    }
+
+    @Test fun aChatTakesTheConnectionUntilItEnds() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.CHAT_OPEN),
+            // Never read here: the conversation has the connection now.
+            message(MessageType.HEARTBEAT),
+        )
+        talking.handle(channel)
+
+        assertEquals(listOf<Channel>(channel), chats)
+        assertEquals(listOf("receive ${MessageType.CHAT_OPEN}", "send ${MessageType.COMMAND_ACK}"), channel.events)
+    }
+
+    @Test fun aChatFromAnUntrustedTeacherNeverOpens() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.CHAT_OPEN))
+        talking.handle(channel)
+        assertTrue(chats.isEmpty())
+        assertTrue(channel.sent.isEmpty())
+    }
+
+    // Without them (as a JVM test builds the handler), the phone says it doesn't yet.
+    @Test fun withoutMessagesOrChatThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        val shown = FakeChannel(teacher, message(MessageType.SHOW_MESSAGE, "oi".toByteArray()))
+        handler.handle(shown)
+        assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(shown.sent.single().payload))
+
+        val chat = FakeChannel(teacher, message(MessageType.CHAT_OPEN), message(MessageType.HEARTBEAT))
+        handler.handle(chat)
+        assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(chat.sent.single().payload))
+        assertEquals(1, chat.events.count { it.startsWith("receive") })
+    }
+
     private companion object {
         val identity: AgentIdentity by lazy {
             AgentIdentity(Files.createTempDirectory("command-handler").toFile().apply { deleteOnExit() }, "Cel 01")

@@ -126,7 +126,7 @@ public sealed class ClassChat : IDisposable
         {
             lock (_gate)
             {
-                _notConnected.Add((machine.Name, FailureText.Describe(ex)));
+                _notConnected.Add((machine.Name, ChatConnection.DescribeFailure(machine, ex)));
             }
             Changed?.Invoke();
             return;

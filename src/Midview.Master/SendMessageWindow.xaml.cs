@@ -7,7 +7,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Sends one text to one machine or to the whole class; each student sees it
-// in a window on their screen (the Session's WinFormsMessageDisplay).
+// in a window on their screen (the Session's WinFormsMessageDisplay), or over
+// the app on a phone (MessageTargets).
 public partial class SendMessageWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -47,29 +48,10 @@ public partial class SendMessageWindow : MidviewWindow
         ResultTextBlock.Text = "Enviando...";
 
         // All machines at once: an offline one must not hold up the rest.
-        var results = await Task.WhenAll(_targets.Select(machine => Task.Run(() => SendTo(machine, payload))));
+        var results = await Task.WhenAll(_targets.Select(machine =>
+            Task.Run(() => MessageTargets.Send(machine, payload, _masterCertificate))));
 
-        var failures = results.Where(result => result.Failure is not null).ToList();
-        var delivered = results.Length - failures.Count;
-        ResultTextBlock.Text = failures.Count == 0
-            ? results.Length == 1 ? "Mensagem enviada." : $"Mensagem enviada para as {delivered} máquinas."
-            : $"Enviada para {delivered} de {results.Length}. Não chegou em:\n"
-              + string.Join("\n", failures.Select(failure => $"• {failure.Name}: {failure.Failure}"));
+        ResultTextBlock.Text = MessageTargets.Summary(results);
         SendButton.IsEnabled = MessageTextBox.Text.Trim().Length > 0;
-    }
-
-    private (string Name, string? Failure) SendTo(KnownMachine machine, byte[] payload)
-    {
-        try
-        {
-            var shown = CommandClient.SendCommand(
-                machine.HostAddress, ConnectionClient.SessionPort, machine.SessionThumbprint, _masterCertificate,
-                MessageType.ShowMessage, payload);
-            return (machine.Name, shown ? null : "a máquina não conseguiu mostrar a mensagem");
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, FailureText.Describe(ex));
-        }
     }
 }

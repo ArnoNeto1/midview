@@ -30,6 +30,10 @@ import java.io.EOFException
 // network); listApps reads the apps the student can open (for the teacher's
 // list); gateway erases the phone at "Apagar e preparar de novo", runLater
 // being how it is put off (the ack has to reach the teacher first).
+// showMessage and chat are the teacher's "Mensagem" and "Bate-papo", which a
+// PC takes on its Session's port: on a phone the one app is both, and its
+// commands port answers everything (an agent from before them says "Ainda
+// não funciona em celular.", which the teacher's program can tell apart).
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -47,6 +51,13 @@ class CommandHandler(
     // "Fechar programas" (CloseCountdown): the warning's time in seconds in,
     // the CommandAck's result out.
     private val closeApps: (delaySeconds: Int) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Mensagem" (TeacherMessages): the ShowMessage payload in, the
+    // CommandAck's result out.
+    private val showMessage: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Bate-papo" (ChatHandler): the connection, for the whole conversation.
+    private val chat: (Channel) -> Unit = {
+        it.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE)))
+    },
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -68,6 +79,11 @@ class CommandHandler(
             // on a PC.
             if (message.type == MessageType.UPDATE_OFFER) {
                 updater.offer(message.payload, channel)
+                return
+            }
+            // The conversation keeps the connection until it ends.
+            if (message.type == MessageType.CHAT_OPEN) {
+                chat(channel)
                 return
             }
             channel.send(answer(message))
@@ -124,6 +140,10 @@ class CommandHandler(
             val delay = closeAppsDelay(message.payload)
             val (closed, detail) = if (delay == null) false to INVALID_REQUEST else closeApps(delay)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(closed, detail))
+        }
+        MessageType.SHOW_MESSAGE -> {
+            val (shown, detail) = showMessage(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(shown, detail))
         }
         // On this connection's own thread: up to ~30 s checking the network.
         MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())

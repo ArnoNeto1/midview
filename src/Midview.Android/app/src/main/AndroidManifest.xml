@@ -114,6 +114,31 @@
             android:taskAffinity="io.github.arnoneto1.midview.agent.lock"
             android:theme="@style/Theme.Midview.Lock" />
 
+        <!-- The teacher's "Mensagem": over the student's app (and over the
+             phone's lock screen), out of the recents, closed only by its OK. -->
+        <activity
+            android:name=".talk.TeacherMessageActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.message"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+            android:turnScreenOn="true" />
+
+        <!-- The teacher's "Bate-papo": "Conversa com o professor", a task of
+             its own that its notification brings back. -->
+        <activity
+            android:name=".talk.ChatActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+            android:exported="false"
+            android:label="Conversa com o professor"
+            android:launchMode="singleTask"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.chat"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
         <receiver
             android:name=".agent.AgentService$StartAtBoot"
             android:exported="true">

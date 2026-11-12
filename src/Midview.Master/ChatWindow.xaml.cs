@@ -9,8 +9,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // The teacher's side of a private chat with one machine. Opening this window
-// opens the chat window on the student's screen; closing it ends the
-// conversation there.
+// opens the chat window on the student's screen (on a phone, the "Conversa
+// com o professor" screen); closing it ends the conversation there.
 public partial class ChatWindow : MidviewWindow
 {
     private readonly KnownMachine _machine;
@@ -46,13 +46,15 @@ public partial class ChatWindow : MidviewWindow
             _connection = connection;
             connection.Start();
 
-            StatusTextBlock.Text = "Conectado: a janela de conversa abriu na tela do aluno.";
+            StatusTextBlock.Text = connection.Notice is { } notice
+                ? $"Conectado; {notice}."
+                : "Conectado: a janela de conversa abriu na tela do aluno.";
             UpdateSendButton();
             InputTextBox.Focus();
         }
         catch (Exception ex)
         {
-            StatusTextBlock.Text = $"Não foi possível conectar: {FailureText.Describe(ex)}";
+            StatusTextBlock.Text = $"Não foi possível conectar: {ChatConnection.DescribeFailure(_machine, ex)}";
         }
     }
 

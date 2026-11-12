@@ -39,9 +39,10 @@ public enum ToolbarAction
 // What each kind of device accepts. A phone can have its screen watched and
 // locked, its apps blocked (its own window: PhoneAppBlockWindow) and closed
 // ("Fechar programas": all of them at once, CloseAppsTargets) and its sites
-// blocked (the same commands as a PC's), and is optimized and updated
-// (actions a PC has nothing to do with). Control stays for computers.
-// WipePhone (a tile's menu only) is for Android devices alone.
+// blocked (the same commands as a PC's), gets the teacher's messages and
+// chats ("Mensagem", "Bate-papo": MessageTargets, ChatConnection), and is
+// optimized and updated (actions a PC has nothing to do with). Control stays
+// for computers. WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
@@ -49,7 +50,8 @@ public static class DeviceSupport
         DeviceKind.Windows => !IsPhoneOnly(action) && action != ToolbarAction.WipePhone,
         DeviceKind.Android => action is ToolbarAction.View or ToolbarAction.ScreenLock
             or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
-            or ToolbarAction.CloseApps or ToolbarAction.WipePhone
+            or ToolbarAction.CloseApps or ToolbarAction.Message or ToolbarAction.Chat
+            or ToolbarAction.WipePhone
             || IsPhoneOnly(action),
         _ => false,
     };

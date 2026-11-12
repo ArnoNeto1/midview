@@ -32,6 +32,11 @@ public enum MessageType : byte
     // ChatText (a UTF-8 line, see TextMessage) then flows both ways, and the
     // Master's periodic Heartbeat keeps the connection from timing out while
     // nobody is typing.
+    // A phone's agent (port 28900) takes both from a trusted teacher: it
+    // answers ShowMessage with a CommandResult (its first byte the Session's
+    // 1 or 0), and ChatOpen with one CommandResult before the conversation
+    // (the Session answers nothing). An agent from before them answers "Ainda
+    // não funciona em celular.".
     ChatOpen = 15,
     ChatText = 16,
 

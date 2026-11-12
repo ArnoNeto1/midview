@@ -22,12 +22,9 @@ public static class CloseAppsTargets
     public const string PhoneNote =
         "Nos celulares, o aluno também é avisado e os apps fecham no fim da espera. Pedir para fechar ou forçar vale só para os computadores: no celular, os apps sempre fecham.";
 
-    public const string OldAgent = "o Midview deste celular é de uma versão anterior e ainda não fecha apps: atualize-o";
+    public static readonly string OldAgent = PhoneAgentCommand.OldAgent("fecha apps");
 
-    public const string NoIdentity = "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"";
-
-    // What an agent from before this answers to a command it doesn't know.
-    private const string NotOnPhone = "Ainda não funciona em celular.";
+    public const string NoIdentity = PhoneAgentCommand.NoIdentity;
 
     // Phones (and tablets) alone: asking or forcing does not apply (the wait does).
     public static bool OnlyPhones(IReadOnlyCollection<KnownMachine> targets) =>
@@ -75,20 +72,6 @@ public static class CloseAppsTargets
     }
 
     // send: given the phone's agent thumbprint, the agent's answer.
-    internal static (bool Succeeded, string Detail) SendToPhone(KnownMachine phone, Func<string, (bool Succeeded, string Detail)> send)
-    {
-        if (phone.AgentThumbprint is not { Length: > 0 } thumbprint)
-        {
-            return (false, NoIdentity);
-        }
-        try
-        {
-            var (succeeded, detail) = send(thumbprint);
-            return !succeeded && (detail.Length == 0 || detail == NotOnPhone) ? (false, OldAgent) : (succeeded, detail);
-        }
-        catch (Exception ex)
-        {
-            return (false, FailureText.DescribePhoneAgent(ex));
-        }
-    }
+    internal static (bool Succeeded, string Detail) SendToPhone(KnownMachine phone, Func<string, (bool Succeeded, string Detail)> send) =>
+        PhoneAgentCommand.Send(phone, OldAgent, send);
 }

@@ -37,11 +37,31 @@ public sealed class ChatConnection : IChatConnection
     public event Action<string>? StudentMessageReceived;
     public event Action<string>? Closed;
 
+    // A phone's agent says yes or no to the conversation first (see Open):
+    // what it said when that is worth showing the teacher (it comes up once
+    // the teacher's lock screen goes); null otherwise.
+    public string? Notice { get; private init; }
+
+    // An agent from before "Bate-papo" refuses it in these words.
+    public static readonly string OldAgent = PhoneAgentCommand.OldAgent("conversa");
+
+    // What the phone says when its screen came up.
+    private const string PhoneOpened = "conversa aberta";
+
+    // A PC: its Session (port 5901), which opens the window and answers
+    // nothing. A phone: its agent (port 28900, its own thumbprint), which
+    // answers ChatOpen with one CommandAck first -- a refusal (an older
+    // agent's "Ainda não funciona em celular." among them) throws
+    // ChatRefusedException. port: only for the tests.
     public static ChatConnection Open(
-        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.SessionPort,
+        KnownMachine machine, X509Certificate2 masterCertificate, int? port = null,
         TimeSpan? handshakeTimeout = null)
     {
-        var tcpClient = TcpConnect.WithTimeout(machine.HostAddress, port, ConnectTimeout);
+        var thumbprint = machine.IsPhone
+            ? machine.AgentThumbprint is { Length: > 0 } agent ? agent : throw new ChatRefusedException(PhoneAgentCommand.NoIdentity)
+            : machine.SessionThumbprint;
+        var tcpClient = TcpConnect.WithTimeout(
+            machine.HostAddress, port ?? (machine.IsPhone ? ConnectionClient.AgentPort : ConnectionClient.SessionPort), ConnectTimeout);
         try
         {
             tcpClient.NoDelay = true;
@@ -52,13 +72,26 @@ public sealed class ChatConnection : IChatConnection
             tcpClient.ReceiveTimeout = timeoutMs;
             tcpClient.SendTimeout = timeoutMs;
             var channel = SecureChannel.AuthenticateAsClient(
-                tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { machine.SessionThumbprint }));
+                tcpClient, machine.HostAddress, masterCertificate, new TrustStore(new[] { thumbprint }));
             channel.Send(new Message(MessageType.ChatOpen, Array.Empty<byte>()));
+            string? notice = null;
+            if (machine.IsPhone)
+            {
+                try
+                {
+                    notice = PhoneAnswer(channel.Receive());
+                }
+                catch
+                {
+                    channel.Dispose();
+                    throw;
+                }
+            }
             // From here on the receive loop waits for the student's lines for
             // as long as the conversation lasts: the Session sends the teacher
             // no heartbeats, so silence isn't a dead connection.
             tcpClient.ReceiveTimeout = 0;
-            return new ChatConnection(tcpClient, channel);
+            return new ChatConnection(tcpClient, channel) { Notice = notice };
         }
         catch
         {
@@ -66,6 +99,34 @@ public sealed class ChatConnection : IChatConnection
             throw;
         }
     }
+
+    // The phone agent's answer to ChatOpen: its notice (null for a plain
+    // yes), or ChatRefusedException with why not.
+    internal static string? PhoneAnswer(Message answer)
+    {
+        if (answer.Type != MessageType.CommandAck)
+        {
+            throw new ChatRefusedException($"resposta inesperada ({answer.Type})");
+        }
+        var (opened, detail) = CommandResult.Decode(answer.Payload);
+        if (PhoneAgentCommand.IsOldAgentAnswer(opened, detail))
+        {
+            throw new ChatRefusedException(OldAgent);
+        }
+        if (!opened)
+        {
+            throw new ChatRefusedException(detail);
+        }
+        return detail.Length == 0 || detail == PhoneOpened ? null : detail;
+    }
+
+    // Why the conversation with the machine did not open, for the teacher.
+    public static string DescribeFailure(KnownMachine machine, Exception ex) => ex switch
+    {
+        ChatRefusedException refused => refused.Message,
+        _ when machine.IsPhone => FailureText.DescribePhoneAgent(ex),
+        _ => FailureText.Describe(ex),
+    };
 
     // Separate from Open so event handlers can be attached before anything
     // can be received. The timer is armed first: a connection the student's
@@ -138,3 +199,6 @@ public sealed class ChatConnection : IChatConnection
         Closed?.Invoke(reason);
     }
 }
+
+// A phone that answered the conversation with a no: the message is its reason, in the teacher's words.
+public sealed class ChatRefusedException(string reason) : Exception(reason);

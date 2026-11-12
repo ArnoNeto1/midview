@@ -31,12 +31,13 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_closing_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.ScreenLock
-                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps or ToolbarAction.WipePhone
+                or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
+                or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }
@@ -75,11 +76,14 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.HasAndroid(new[] { Pc("PC 01"), Phone("Tablet 01") }));
     }
 
-    // The sites window sends its commands to every machine it reaches.
+    // The sites window sends its commands to every machine it reaches; so do
+    // "Mensagem" and "Bate-papo".
     [Theory]
     [InlineData(ToolbarAction.BlockPrograms)]
     [InlineData(ToolbarAction.BlockSites)]
-    public void Blocking_leaves_no_phone_out(ToolbarAction action)
+    [InlineData(ToolbarAction.Message)]
+    [InlineData(ToolbarAction.Chat)]
+    public void Blocking_messages_and_chat_leave_no_phone_out(ToolbarAction action)
     {
         var machines = new[] { Pc("PC 01"), Phone("Cel 01") };
 

@@ -20,6 +20,17 @@ object MessageType {
     const val REQUEST_THUMBNAIL = 12
     const val THUMBNAIL_FRAME = 13
 
+    // The teacher's "Mensagem" and "Bate-papo", as on a PC (TextMessage
+    // payloads), from a trusted teacher only, on the commands port (28900):
+    // SHOW_MESSAGE is answered with one CommandAck (CommandResult, its first
+    // byte the PC Session's 1 or 0); a connection whose first message is
+    // CHAT_OPEN is answered with one CommandAck (CommandResult) and then
+    // stays open for the conversation, CHAT_TEXT lines flowing both ways and
+    // the teacher's Heartbeats keeping it up (see ChatHandler).
+    const val SHOW_MESSAGE = 14
+    const val CHAT_OPEN = 15
+    const val CHAT_TEXT = 16
+
     // Sending a file in chunks (the update's APK too).
     const val FILE_CHUNK = 18
 
