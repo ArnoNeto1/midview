@@ -55,6 +55,18 @@ sem anúncios, tudo pela rede, sem cabo e sem precisar dele em cada aparelho.
   torna o agente o dono do aparelho ("aparelho da escola").
 - Depois disso, nada mais é feito no celular: o agente aparece na busca do
   Midview e o professor pareia como pareia um PC.
+- **Atualização 2026-11-12:** o QR não funciona. O Google só deixa entrar
+  pelo QR de 6 toques os aplicativos de gerenciamento da lista de aprovados
+  dele, e o Midview não está nela: o celular baixa o APK, recusa e mostra
+  "Não foi possível configurar o dispositivo". O celular é preparado pelo
+  **cabo USB**: restaurar e pular as contas, ligar a depuração USB (na
+  Xiaomi também a "Depuração USB (configurações de segurança)", que pede
+  conta Mi e às vezes chip), sair de todas as contas, `adb install`, os
+  comandos de bateria, início automático e acessibilidade, e por último
+  `dpm set-device-owner` (passos no README, "Celulares"). O Master não
+  oferece o QR (`PhoneProvisioning.QrEnabled` desligado); o filtro e
+  "Otimizar celulares e tablets..." ficam no botão **Telas**, e "Atualizar
+  os celulares" em Máquinas da sala > Atualizações.
 
 ### 2. O agente no celular
 
