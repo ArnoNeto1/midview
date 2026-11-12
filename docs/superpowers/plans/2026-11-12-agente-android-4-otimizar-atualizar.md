@@ -4,7 +4,7 @@
 
 **Goal:** O celular da escola fica leve e sem anúncios sozinho (apps de anúncios escondidos e DNS sem anúncios, com volta automática se a rede bloquear), e o professor atualiza o app do Midview nos celulares pela rede, sem cabo.
 
-**Architecture:** Otimizar: mensagem nova na porta `28900`; o Device Owner esconde a lista de anúncios (`setApplicationHidden`) e liga o DNS privado `dns.adguard-dns.com` só depois de conferir a internet, voltando ao automático se a rede bloquear (na hora ou depois, ao trocar de rede). Atualizar: as mesmas mensagens da atualização dos PCs (`NetworkUpdate`: oferta, pedaços, situação), com o APK no lugar do zip; o agente confere pacote, versão e assinatura e instala a si mesmo pelo `PackageInstaller` sem toque do aluno. No Master: grupo **CELULARES** na barra (só aparece se a sala tem celular) com **Otimizar** e **Atualizar celulares**; o APK vem da versão do GitHub igual à do Master, conferido pela soma SHA-256 publicada.
+**Architecture:** Otimizar: mensagem nova na porta `28900`; o Device Owner esconde a lista de anúncios (`setApplicationHidden`) e liga o DNS privado `dns.adguard-dns.com` só depois de conferir a internet, voltando ao automático se a rede bloquear (na hora ou depois, ao trocar de rede). Atualizar: as mesmas mensagens da atualização dos PCs (`NetworkUpdate`: oferta, pedaços, situação), com o APK no lugar do zip; o agente confere pacote, versão e assinatura e instala a si mesmo pelo `PackageInstaller` sem toque do aluno. O bloqueio da internet do plano 3 é uma VPN (não o DNS privado), então o DNS sem anúncios não precisa ser restaurado por ele. No Master: grupo **CELULARES** na barra (só aparece se a sala tem celular) com **Otimizar** e **Atualizar celulares**; o APK vem da versão do GitHub igual à do Master, conferido pela soma SHA-256 publicada.
 
 **Tech Stack:** Kotlin (Android 10+, `DevicePolicyManager.setApplicationHidden`, `setGlobalPrivateDnsModeSpecifiedHost`/`Opportunistic`, `ConnectivityManager.NetworkCallback`, `PackageInstaller`), JUnit 4 JVM; .NET 8 / WPF / xUnit.
 
@@ -24,7 +24,7 @@
 - O Master pega o APK da versão do GitHub com a mesma versão dele: `https://api.github.com/repos/ArnoNeto1/midview/releases/tags/v{versão}`, asset `MidviewAgent.apk`, só de `github.com` por HTTPS, conferido pelo `digest` `sha256:` do asset (como `TeacherUpdate`); guardado em `MasterData.Folder\celular\MidviewAgent-{versão}.apk`.
 - Barra: grupo **CELULARES** com **Otimizar** e **Atualizar celulares**, visível só se a sala tem ao menos um celular (sala só de PCs fica igual). Alvo: os celulares da seleção; sem celular selecionado, todos os celulares da sala.
 - "Preparar celular" fica onde está (Máquinas da sala): a preparação pelo cabo é de outra sessão; este plano não mexe na `PreparePhoneWindow`.
-- Trava nova no `Lockdown` (release e debug): `DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY` (o aluno não instala APK baixado no Chrome); não pode impedir a atualização do próprio agente.
+- As travas `no_install_unknown_sources(_globally)` e `no_modify_accounts` (entraram na correção final do plano 3) não podem impedir a atualização do próprio agente: a Task 3 prova isso no aparelho (e, se a build debug ficar sem elas, liga-as durante o teste).
 - Textos em português, no tom do Midview; nenhum produto concorrente citado (o nome do servidor de DNS aparece só como endereço técnico); commits sem `Co-Authored-By`.
 
 ## Review Focus
@@ -66,7 +66,7 @@
 
 **Files:**
 - Create: `.../update/ApkUpdateStore.kt` (tentativa guardada), `.../update/ApkUpload.kt` (recebe os pedaços em `filesDir/update/`, confere tamanho e SHA-256), `.../update/ApkCheck.kt` (decisão pura), `.../update/SelfInstaller.kt` (`PackageInstaller`, sessão silenciosa do Device Owner; `setRequireUserAction(USER_ACTION_NOT_REQUIRED)` no Android 12+), `.../update/PackageReplacedReceiver.kt` (`MY_PACKAGE_REPLACED` → inicia o `AgentService`)
-- Modify: `.../net/CommandHandler.kt` (25, 18, 27), `AgentService.kt` (ao iniciar, fecha a tentativa: `versionCode` atual == esperado → `committed`, senão `failed`; calcula o SHA-256 do APK instalado em segundo plano, `ready` falso até lá), `AndroidManifest.xml` (`REQUEST_INSTALL_PACKAGES`, receptor), `.../policy/Lockdown.kt` (`DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY`)
+- Modify: `.../net/CommandHandler.kt` (25, 18, 27), `AgentService.kt` (ao iniciar, fecha a tentativa: `versionCode` atual == esperado → `committed`, senão `failed`; calcula o SHA-256 do APK instalado em segundo plano, `ready` falso até lá), `AndroidManifest.xml` (`REQUEST_INSTALL_PACKAGES`, receptor)
 - Test: `ApkCheckTest` (pacote diferente, versão igual/menor, certificado diferente, ok), `ApkUploadTest` (tamanho ou SHA-256 errado → `failed` e arquivo apagado), handler (SHA igual ao instalado → "já está nesta versão"; tentativa em andamento → recusa; status JSON), fechamento da tentativa ao iniciar
 
 **Interfaces:**
@@ -74,7 +74,7 @@
 - Produces: comportamento das mensagens 25/18/27 igual ao do Agent dos PCs para o `UpdateClient` do Master (Task 4).
 
 - [ ] Testes → falham → implementar → passam.
-- [ ] No Redmi: instalar uma build debug e mandar, por um roteiro com as mensagens 25/18/27, outra build debug igual com `versionCode` maior (versão de teste por propriedade do Gradle): instala sem toque, agente volta em ≤ 20 s com a versão nova, continua Device Owner, a acessibilidade continua ligada (tela sem pedir "Iniciar agora"), bloqueios de apps/sites/internet continuam; mandar a mesma versão → "já está nesta versão"; uma mais antiga e uma assinada com outra chave → recusadas; cortar o Wi-Fi no meio do envio → `failed`, agente antigo rodando, repetir funciona; com a trava nova, as Configurações não deixam o Chrome instalar apps desconhecidos e a atualização continua funcionando. Deixar o celular na build mais nova. Commit `feat(android): atualizar o app do celular pela rede`.
+- [ ] No Redmi: instalar uma build debug e mandar, por um roteiro com as mensagens 25/18/27, outra build debug igual com `versionCode` maior (versão de teste por propriedade do Gradle): instala sem toque, agente volta em ≤ 20 s com a versão nova, continua Device Owner, a acessibilidade continua ligada (tela sem pedir "Iniciar agora"), bloqueios de apps/sites/internet continuam; mandar a mesma versão → "já está nesta versão"; uma mais antiga e uma assinada com outra chave → recusadas; cortar o Wi-Fi no meio do envio → `failed`, agente antigo rodando, repetir funciona; com as travas de instalar apps desconhecidos e de contas ligadas, a atualização continua funcionando. Deixar o celular na build mais nova. Commit `feat(android): atualizar o app do celular pela rede`.
 
 ### Task 4: Master — grupo CELULARES (Otimizar e Atualizar celulares)
 
