@@ -95,3 +95,43 @@
 
 - [ ] Com o código do Master (harness, identidade de teste em cópia de `%LOCALAPPDATA%\Midview-teste-celular`) e o Redmi: "Otimizar" pela janela nova e conferir no celular; "Atualizar celulares" com um APK local (`PhoneAgentApk.FromFile`) de versão maior, conferir a versão nova no celular e na janela. Anotar o resultado no fim deste plano (o que ficou pendente: baixar do GitHub só depois da primeira versão publicada com o APK).
 - [ ] README "Celulares": "Otimizar" e "Atualizar celulares" em poucas linhas; manter "Em breve" e não mexer nos passos de preparação. Commit `docs: resultado de otimizar e atualizar os celulares`.
+
+## Resultado (Task 5)
+
+Prova feita em 12/11/2026, das 06:50 às 06:53, no Redmi 10C da escola (Android 13, MIUI 14, Device Owner, versão de teste do agente), pela rede Wi-Fi.
+
+- **Como:** um programa de teste abriu a `MainWindow` do Master fora da tela, com uma cópia da pasta de teste `Midview-teste-celular` (identidade de teste e sala só com o celular).
+- Ele clicou em "Otimizar" e "Atualizar celulares" na barra, e nos botões da `PhoneOptimizeWindow`, da `PhoneUpdateWindow` e da `SiteBlockWindow`, como o professor faria.
+- Na janela do Atualizar, a origem do APK foi trocada por `PhoneApkSource.File` (APK local) antes de clicar em "Atualizar"; o GitHub não foi chamado.
+- O Master instalado e a sala de verdade não foram usados.
+- As capturas estão em `.superpowers/sdd/2026-11-12-agente-android-4-otimizar-atualizar/screens/task5-*.png`.
+
+### Provado no celular
+
+- **Barra:** com o celular na sala, o grupo CELULARES aparece com "Otimizar" e "Atualizar celulares", os dois ativos. Com a janela em 1366 × 728, o grupo fica numa segunda linha da barra, como na prévia da Task 4.
+- **Otimizar:** a janela "Otimizar o celular" respondeu em cerca de 1 s: "✓ 15 apps de anúncios escondidos · DNS sem anúncios ligado", "Pronto.".
+  - No celular, `optimize.txt` foi regravado com os mesmos 15 apps, `dns=on`, e o DNS privado continuou `hostname` / `dns.adguard-dns.com`.
+- **Otimizar com a internet bloqueada:** depois de "Bloquear a internet" na janela de sites, "Otimizar" respondeu "! 15 apps de anúncios escondidos · DNS sem anúncios desligado: a internet está bloqueada; liga sozinho ao desbloquear".
+  - O agente registrou `dns=offInternetBlocked` e não mexeu no DNS privado.
+- **Ao desbloquear:** "Liberar a internet" desligou a VPN, e 0,25 s depois o agente registrou "Ad-free DNS: on.", sem clicar em nada. "Otimizar de novo" voltou a dizer "DNS sem anúncios ligado".
+- **Atualizar celulares, de 0.0.53 para 0.0.54** (APK de teste do mesmo código, com `-PmidviewVersion=0.0.54`):
+  - Antes, a janela mostrou "versão 0.0.53".
+  - Depois de clicar em "Atualizar": "enviando o app… 0%" até "100%" com a barra em 0,5 s, "atualizando…" em 1 s e "✓ atualizado para 0.0.54" em 8,1 s, com "Terminado: o celular está na versão nova.".
+  - No celular: `versionName=0.0.54`, `versionCode=54`, instalado por ele mesmo, sem nenhum toque no celular; tentativa `committed` "atualizado para 0.0.54".
+  - Continua Device Owner, com a acessibilidade ligada. Os 15 apps continuam escondidos, o DNS continua ligado e validado, as travas são as mesmas, e nenhum app ou site ficou bloqueado. Comparando o estado antes e depois, só mudaram o pacote, a tentativa e o processo do agente.
+  - A tela do celular voltou sozinha: o quadradinho ficou uma vez "Sem resposta" (3 s, enquanto o agente reiniciava) e voltou a receber a tela a cada ~3 s.
+- **De novo com o mesmo APK:** "✓ já está na versão 0.0.54" em 0,2 s, sem enviar nada.
+- **Otimizar na versão nova:** "✓ 15 apps de anúncios escondidos · DNS sem anúncios ligado".
+
+### Achado
+
+- Com a internet bloqueada, a janela diz "DNS sem anúncios desligado" e "O celular não foi otimizado", mas o DNS privado continua no servidor sem anúncios (o agente não mexe nele de propósito) e os 15 apps estão escondidos. É só o texto; com a internet bloqueada nada sai mesmo, e ao desbloquear o DNS é conferido de novo. Fica para a revisão final decidir se vale outro texto quando o DNS já estava ligado.
+
+### Pendente
+
+- **Baixar o APK do GitHub:** só depois da primeira versão publicada com o `MidviewAgent.apk`. Até lá, a janela diz que o app ainda não está neste PC e, ao clicar em "Atualizar", que ele não pôde ser obtido (o download só foi testado com um GitHub simulado).
+- **Vigia do DNS:** a volta ao DNS automático depois de 30 s sem validar, e quando o DNS ligado deixa a internet sem resposta, só foram testadas na JVM.
+- **Lugar dos botões na barra:** esperando a escolha do usuário (segunda linha, a linha dos filtros ou um botão "Celulares" com menu).
+- **Bateria e calor numa aula de verdade:** não medidos. O celular ficou na tomada, com 100 % de bateria e 27 °C.
+- **Vários celulares:** só há um celular de teste, então "um celular primeiro e os outros depois" só foi visto na prévia da Task 4 e nos testes.
+- **Instalação recusada pelo Android** (e o prazo de 3 min): só testados na JVM.

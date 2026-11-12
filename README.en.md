@@ -115,6 +115,11 @@ An Android phone (Android 10 or newer) shows up in the grid, under the **Celular
 
 The app and website blocks stay in effect if the phone restarts.
 
+Phones also have two buttons of their own, which act on the selected phones or, with nothing selected, on every phone in the room:
+
+- **Otimizar** (optimize) hides the ad apps that come preinstalled on the phone (they aren't deleted) and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
+- **Atualizar celulares** (update phones) sends the new version of the phone app over the network: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
+
 To prepare a phone:
 
 1. In Midview, open **Máquinas da sala** > **Procurar e parear** > **Preparar celular** (prepare phone). The window first asks for the lab Wi-Fi (network name and password); click **Gerar código** (generate code) and the QR appears.

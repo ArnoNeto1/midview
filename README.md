@@ -113,6 +113,11 @@ O celular Android (Android 10 ou mais novo) aparece na grade, no filtro **Celula
 
 Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 
+Para os celulares há também dois botões, que valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
+
+- **Otimizar** esconde os apps de propaganda que vêm de fábrica no celular (eles não são apagados) e liga um DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps, quando a rede deixa. Se o DNS sem anúncios não funcionar na rede, o celular volta sozinho ao DNS de sempre e continua com internet. Com a internet bloqueada, ele liga sozinho ao desbloquear.
+- **Atualizar celulares** manda pela rede a versão nova do aplicativo do celular, a mesma versão do Midview do professor, baixada do GitHub. Um celular é atualizado primeiro, e os outros só depois que ele confirmar a versão nova. O aluno não precisa tocar em nada, e os bloqueios continuam valendo; o Android mostra ao aluno o aviso "Atualizado pelo seu administrador".
+
 Para preparar um celular:
 
 1. No Midview, abra **Máquinas da sala** > **Procurar e parear** > **Preparar celular**. A janela pede primeiro o Wi-Fi do laboratório (nome da rede e senha); clique em **Gerar código** para aparecer o QR.
