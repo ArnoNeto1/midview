@@ -36,6 +36,8 @@ public sealed class PhoneCable
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private const string Authority = "content://io.github.arnoneto1.midview.agent.setup";
+    private const string AccessibilityService =
+        PhoneProvisioning.AgentPackage + "/" + PhoneProvisioning.AgentPackage + ".screen.AccessibilityCapture";
 
     private readonly IAdb _adb;
 
@@ -196,6 +198,12 @@ public sealed class PhoneCable
         // Keeps the phone's cleaner from killing the app. A failure here does not stop the setup.
         Shell(Short, "cmd", "appops", "set", package, "10008", "allow");
         Shell(Short, "cmd", "deviceidle", "whitelist", "+" + package);
+        // The screen reader the agent shows the screen with (Android 11 or
+        // newer): without it the phone asks "Iniciar agora" before the
+        // teacher sees its screen. Only from the cable, so before the
+        // Device Owner step; a failure does not stop the setup either.
+        Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
+        Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
 
         stage(CableStage.Wifi);
         var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password);

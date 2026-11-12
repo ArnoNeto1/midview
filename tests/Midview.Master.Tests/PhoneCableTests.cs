@@ -17,6 +17,7 @@ public sealed class PhoneCableTests
     private const string Admin = "io.github.arnoneto1.midview.agent/.AdminReceiver";
     private const string Thumb = "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12";
     private const string SetDeviceOwner = S + "shell dpm set-device-owner " + Admin;
+    private const string Accessibility = "io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture";
 
     // Answers by the exact arguments, joined with spaces; whatever is not set
     // answers an empty success. Records every call in order.
@@ -299,6 +300,8 @@ public sealed class PhoneCableTests
             S + "install -r " + Apk,
             S + "shell cmd appops set " + Package + " 10008 allow",
             S + "shell cmd deviceidle whitelist +" + Package,
+            S + "shell settings put secure enabled_accessibility_services " + Accessibility,
+            S + "shell settings put secure accessibility_enabled 1",
             ContentCall(),
             "devices",
             SetDeviceOwner,
@@ -475,7 +478,9 @@ public sealed class PhoneCableTests
     {
         var adb = ReadyToPrepare()
             .Set(S + "shell cmd appops set " + Package + " 10008 allow", "Error: unknown op", 255)
-            .Set(S + "shell cmd deviceidle whitelist +" + Package, "Error", 255);
+            .Set(S + "shell cmd deviceidle whitelist +" + Package, "Error", 255)
+            .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
+            .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255);
         var result = Prepare(adb);
         Assert.Null(result.Problem);
         Assert.NotNull(result.Phone);
