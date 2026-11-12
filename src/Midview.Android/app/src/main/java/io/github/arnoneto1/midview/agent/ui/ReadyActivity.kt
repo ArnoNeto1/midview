@@ -24,6 +24,7 @@ class ReadyActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        seen = true
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -68,13 +69,25 @@ class ReadyActivity : Activity() {
             Intent(context, ReadyActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY)
 
-        // From the background, a Device Owner may start screens.
+        // Whether the screen was opened in this run of the app.
+        @Volatile private var seen = false
+
+        // From the background, a Device Owner may start screens (on MIUI
+        // only a moment after it became owner: ReadyShow asks again).
         fun show(context: Context) {
-            try {
-                context.startActivity(intent(context))
-            } catch (e: RuntimeException) {
-                // Refused: the phone is prepared all the same.
-            }
+            val app = context.applicationContext
+            val handler = Handler(Looper.getMainLooper())
+            ReadyShow.start(
+                open = {
+                    try {
+                        app.startActivity(intent(app))
+                    } catch (e: RuntimeException) {
+                        // Refused: the phone is prepared all the same.
+                    }
+                },
+                seen = { seen },
+                later = { delay, run -> handler.postDelayed(run, delay) },
+            )
         }
     }
 }
