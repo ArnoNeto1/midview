@@ -9,6 +9,11 @@ namespace Midview.Master;
 internal sealed record GuideHelp(string Problem, string Answer, IReadOnlyList<GuideHelp>? Links = null);
 
 /// <summary>
+/// The one-time screen before the first phone: what to have on the table.
+/// </summary>
+internal sealed record GuideGather(string Title, IReadOnlyList<string> Items);
+
+/// <summary>
 /// One screen of the "Preparar celulares" guide. <c>Target</c> is the spot to outline in red,
 /// as fractions (0 to 1) of the image, so a print can be swapped without redrawing the outline.
 /// </summary>
@@ -23,22 +28,23 @@ internal sealed record GuideStep(
     IReadOnlyList<GuideHelp> Help);
 
 /// <summary>
-/// The script of the step-by-step guide that prepares a school phone. Texts and prints are
-/// for a Xiaomi with MIUI 14 (Redmi 10C); the MIUI 12/13 paths live in each "Deu errado?".
+/// The script of the step-by-step guide that prepares a school phone over the USB cable. Texts and
+/// prints are for a Xiaomi with MIUI 14 (Redmi 10C). Other MIUI versions get the Settings search
+/// tip in each "Deu errado?"; no menu path is written without a print or a source.
 /// </summary>
 internal static class PhoneSetupGuide
 {
     private const string Folder = "Assets/PrepararCelular/";
 
-    // Real prints of the Redmi 10C (Wi-Fi name already blurred).
+    // Real prints of the Redmi 10C (nothing personal in them: no network or account names).
     private const string AccountsPrint = Folder + "contas.png";
-    private const string ResetPrint = Folder + "redefinicao.png";
+    private const string AboutPrint = Folder + "sobre.png";
+    private const string DeveloperPrint = Folder + "desenvolvedor.png";
 
-    // PROVISIONAL: drawings, not prints. The Mi account screen blocks screenshots and the
-    // welcome screen only exists after a reset. Swap both for real prints after the first
-    // real preparation (the outline follows the Target fractions, so nothing else changes).
-    private const string MiAccountDrawing = Folder + "conta-mi.png";
-    private const string WelcomeDrawing = Folder + "bem-vindo.png";
+    // PROVISIONAL: a drawing, not a print. The Mi account login screen blocks screenshots.
+    // Swap it for a real print after the first real preparation (the outline follows the Target
+    // fractions, so nothing else changes).
+    private const string MiLoginDrawing = Folder + "conta-mi.png";
 
     /// <summary>Real print of the Settings home, for the window (e.g. the search tip).</summary>
     public const string SettingsImage = Folder + "configuracoes.png";
@@ -47,38 +53,51 @@ internal static class PhoneSetupGuide
     public static Rect SettingsAboutTarget { get; } = new(0.06, 0.23, 0.88, 0.06);
 
     /// <summary>Real print of "Sobre o telefone", for the window.</summary>
-    public const string AboutImage = Folder + "sobre.png";
+    public const string AboutImage = AboutPrint;
 
-    private const string SearchTip =
-        "Dica: nas Configurações, toque na caixa \"Pesquisar nas Configurações\", no topo, e escreva a palavra do item. O celular leva você até ele.";
+    private static string SearchTip(string word) =>
+        $"Dica: nas Configurações, toque na caixa \"Pesquisar nas Configurações\", no topo, e escreva \"{word}\". O celular leva você até o item.";
+
+    private static GuideHelp NotFound(string menu, string word) => new(
+        "Não achei o item no meu celular",
+        $"Estes passos são do MIUI 14. Em outras versões do MIUI o item \"{menu}\" pode ficar em outro lugar. " + SearchTip(word));
+
+    /// <summary>The screen before the first phone: what to separate.</summary>
+    public static GuideGather Gather { get; } = new(
+        "Antes de começar, separe:",
+        new[]
+        {
+            "O cabo USB do celular (tem de ser um cabo que passa dados, não só carrega).",
+            "Um chip qualquer (pode ser o do seu celular). Ele é usado só por alguns minutos em cada celular e depois você tira.",
+            "A agulha da gaveta do chip (ou um clipe de papel aberto).",
+            "O e-mail e a senha da conta Google da escola. O Midview não guarda nenhum dos dois.",
+        });
 
     public static GuideHelp UnknownAccount { get; } = new(
         "Celular com conta desconhecida",
-        "Sem a senha da conta Mi ou da conta Google, o celular não pode ser preparado por você: ao restaurar, ele trava pedindo a senha. " +
-        "Separe esse celular e procure quem tem a senha da conta (ou a assistência da Xiaomi, com a nota fiscal). " +
+        "Sem a senha da conta Mi ou da conta Google, a conta não sai do celular, e com uma conta dentro o Midview não consegue terminar a preparação. " +
+        "Separe esse celular e procure quem tem a senha (ou a assistência da Xiaomi, com a nota fiscal). " +
         "Os outros celulares não são afetados: siga com o próximo.");
 
-    public static GuideHelp ResetWithoutPin { get; } = new(
-        "Restaurar sem o PIN",
+    public static GuideHelp LockedWithPin { get; } = new(
+        "Celular travado com PIN",
         "Desligue o celular. Segure Ligar e Volume para cima ao mesmo tempo até aparecer um menu. " +
         "Escolha \"Wipe Data\", depois \"Wipe All Data\", depois \"Confirm\" e, por fim, \"Reboot to System\". " +
-        "O celular liga sozinho em 3 a 7 minutos, na tela \"Bem-vindo\". " +
-        "Isso só funciona se as contas Mi e Google já foram tiradas; se não foram, o celular trava pedindo a senha delas.");
+        "O celular liga sozinho em alguns minutos, na tela \"Bem-vindo\". " +
+        "Isso só funciona se as contas Mi e Google já foram tiradas; se não foram, o celular trava pedindo a senha delas. " +
+        "Depois volte ao passo 2 e siga a ajuda \"Apareceu Bem-vindo\".");
 
+    /// <summary>The phone is ready but does not show up in Midview: a network problem, not a preparation one.</summary>
     public static IReadOnlyList<GuideHelp> NotAppeared { get; } = new GuideHelp[]
     {
-        new("Olhe a mensagem na tela do celular",
-            "Se o celular mostra uma mensagem de erro, ela diz o que fazer. Mensagem sobre Wi-Fi ou conexão quer dizer nome ou senha da rede errados (volte e troque o Wi-Fi). " +
-            "Mensagem sobre baixar quer dizer rede sem internet ou celular longe do roteador. " +
-            "Mensagem sobre conta quer dizer que faltou tirar a conta Google ou Mi (tire e recomece este celular)."),
+        new("Espere um pouco",
+            "O celular só aparece no Midview quando entra no Wi-Fi. Espere até 5 minutos depois de o celular mostrar que está pronto."),
         new("Confira o Wi-Fi",
-            "O Wi-Fi do Midview tem de ser o mesmo do computador do professor, com senha comum. Rede com usuário e senha (de empresa) ou com página de login não funciona."),
+            "O celular tem de estar no mesmo Wi-Fi do computador do professor, com senha comum. Rede com usuário e senha (de empresa) ou com página de login não funciona."),
         new("Chegue o celular perto do roteador",
-            "Sinal fraco atrasa ou impede o download. Deixe o celular na mesma sala do roteador até terminar."),
-        new("O celular já mostra a tela do Midview, mas não aparece aqui",
-            "A preparação deu certo. O problema é de rede: confira se o celular e este computador estão no mesmo Wi-Fi. Não restaure o celular de novo."),
-        new("Nada ajudou",
-            "Use \"Recomeçar este celular\": o assistente volta ao passo de restaurar o celular de fábrica."),
+            "Sinal fraco atrasa a entrada na rede. Deixe o celular na mesma sala do roteador."),
+        new("Não prepare o celular de novo",
+            "A preparação deu certo: o celular já confia neste computador. O problema é de rede, e não adianta apagar nem preparar outra vez."),
     };
 
     public static IReadOnlyList<GuideHelp> WifiHelp { get; } = new GuideHelp[]
@@ -104,57 +123,37 @@ internal static class PhoneSetupGuide
                     "O Midview avisa. Se for o mesmo celular sendo preparado de novo, confirme. Se for outro, escolha outro número."),
             }),
 
-        new("bateria",
-            "Ligue o celular na tomada",
+        new("ligar",
+            "Ligue o celular",
             new[]
             {
-                "Ligue o celular no carregador e na tomada.",
-                "Confira que a tela mostra que está carregando, ou que a bateria passa de metade.",
+                "Ligue o celular e desbloqueie a tela.",
+                "Confira que a bateria tem carga (mais de metade).",
+                "Conecte o celular ao Wi-Fi: ele precisa de internet para entrar na conta Mi, mais adiante.",
             },
             null, null,
-            "A preparação leva de 10 a 15 minutos, e o celular não pode desligar no meio.",
-            "Já está na tomada, próximo passo",
-            new GuideHelp[]
-            {
-                new("O celular não liga ou não carrega",
-                    "Troque o cabo ou a tomada e espere 5 minutos. Se continua sem carregar, separe este celular e use outro."),
-                new("Não tenho tomada perto",
-                    "A bateria precisa estar acima de metade. Com menos que isso, o celular pode desligar no meio e ficar travado."),
-            }),
-
-        new("conta-mi",
-            "Tire a conta Mi do celular",
-            new[]
-            {
-                "Abra as Configurações (ícone de engrenagem).",
-                "Toque em \"Conta Mi\", no topo da lista.",
-                "Desligue \"Encontrar dispositivo\".",
-                "Toque em \"Sair\" e digite a senha da conta Mi.",
-                "Isso vem antes de restaurar: se o celular for restaurado com a conta Mi dentro, ele trava na volta pedindo a senha dessa conta.",
-            },
-            MiAccountDrawing, new Rect(0.06, 0.235, 0.88, 0.08),
             "Leva 1 minuto.",
-            "Já tirei, próximo passo",
+            "O celular está ligado e no Wi-Fi, próximo passo",
             new GuideHelp[]
             {
-                new("Não aparece \"Conta Mi\" no topo",
-                    "Então não há conta Mi neste celular. Siga para o próximo passo."),
-                new("Ninguém sabe a senha da conta",
-                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
-                new("Não achei o item no meu celular",
-                    "Em celulares mais antigos, a conta fica em Configurações, \"Conta Mi\" ou \"Mi Account\", e \"Encontrar dispositivo\" fica dentro dela. " + SearchTip),
+                new("Apareceu Bem-vindo",
+                    "O celular está apagado. Escolha o idioma e o Wi-Fi, e pule a conta Google e a conta Mi até chegar à tela inicial."),
+                new("Pede um PIN que ninguém sabe",
+                    "Veja a ajuda \"Celular travado com PIN\".", new[] { LockedWithPin }),
+                new("O celular não liga",
+                    "Ligue o celular no carregador e espere 5 minutos. Se continua sem ligar, separe este celular e use outro."),
             }),
 
         new("conta-google",
             "Tire a conta Google do celular",
             new[]
             {
-                "Abra as Configurações.",
+                "Abra as Configurações (ícone de engrenagem).",
                 "Toque em \"Contas e sincronização\".",
                 "Na seção \"GOOGLE\", toque na conta.",
                 "Toque em \"Mais\" e depois em \"Remover conta\".",
                 "Se o celular pedir, digite a senha de tela do celular ou da conta.",
-                "Isso vem antes de restaurar: com uma conta Google no celular, o Android trava o celular restaurado pedindo essa conta, e o código QR não passa.",
+                "Com uma conta Google no celular, o Midview não consegue terminar a preparação.",
             },
             AccountsPrint, new Rect(0.06, 0.55, 0.88, 0.09),
             "Leva 1 minuto.",
@@ -165,62 +164,119 @@ internal static class PhoneSetupGuide
                     "Então não há conta Google neste celular. Siga para o próximo passo."),
                 new("Pediu a senha e ninguém sabe",
                     "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
-                new("Não achei o item no meu celular",
-                    "Em celulares mais antigos, procure \"Contas e sincronização\" em Configurações, ou \"Contas\" em \"Configurações adicionais\". " + SearchTip),
+                NotFound("Contas e sincronização", "conta"),
             }),
 
-        new("restaurar",
-            "Restaure o celular de fábrica",
+        new("desenvolvedor",
+            "Ligue o modo de desenvolvedor",
             new[]
             {
                 "Abra as Configurações.",
                 "Toque em \"Sobre o telefone\" (o primeiro item).",
-                "Desça até o fim da tela e toque em \"Redefinição de fábrica\".",
-                "Toque em \"Limpar todos os dados\" e confirme.",
-                "Quando der certo, o celular reinicia sozinho e termina na tela \"Bem-vindo\", pedindo para escolher o idioma.",
+                "Toque 7 vezes seguidas em \"Versão do MIUI\".",
+                "Pare quando aparecer \"Você agora é um desenvolvedor\".",
             },
-            ResetPrint, new Rect(0.48, 0.87, 0.47, 0.06),
-            "Leva de 3 a 7 minutos.",
-            "Apareceu o Bem-vindo",
+            AboutPrint, new Rect(0.525, 0.57, 0.445, 0.19),
+            "Leva menos de 1 minuto.",
+            "Apareceu \"Você agora é um desenvolvedor\", próximo passo",
             new GuideHelp[]
             {
-                new("Não achei \"Redefinição de fábrica\"",
-                    "Em celulares mais antigos, vá em Configurações, \"Configurações adicionais\" e \"Backup e redefinição\". " + SearchTip),
-                new("O celular já era um celular da escola",
-                    "Um celular que já foi preparado antes não deixa restaurar pelo menu: a \"Redefinição de fábrica\" fica bloqueada. " +
-                    "Use a ajuda \"Restaurar sem o PIN\" (modo de recuperação do celular).",
-                    new[] { ResetWithoutPin }),
-                new("Pediu um PIN ou senha de tela que ninguém sabe",
-                    "Veja a ajuda \"Restaurar sem o PIN\" (modo de recuperação do celular).", new[] { ResetWithoutPin }),
-                new("Pediu a senha de uma conta",
-                    "Faltou tirar a conta Mi ou Google. Veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
-                new("Passou de 10 minutos e a tela não muda",
-                    "Espere mais 5 minutos. Se continua parado, segure Ligar por 15 segundos até desligar e ligue de novo."),
+                new("Diz que já é desenvolvedor",
+                    "Então o modo de desenvolvedor já está ligado neste celular. Siga para o próximo passo."),
+                new("Não aparece \"Versão do MIUI\"",
+                    "Role a tela de \"Sobre o telefone\" para baixo: o quadrado \"Versão do MIUI\" fica abaixo de \"Versão do Android\"."),
+                NotFound("Sobre o telefone", "Sobre o telefone"),
             }),
 
-        new("seis-toques",
-            "Toque 6 vezes e escaneie o código",
+        new("chip-conta-mi",
+            "Coloque o chip e entre na conta Mi",
             new[]
             {
-                "Na tela \"Bem-vindo\", toque 6 vezes seguidas numa parte vazia da tela, sempre no mesmo lugar.",
-                "Vai abrir a câmera do celular.",
-                "Aponte a câmera para o código QR que aparece neste computador.",
-                "Toque em Aceitar ou Continuar até aparecer a tela do Midview.",
+                "Com a agulha da gaveta do chip (ou um clipe), abra a gaveta, na lateral do celular.",
+                "Coloque o chip e feche a gaveta.",
+                "Abra as Configurações e toque em \"Conta Mi\", no topo da lista.",
+                "Toque no botão do Google.",
+                "Entre com o e-mail e a senha da conta Google da escola.",
             },
-            WelcomeDrawing, null,
-            "Leva uns 10 minutos: o celular entra no Wi-Fi e baixa o Midview sozinho.",
-            "Já escaneei o código",
+            MiLoginDrawing, new Rect(0.069, 0.606, 0.861, 0.055),
+            "Leva uns 2 minutos.",
+            "Entrei na conta Mi, próximo passo",
             new GuideHelp[]
             {
-                new("A câmera não abriu",
-                    "Toque mais rápido, 6 vezes seguidas, sempre no mesmo lugar, numa parte vazia da tela (longe de botões)."),
-                new("A câmera abriu mas não lê o código",
-                    "Chegue o celular mais perto da tela do computador, sem reflexo, e espere 5 segundos parado."),
-                new("Apareceu uma mensagem de erro",
-                    "Leia a mensagem. Se fala de rede ou Wi-Fi, o nome ou a senha da rede estão errados, ou a rede está sem internet. " +
-                    "Se fala de conta, sobrou a conta Mi ou Google (volte aos passos de tirar as contas). Depois use \"Recomeçar este celular\"."),
-                new("O código venceu",
-                    "O código vale por 1 hora e funciona uma vez. Volte e peça um código novo."),
+                new("Já tem outra conta Mi",
+                    "Saia dela primeiro (o celular pede a senha dessa conta) e depois entre com o Google da escola. " +
+                    "Se ninguém sabe a senha, veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
+                new("Fica carregando no \"não sou robô\"",
+                    "Confira se o celular está no Wi-Fi e se a data e a hora estão no automático. " + SearchTip("data e hora")),
+                NotFound("Conta Mi", "conta"),
+            }),
+
+        new("chaves",
+            "Ligue as três chaves do desenvolvedor",
+            new[]
+            {
+                "Abra as Configurações e toque em \"Configurações adicionais\".",
+                "Toque em \"Opções do desenvolvedor\".",
+                "Desça a tela e ligue \"Depuração USB\".",
+                "Ligue \"Instalar via USB\".",
+                "Ligue \"Depuração USB (configurações de segurança)\".",
+                "Cada chave mostra um aviso: espere o contador chegar a zero e toque em \"Aceitar\" ou \"Próximo\".",
+            },
+            DeveloperPrint, new Rect(0.05, 0.10, 0.90, 0.09),
+            "Leva uns 3 minutos.",
+            "As três chaves estão ligadas, próximo passo",
+            new GuideHelp[]
+            {
+                new("A chave volta a desligar",
+                    "O chip não está bem colocado ou a conta Mi não entrou. Volte ao passo 5, confira os dois e tente de novo."),
+                new("Pede para inserir um cartão SIM",
+                    "Falta o chip. Volte ao passo 5 e coloque o chip na gaveta."),
+                new("Não aparece \"Opções do desenvolvedor\"",
+                    "Falta ligar o modo de desenvolvedor. Volte ao passo 4. " + SearchTip("desenvolvedor")),
+                NotFound("Configurações adicionais", "depuração"),
+            }),
+
+        new("sair-contas",
+            "Saia das contas e tire o chip",
+            new[]
+            {
+                "Abra as Configurações e toque em \"Conta Mi\", no topo da lista.",
+                "Se \"Encontrar dispositivo\" estiver ligado, desligue.",
+                "Toque em \"Sair da conta\".",
+                "Se o login pelo Google deixou uma conta Google no celular, tire-a como no passo 3: Contas e sincronização, Google, a conta, Mais, Remover conta.",
+                "Abra a gaveta do chip e tire o chip, sem desligar o celular.",
+                "As três chaves do passo anterior continuam ligadas. Com qualquer conta no celular, o Midview não consegue terminar.",
+            },
+            null, null,
+            "Leva uns 2 minutos.",
+            "Já tirei, próximo passo",
+            new GuideHelp[]
+            {
+                new("Pede a senha da conta e ninguém sabe",
+                    "Veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
+                new("Não aparece \"Conta Mi\" no topo",
+                    "Então não há conta Mi neste celular. Confira só se sobrou conta Google (passo 3) e tire o chip."),
+                NotFound("Conta Mi", "conta"),
+            }),
+
+        new("cabo",
+            "Ligue o celular no computador pelo cabo",
+            new[]
+            {
+                "Ligue o celular neste computador pelo cabo USB.",
+                "No celular aparece \"Permitir depuração USB?\": marque \"Sempre permitir deste computador\" e toque em Permitir.",
+                "Depois o celular pergunta se pode instalar: toque em Instalar.",
+                "O assistente avança sozinho quando vê o celular no cabo.",
+            },
+            null, null,
+            "Leva uns 2 minutos. Depois o Midview termina sozinho, em cerca de 1 minuto.",
+            "Liguei o cabo e toquei em Permitir",
+            new GuideHelp[]
+            {
+                new("Não aparece a pergunta",
+                    "Troque de porta USB ou de cabo (um cabo só de carregar não serve) e desbloqueie a tela do celular."),
+                new("Toquei em Cancelar",
+                    "Desligue o cabo e ligue de novo: a pergunta volta a aparecer."),
             }),
     };
 }

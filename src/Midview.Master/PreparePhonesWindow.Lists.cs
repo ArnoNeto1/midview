@@ -87,7 +87,7 @@ public partial class PreparePhonesWindow
             || (_progress.Page == SetupPage.Step && _progress.Wipe == WipeState.Failed))
         {
             // The way out of a wipe that failed (and of redoing an offline phone): first in the list.
-            helps.Insert(0, PhoneSetupGuide.ResetWithoutPin);
+            helps.Insert(0, PhoneSetupGuide.LockedWithPin);
         }
         // The fixed helps an answer points to come after it, once each.
         foreach (var help in helps.ToList())

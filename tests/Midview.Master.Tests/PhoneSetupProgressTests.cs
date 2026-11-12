@@ -19,7 +19,7 @@ public class PhoneSetupProgressTests
     private static PhoneSetupProgress AtSixTaps()
     {
         var progress = AtNumber();
-        while (progress.StepId != "seis-toques")
+        while (progress.StepId != "cabo")
         {
             progress.Next();
         }
@@ -90,7 +90,7 @@ public class PhoneSetupProgressTests
 
         Assert.Equal("07", progress.Number);
         Assert.Equal("Celular 07", progress.Name);
-        Assert.Equal("bateria", progress.StepId);
+        Assert.Equal("ligar", progress.StepId);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public class PhoneSetupProgressTests
         Assert.True(progress.ReturnsAfterWifi);
         progress.Next();
 
-        Assert.Equal("conta-mi", progress.StepId);
+        Assert.Equal("conta-google", progress.StepId);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class PhoneSetupProgressTests
         progress.ChangeWifi();
         progress.Next();
 
-        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal("cabo", progress.StepId);
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class PhoneSetupProgressTests
 
         progress.StartAt("07");
 
-        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal("cabo", progress.StepId);
         Assert.Equal("07", progress.Number);
     }
 
@@ -173,7 +173,7 @@ public class PhoneSetupProgressTests
 
         progress.Next();
 
-        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal("cabo", progress.StepId);
         Assert.True(progress.OffersWipe);
     }
 
@@ -185,7 +185,7 @@ public class PhoneSetupProgressTests
 
         progress.Next();
 
-        Assert.Equal("bateria", progress.StepId);
+        Assert.Equal("ligar", progress.StepId);
         Assert.False(progress.OffersWipe);
     }
 
@@ -236,7 +236,7 @@ public class PhoneSetupProgressTests
         progress.Next();
 
         Assert.Equal($"Passo 2 de {PhoneSetupGuide.Steps.Count}", progress.StepCaption);
-        Assert.Equal(IndexOf("bateria"), progress.StepIndex);
+        Assert.Equal(IndexOf("ligar"), progress.StepIndex);
     }
 
     // After "Sim, preparar de novo": on the six taps with the wipe offered.
@@ -281,7 +281,7 @@ public class PhoneSetupProgressTests
 
         progress.RestoredByHand();
 
-        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal("cabo", progress.StepId);
         Assert.Equal(WipeState.None, progress.Wipe);
         Assert.Null(progress.WipeFailure);
     }
@@ -319,7 +319,7 @@ public class PhoneSetupProgressTests
 
         progress.StartAt("07", wiped: true);
 
-        Assert.Equal("seis-toques", progress.StepId);
+        Assert.Equal("cabo", progress.StepId);
         Assert.Equal(WipeState.Done, progress.Wipe);
         Assert.Equal("Celular 07", progress.Name);
     }

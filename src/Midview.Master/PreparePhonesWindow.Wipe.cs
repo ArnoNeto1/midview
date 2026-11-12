@@ -19,7 +19,7 @@ public partial class PreparePhonesWindow
         {
             return;
         }
-        if (step.Id != "seis-toques")
+        if (step.Id != "cabo")
         {
             WipeCard.Visibility = Visibility.Collapsed;
             StepBody.Visibility = Visibility.Visible;
@@ -39,7 +39,7 @@ public partial class PreparePhonesWindow
             WipeState.Done => $"O {name} está sendo apagado e volta sozinho ao \"Bem-vindo\" em alguns minutos. Então siga os passos.",
             WipeState.Failed => $"Não deu para apagar o {name} daqui: {_progress.WipeFailure?.TrimEnd('.', ' ')}. " +
                                 "Um celular que já foi da escola não deixa restaurar pelo menu das Configurações. " +
-                                "Restaure-o pelo modo de recuperação (\"Restaurar sem o PIN\") e depois toque em \"Já restaurei\".",
+                                "Restaure-o pelo modo de recuperação (\"Celular travado com PIN\") e depois toque em \"Já restaurei\".",
             _ => "",
         };
         WipeButton.Visibility = Shown(state == WipeState.Offered);

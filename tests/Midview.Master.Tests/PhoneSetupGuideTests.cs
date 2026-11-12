@@ -17,7 +17,9 @@ public class PhoneSetupGuideTests
             foreach (var t in s.Taps) yield return t;
             foreach (var h in s.Help) { yield return h.Problem; yield return h.Answer; }
         }
-        foreach (var h in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.ResetWithoutPin })
+        yield return PhoneSetupGuide.Gather.Title;
+        foreach (var item in PhoneSetupGuide.Gather.Items) yield return item;
+        foreach (var h in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.LockedWithPin })
         {
             yield return h.Problem; yield return h.Answer;
         }
@@ -41,27 +43,16 @@ public class PhoneSetupGuideTests
     public void Steps_come_in_the_expected_order()
     {
         Assert.Equal(
-            new[] { "numero", "bateria", "conta-mi", "conta-google", "restaurar", "seis-toques" },
+            new[] { "numero", "ligar", "conta-google", "desenvolvedor", "chip-conta-mi", "chaves", "sair-contas", "cabo" },
             PhoneSetupGuide.Steps.Select(s => s.Id).ToArray());
     }
 
     [Fact]
-    public void Both_accounts_come_before_the_reset()
+    public void The_google_account_goes_before_developer_mode_and_the_accounts_leave_before_the_cable()
     {
         var ids = PhoneSetupGuide.Steps.Select(s => s.Id).ToList();
-        Assert.True(ids.IndexOf("conta-mi") < ids.IndexOf("restaurar"));
-        Assert.True(ids.IndexOf("conta-google") < ids.IndexOf("restaurar"));
-    }
-
-    [Fact]
-    public void Account_steps_say_why_they_come_before_the_reset()
-    {
-        foreach (var id in new[] { "conta-mi", "conta-google" })
-        {
-            var step = PhoneSetupGuide.Steps.Single(s => s.Id == id);
-            Assert.Contains(step.Taps, t => t.Contains("antes de restaurar", StringComparison.OrdinalIgnoreCase)
-                && t.Contains("conta", StringComparison.OrdinalIgnoreCase));
-        }
+        Assert.True(ids.IndexOf("conta-google") < ids.IndexOf("desenvolvedor"));
+        Assert.True(ids.IndexOf("sair-contas") < ids.IndexOf("cabo"));
     }
 
     [Fact]
@@ -84,7 +75,7 @@ public class PhoneSetupGuideTests
         {
             Assert.Contains(s.Image!.ToLowerInvariant(), names);
         }
-        foreach (var f in new[] { "configuracoes", "contas", "sobre", "redefinicao", "conta-mi", "bem-vindo" })
+        foreach (var f in new[] { "configuracoes", "contas", "sobre", "desenvolvedor", "conta-mi" })
         {
             Assert.Contains("assets/prepararcelular/" + f + ".png", names);
         }
@@ -121,16 +112,11 @@ public class PhoneSetupGuideTests
     public void The_number_step_asks_with_the_spec_words() =>
         Assert.Equal("Qual número está escrito atrás deste celular?", PhoneSetupGuide.Steps.Single(s => s.Id == "numero").Title);
 
-    // No timing that nobody measured.
-    [Fact]
-    public void The_six_taps_help_has_no_made_up_time_limit() =>
-        Assert.DoesNotContain(PhoneSetupGuide.Steps.Single(s => s.Id == "seis-toques").Help, h => h.Answer.Contains("menos de 3 segundos"));
-
     [Fact]
     public void Fixed_helps_are_filled()
     {
         Assert.False(string.IsNullOrWhiteSpace(PhoneSetupGuide.UnknownAccount.Answer));
-        Assert.False(string.IsNullOrWhiteSpace(PhoneSetupGuide.ResetWithoutPin.Answer));
+        Assert.False(string.IsNullOrWhiteSpace(PhoneSetupGuide.LockedWithPin.Answer));
         Assert.NotEmpty(PhoneSetupGuide.NotAppeared);
         Assert.NotEmpty(PhoneSetupGuide.WifiHelp);
     }
@@ -138,7 +124,7 @@ public class PhoneSetupGuideTests
     [Fact]
     public void An_answer_that_quotes_a_fixed_help_links_to_it()
     {
-        foreach (var fixedHelp in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.ResetWithoutPin })
+        foreach (var fixedHelp in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.LockedWithPin })
         {
             foreach (var help in PhoneSetupGuide.Steps.SelectMany(s => s.Help))
             {
@@ -151,13 +137,62 @@ public class PhoneSetupGuideTests
     }
 
     [Fact]
-    public void The_restore_step_says_a_phone_that_was_already_a_school_phone_needs_recovery_mode()
+    public void Gather_names_what_to_bring()
     {
-        var help = PhoneSetupGuide.Steps.Single(s => s.Id == "restaurar").Help
-            .Single(h => h.Problem.Contains("já era um celular da escola"));
+        var all = PhoneSetupGuide.Gather.Title + " " + string.Join(" ", PhoneSetupGuide.Gather.Items);
+        Assert.StartsWith("Antes de começar, separe", PhoneSetupGuide.Gather.Title);
+        foreach (var word in new[] { "cabo", "chip", "agulha", "conta Google da escola" })
+        {
+            Assert.Contains(word, all, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
-        Assert.Contains("Restaurar sem o PIN", help.Answer);
-        Assert.Contains(PhoneSetupGuide.ResetWithoutPin, help.Links!);
+    [Fact]
+    public void Menu_steps_point_to_the_settings_search_in_their_help()
+    {
+        foreach (var id in new[] { "conta-google", "desenvolvedor", "chip-conta-mi", "chaves", "sair-contas" })
+        {
+            var step = PhoneSetupGuide.Steps.Single(s => s.Id == id);
+            Assert.Contains(step.Help, h => h.Answer.Contains("Pesquisar nas Configurações"));
+        }
+    }
+
+    [Fact]
+    public void The_cable_step_warns_about_both_questions()
+    {
+        var step = PhoneSetupGuide.Steps.Single(s => s.Id == "cabo");
+        var text = string.Join(" ", step.Taps);
+        Assert.Contains("Permitir depuração USB?", text);
+        Assert.Contains("Sempre permitir deste computador", text);
+        Assert.Contains("Permitir", text);
+        Assert.Contains("Instalar", text);
+    }
+
+    [Fact]
+    public void The_pin_help_is_the_recovery_menu()
+    {
+        Assert.Equal("Celular travado com PIN", PhoneSetupGuide.LockedWithPin.Problem);
+        Assert.Contains("Wipe All Data", PhoneSetupGuide.LockedWithPin.Answer);
+    }
+
+    [Fact]
+    public void Not_appeared_is_about_the_network_and_says_the_phone_already_trusts_this_pc()
+    {
+        var text = string.Join(" ", PhoneSetupGuide.NotAppeared.Select(h => h.Problem + " " + h.Answer));
+        Assert.Contains("mesmo Wi-Fi", text);
+        Assert.Contains("roteador", text);
+        Assert.Contains("já confia", text);
+    }
+
+    [Fact]
+    public void No_text_mentions_the_old_qr_or_six_taps()
+    {
+        foreach (var text in AllTexts())
+        {
+            Assert.DoesNotContain("QR", text);
+            Assert.DoesNotContain("6 vezes", text);
+            Assert.DoesNotContain("Recomeçar este celular", text);
+        }
     }
 
     [Fact]

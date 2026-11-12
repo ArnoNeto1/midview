@@ -26,8 +26,8 @@ internal enum WipeState
 internal sealed class PhoneSetupProgress
 {
     private static readonly int NumberStep = IndexOf("numero");
-    private static readonly int BatteryStep = IndexOf("bateria");
-    private static readonly int SixTapsStep = IndexOf("seis-toques");
+    private static readonly int BatteryStep = IndexOf("ligar");
+    private static readonly int SixTapsStep = IndexOf("cabo");
 
     // The step to come back to after the Wi-Fi page ("trocar").
     private int? _afterWifi;
