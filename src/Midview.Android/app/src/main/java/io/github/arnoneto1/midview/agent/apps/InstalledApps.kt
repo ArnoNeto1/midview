@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.provider.Settings
 import android.telecom.TelecomManager
@@ -120,9 +121,10 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
             .map { it.packageName }
             .toSet()
 
-    // The apps the teacher may block: those with an icon on the home screen,
-    // without the protected ones, one entry per app; sorted and cut to what is
-    // sent before any icon is drawn.
+    // The apps the teacher may block (and open, uninstall): those with an icon
+    // on the home screen, without the protected ones, one entry per app, with
+    // whether each came with the phone (Preinstalled) and is suspended now; sorted and cut to
+    // what is sent before any icon is drawn.
     fun list(): List<PhoneApp> {
         val protected = protected()
         val seen = HashSet<String>()
@@ -133,9 +135,16 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
                 val label = PhoneAppsAnswer.label(info.loadLabel(pm)?.toString() ?: pkg)
                 info to label.ifEmpty { pkg.take(PhoneAppList.MAX_LABEL_LENGTH) }
             }
+        val suspended = suspended()
+        val installedAt = pm.getInstalledPackages(0).associate { it.packageName to it.firstInstallTime }
         return PhoneAppsAnswer.pick(entries) { it.second }.map { (info, label) ->
             val icon = runCatching { png(info.loadIcon(pm)) }.getOrDefault(ByteArray(0))
-            PhoneApp(info.activityInfo.packageName, label, icon)
+            val pkg = info.activityInfo.packageName
+            val cameWithPhone = Preinstalled.cameWithPhone(
+                candidate(info.activityInfo.applicationInfo).system, installedAt[pkg] ?: Long.MAX_VALUE, Build.TIME,
+            )
+            val flags = (if (cameWithPhone) PhoneApp.FLAG_SYSTEM else 0) or (if (pkg in suspended) PhoneApp.FLAG_BLOCKED else 0)
+            PhoneApp(pkg, label, icon, flags)
         }
     }
 
@@ -181,19 +190,20 @@ object PhoneAppsAnswer {
         return items.sortedWith { a, b -> collator.compare(label(a), label(b)) }.take(PhoneAppList.MAX_APPS)
     }
 
-    fun encode(apps: List<PhoneApp>): ByteArray {
+    // format: PhoneAppList's, as the teacher asked (PhoneAppList.askedFormat).
+    fun encode(apps: List<PhoneApp>, format: Int = PhoneAppList.FORMAT_VERSION): ByteArray {
         val seen = HashSet<String>()
         val kept = pick(apps.filter { PhoneAppPolicy.isValidPackageName(it.pkg) && seen.add(it.pkg) }) { it.label }
             .map {
                 val label = label(it.label)
                 val icon = if (it.iconPng.size > PhoneAppList.MAX_ICON_BYTES) ByteArray(0) else it.iconPng
-                if (label == it.label && icon === it.iconPng) it else PhoneApp(it.pkg, label, icon)
+                if (label == it.label && icon === it.iconPng) it else PhoneApp(it.pkg, label, icon, it.flags)
             }
-        val payload = PhoneAppList.encode(kept)
+        val payload = PhoneAppList.encode(kept, format)
         return if (payload.size <= MAX_PAYLOAD) {
             payload
         } else {
-            PhoneAppList.encode(kept.map { PhoneApp(it.pkg, it.label, ByteArray(0)) })
+            PhoneAppList.encode(kept.map { PhoneApp(it.pkg, it.label, ByteArray(0), it.flags) }, format)
         }
     }
 }

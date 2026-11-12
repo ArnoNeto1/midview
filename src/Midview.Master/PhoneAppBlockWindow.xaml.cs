@@ -191,7 +191,7 @@ public partial class PhoneAppBlockWindow : MidviewWindow
 
     // The PNG comes from the student's phone: anything that doesn't decode
     // is simply drawn without an icon.
-    private static ImageSource? DecodeIcon(byte[] png)
+    internal static ImageSource? DecodeIcon(byte[] png)
     {
         if (png.Length == 0)
         {

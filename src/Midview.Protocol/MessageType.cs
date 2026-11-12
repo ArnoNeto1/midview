@@ -144,11 +144,16 @@ public enum MessageType : byte
     // Master -> Session: open a website (a WebsiteAddress, as TextMessage)
     // in the student's browser ("Abrir site"). The only message of a
     // short-lived connection, answered with one CommandAck (CommandResult).
+    // A phone's agent (port 28900) takes it too, from a trusted teacher, and
+    // opens the site in Chrome, or once the teacher's lock screen goes.
     OpenWebsite = 46,
 
     // Master -> Session: start a program as the student ("Abrir programa"),
     // a ProgramCommand as TextMessage. The only message of a short-lived
-    // connection, answered with one CommandAck (CommandResult).
+    // connection, answered with one CommandAck (CommandResult). A phone's
+    // agent (port 28900) takes the package of one of its apps (from
+    // PhoneApps) instead, from a trusted teacher, and opens it as OpenWebsite.
+    // An agent from before them answers "Ainda não funciona em celular.".
     OpenProgram = 47,
 
     // "Ver a tela"/"Controlar" as one message per update: a viewer that
@@ -193,7 +198,10 @@ public enum MessageType : byte
     // uninstalled on that machine. UninstallPrograms (a ProgramList of names)
     // is an Agent command that silently uninstalls each one it finds,
     // answered with one CommandAck and a CommandResult. An Agent from before
-    // this answers CommandAck to GetInstalledPrograms.
+    // this answers CommandAck to GetInstalledPrograms. A phone's agent takes
+    // UninstallPrograms with a ProgramList of packages (from PhoneApps), from
+    // a trusted teacher, and removes them as the Device Owner; it lists its
+    // apps with GetPhoneApps, not GetInstalledPrograms.
     GetInstalledPrograms = 56,
     InstalledPrograms = 57,
     UninstallPrograms = 58,
@@ -312,7 +320,10 @@ public enum MessageType : byte
     // accept come FileChunk messages up to the requested size; the Agent
     // answers InstallStarted, no payload, once it has the whole file, then
     // one CommandAck carrying a CommandResult when the installer ends. An
-    // Agent from before this answers CommandAck [0] to InstallProgram.
+    // Agent from before this answers CommandAck [0] to InstallProgram. A
+    // phone's agent takes the same exchange for an .apk (ProgramInstall.MaxApkSize,
+    // no arguments) and installs it silently as the Device Owner; one from
+    // before it answers "Ainda não funciona em celular.".
     InstallProgram = 86,
     InstallAccepted = 87,
     InstallStarted = 88,
@@ -356,7 +367,8 @@ public enum MessageType : byte
     // Master -> Android agent (port 28900): the phone-apps block. Set a PhoneAppPolicy
     // (answered with a CommandAck), ask for the one in force (answered with
     // PhoneAppBlockStatus, a PhoneAppPolicy payload), and ask for the apps the student
-    // can open (answered with PhoneApps, a PhoneAppList payload).
+    // can open (answered with PhoneApps, a PhoneAppList payload; with each app's
+    // flags when GetPhoneApps carries PhoneAppList.WithFlagsRequest).
     SetPhoneAppBlock = 93,
     GetPhoneAppBlock = 94,
     PhoneAppBlockStatus = 95,

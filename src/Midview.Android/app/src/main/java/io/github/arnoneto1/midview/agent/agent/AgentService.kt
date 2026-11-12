@@ -46,6 +46,7 @@ import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 import io.github.arnoneto1.midview.agent.power.AndroidPhonePower
 import io.github.arnoneto1.midview.agent.power.PowerCountdown
+import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
@@ -240,15 +241,22 @@ class AgentService : Service() {
         )
         val lockScreen = LockScreenKeeper.get(this)
         lateinit var closer: AppCloser
+        lateinit var programs: TeacherPrograms
         // A closing asked for under the lock is done when it goes, and the
-        // teacher's messages and conversations come up then.
+        // teacher's messages and conversations, sites and apps come up then.
         val screenLock = ScreenLock(
             show = { LockActivity.show(this) },
             hide = {
                 LockActivity.hide()
                 closer.unlocked()
                 TeacherTalk.unlocked()
+                programs.launch.unlocked()
             },
+        )
+        // "Abrir site", "Abrir programa", "Instalar programa", "Desinstalar programa".
+        programs = TeacherPrograms(
+            this, { screenLock.locked }, internetBlocked, { sites.current.domains }, installedApps::protected,
+            appBlock::reapply, policyGateway::isDeviceOwner, log,
         )
         // "Mensagem" and "Bate-papo": never over the teacher's lock screen.
         TeacherTalk.start(this, isLocked = { screenLock.locked })
@@ -311,6 +319,7 @@ class AgentService : Service() {
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
             files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),
+            openWebsite = programs.launch::openWebsite, openApp = programs.launch::openApp, installs = programs.installs,
             listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames

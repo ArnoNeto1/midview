@@ -19,6 +19,13 @@
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <!-- With phones among the machines: they have a list of their own. -->
+            <Border x:Name="PhonesCard" Style="{StaticResource Card}" Margin="0,0,0,10" Visibility="Collapsed">
+                <DockPanel>
+                    <Button x:Name="PhonesButton" DockPanel.Dock="Right" Click="OnPhonesClicked" Padding="10,4" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="PhonesTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
             <CheckBox x:Name="WholeClassCheckBox" Content="Aplicar na turma toda" Margin="0,0,0,10" />
             <Button x:Name="UninstallButton" Content="Desinstalar os marcados" Click="OnUninstallClicked"
                     Style="{StaticResource DangerButton}" Padding="14,6" HorizontalAlignment="Left" Margin="0,0,0,10" />

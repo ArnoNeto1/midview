@@ -5,6 +5,13 @@ import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
+import io.github.arnoneto1.midview.agent.programs.PackageChanger
+import io.github.arnoneto1.midview.agent.programs.PackageFacts
+import io.github.arnoneto1.midview.agent.programs.PhoneAppFacts
+import io.github.arnoneto1.midview.agent.programs.TeacherInstalls
+import io.github.arnoneto1.midview.agent.protocol.ProgramInstall
+import io.github.arnoneto1.midview.agent.update.ApkFacts
+import io.github.arnoneto1.midview.agent.update.ApkUpload
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
@@ -817,6 +824,97 @@ class CommandHandlerTest {
             handler.handle(channel)
             assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
         }
+    }
+
+    // "Abrir site", "Abrir programa", "Instalar programa", "Desinstalar
+    // programa": what the teacher sent reaches them, and their answer the teacher.
+    private val launched = mutableListOf<String>()
+    private val installEvents = mutableListOf<String>()
+    private val installs by lazy {
+        val packages = object : PackageFacts, PackageChanger {
+            override fun read(apk: File) = ApkFacts("com.x.ola", 1, "1.0", setOf("k"))
+            override fun installed(pkg: String) =
+                if (pkg == "com.x.ola" && "install" in installEvents) PhoneAppFacts(ApkFacts(pkg, 1, "1.0", setOf("k")), "Olá", false) else null
+            override fun isSuspended(pkg: String) = false
+            override fun freeBytes() = Long.MAX_VALUE
+            override fun install(apk: File, pkg: String): String? = null.also { installEvents += "install" }
+            override fun uninstall(pkg: String): String? = null.also { installEvents += "uninstall $pkg" }
+        }
+        TeacherInstalls(
+            ApkUpload(folder.newFolder("teacher-app"), "app.apk"), packages, packages, "io.github.arnoneto1.midview.agent",
+            isDeviceOwner = { true }, protectedApps = { emptySet() }, reapplyBlock = {},
+        )
+    }
+    private val withPrograms by lazy {
+        CommandHandler(
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway,
+            openWebsite = { launched += "site ${String(it)}"; true to "aberto no Chrome" },
+            openApp = { launched += "app ${String(it)}"; true to "aberto" },
+            installs = installs,
+        ) { phoneApps }
+    }
+
+    @Test fun aTrustedTeacherOpensASiteAndAnApp() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.OPEN_WEBSITE, "https://www.google.com/".toByteArray()),
+            message(MessageType.OPEN_PROGRAM, "com.miui.calculator".toByteArray()),
+        )
+        withPrograms.handle(channel)
+        assertEquals(listOf("site https://www.google.com/", "app com.miui.calculator"), launched)
+        assertEquals(
+            listOf(true to "aberto no Chrome", true to "aberto"),
+            channel.sent.map { CommandResult.decode(it.also { m -> assertEquals(MessageType.COMMAND_ACK, m.type) }.payload) },
+        )
+    }
+
+    @Test fun aTrustedTeacherInstallsAndUninstalls() {
+        trusted.add(teacher)
+        val apk = ByteArray(1000) { it.toByte() }
+        val request = java.nio.ByteBuffer.allocate(10 + 7).putLong(apk.size.toLong()).putShort(0).put("ola.apk".toByteArray()).array()
+        val channel = FakeChannel(teacher, message(MessageType.INSTALL_PROGRAM, request), message(MessageType.FILE_CHUNK, apk))
+        withPrograms.handle(channel)
+        assertEquals(listOf(MessageType.INSTALL_ACCEPTED, MessageType.INSTALL_STARTED, MessageType.COMMAND_ACK), channel.sent.map { it.type })
+        assertEquals(true to "instalado: Olá (versão 1.0)", CommandResult.decode(channel.sent.last().payload))
+
+        val uninstall = FakeChannel(teacher, message(MessageType.UNINSTALL_PROGRAMS, ProgramInstall.encodeList(listOf("com.x.ola"))))
+        withPrograms.handle(uninstall)
+        assertEquals(true to "Olá: desinstalado", CommandResult.decode(uninstall.sent.single().payload))
+        assertEquals(listOf("install", "uninstall com.x.ola"), installEvents)
+    }
+
+    @Test fun aStrangerOpensAndInstallsNothing() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.OPEN_WEBSITE, MessageType.OPEN_PROGRAM, MessageType.INSTALL_PROGRAM, MessageType.UNINSTALL_PROGRAMS)) {
+            val channel = FakeChannel(stranger, message(type, "com.x.ola".toByteArray()))
+            withPrograms.handle(channel)
+            assertTrue(channel.sent.isEmpty())
+        }
+        assertTrue(launched.isEmpty())
+        assertTrue(installEvents.isEmpty())
+    }
+
+    // An agent built without them answers as one from before them.
+    @Test fun withoutProgramsThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.OPEN_WEBSITE, MessageType.OPEN_PROGRAM, MessageType.INSTALL_PROGRAM, MessageType.UNINSTALL_PROGRAMS)) {
+            val channel = FakeChannel(teacher, message(type, "com.x.ola".toByteArray()))
+            handler.handle(channel)
+            assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+        }
+    }
+
+    // A teacher who asks for them gets each app's flags; one from before them, the list as it was.
+    @Test fun getPhoneAppsWithFlagsWhenAsked() {
+        trusted.add(teacher)
+        phoneApps = listOf(PhoneApp("com.miui.calculator", "Calculadora", byteArrayOf(1), PhoneApp.FLAG_SYSTEM or PhoneApp.FLAG_BLOCKED))
+        val channel = FakeChannel(teacher, message(MessageType.GET_PHONE_APPS, byteArrayOf(2)), message(MessageType.GET_PHONE_APPS))
+        handler.handle(channel)
+        assertEquals(PhoneAppList.WITH_FLAGS, channel.sent[0].payload[0].toInt())
+        assertEquals(phoneApps, PhoneAppList.decode(channel.sent[0].payload))
+        assertEquals(PhoneAppList.FORMAT_VERSION, channel.sent[1].payload[0].toInt())
+        assertEquals(0, PhoneAppList.decode(channel.sent[1].payload)!!.single().flags)
     }
 
     private companion object {

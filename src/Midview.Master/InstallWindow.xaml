@@ -6,22 +6,25 @@
         WindowStartupLocation="CenterOwner">
     <DockPanel Margin="24,22,24,20">
         <StackPanel DockPanel.Dock="Top">
-            <local:DialogHeader Icon="&#xE7B8;" Heading="Instalar programa" Accent="{StaticResource ProgramasBrush}">
+            <local:DialogHeader x:Name="DialogHeading" Icon="&#xE7B8;" Heading="Instalar programa" Accent="{StaticResource ProgramasBrush}">
                 <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
             </local:DialogHeader>
             <Border Style="{StaticResource Card}" Margin="0,16,0,10">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                    <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,10" TextWrapping="Wrap"
                                Text="O Midview de cada máquina instala o programa como administrador: não aparece a tela do UAC e ninguém precisa digitar senha. O instalador tem de funcionar sem perguntas (modo silencioso) e instalar para todos os usuários." />
                     <DockPanel Margin="0,0,0,8">
                         <Button x:Name="ChooseButton" DockPanel.Dock="Right" Content="Escolher instalador..." Click="OnChooseFileClicked" Padding="10,4" Margin="8,0,0,0" />
                         <TextBlock x:Name="FileTextBlock" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="Nenhum instalador ou script escolhido (.exe, .msi, .bat ou .cmd)." />
                     </DockPanel>
-                    <TextBlock x:Name="KindTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,8" Visibility="Collapsed" />
-                    <TextBlock Text="Opções do instalador:" Margin="0,0,0,4" />
-                    <TextBox x:Name="ArgumentsTextBox" Margin="0,0,0,6" IsEnabled="False" />
-                    <TextBlock Style="{StaticResource Hint}"
-                               Text="Um instalador que fica esperando uma resposta é encerrado depois de 30 minutos. Na dúvida, teste numa máquina antes da turma toda." />
+                    <TextBlock x:Name="KindTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed" />
+                    <!-- A PC's installer only: an .apk has no options. -->
+                    <StackPanel x:Name="ArgumentsPanel">
+                        <TextBlock Text="Opções do instalador:" Margin="0,0,0,4" />
+                        <TextBox x:Name="ArgumentsTextBox" Margin="0,0,0,6" IsEnabled="False" />
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="Um instalador que fica esperando uma resposta é encerrado depois de 30 minutos. Na dúvida, teste numa máquina antes da turma toda." />
+                    </StackPanel>
                 </StackPanel>
             </Border>
             <Button x:Name="InstallButton" Content="Instalar" Click="OnInstallClicked" IsEnabled="False"

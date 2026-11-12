@@ -31,12 +31,15 @@ public static class PhoneAppBlockClient
             phone.HostAddress, port, AgentThumbprint(phone), masterCertificate, MessageType.SetPhoneAppBlock, policy.Encode());
 
     // The apps the student can open, with their icons; null for a phone
-    // agent from before app blocking.
+    // agent from before app blocking. withFlags: with whether each came with
+    // the phone and is blocked now (PhoneAppFlags); a phone from before them
+    // answers without, read as none.
     public static IReadOnlyList<PhoneApp>? ListApps(
-        KnownMachine phone, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort)
+        KnownMachine phone, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort, bool withFlags = false)
     {
         var reply = CommandClient.Ask(
-            phone.HostAddress, port, AgentThumbprint(phone), masterCertificate, MessageType.GetPhoneApps, Array.Empty<byte>());
+            phone.HostAddress, port, AgentThumbprint(phone), masterCertificate, MessageType.GetPhoneApps,
+            withFlags ? PhoneAppList.WithFlagsRequest : Array.Empty<byte>());
         return reply.Type switch
         {
             MessageType.PhoneApps when PhoneAppList.Decode(reply.Payload) is { } apps => apps,

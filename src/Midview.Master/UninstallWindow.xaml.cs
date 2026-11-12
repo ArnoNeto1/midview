@@ -9,23 +9,38 @@ namespace Midview.Master;
 // teacher marks, on that machine or the whole class, through each Agent
 // (GetInstalledPrograms / UninstallPrograms on port 28900). The list is read
 // from one machine; the uninstall goes by display name, so each machine
-// removes the ones it actually has.
+// removes the ones it actually has. Phones among the machines have a list
+// of their own (PhoneUninstallWindow, opened from here: openPhones).
 public partial class UninstallWindow : MidviewWindow
 {
     private readonly KnownMachine _listFrom;
     private readonly IReadOnlyList<KnownMachine> _classTargets;
     private readonly X509Certificate2 _masterCertificate;
     private readonly List<ProgramChoice> _all = new();
+    private readonly Action? _openPhones;
 
-    public UninstallWindow(KnownMachine listFrom, IReadOnlyList<KnownMachine> classTargets, X509Certificate2 masterCertificate)
+    // phones: the phones that were among the machines, left to openPhones.
+    public UninstallWindow(
+        KnownMachine listFrom, IReadOnlyList<KnownMachine> classTargets, X509Certificate2 masterCertificate,
+        int phones = 0, Action? openPhones = null)
     {
         InitializeComponent();
         _listFrom = listFrom;
         _classTargets = classTargets;
         _masterCertificate = masterCertificate;
+        _openPhones = openPhones;
         TargetsTextBlock.Text = $"Programas instalados em {listFrom.Name}";
         WholeClassCheckBox.Content = $"Aplicar na turma toda ({classTargets.Count} máquinas)";
+        if (phones > 0 && openPhones is not null)
+        {
+            PhonesTextBlock.Text = PhoneProgramsText.UninstallPhonesNote(phones);
+            PhonesButton.Content = PhoneProgramsText.UninstallPhonesButton(phones);
+            PhonesCard.Visibility = Visibility.Visible;
+            Height += 60;
+        }
     }
+
+    private void OnPhonesClicked(object sender, RoutedEventArgs e) => _openPhones?.Invoke();
 
     private async void OnWindowLoaded(object sender, RoutedEventArgs e) => await LoadAsync();
 

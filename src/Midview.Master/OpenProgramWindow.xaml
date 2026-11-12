@@ -33,6 +33,13 @@
                     </StackPanel>
                 </StackPanel>
             </Border>
+            <!-- With phones among the machines: they pick an app of their own list. -->
+            <Border x:Name="PhonesCard" Style="{StaticResource Card}" Margin="0,0,0,14" Visibility="Collapsed">
+                <DockPanel>
+                    <Button x:Name="PhonesButton" DockPanel.Dock="Right" Click="OnPhonesClicked" Padding="10,4" Margin="12,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock x:Name="PhonesTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
             <Button x:Name="OpenButton" Content="Abrir nas máquinas" Click="OnOpenClicked"
                     Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,0,10" HorizontalAlignment="Left" />
         </StackPanel>

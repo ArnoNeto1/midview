@@ -527,12 +527,21 @@ public partial class MainWindow : MidviewWindow
     }
 
     // "Bloquear apps..." when the menu acts on phones alone (the phones'
-    // window opens); "Bloquear programas..." otherwise.
+    // window opens); "Bloquear programas..." otherwise. The same for "Abrir
+    // programa", "Instalar programa..." and "Desinstalar programa..."
+    // (PhoneProgramsText.MenuItem).
     internal static void NameBlockProgramsItem(ContextMenu menu, IReadOnlyList<KnownMachine> machines)
     {
-        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.BlockPrograms))
+        foreach (var item in menu.Items.OfType<MenuItem>())
         {
-            item.Header = PhoneAppBlockText.BlockProgramsMenuItem(machines);
+            if (DeviceActions.Of(item) == ToolbarAction.BlockPrograms)
+            {
+                item.Header = PhoneAppBlockText.BlockProgramsMenuItem(machines);
+            }
+            else if (DeviceActions.Of(item) is { } action && PhoneProgramsText.MenuItem(action, machines) is { } header)
+            {
+                item.Header = header;
+            }
         }
     }
 
@@ -1191,6 +1200,7 @@ public partial class MainWindow : MidviewWindow
         ShowOnce("instalar", targets, () => new InstallWindow(targets, IsWholeClass(targets, ToolbarAction.Install), _masterCertificate) { Owner = this });
     }
 
+    // Phones have a list of their own (MainWindow.PhonePrograms.cs).
     private void OnUninstallClassClicked(object sender, RoutedEventArgs e)
     {
         if (ToolbarTargets(ToolbarAction.Uninstall, "desinstalar programas") is not { } classTargets)
@@ -1201,11 +1211,11 @@ public partial class MainWindow : MidviewWindow
         {
             return;
         }
-        var listFrom = classTargets[0];
-        ShowOnce("desinstalar", new[] { listFrom },
-            () => new UninstallWindow(listFrom, classTargets, _masterCertificate) { Owner = this });
+        OpenUninstallWindows(classTargets);
     }
 
+    // A PC's list is read from it, and "turma toda" is every PC of the room;
+    // a phone's window is for it alone.
     private void OnUninstallMachineClicked(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
@@ -1215,8 +1225,12 @@ public partial class MainWindow : MidviewWindow
             {
                 return;
             }
-            var classTargets = _tiles.Select(t => t.Machine)
-                .Where(machine => DeviceSupport.Supports(machine.Kind, ToolbarAction.Uninstall)).ToList();
+            if (tile.Machine.IsPhone)
+            {
+                OpenPhoneUninstallWindow(onlyThis);
+                return;
+            }
+            var classTargets = _tiles.Select(t => t.Machine).Where(machine => !machine.IsPhone).ToList();
             ShowOnce("desinstalar", new[] { tile.Machine },
                 () => new UninstallWindow(tile.Machine, classTargets, _masterCertificate) { Owner = this });
         }

@@ -80,6 +80,28 @@ public class ProgramInstallTests
         Assert.Equal(installer, ProgramInstall.IsInstallerName(name));
     }
 
+    // A phone takes an Android app; a PC's Agent never does.
+    [Theory]
+    [InlineData("ola.apk", true)]
+    [InlineData("OLA.APK", true)]
+    [InlineData("ola.apk.exe", false)]
+    [InlineData("ola.xapk", false)]
+    [InlineData("setup.exe", false)]
+    public void WhatAPhoneInstalls(string name, bool apk)
+    {
+        Assert.Equal(apk, ProgramInstall.IsApkName(name));
+        Assert.False(ProgramInstall.IsInstallerName("ola.apk"));
+        Assert.Equal(200L * 1024 * 1024, ProgramInstall.MaxApkSize);
+    }
+
+    // The phone decodes the request as a PC's Agent does: the bytes PhoneInstall sends.
+    [Fact]
+    public void AnApkRequest_HasNoArguments()
+    {
+        var payload = ProgramInstall.EncodeRequest(new InstallRequest("ola.apk", 1000, string.Empty));
+        Assert.Equal(Convert.FromHexString("00000000000003E8" + "0000" + "6F6C612E61706B"), payload);
+    }
+
     // Built by hand, so a request the Master would never send can be tried.
     private static byte[] Payload(long size, string arguments, string name)
     {

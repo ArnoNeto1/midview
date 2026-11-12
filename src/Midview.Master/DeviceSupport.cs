@@ -43,10 +43,13 @@ public enum ToolbarAction
 // chats ("Mensagem", "Bate-papo": MessageTargets, ChatConnection) and files
 // ("Enviar arquivo", "Recolher arquivos": FileTargets, its Download/Midview), is
 // restarted and has its screen turned off ("Reiniciar", "Desligar":
-// PowerTargets; Android lets no app turn it off), and is optimized and
-// updated (actions a PC has nothing to do with). Control, "Ligar" and
-// "Agendar" stay for computers. WipePhone (a tile's menu only) is for
-// Android devices alone.
+// PowerTargets; Android lets no app turn it off), opens sites and its apps
+// ("Abrir site", "Abrir programa": RemoteLaunch, PhoneOpenAppWindow), gets
+// apps installed and uninstalled ("Instalar programa": an .apk,
+// InstallWindow; "Desinstalar programa": PhoneUninstallWindow), and is
+// optimized and updated (actions a PC has nothing to do with). Control,
+// "Ligar", "Agendar", the lab panel and the class folder stay for computers.
+// WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
     public static bool Supports(DeviceKind kind, ToolbarAction action) => kind switch
@@ -57,6 +60,8 @@ public static class DeviceSupport
             or ToolbarAction.CloseApps or ToolbarAction.Message or ToolbarAction.Chat
             or ToolbarAction.SendFile or ToolbarAction.CollectFiles
             or ToolbarAction.Power or ToolbarAction.WipePhone
+            or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram
+            or ToolbarAction.Install or ToolbarAction.Uninstall
             || IsPhoneOnly(action),
         _ => false,
     };

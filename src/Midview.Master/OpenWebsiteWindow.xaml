@@ -12,8 +12,10 @@
             </local:DialogHeader>
             <Border Style="{StaticResource Card}" Margin="0,16,0,10">
                 <StackPanel>
-                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                    <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}" Margin="0,0,0,10" TextWrapping="Wrap"
                                Text="Abre o site no navegador do aluno. Um site bloqueado continua bloqueado, e com a tela bloqueada ele abre por baixo do cadeado." />
+                    <!-- With phones among PCs: how a phone opens it. -->
+                    <TextBlock x:Name="PhoneNoteTextBlock" Style="{StaticResource Hint}" Margin="0,-4,0,10" TextWrapping="Wrap" Visibility="Collapsed" />
                     <TextBlock Text="Endereço do site:" Margin="0,0,0,4" />
                     <TextBox x:Name="AddressTextBox" Padding="4,3" MaxLength="20000" TextChanged="OnAddressChanged" />
                     <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" TextWrapping="Wrap"

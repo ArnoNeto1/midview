@@ -6,9 +6,10 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Opens a website in the browser of one machine or of the whole class (the
-// Session's WindowsWebsiteOpener). Only a website: what the teacher typed
-// is checked here first (WebsiteAddress), and again on each machine. It can
-// also go into the "Abrir site" menu (SavedMenu), to open with a click.
+// Session's WindowsWebsiteOpener; on a phone, its Chrome, or once the
+// teacher's lock screen goes: RemoteLaunch). Only a website: what the teacher
+// typed is checked here first (WebsiteAddress), and again on each machine. It
+// can also go into the "Abrir site" menu (SavedMenu), to open with a click.
 public partial class OpenWebsiteWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
@@ -20,8 +21,14 @@ public partial class OpenWebsiteWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
-        OpenButton.Content = targets.Count == 1 ? "Abrir na máquina" : "Abrir nas máquinas";
+        TargetsTextBlock.Text = PhoneProgramsText.Describe(targets, wholeClass);
+        HintTextBlock.Text = PhoneProgramsText.WebsiteHint(targets);
+        if (PhoneProgramsText.WebsiteNote(targets) is { } note)
+        {
+            PhoneNoteTextBlock.Text = note;
+            PhoneNoteTextBlock.Visibility = Visibility.Visible;
+        }
+        OpenButton.Content = PhoneProgramsText.OpenButton(targets);
     }
 
     private void OnAddressChanged(object sender, TextChangedEventArgs e) =>
@@ -65,9 +72,7 @@ public partial class OpenWebsiteWindow : MidviewWindow
         var results = await RemoteLaunch.OpenWebsites(_targets, _masterCertificate, addresses);
 
         var failures = results.Count(result => !result.Succeeded);
-        var summary = failures == 0
-            ? results.Length == 1 ? $"Aberto: {what}" : $"Aberto nas {results.Length} máquinas: {what}"
-            : $"Aberto em {results.Length - failures} de {results.Length}: {what}";
+        var summary = PhoneProgramsText.Opened(_targets, results.Length, failures, what);
         ProgressTextBlock.Text = saved is null ? summary : $"{summary}\n{saved}";
         ResultTextBlock.Text = LaunchText.Lines(results);
         OpenButton.IsEnabled = true;

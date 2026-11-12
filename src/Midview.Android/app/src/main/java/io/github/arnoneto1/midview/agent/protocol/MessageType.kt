@@ -86,12 +86,33 @@ object MessageType {
     // Pairing.NEW_TEACHER_WINDOW_MILLIS ("Permitir novo professor").
     const val ALLOW_NEW_TEACHER = 45
 
+    // "Abrir site" and "Abrir programa", as a PC's Session takes them (a
+    // TextMessage payload: the site's address, or on a phone the app's
+    // package), from a trusted teacher only; answered with a CommandAck
+    // (CommandResult). The site opens in Chrome; under the teacher's lock
+    // screen both wait for it to go (TeacherLaunch).
+    const val OPEN_WEBSITE = 46
+    const val OPEN_PROGRAM = 47
+
     // Screen streaming: a first ScreenStream message makes the agent answer
     // with ScreenFrame updates, and the viewer acknowledges each with FrameAck.
     const val SCREEN_STREAM = 48
     const val SCREEN_FRAME = 49
     const val FRAME_ACK = 50
+    // "Desinstalar programa", as a PC's Agent takes it (a ProgramList, on a
+    // phone of packages), from a trusted teacher only; answered with a
+    // CommandAck (CommandResult) once every app is done (TeacherInstalls).
+    const val UNINSTALL_PROGRAMS = 58
     const val CLIPBOARD_TEXT = 60
+
+    // "Instalar programa", as a PC's Agent takes it (ProgramInstall), from a
+    // trusted teacher only, an .apk on a phone: INSTALL_PROGRAM (size, no
+    // arguments, the file's name) is answered with INSTALL_ACCEPTED or a
+    // CommandAck refusal; the file comes as FILE_CHUNKs; INSTALL_STARTED once
+    // it is all there, then one CommandAck (CommandResult) when Android is done.
+    const val INSTALL_PROGRAM = 86
+    const val INSTALL_ACCEPTED = 87
+    const val INSTALL_STARTED = 88
     const val FILL_ADMIN_PASSWORD = 90
 
     // Master -> Android agent (port 28900): ask this device to show the

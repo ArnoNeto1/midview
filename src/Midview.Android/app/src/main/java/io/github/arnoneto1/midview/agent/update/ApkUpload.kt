@@ -24,11 +24,13 @@ sealed interface UploadResult {
 // (as UpdateReceiver on a PC), written to folder/agent.apk and hashed on the
 // way. A chunk past that size, an empty one or another message refuses the
 // upload, and so does a SHA-256 that is not the offer's. Whatever does not
-// end in Received leaves no file behind.
-class ApkUpload(private val folder: File) {
-    val file: File get() = File(folder, FILE_NAME)
+// end in Received leaves no file behind. "Instalar programa" receives the
+// teacher's APK the same way (TeacherInstalls), as folder/fileName, with no
+// SHA-256 to compare (a PC's install request has none).
+class ApkUpload(private val folder: File, private val fileName: String = FILE_NAME) {
+    val file: File get() = File(folder, fileName)
 
-    fun receive(size: Long, sha256: ByteArray, receive: () -> Message): UploadResult {
+    fun receive(size: Long, sha256: ByteArray?, receive: () -> Message): UploadResult {
         delete()
         val result = try {
             write(size, sha256, receive)
@@ -48,7 +50,7 @@ class ApkUpload(private val folder: File) {
     // A disk that refuses the APK does not stop the reading: a refusal sent
     // while the teacher's program still sends would be lost to the reset
     // connection. The connection's own failures (IOException) are thrown.
-    private fun write(size: Long, sha256: ByteArray, receive: () -> Message): UploadResult {
+    private fun write(size: Long, sha256: ByteArray?, receive: () -> Message): UploadResult {
         var writeProblem: String? = null
         val out = try {
             folder.mkdirs()
@@ -83,7 +85,7 @@ class ApkUpload(private val folder: File) {
             }
         }
         writeProblem?.let { return UploadResult.Refused(it) }
-        return if (MessageDigest.isEqual(hash.digest(), sha256)) UploadResult.Received else UploadResult.Refused(CORRUPT)
+        return if (sha256 == null || MessageDigest.isEqual(hash.digest(), sha256)) UploadResult.Received else UploadResult.Refused(CORRUPT)
     }
 
     companion object {

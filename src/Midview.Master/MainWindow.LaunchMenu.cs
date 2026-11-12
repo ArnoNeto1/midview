@@ -14,7 +14,10 @@ namespace Midview.Master;
 // straight to the window while nothing is saved), and on a machine's own menu for
 // that machine only. Delete over an item takes it out of the menu. With
 // several machines selected, a machine's menu acts on all of them
-// (TargetsOf).
+// (TargetsOf). The saved programs are PC commands: phones pick an app of
+// their own list instead (MainWindow.PhonePrograms.cs), so for phones alone
+// "Abrir programa" opens their window, and with PCs the menu and the window
+// point to it.
 public partial class MainWindow
 {
     private const string MenuHintTag = "dica";
@@ -64,6 +67,11 @@ public partial class MainWindow
         {
             return;
         }
+        if (kind == LaunchKind.Program && reached.All(machine => machine.IsPhone))
+        {
+            OpenPhoneAppWindow(reached);
+            return;
+        }
         if (SavedMenu.Load(MenuPath(kind)).Count == 0)
         {
             ShowLaunchWindow(kind, reached);
@@ -93,6 +101,15 @@ public partial class MainWindow
     private void FillLaunchMenu(ItemCollection items, LaunchKind kind, Func<IReadOnlyList<KnownMachine>> targets)
     {
         items.Clear();
+        // A phone's apps: its own list, not the saved commands.
+        var phones = kind == LaunchKind.Program ? targets().Count(machine => machine.IsPhone) : 0;
+        if (phones > 0 && phones == targets().Count)
+        {
+            var pick = new MenuItem { Header = PhoneProgramsText.PhonesButton(phones) };
+            pick.Click += (_, _) => OpenPhoneAppWindow(targets());
+            items.Add(pick);
+            return;
+        }
         foreach (var entry in SavedMenu.Load(MenuPath(kind)))
         {
             // A "_" in a name would otherwise be taken for an access key.
@@ -109,6 +126,12 @@ public partial class MainWindow
         var other = new MenuItem { Header = kind == LaunchKind.Website ? "Outro site..." : "Outro programa..." };
         other.Click += (_, _) => ShowLaunchWindow(kind, targets());
         items.Add(other);
+        if (phones > 0)
+        {
+            var pick = new MenuItem { Header = PhoneProgramsText.PhonesButton(phones) };
+            pick.Click += (_, _) => OpenPhoneAppWindow(targets().Where(machine => machine.IsPhone).ToList());
+            items.Add(pick);
+        }
         if (hasEntries)
         {
             items.Add(new MenuItem
@@ -144,6 +167,14 @@ public partial class MainWindow
             if (!TypedText.TryParseCommands(entry.Target, out var commands, out var problem, out _))
             {
                 StatusTextBlock.Text = $"{entry.Name}: {problem}";
+                return;
+            }
+            // A command is a PC's: the phones pick an app of their own list.
+            leftOut = Joined(leftOut, PhoneProgramsText.SavedCommandLeftOut(targets.Count(machine => machine.IsPhone)));
+            targets = targets.Where(machine => !machine.IsPhone).ToList();
+            if (targets.Count == 0)
+            {
+                StatusTextBlock.Text = leftOut ?? string.Empty;
                 return;
             }
             StatusTextBlock.Text = WithNotice($"Abrindo {entry.Name}...", leftOut);
@@ -191,14 +222,18 @@ public partial class MainWindow
         {
             return;
         }
-        ShowOnce(kind == LaunchKind.Website ? "site" : "programa", targets, () =>
+        if (kind == LaunchKind.Program)
         {
-            Window window = kind == LaunchKind.Website
-                ? new OpenWebsiteWindow(targets, IsWholeClass(targets, action), _masterCertificate)
-                : new OpenProgramWindow(targets, IsWholeClass(targets, action), _masterCertificate);
-            window.Owner = this;
-            return window;
-        });
+            var (pcs, phones) = SplitPhones(targets);
+            if (pcs.Count == 0)
+            {
+                OpenPhoneAppWindow(phones);
+                return;
+            }
+            ShowOnce("programa", pcs, () => NewProgramWindow(pcs, phones));
+            return;
+        }
+        ShowOnce("site", targets, () => new OpenWebsiteWindow(targets, IsWholeClass(targets, action), _masterCertificate) { Owner = this });
     }
 
     private static ToolbarAction LaunchAction(LaunchKind kind) =>

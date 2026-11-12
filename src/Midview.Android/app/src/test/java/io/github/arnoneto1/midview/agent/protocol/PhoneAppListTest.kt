@@ -77,7 +77,7 @@ class PhoneAppListTest {
     @Test fun decodeRejectsTrailingBytesTruncationAndBadVersion() {
         assertNull(PhoneAppList.decode(hex(goldenHex + "00")))
         assertNull(PhoneAppList.decode(hex(goldenHex.dropLast(2))))
-        assertNull(PhoneAppList.decode(hex("02" + goldenHex.drop(2))))
+        assertNull(PhoneAppList.decode(hex("03" + goldenHex.drop(2))))
         assertNull(PhoneAppList.decode(ByteArray(0)))
         assertNull(PhoneAppList.decode(hex("0100")))
     }
@@ -88,5 +88,39 @@ class PhoneAppListTest {
         assertNull(PhoneAppList.decode(hex("01" + "0001" + "07636f6d2e612e62" + "02c328" + "0000")))
         val one = "07636f6d2e612e62" + "00" + "0000"
         assertNull(PhoneAppList.decode(hex("01" + "0002" + one + one)))
+    }
+
+    // Format 2, with each app's flags after its icon: the same bytes as
+    // PhoneAppListTests.cs.
+    private val flaggedHex =
+        "02" + "0002" +
+            "0c636f6d2e7768617473617070" + "085768617473417070" + "0004" + "89504e47" + "01" +
+            "07636f6d2e782e79" + "07" + "43c3a26d657261" + "0003" + "010203" + "02"
+
+    private val flagged = listOf(
+        PhoneApp("com.whatsapp", "WhatsApp", byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47), PhoneApp.FLAG_SYSTEM),
+        PhoneApp("com.x.y", "Câmera", byteArrayOf(1, 2, 3), PhoneApp.FLAG_BLOCKED),
+    )
+
+    @Test fun theListWithFlagsMatchesTheGoldenBytes() {
+        assertArrayEquals(hex(flaggedHex), PhoneAppList.encode(flagged, PhoneAppList.WITH_FLAGS))
+        assertEquals(flagged, PhoneAppList.decode(hex(flaggedHex)))
+        // Format 1 leaves the flags out, and reads none.
+        assertArrayEquals(hex(goldenHex), PhoneAppList.encode(flagged))
+        assertEquals(0, PhoneAppList.decode(hex(goldenHex))!![0].flags)
+    }
+
+    @Test fun theListWithFlagsRejectsAMissingFlag() {
+        assertNull(PhoneAppList.decode(hex(flaggedHex.dropLast(2))))
+        assertNull(PhoneAppList.decode(hex(flaggedHex + "00")))
+        assertRefused { PhoneAppList.encode(flagged, 3) }
+    }
+
+    // Only the one byte 2 asks for the flags: a teacher from before them sends nothing.
+    @Test fun theFormatAskedFor() {
+        assertEquals(1, PhoneAppList.askedFormat(ByteArray(0)))
+        assertEquals(2, PhoneAppList.askedFormat(byteArrayOf(2)))
+        assertEquals(1, PhoneAppList.askedFormat(byteArrayOf(3)))
+        assertEquals(1, PhoneAppList.askedFormat(byteArrayOf(2, 0)))
     }
 }

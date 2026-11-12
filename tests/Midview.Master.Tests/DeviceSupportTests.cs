@@ -31,7 +31,7 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_power_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_screen_lock_blocking_closing_messages_chat_files_power_programs_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
@@ -39,6 +39,7 @@ public class DeviceSupportTests
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
                 or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
+                or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram or ToolbarAction.Install or ToolbarAction.Uninstall
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }

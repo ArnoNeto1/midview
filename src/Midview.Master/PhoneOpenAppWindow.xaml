@@ -1,0 +1,41 @@
+<local:MidviewWindow x:Class="Midview.Master.PhoneOpenAppWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Abrir app nos celulares" Height="720" Width="880" MinHeight="520" MinWidth="700"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="24,22,24,20">
+        <StackPanel DockPanel.Dock="Top">
+            <local:DialogHeader x:Name="DialogHeading" Icon="&#xE756;" Heading="Abrir app nos celulares" Accent="{StaticResource ProgramasBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <TextBlock x:Name="HintTextBlock" Style="{StaticResource Hint}" Margin="0,12,0,12" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+            <Button x:Name="OpenButton" Content="Abrir nos celulares" Click="OnOpenClicked" IsEnabled="False"
+                    Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,0,10" HorizontalAlignment="Left" />
+            <Border Style="{StaticResource ResultCard}">
+                <DockPanel>
+                    <TextBlock x:Name="ProgressTextBlock" DockPanel.Dock="Top" TextWrapping="Wrap" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="90">
+                        <TextBlock x:Name="ResultTextBlock" TextWrapping="Wrap" />
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
+        <Border Style="{StaticResource Card}">
+            <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                    <Button x:Name="RefreshButton" DockPanel.Dock="Right" Content="Atualizar lista" Click="OnRefreshClicked" Padding="10,4" Margin="8,0,0,0" />
+                    <TextBlock x:Name="ListTitleTextBlock" Text="Apps dos celulares" Style="{StaticResource CardTitle}" VerticalAlignment="Center" />
+                </DockPanel>
+                <TextBlock x:Name="ListTextBlock" DockPanel.Dock="Top" Style="{StaticResource Hint}" Margin="0,0,0,8"
+                           Text="Pedindo a lista de apps..." />
+                <local:PhoneAppGrid x:Name="AppsGrid" SingleChoice="True" />
+            </DockPanel>
+        </Border>
+    </DockPanel>
+</local:MidviewWindow>

@@ -5,12 +5,14 @@ import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
+import io.github.arnoneto1.midview.agent.programs.TeacherInstalls
 import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.NetworkUpdateCodec
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
+import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
@@ -37,6 +39,9 @@ import java.io.EOFException
 // files is "Enviar arquivo", "Recolher arquivos" and "Apagar as pastas dos
 // alunos" (FileHandler), a PC Session's too; without it they get that answer.
 // power is "Desligar" and "Reiniciar" (PowerCountdown), a PC Agent's command.
+// openWebsite and openApp are "Abrir site" and "Abrir programa" (TeacherLaunch),
+// a PC Session's; installs is "Instalar programa" and "Desinstalar programa"
+// (TeacherInstalls), a PC Agent's.
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -67,6 +72,11 @@ class CommandHandler(
     },
     // "Enviar arquivo", "Recolher arquivos", "Apagar as pastas dos alunos".
     private val files: FileHandler? = null,
+    // "Abrir site" and "Abrir programa": the payload in, the CommandAck's result out.
+    private val openWebsite: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    private val openApp: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Instalar programa" and "Desinstalar programa".
+    private val installs: TeacherInstalls? = null,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -93,6 +103,12 @@ class CommandHandler(
             // The conversation keeps the connection until it ends.
             if (message.type == MessageType.CHAT_OPEN) {
                 chat(channel)
+                return
+            }
+            // The app to install comes in chunks after the request, as on a
+            // PC; the connection ends with the answer.
+            if (installs != null && message.type == MessageType.INSTALL_PROGRAM) {
+                installs.install(message.payload, channel)
                 return
             }
             // A file each way is more than one message, and ends the
@@ -143,7 +159,22 @@ class CommandHandler(
             Message(MessageType.COMMAND_ACK, CommandResult.encode(applied, detail))
         }
         MessageType.GET_PHONE_APP_BLOCK -> Message(MessageType.PHONE_APP_BLOCK_STATUS, appBlock.current.encode())
-        MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
+        // With each app's flags for a teacher who asks for them (one byte, 2).
+        MessageType.GET_PHONE_APPS ->
+            Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps(), PhoneAppList.askedFormat(message.payload)))
+        MessageType.OPEN_WEBSITE -> {
+            val (opened, detail) = openWebsite(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(opened, detail))
+        }
+        MessageType.OPEN_PROGRAM -> {
+            val (opened, detail) = openApp(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(opened, detail))
+        }
+        // On this connection's thread: Android removes one app after another.
+        MessageType.UNINSTALL_PROGRAMS -> {
+            val (removed, detail) = installs?.uninstall(message.payload) ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(removed, detail))
+        }
         MessageType.SET_PHONE_SCREEN_PASSWORD -> {
             val (done, detail) = screenPin(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))

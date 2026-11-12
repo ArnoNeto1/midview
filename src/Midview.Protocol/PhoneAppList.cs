@@ -4,34 +4,57 @@ using System.Text;
 namespace Midview.Protocol;
 
 // One app the student can open on a phone: its package name, the label the
-// student sees and the launcher icon as a PNG (48x48 on the phone).
-public sealed record PhoneApp(string Package, string Label, byte[] IconPng);
+// student sees, the launcher icon as a PNG (48x48 on the phone) and, in the
+// list with flags (PhoneAppList.WithFlags), what else the teacher's windows
+// need to know of it.
+public sealed record PhoneApp(string Package, string Label, byte[] IconPng, PhoneAppFlags Flags = PhoneAppFlags.None);
+
+[Flags]
+public enum PhoneAppFlags : byte
+{
+    None = 0,
+
+    // Came with the phone: a system app (or an update of one), or one the
+    // phone's maker installs at its first start. "Desinstalar programa"
+    // leaves it (the phone could not get it back); the teacher blocks it instead.
+    System = 1,
+
+    // Suspended now, by the teacher's app block: it does not open.
+    Blocked = 2,
+}
 
 // The phone's answer to GetPhoneApps (MessageType.PhoneApps): the apps the
-// student can open, so the teacher can choose which to block. It comes from
-// the student's side, so decoding checks everything and a payload that does
-// not decode is refused whole.
+// student can open, so the teacher can choose which to block, open or
+// uninstall. It comes from the student's side, so decoding checks everything
+// and a payload that does not decode is refused whole.
 //
 // Payload (big-endian): format version (1 byte), count (uint16), then each
 // app as: package length (1 byte) + package (UTF-8), label length (1 byte) +
-// label (UTF-8, at most 64 chars), icon length (uint16) + PNG bytes.
+// label (UTF-8, at most 64 chars), icon length (uint16) + PNG bytes, and in
+// format 2 only, its flags (1 byte, PhoneAppFlags). A teacher gets format 2
+// by asking for it (GetPhoneApps with WithFlagsRequest); a phone from before
+// it ignores the request and answers format 1, read as flags None.
 public static class PhoneAppList
 {
     public const byte FormatVersion = 1;
+    public const byte WithFlags = 2;
+
+    // GetPhoneApps' payload asking for format 2.
+    public static byte[] WithFlagsRequest => new[] { WithFlags };
     public const int MaxApps = 300;
     public const int MaxLabelLength = 64;
     public const int MaxIconBytes = ushort.MaxValue;
 
-    // Throws when the list breaks a bound.
-    public static byte[] Encode(IReadOnlyList<PhoneApp> apps)
+    // Throws when the list breaks a bound. format: FormatVersion or WithFlags.
+    public static byte[] Encode(IReadOnlyList<PhoneApp> apps, byte format = FormatVersion)
     {
-        if (apps.Count > MaxApps)
+        if (apps.Count > MaxApps || format is not (FormatVersion or WithFlags))
         {
             throw new InvalidOperationException("too many phone apps");
         }
 
         using var buffer = new MemoryStream();
-        buffer.WriteByte(FormatVersion);
+        buffer.WriteByte(format);
         Span<byte> number = stackalloc byte[2];
         BinaryPrimitives.WriteUInt16BigEndian(number, (ushort)apps.Count);
         buffer.Write(number);
@@ -55,6 +78,10 @@ public static class PhoneAppList
             BinaryPrimitives.WriteUInt16BigEndian(number, (ushort)app.IconPng.Length);
             buffer.Write(number);
             buffer.Write(app.IconPng);
+            if (format == WithFlags)
+            {
+                buffer.WriteByte((byte)app.Flags);
+            }
         }
         return buffer.ToArray();
     }
@@ -62,10 +89,11 @@ public static class PhoneAppList
     // Null for anything that is not exactly a valid list.
     public static IReadOnlyList<PhoneApp>? Decode(byte[] payload)
     {
-        if (payload.Length < 3 || payload[0] != FormatVersion)
+        if (payload.Length < 3 || payload[0] is not (FormatVersion or WithFlags))
         {
             return null;
         }
+        var withFlags = payload[0] == WithFlags;
 
         var count = BinaryPrimitives.ReadUInt16BigEndian(payload.AsSpan(1));
         if (count > MaxApps)
@@ -96,8 +124,18 @@ public static class PhoneAppList
                 {
                     return null;
                 }
-                apps.Add(new PhoneApp(package, label, payload.AsSpan(offset, iconLength).ToArray()));
+                var icon = payload.AsSpan(offset, iconLength).ToArray();
                 offset += iconLength;
+                var flags = PhoneAppFlags.None;
+                if (withFlags)
+                {
+                    if (offset >= payload.Length)
+                    {
+                        return null;
+                    }
+                    flags = (PhoneAppFlags)payload[offset++];
+                }
+                apps.Add(new PhoneApp(package, label, icon, flags));
             }
         }
         catch (DecoderFallbackException)

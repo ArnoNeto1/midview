@@ -84,7 +84,7 @@ public class PhoneAppListTests
     {
         Assert.Null(PhoneAppList.Decode(Hex(GoldenHex + "00")));
         Assert.Null(PhoneAppList.Decode(Hex(GoldenHex[..^2])));
-        Assert.Null(PhoneAppList.Decode(Hex("02" + GoldenHex[2..])));
+        Assert.Null(PhoneAppList.Decode(Hex("03" + GoldenHex[2..])));
         Assert.Null(PhoneAppList.Decode(Array.Empty<byte>()));
         Assert.Null(PhoneAppList.Decode(Hex("0100")));
     }
@@ -102,4 +102,40 @@ public class PhoneAppListTests
         var one = "07636f6d2e612e62" + "00" + "0000";
         Assert.Null(PhoneAppList.Decode(Hex("01" + "0002" + one + one)));
     }
+
+    // Format 2, each app's flags after its icon: the same bytes as PhoneAppListTest.kt.
+    private const string FlaggedHex =
+        "02" + "0002"
+        + "0c636f6d2e7768617473617070" + "085768617473417070" + "0004" + "89504e47" + "01"
+        + "07636f6d2e782e79" + "07" + "43c3a26d657261" + "0003" + "010203" + "02";
+
+    private static readonly IReadOnlyList<PhoneApp> Flagged = new[]
+    {
+        new PhoneApp("com.whatsapp", "WhatsApp", new byte[] { 0x89, 0x50, 0x4e, 0x47 }, PhoneAppFlags.System),
+        new PhoneApp("com.x.y", "Câmera", new byte[] { 1, 2, 3 }, PhoneAppFlags.Blocked),
+    };
+
+    [Fact]
+    public void TheListWithFlags_MatchesTheGoldenBytes()
+    {
+        Assert.Equal(Hex(FlaggedHex), PhoneAppList.Encode(Flagged, PhoneAppList.WithFlags));
+        var apps = PhoneAppList.Decode(Hex(FlaggedHex))!;
+        Assert.Equal(new[] { PhoneAppFlags.System, PhoneAppFlags.Blocked }, apps.Select(app => app.Flags));
+        Assert.Equal("Câmera", apps[1].Label);
+        // Format 1 carries no flags, and reads as None.
+        Assert.Equal(Hex(GoldenHex), PhoneAppList.Encode(Flagged));
+        Assert.All(PhoneAppList.Decode(Hex(GoldenHex))!, app => Assert.Equal(PhoneAppFlags.None, app.Flags));
+    }
+
+    [Fact]
+    public void TheListWithFlags_RefusesAMissingFlagOrAnUnknownFormat()
+    {
+        Assert.Null(PhoneAppList.Decode(Hex(FlaggedHex[..^2])));
+        Assert.Null(PhoneAppList.Decode(Hex(FlaggedHex + "00")));
+        Assert.Throws<InvalidOperationException>(() => PhoneAppList.Encode(Flagged, 3));
+    }
+
+    [Fact]
+    public void TheRequestForFlags_IsTheOneByteTwo() =>
+        Assert.Equal(new byte[] { 2 }, PhoneAppList.WithFlagsRequest);
 }

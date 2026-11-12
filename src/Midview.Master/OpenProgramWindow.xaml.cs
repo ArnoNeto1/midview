@@ -8,21 +8,37 @@ namespace Midview.Master;
 // Session's WindowsProgramStarter), from commands typed as in Windows' Run
 // box, one per line. What was typed is checked here first (TypedText, then
 // ProgramCommand), and again on each machine. It can also go into the
-// "Abrir programa" menu (SavedMenu), to start with a click.
+// "Abrir programa" menu (SavedMenu), to start with a click. Phones among
+// the machines pick an app of their own list instead (PhoneOpenAppWindow,
+// opened from here: openPhones).
 public partial class OpenProgramWindow : MidviewWindow
 {
     private readonly IReadOnlyList<KnownMachine> _targets;
     private readonly X509Certificate2 _masterCertificate;
+    private readonly Action? _openPhones;
 
     // wholeClass: targets is every machine in the classroom list (TargetsText).
-    public OpenProgramWindow(IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate)
+    // phones: the phones that were among the machines, left to openPhones.
+    public OpenProgramWindow(
+        IReadOnlyList<KnownMachine> targets, bool wholeClass, X509Certificate2 masterCertificate,
+        int phones = 0, Action? openPhones = null)
     {
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
+        _openPhones = openPhones;
         TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
         OpenButton.Content = targets.Count == 1 ? "Abrir na máquina" : "Abrir nas máquinas";
+        if (phones > 0 && openPhones is not null)
+        {
+            PhonesTextBlock.Text = PhoneProgramsText.PhonesNote(phones);
+            PhonesButton.Content = PhoneProgramsText.PhonesButton(phones);
+            PhonesCard.Visibility = Visibility.Visible;
+            Height += 70;
+        }
     }
+
+    private void OnPhonesClicked(object sender, RoutedEventArgs e) => _openPhones?.Invoke();
 
     private void OnCommandChanged(object sender, TextChangedEventArgs e) =>
         ProblemTextBlock.Visibility = Visibility.Collapsed;

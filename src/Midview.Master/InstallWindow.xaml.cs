@@ -11,7 +11,10 @@ namespace Midview.Master;
 // Installs one program on one machine or the whole class (InstallClient, one
 // connection per machine to its Agent, which runs the installer as SYSTEM:
 // no UAC prompt, no password). Each machine's line shows where it is: queued,
-// sending, installing, then how it went.
+// sending, installing, then how it went. A phone's agent takes an Android
+// app (.apk) the same way and installs it silently as the Device Owner: an
+// .apk goes to the phones among the machines, any other installer to the PCs
+// (PhoneProgramsText.InstallTargets), and the window says who is left out.
 public partial class InstallWindow : MidviewWindow
 {
     // As many uploads at once as "Enviar arquivo" (an installer is as big as
@@ -30,45 +33,68 @@ public partial class InstallWindow : MidviewWindow
         InitializeComponent();
         _targets = targets;
         _masterCertificate = masterCertificate;
-        TargetsTextBlock.Text = TargetsText.Describe(TargetsPreposition.In, targets, wholeClass);
+        TargetsTextBlock.Text = PhoneProgramsText.Describe(targets, wholeClass);
+        HintTextBlock.Text = PhoneProgramsText.InstallHint(targets);
+        ChooseButton.Content = PhoneProgramsText.ChooseButton(targets);
+        FileTextBlock.Text = PhoneProgramsText.NothingChosen(targets);
+        if (PhoneProgramsText.OnlyPhones(targets))
+        {
+            Title = DialogHeading.Heading = targets.Count == 1 ? "Instalar app no celular" : "Instalar app nos celulares";
+            ArgumentsPanel.Visibility = Visibility.Collapsed;
+        }
+        else if (PhoneProgramsText.HasPhones(targets))
+        {
+            HintTextBlock.Text += " " + PhoneProgramsText.MixedInstallNote;
+        }
     }
 
     private void OnChooseFileClicked(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Escolher o instalador ou script",
-            Filter = "Instaladores e scripts (*.exe; *.msi; *.bat; *.cmd)|*.exe;*.msi;*.bat;*.cmd",
+            Title = PhoneProgramsText.OnlyPhones(_targets) ? "Escolher o app (.apk)" : "Escolher o instalador ou script",
+            Filter = PhoneProgramsText.FileFilter(_targets),
             CheckFileExists = true,
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(this) == true)
         {
-            return;
+            ChooseFile(dialog.FileName);
         }
+    }
 
+    // The file the teacher picked: checked, described, and ready to send when
+    // the machines take it.
+    internal void ChooseFile(string fileName)
+    {
         _filePath = null;
         ResultTextBlock.Text = string.Empty;
         KindTextBlock.Visibility = Visibility.Collapsed;
-        var name = Path.GetFileName(dialog.FileName);
+        var name = Path.GetFileName(fileName);
         try
         {
-            var size = new FileInfo(dialog.FileName).Length;
-            if (!ProgramInstall.IsInstallerName(name))
+            var size = new FileInfo(fileName).Length;
+            if (PhoneProgramsText.FileProblem(name, size, _targets) is { } problem)
             {
-                FileTextBlock.Text = $"{name} não é um instalador ou script (.exe, .msi, .bat ou .cmd).";
+                FileTextBlock.Text = problem;
             }
-            else if (size > ProgramInstall.MaxFileSize)
+            else if (ProgramInstall.IsApkName(name))
             {
-                FileTextBlock.Text = $"{name} passa de 4 GB e não pode ser enviado.";
+                FileTextBlock.Text = $"{name} ({SizeText.Describe(size)})";
+                KindTextBlock.Text = Joined(PhoneProgramsText.ApkKind, PhoneProgramsText.InstallLeftOut(_targets, name));
+                KindTextBlock.Visibility = Visibility.Visible;
+                ArgumentsPanel.Visibility = Visibility.Collapsed;
+                ArgumentsTextBox.Text = string.Empty;
+                _filePath = fileName;
             }
             else
             {
-                var kind = InstallerDetection.Detect(dialog.FileName);
+                var kind = InstallerDetection.Detect(fileName);
                 FileTextBlock.Text = $"{name} ({SizeText.Describe(size)})";
-                KindTextBlock.Text = InstallerDetection.Describe(kind);
+                KindTextBlock.Text = Joined(InstallerDetection.Describe(kind), PhoneProgramsText.InstallLeftOut(_targets, name));
                 KindTextBlock.Visibility = Visibility.Visible;
+                ArgumentsPanel.Visibility = Visibility.Visible;
                 ArgumentsTextBox.Text = InstallerDetection.DefaultArguments(kind);
-                _filePath = dialog.FileName;
+                _filePath = fileName;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -77,6 +103,8 @@ public partial class InstallWindow : MidviewWindow
         }
         ArgumentsTextBox.IsEnabled = InstallButton.IsEnabled = _filePath is not null;
     }
+
+    private static string Joined(string first, string? second) => second is null ? first : $"{first}\n{second}";
 
     private async void OnInstallClicked(object sender, RoutedEventArgs e)
     {
@@ -91,32 +119,42 @@ public partial class InstallWindow : MidviewWindow
             return;
         }
 
+        // An .apk to the phones, any other installer to the PCs.
+        var apk = ProgramInstall.IsApkName(filePath);
+        var targets = PhoneProgramsText.InstallTargets(_targets, filePath);
+        if (apk)
+        {
+            arguments = string.Empty;
+        }
+        var unit = apk ? "celular(es)" : "máquina(s)";
+
         // Not the whole window: the machines' lines must still scroll while
         // the installers run.
         ChooseButton.IsEnabled = ArgumentsTextBox.IsEnabled = InstallButton.IsEnabled = false;
-        _lines = _targets.Select(machine => $"… {machine.Name}: na fila").ToArray();
+        _lines = targets.Select(machine => $"… {machine.Name}: na fila").ToArray();
         ResultTextBlock.Text = string.Join("\n", _lines);
         var finished = 0;
-        var going = $"Instalando {Path.GetFileName(filePath)} em {_targets.Count} máquina(s). Pode levar vários minutos.";
+        var going = PhoneProgramsText.Installing(filePath, targets.Count);
         ProgressTextBlock.Text = going;
 
         using var slots = new SemaphoreSlim(MachinesAtATime);
-        var results = await Task.WhenAll(_targets.Select(async (machine, index) =>
+        var results = await Task.WhenAll(targets.Select(async (machine, index) =>
         {
             var installed = await InstallOn(machine, index, filePath, arguments, slots);
             // Back on the window's thread here (the awaits resume on it).
             finished++;
-            if (finished < _targets.Count)
+            if (finished < targets.Count)
             {
-                ProgressTextBlock.Text = $"{going}\n{finished} de {_targets.Count} máquina(s) terminaram.";
+                ProgressTextBlock.Text = $"{going}\n{finished} de {targets.Count} {unit} terminaram.";
             }
             return installed;
         }));
 
         var succeeded = results.Count(installed => installed);
         ProgressTextBlock.Text = succeeded == results.Length
-            ? results.Length == 1 ? "Instalado." : $"Instalado nas {results.Length} máquinas."
-            : $"Instalado em {succeeded} de {results.Length} máquina(s).";
+            ? results.Length == 1 ? "Instalado." : apk ? $"Instalado nos {results.Length} celulares." : $"Instalado nas {results.Length} máquinas."
+            : succeeded == 0 ? "Não instalado."
+            : $"Instalado em {succeeded} de {results.Length} {unit}.";
         ChooseButton.IsEnabled = ArgumentsTextBox.IsEnabled = InstallButton.IsEnabled = true;
     }
 
@@ -140,7 +178,7 @@ public partial class InstallWindow : MidviewWindow
             {
                 if (string.IsNullOrEmpty(machine.AgentThumbprint))
                 {
-                    return new InstallResult(false, "pareie-a de novo em \"Máquinas da sala\"");
+                    return new InstallResult(false, machine.IsPhone ? PhoneAgentCommand.NoIdentity : "pareie-a de novo em \"Máquinas da sala\"");
                 }
                 try
                 {
@@ -164,11 +202,12 @@ public partial class InstallWindow : MidviewWindow
                 }
                 catch (Exception ex)
                 {
-                    return new InstallResult(false, FailureText.DescribeAgent(ex));
+                    return new InstallResult(false, machine.IsPhone ? FailureText.DescribePhoneAgent(ex) : FailureText.DescribeAgent(ex));
                 }
             });
 
-            var detail = result.OldAgent ? "Midview antigo nesta máquina: atualize-a pela rede" : result.Detail;
+            var detail = machine.IsPhone ? PhoneProgramsText.InstallLine(result.Succeeded, result.Detail)
+                : result.OldAgent ? "Midview antigo nesta máquina: atualize-a pela rede" : result.Detail;
             Show(index, $"{(result.Succeeded ? "✓" : "✗")} {machine.Name}: {detail}");
             return result.Succeeded;
         }

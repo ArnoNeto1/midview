@@ -103,10 +103,10 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.SendFile, true)]
     [InlineData(ToolbarAction.CollectFiles, true)]
     [InlineData(ToolbarAction.ClassFolder, false)]
-    [InlineData(ToolbarAction.OpenWebsite, false)]
-    [InlineData(ToolbarAction.OpenProgram, false)]
-    [InlineData(ToolbarAction.Install, false)]
-    [InlineData(ToolbarAction.Uninstall, false)]
+    [InlineData(ToolbarAction.OpenWebsite, true)]
+    [InlineData(ToolbarAction.OpenProgram, true)]
+    [InlineData(ToolbarAction.Install, true)]
+    [InlineData(ToolbarAction.Uninstall, true)]
     [InlineData(ToolbarAction.LabConfig, false)]
     public void Phones_filter_greys_what_a_phone_cannot_do(ToolbarAction action, bool enabled)
     {

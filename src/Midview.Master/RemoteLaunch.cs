@@ -6,7 +6,9 @@ namespace Midview.Master;
 
 // Sends "Abrir site" and "Abrir programa" to each machine's Session, all
 // machines at once: an offline one must not hold up the rest. The same
-// from the windows and from a click in the menu.
+// from the windows and from a click in the menu. A phone takes them on its
+// agent's port (28900, its agent's thumbprint): a site opens in its Chrome,
+// and an app goes by its package (OpenPhoneApp), never a PC's command.
 public static class RemoteLaunch
 {
     // On a machine the sites open one after the other, in the order typed (so
@@ -49,9 +51,23 @@ public static class RemoteLaunch
             return LaunchText.Combine(machine.Name, answers);
         })));
 
+    // "Abrir programa" on phones: the app (its package, from the phones' list) on each of them.
+    public static Task<LaunchResult[]> OpenPhoneApp(
+        IReadOnlyList<KnownMachine> phones, X509Certificate2 masterCertificate, string package) =>
+        Task.WhenAll(phones.Select(phone => Task.Run(() =>
+        {
+            var (succeeded, detail, _) = Send(phone, masterCertificate, MessageType.OpenProgram, TextMessage.Encode(package));
+            return new LaunchResult(phone.Name, succeeded, detail);
+        })));
+
     private static (bool Succeeded, string Detail, bool Reached) Send(
         KnownMachine machine, X509Certificate2 masterCertificate, MessageType type, byte[] payload)
     {
+        if (machine.IsPhone)
+        {
+            return SendToPhone(machine, type, thumbprint => CommandClient.SendCommandForResult(
+                machine.HostAddress, ConnectionClient.AgentPort, thumbprint, masterCertificate, type, payload));
+        }
         try
         {
             var (succeeded, detail) = CommandClient.SendCommandForResult(
@@ -62,5 +78,28 @@ public static class RemoteLaunch
         {
             return (false, FailureText.Describe(ex), false);
         }
+    }
+
+    // A phone's answer as the teacher reads it (PhoneAgentCommand): an agent
+    // from before these says it is an older version. Reached is false only
+    // when the phone could not be asked at all. send: given the phone's agent
+    // thumbprint, its answer.
+    internal static (bool Succeeded, string Detail, bool Reached) SendToPhone(
+        KnownMachine phone, MessageType type, Func<string, (bool Succeeded, string Detail)> send)
+    {
+        var reached = true;
+        var (succeeded, detail) = PhoneAgentCommand.Send(phone, PhoneProgramsText.OldAgent(type), thumbprint =>
+        {
+            try
+            {
+                return send(thumbprint);
+            }
+            catch
+            {
+                reached = false;
+                throw;
+            }
+        });
+        return (succeeded, detail, reached && phone.AgentThumbprint is { Length: > 0 });
     }
 }

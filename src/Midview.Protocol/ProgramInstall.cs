@@ -20,6 +20,14 @@ public static class ProgramInstall
 
     public const int MaxArgumentsBytes = 2048;
 
+    // A phone (its agent, on the same port) takes an Android app (.apk), no
+    // arguments, up to this size, and installs it silently as the phone's
+    // Device Owner; a PC's Agent never gets one.
+    public const long MaxApkSize = 200L * 1024 * 1024;
+
+    public static bool IsApkName(string fileName) =>
+        string.Equals(Path.GetExtension(fileName), ".apk", StringComparison.OrdinalIgnoreCase);
+
     // Until the Agent gives up on an installer and ends it: one that waits on
     // a question in session 0, where nobody can see it, never finishes. Long
     // enough for a big suite on a slow lab machine.
