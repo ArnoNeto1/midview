@@ -24,6 +24,9 @@ class CableSetupProvider : ContentProvider() {
         val context = context ?: return null
         val dir = context.filesDir
         val setup = CableSetup(File(dir, CableSetup.FILE_NAME))
+        // The uid first: an extras Bundle from any other app is never read.
+        val uid = Binder.getCallingUid()
+        val payload = if (uid == CableSetupDoor.SHELL_UID) extras?.getString("setup") else null
         val door = CableSetupDoor(
             setup,
             TrustedMasters(File(dir, TRUSTED_MASTERS_FILE)),
@@ -33,7 +36,7 @@ class CableSetupProvider : ContentProvider() {
                 AgentIdentity(dir, name).thumbprint to name
             },
         )
-        val answer = door.prepare(Binder.getCallingUid(), extras?.getString("setup"))
+        val answer = door.prepare(uid, payload)
         return Bundle().apply {
             for ((key, value) in answer) {
                 when (value) {

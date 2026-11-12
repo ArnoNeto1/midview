@@ -56,17 +56,20 @@ class CableSetup(private val file: File) {
 
     fun number(): String? = synchronized(lock) { load()?.optString("number", "")?.ifEmpty { null } }
 
-    // The Wi-Fi to join; the password is removed from the file, so it is
-    // given once. Null when there is no setup.
+    // Forgets the setup (a preparation that failed midway).
+    fun clear() = synchronized(lock) { file.delete(); Unit }
+
+    // The Wi-Fi to join, given once: the password is removed and the network
+    // marked taken, so a second call is null (never an open network under
+    // the school name). Null when there is no setup.
     fun takeWifi(): Pair<String, String?>? = synchronized(lock) {
         val obj = load() ?: return null
         val ssid = obj.optString("ssid", "")
-        if (ssid.isEmpty()) return null
+        if (ssid.isEmpty() || obj.optBoolean("wifiTaken", false)) return null
         val password = if (obj.isNull("password")) null else obj.optString("password", "").ifEmpty { null }
-        if (password != null) {
-            obj.put("password", JSONObject.NULL)
-            store(obj)
-        }
+        obj.put("password", JSONObject.NULL)
+        obj.put("wifiTaken", true)
+        store(obj)
         ssid to password
     }
 

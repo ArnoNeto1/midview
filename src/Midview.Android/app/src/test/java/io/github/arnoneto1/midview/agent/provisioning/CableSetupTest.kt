@@ -61,10 +61,18 @@ class CableSetupTest {
         setup.save(CableSetupData("07", "AB".repeat(20), "Lab \"1\"", "s'nh@ 1;"))
         assertEquals("07", setup.number())
         assertEquals("Lab \"1\"" to "s'nh@ 1;", setup.takeWifi())
-        assertEquals("Lab \"1\"" to null, setup.takeWifi())
+        assertNull(setup.takeWifi())
+        assertNull(CableSetup(file).takeWifi())
         // The number stays: it is the phone's name.
         assertEquals("07", CableSetup(file).number())
         assertFalse(file.readText().contains("nh@"))
+    }
+
+    @Test fun anOpenNetworkIsAlsoGivenOnce() {
+        val setup = CableSetup(File(folder.root, "cable-setup.json"))
+        setup.save(CableSetupData("07", "AB".repeat(20), "Aberta", null))
+        assertEquals("Aberta" to null, setup.takeWifi())
+        assertNull(setup.takeWifi())
     }
 
     @Test fun withoutAFileThereIsNothing() {

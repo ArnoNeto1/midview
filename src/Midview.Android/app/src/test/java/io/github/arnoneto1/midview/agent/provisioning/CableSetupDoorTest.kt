@@ -45,7 +45,7 @@ class CableSetupDoorTest {
         for (uid in listOf(10123, 0, 1000, 2001, 1999, -1)) {
             val answer = door().prepare(uid, vector)
             assertEquals("not-shell", answer["error"])
-            assertFalse(answer.containsKey("ok"))
+            assertEquals(false, answer["ok"])
             assertNull(setup.number())
             assertEquals(0, trusted.count())
         }
@@ -55,6 +55,7 @@ class CableSetupDoorTest {
         owner = true
         val answer = door().prepare(2000, vector)
         assertEquals("already-owner", answer["error"])
+        assertEquals(false, answer["ok"])
         assertNull(setup.number())
         assertEquals(0, trusted.count())
     }
@@ -64,6 +65,7 @@ class CableSetupDoorTest {
         trusted.add("FF".repeat(20))
         val answer = d.prepare(2000, vector)
         assertEquals("already-trusted", answer["error"])
+        assertEquals(false, answer["ok"])
         assertNull(setup.number())
         assertEquals(1, trusted.count())
     }
@@ -72,9 +74,36 @@ class CableSetupDoorTest {
         for (payload in listOf(null, "", "garbage", "e30")) {
             val answer = door().prepare(2000, payload)
             assertEquals("bad-setup", answer["error"])
+            assertEquals(false, answer["ok"])
             assertNull(setup.number())
             assertEquals(0, trusted.count())
         }
+    }
+
+    @Test fun aFailingIdentityLeavesNothingAndARetryWorks() {
+        setup = CableSetup(File(folder.root, "cable-setup.json"))
+        trusted = TrustedMasters(File(folder.root, "trusted.txt"))
+        val failing = CableSetupDoor(setup, trusted, { false }, { throw IllegalStateException("no keystore") })
+        try {
+            failing.prepare(2000, vector)
+            org.junit.Assert.fail("expected the identity failure")
+        } catch (_: IllegalStateException) {
+        }
+        assertEquals(0, trusted.count())
+        assertNull(setup.number())
+        assertEquals(true, door().prepare(2000, vector)["ok"])
+    }
+
+    @Test fun theMasterIsTrustedOnlyAfterTheIdentityExists() {
+        setup = CableSetup(File(folder.root, "cable-setup.json"))
+        trusted = TrustedMasters(File(folder.root, "trusted.txt"))
+        var trustedWhenMade = -1
+        CableSetupDoor(setup, trusted, { false }, {
+            trustedWhenMade = trusted.count()
+            "T" to "Celular 07"
+        }).prepare(2000, vector)
+        assertEquals(0, trustedWhenMade)
+        assertEquals(1, trusted.count())
     }
 
     @Test fun theUidIsCheckedBeforeThePayload() {

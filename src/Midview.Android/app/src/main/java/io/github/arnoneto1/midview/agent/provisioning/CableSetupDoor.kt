@@ -20,12 +20,19 @@ class CableSetupDoor(
         if (trusted.count() > 0) return error("already-trusted")
         val data = CableSetupPayload.decode(payload) ?: return error("bad-setup")
         setup.save(data)
+        // The identity before the trust: if it fails, nothing is left half
+        // done (no setup file, nobody trusted) and a retry starts clean.
+        val (thumbprint, name) = try {
+            identity()
+        } catch (e: RuntimeException) {
+            setup.clear()
+            throw e
+        }
         trusted.add(data.master)
-        val (thumbprint, name) = identity()
         return mapOf("ok" to true, "thumbprint" to thumbprint, "name" to name)
     }
 
-    private fun error(code: String): Map<String, Any> = mapOf("error" to code)
+    private fun error(code: String): Map<String, Any> = mapOf("ok" to false, "error" to code)
 
     companion object {
         // Process.SHELL_UID: what adb shell runs as.
