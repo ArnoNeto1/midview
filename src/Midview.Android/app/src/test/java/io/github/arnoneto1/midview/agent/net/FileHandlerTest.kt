@@ -273,14 +273,14 @@ class FileHandlerTest {
         val channel = FakeChannel("T")
         handler().collect(channel)
         assertEquals(true to FileHandler.ONLY_OWN_FILES, CommandResult.decode(channel.sent.last().payload))
-        assertEquals(true to "1 item(ns) foram apagados; ${FileHandler.ONLY_OWN_FILES}", handler().clear())
+        assertEquals(true to "1 item foi apagado; ${FileHandler.ONLY_OWN_FILES}", handler().clear())
     }
 
     @Test
     fun clearingEmptiesTheFolderAndTellsTheStudent() {
         folder.files["a.txt"] = byteArrayOf(1)
         folder.files["b.txt"] = byteArrayOf(1)
-        assertEquals(true to "2 item(ns) foram apagados", handler().clear())
+        assertEquals(true to "2 itens foram apagados", handler().clear())
         assertEquals(listOf("O professor esvaziou a pasta Download/Midview. O que estava nela foi apagado."), notices)
         assertEquals(true to "a pasta já estava vazia", handler().clear())
         assertEquals(1, notices.size)
@@ -289,8 +289,15 @@ class FileHandlerTest {
     @Test
     fun whatCouldNotBeClearedIsNamed() {
         folder.files["a.txt"] = byteArrayOf(1)
-        folder.clearProblems = listOf("link (pasta vinculada, não removida)")
-        assertEquals(false to "1 item(ns) foram apagados; não saiu: link (pasta vinculada, não removida)", handler().clear())
+        folder.clearProblems = listOf("link (pasta vinculada)")
+        assertEquals(false to "1 item foi apagado; não pôde ser apagado: link (pasta vinculada)", handler().clear())
         assertEquals(1, notices.size)
+    }
+
+    @Test
+    fun theCountIsSingularOrPlural() {
+        assertEquals("1 item foi apagado", FileHandler.cleared(1, emptyList()))
+        assertEquals("0 itens foram apagados; não pôde ser apagado: a.txt", FileHandler.cleared(0, listOf("a.txt")))
+        assertEquals("3 itens foram apagados; não puderam ser apagados: a.txt, b", FileHandler.cleared(3, listOf("a.txt", "b")))
     }
 }

@@ -4,10 +4,12 @@ import io.github.arnoneto1.midview.agent.protocol.FileTransfer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.nio.file.Files
 
 // Download/Midview read straight from the storage, as the PC's DeliveryFolder.
 class FolderWalkTest {
@@ -32,6 +34,23 @@ class FolderWalkTest {
         assertEquals(listOf("A.pdf", "b.txt", "Outra/x.docx", "sub/z.png"), listed.map { it.relativePath })
         assertEquals(5L, listed[0].size)
         assertEquals("sub/z.png", listed[3].open().use { String(it.readBytes()) })
+    }
+
+    // A link is never followed, to a file no more than to a folder.
+    @Test
+    fun linksAreNotCollected() {
+        val root = temp.newFolder("Midview")
+        val outside = file(temp.root, "fora/segredo.txt")
+        file(root, "a.txt")
+        val linked = try {
+            Files.createSymbolicLink(File(root, "link.txt").toPath(), outside.toPath())
+            Files.createSymbolicLink(File(root, "pasta").toPath(), outside.parentFile!!.toPath())
+            true
+        } catch (e: Exception) {
+            false // Windows without the right to make links
+        }
+        assumeTrue(linked)
+        assertEquals(listOf("a.txt"), FolderWalk.list(root, 100).map { it.relativePath })
     }
 
     @Test

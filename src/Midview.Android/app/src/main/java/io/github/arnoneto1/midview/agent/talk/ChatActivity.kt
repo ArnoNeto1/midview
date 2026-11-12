@@ -62,6 +62,13 @@ class ChatActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Started just as the teacher locked the screen: it goes, and the
+        // conversation waits to come up when the lock does.
+        if (TeacherTalk.locked) {
+            TeacherTalk.chats?.comeUp(conversationId)
+            finish()
+            return
+        }
         render()
         input.requestFocus()
     }

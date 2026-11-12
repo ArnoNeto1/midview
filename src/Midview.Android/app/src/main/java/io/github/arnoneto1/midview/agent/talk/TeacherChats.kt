@@ -59,6 +59,13 @@ class TeacherChats(
         conversation(id)?.let { bringUp(it) }
     }
 
+    // A conversation that wanted the screen and had to wait (behind a
+    // message, or a screen started just as the teacher locked): it comes up
+    // now, or once the lock goes.
+    fun comeUp(id: Int) {
+        conversation(id)?.let { bringUp(it) }
+    }
+
     private fun bringUp(conversation: Conversation) {
         if (isLocked()) {
             synchronized(gate) {

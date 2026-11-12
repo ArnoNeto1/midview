@@ -724,7 +724,7 @@ class CommandHandlerTest {
         File(filesFolder, "trabalho.txt").writeText("oi")
         val channel = FakeChannel(teacher, message(MessageType.CLEAR_DELIVERY_FOLDER), message(MessageType.HEARTBEAT))
         withFiles.handle(channel)
-        assertEquals(true to "1 item(ns) foram apagados", CommandResult.decode(channel.sent[0].payload))
+        assertEquals(true to "1 item foi apagado", CommandResult.decode(channel.sent[0].payload))
         assertEquals(MessageType.HEARTBEAT, channel.sent[1].type)
         assertTrue(filesFolder.list()!!.isEmpty())
     }

@@ -26,6 +26,11 @@ object TeacherTalk {
 
     @Volatile private var context: Context? = null
 
+    @Volatile private var isLocked: () -> Boolean = { false }
+
+    // The teacher's lock screen is up: nothing of these may come over it.
+    val locked: Boolean get() = isLocked()
+
     // A conversation that wanted the screen while a message was up.
     @Volatile private var behindMessage: Int? = null
 
@@ -35,6 +40,7 @@ object TeacherTalk {
     fun start(context: Context, isLocked: () -> Boolean) {
         val app = context.applicationContext
         this.context = app
+        this.isLocked = isLocked
         val notifications = app.getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Mensagens do professor", NotificationManager.IMPORTANCE_LOW).apply {
@@ -57,17 +63,12 @@ object TeacherTalk {
     }
 
     // The student read the last message ("OK, ENTENDI"): a conversation that
-    // wanted the screen meanwhile comes up.
+    // wanted the screen meanwhile comes up, or waits for the teacher's lock
+    // screen to go (TeacherChats.comeUp).
     fun messagesRead() {
         val id = behindMessage ?: return
         behindMessage = null
-        val app = context ?: return
-        if (chats?.conversation(id) == null) return
-        try {
-            app.startActivity(ChatActivity.intent(app, id))
-        } catch (e: RuntimeException) {
-            // Its notification is still there to open it.
-        }
+        chats?.comeUp(id)
     }
 
     // "Fechar programas" closes the teacher's messages too, as on a PC.

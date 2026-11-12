@@ -192,6 +192,13 @@ Aplicada sozinha na primeira conexão com o professor e repetível por um botão
 - Desligar, ligar pela rede, agendar ligar e desligar (o Android não deixa
   desligar nem ligar remotamente; reiniciar pode entrar se for barato).
 - Mensagens, chat, mandar e recolher arquivos, pasta da turma.
+  - **Atualização 2026-11-12 (decidido pelo professor):** Mensagem,
+    Bate-papo, Enviar arquivo, Recolher arquivos e Fechar programas já
+    funcionam nos celulares, pela porta de comandos do agente (28900), com as
+    mesmas mensagens do PC. Os arquivos ficam numa pasta só, Download/Midview,
+    que o aluno abre no app Arquivos. Para recolher o que outros apps salvaram
+    nela, o assistente pelo cabo liga o "acesso a todos os arquivos" (appops
+    MANAGE_EXTERNAL_STORAGE). A pasta da turma fica para depois.
 - Instalar apps novos, Play Store, contas Google nos celulares.
 - Os tablets da SED-SC (são gerenciados pela Secretaria; ficam de fora).
 - iPhone.

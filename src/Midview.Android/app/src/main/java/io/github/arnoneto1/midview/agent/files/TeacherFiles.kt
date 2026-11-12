@@ -17,11 +17,18 @@ import io.github.arnoneto1.midview.agent.protocol.FileTransfer
 // notification that opens the folder, as the PC's notice tells where the
 // file went) and "Depois de enviar" (the folder or the file opened). Nothing
 // opens over the teacher's lock screen: an app started there would break
-// its lock task.
+// its lock task. Called once as the agent starts, before its ports open.
 object TeacherFiles {
     fun handler(context: Context, isLocked: () -> Boolean): FileHandler {
         val app = context.applicationContext
         val folder = DownloadFolder(app)
+        // Before the commands port opens, so no file arriving now is taken for one.
+        try {
+            val removed = folder.removeLeftovers()
+            if (removed > 0) Log.i(TAG, "Removed $removed file(s) left half-received in Download/Midview")
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "The files left half-received could not be removed", e)
+        }
         val notifications = app.getSystemService(NotificationManager::class.java)
         notifications.createNotificationChannel(
             NotificationChannel(CHANNEL, "Arquivos do professor", NotificationManager.IMPORTANCE_DEFAULT).apply {

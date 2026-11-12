@@ -178,11 +178,7 @@ class FileHandler(
     fun clear(): Pair<Boolean, String> {
         val (removed, problems) = folder.clear()
         if (removed > 0) notify("O professor esvaziou a pasta ${PhoneFolder.NAME}. O que estava nela foi apagado.")
-        var detail = if (removed == 0 && problems.isEmpty()) {
-            "a pasta já estava vazia"
-        } else {
-            "$removed item(ns) foram apagados" + if (problems.isNotEmpty()) "; não saiu: ${problems.joinToString(", ")}" else ""
-        }
+        var detail = if (removed == 0 && problems.isEmpty()) "a pasta já estava vazia" else cleared(removed, problems)
         if (!folder.seesEverything) detail += "; $ONLY_OWN_FILES"
         return problems.isEmpty() to detail
     }
@@ -195,6 +191,17 @@ class FileHandler(
         // agent the files other apps put in the folder.
         const val ONLY_OWN_FILES =
             "sem acesso a todos os arquivos neste celular: só os que o próprio Midview salvou"
+
+        // "1 item foi apagado", "5 itens foram apagados", then what stayed:
+        // "não pôde ser apagado: a.txt" or "não puderam ser apagados: a.txt, b".
+        fun cleared(removed: Int, problems: List<String>): String {
+            val done = if (removed == 1) "1 item foi apagado" else "$removed itens foram apagados"
+            return when (problems.size) {
+                0 -> done
+                1 -> "$done; não pôde ser apagado: ${problems[0]}"
+                else -> "$done; não puderam ser apagados: ${problems.joinToString(", ")}"
+            }
+        }
 
         private fun notSaved(e: IOException) = "não foi possível salvar o arquivo: ${describe(e)}"
 

@@ -41,6 +41,27 @@ class TeacherChatsTest {
 
     private fun shown(conversation: TeacherChats.Conversation) = conversation.lines.map { it.shown }
 
+    // A conversation that had to wait (behind a message, or a screen started
+    // just as the teacher locked) comes up now, or once the lock goes.
+    @Test fun aWaitingConversationComesUpOnlyWithoutTheLock() {
+        open()
+        events.clear()
+        chats.comeUp(1)
+        assertEquals(listOf("show 1"), events)
+
+        events.clear()
+        locked = true
+        chats.comeUp(1)
+        assertTrue(events.isEmpty())
+        locked = false
+        chats.unlocked()
+        assertEquals(listOf("show 1"), events)
+
+        events.clear()
+        chats.comeUp(99)
+        assertTrue(events.isEmpty())
+    }
+
     @Test fun openingBringsTheScreenUp() {
         val chat = open()
         assertEquals(listOf("changed 1", "show 1"), events)

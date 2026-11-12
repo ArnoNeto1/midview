@@ -1,12 +1,14 @@
 package io.github.arnoneto1.midview.agent.files
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
@@ -89,12 +91,34 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
         val problems = mutableListOf<String>()
         for (file in ownRows()) {
             try {
-                if (resolver.delete(file.uri, null, null) > 0) removed++ else problems += "${file.path} (não pôde ser apagado)"
+                if (resolver.delete(file.uri, null, null) > 0) removed++ else problems += file.path
             } catch (e: RuntimeException) {
-                problems += "${file.path} (não pôde ser apagado)"
+                problems += file.path
             }
         }
         return removed to problems
+    }
+
+    // A file still arriving when the agent stopped (a crash, a restart)
+    // stays pending, hidden, for a week before Android deletes it. Called
+    // when the agent starts, before any teacher can send: only the agent's
+    // own pending files in Download/Midview go. How many went.
+    fun removeLeftovers(): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return 0
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val args = Bundle().apply {
+            putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_ONLY)
+            putString(
+                ContentResolver.QUERY_ARG_SQL_SELECTION,
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?",
+            )
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, arrayOf("$RELATIVE_PATH%", app.packageName))
+        }
+        val leftovers = mutableListOf<Uri>()
+        resolver.query(collection, arrayOf(MediaStore.MediaColumns._ID), args, null)?.use {
+            while (it.moveToNext()) leftovers += ContentUris.withAppendedId(collection, it.getLong(0))
+        }
+        return leftovers.count { resolver.delete(it, null, null) > 0 }
     }
 
     // The saved file, for "Abrir ou executar o arquivo": its address to hand

@@ -44,8 +44,8 @@ interface PhoneFolder {
     @Throws(IOException::class)
     fun list(maxFiles: Int): List<PhoneFile>
 
-    // Everything in it removed, subfolders whole; what could not go, named
-    // with why. How many entries went.
+    // Everything in it removed, subfolders whole; what could not go, by
+    // name (with why, when there is more to say). How many entries went.
     fun clear(): Pair<Int, List<String>>
 
     companion object {
@@ -69,7 +69,8 @@ object FolderWalk {
         val entries = (directory.listFiles() ?: return)
             .filter { !it.name.startsWith(".") }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-        for (file in entries.filter { it.isFile }) {
+        // A link is never followed, to a file no more than to a folder: it could point anywhere.
+        for (file in entries.filter { it.isFile && !Files.isSymbolicLink(it.toPath()) }) {
             if (files.size > maxFiles) return
             files += PhoneFile(prefix + file.name, file.length()) { FileInputStream(file) }
         }
@@ -92,10 +93,10 @@ object FolderWalk {
         var removed = 0
         for (entry in entries) {
             if (Files.isSymbolicLink(entry.toPath())) {
-                problems += "${entry.name} (pasta vinculada, não removida)"
+                problems += "${entry.name} (pasta vinculada)"
                 continue
             }
-            if (deleteTree(entry)) removed++ else problems += "${entry.name} (não pôde ser apagado)"
+            if (deleteTree(entry)) removed++ else problems += entry.name
         }
         return removed to problems
     }

@@ -39,6 +39,12 @@ class TeacherMessageActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Started just as the teacher locked the screen: it goes, and the
+        // message (still open) comes back when the lock does (TeacherTalk.unlocked).
+        if (TeacherTalk.locked) {
+            finish()
+            return
+        }
         render()
     }
 
