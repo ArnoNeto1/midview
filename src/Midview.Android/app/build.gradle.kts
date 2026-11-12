@@ -6,7 +6,12 @@ plugins {
 // The version is the repository's one place to change it: <Version> in
 // Directory.Build.props. versionCode follows from it (major * 1_000_000 +
 // minor * 1_000 + patch), so it only grows when the version does.
-val midviewVersion: String = run {
+// -PmidviewVersion=0.0.51 builds the same code as another version, only to
+// try "Atualizar celulares" on a test phone; releases never pass it.
+val midviewVersion: String = (findProperty("midviewVersion") as String?)?.let { asked ->
+    asked.takeIf { Regex("""[0-9]+\.[0-9]+\.[0-9]+""").matches(it) }
+        ?: throw GradleException("-PmidviewVersion must be major.minor.patch, not \"$asked\".")
+} ?: run {
     val props = rootDir.resolve("../../Directory.Build.props").readText()
     Regex("""<Version>\s*([0-9]+\.[0-9]+\.[0-9]+)\s*</Version>""").find(props)?.groupValues?.get(1)
         ?: throw GradleException("Directory.Build.props has no <Version> as major.minor.patch.")

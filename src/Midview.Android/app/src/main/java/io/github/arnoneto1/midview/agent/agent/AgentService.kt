@@ -49,6 +49,12 @@ import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
 import io.github.arnoneto1.midview.agent.sites.SitePolicy
 import io.github.arnoneto1.midview.agent.status.StatusImage
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
+import io.github.arnoneto1.midview.agent.update.ApkFingerprint
+import io.github.arnoneto1.midview.agent.update.ApkUpdateStore
+import io.github.arnoneto1.midview.agent.update.ApkUpdater
+import io.github.arnoneto1.midview.agent.update.ApkUpload
+import io.github.arnoneto1.midview.agent.update.PackageApkReader
+import io.github.arnoneto1.midview.agent.update.SelfInstaller
 import java.io.File
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
@@ -204,7 +210,20 @@ class AgentService : Service() {
         val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(policyGateway, internet, log)::apply, log = log)
         sites.reapply()
         val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
-        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, installedApps::list)
+        // "Atualizar celulares": the agent's next version comes over the
+        // network and installs itself. The attempt a restart cut short, or
+        // the one that installed this version, is closed here; the APK's
+        // fingerprint is worked out in the background.
+        val updater = ApkUpdater(
+            ApkUpdateStore(File(filesDir, ApkUpdater.ATTEMPT_FILE), log),
+            ApkUpload(File(filesDir, ApkUpdater.UPLOAD_FOLDER)),
+            ApkFingerprint { ApkFingerprint.of(File(applicationInfo.sourceDir)) },
+            PackageApkReader(this),
+            SelfInstaller(this),
+            isDeviceOwner = policyGateway::isDeviceOwner,
+            log = log,
+        )
+        val commands = CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, installedApps::list)
         val frames = ScreenCaptureService.frames
         val picture = ThumbnailPicture(
             consent, frames,
@@ -311,10 +330,11 @@ class AgentService : Service() {
 
     private fun notifications() = getSystemService(NotificationManager::class.java)
 
-    // Starts the agent after the phone restarts (and after the app is updated).
+    // Starts the agent after the phone restarts (after the app is updated:
+    // PackageReplacedReceiver).
     class StartAtBoot : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
                 start(context)
             }
         }

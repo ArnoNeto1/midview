@@ -14,10 +14,14 @@ import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
 import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
 import io.github.arnoneto1.midview.agent.protocol.PhoneOptimizeReport
+import io.github.arnoneto1.midview.agent.protocol.UpdateAttemptReport
+import io.github.arnoneto1.midview.agent.protocol.UpdateStatusReport
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import io.github.arnoneto1.midview.agent.sites.SiteBlockState
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
+import io.github.arnoneto1.midview.agent.update.PhoneUpdater
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,7 +50,27 @@ class CommandHandlerTest {
     private var sitesWork = true
     private val sites by lazy { SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { sitesApplied += it; sitesWork }) }
     private val optimizer = FakeOptimizer()
-    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer) { phoneApps } }
+    private val updater = FakeUpdater()
+    private val handler by lazy { CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater) { phoneApps } }
+
+    // "Atualizar celulares": the offers it got (answered as accepted) and
+    // the status it reports.
+    private class FakeUpdater : PhoneUpdater {
+        val offers = mutableListOf<ByteArray>()
+        var report = UpdateStatusReport(
+            "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", "0.0.50", true,
+            UpdateAttemptReport("A0A1A2A3A4A5A6A7A8A9AAABACADAEAF", "applying", "instalando a versão 0.0.51", Instant.parse("2026-11-12T15:30:45Z")),
+        )
+        var statusAsked = 0
+        override fun offer(payload: ByteArray, channel: Channel) {
+            offers += payload
+            channel.send(Message(MessageType.UPDATE_ACCEPTED, ByteArray(0)))
+        }
+        override fun status(): UpdateStatusReport {
+            statusAsked++
+            return report
+        }
+    }
 
     // "Otimizar": what the phone answers, and how often a trusted command
     // let it catch up (the first optimization, a DNS retry).
@@ -365,6 +389,58 @@ class CommandHandlerTest {
         )
         assertTrue(trusted.isTrusted(stranger))
         assertEquals(0, optimizer.seen)
+    }
+
+    // The update takes more than one message each way: the updater answers
+    // them all, and the connection ends with it, as on a PC.
+    @Test fun anUpdateOfferGoesToTheUpdaterAndEndsTheConnection() {
+        trusted.add(teacher)
+        val offer = ByteArray(96) { it.toByte() }
+        val channel = FakeChannel(teacher, message(MessageType.UPDATE_OFFER, offer), message(MessageType.HEARTBEAT))
+        handler.handle(channel)
+
+        assertArrayEquals(offer, updater.offers.single())
+        assertEquals(listOf("receive 25", "send 26"), channel.events)
+        assertEquals(1, optimizer.seen)
+    }
+
+    @Test fun getUpdateStatusAnswersTheUpdatersReport() {
+        trusted.add(teacher)
+        // With or without the attempt's id, as the Master asks.
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.GET_UPDATE_STATUS),
+            message(MessageType.GET_UPDATE_STATUS, ByteArray(16) { (0xA0 + it).toByte() }),
+        )
+        handler.handle(channel)
+
+        assertEquals(listOf(MessageType.UPDATE_STATUS, MessageType.UPDATE_STATUS), channel.sent.map { it.type })
+        assertEquals(
+            "{\"fingerprint\":\"BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD\",\"build\":\"0.0.50\"," +
+                "\"ready\":true,\"attempt\":{\"id\":\"A0A1A2A3A4A5A6A7A8A9AAABACADAEAF\",\"state\":\"applying\"," +
+                "\"detail\":\"instalando a versão 0.0.51\",\"updatedAt\":\"2026-11-12T15:30:45+00:00\"}}",
+            String(channel.sent.first().payload, Charsets.UTF_8),
+        )
+        assertEquals(2, updater.statusAsked)
+    }
+
+    // A chunk with no update offered before it.
+    @Test fun aStrayFileChunkIsRefused() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.FILE_CHUNK, ByteArray(1000)))
+        handler.handle(channel)
+        assertEquals(false to "transferência inválida", CommandResult.decode(channel.sent.single().payload))
+    }
+
+    @Test fun untrustedTeacherCannotUpdate() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.UPDATE_OFFER, MessageType.GET_UPDATE_STATUS, MessageType.FILE_CHUNK)) {
+            val channel = FakeChannel(stranger, message(type, ByteArray(96)))
+            handler.handle(channel)
+            assertTrue(channel.sent.isEmpty())
+        }
+        assertTrue(updater.offers.isEmpty())
+        assertEquals(0, updater.statusAsked)
     }
 
     private companion object {

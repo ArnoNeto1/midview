@@ -8,10 +8,13 @@ import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.protocol.NetworkUpdateCodec
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.screen.ConsentState
 import io.github.arnoneto1.midview.agent.screen.ScreenConsent
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
+import io.github.arnoneto1.midview.agent.update.ApkUpload
+import io.github.arnoneto1.midview.agent.update.PhoneUpdater
 import java.io.EOFException
 
 // The commands port (28900), as the Windows AgentServer: anyone may ask to
@@ -22,7 +25,8 @@ import java.io.EOFException
 // appBlock holds the phone's app block; sites, the sites and internet the
 // teacher blocked; optimizer, "Otimizar" (which also catches up at a trusted
 // teacher's command: the first optimization after pairing, a DNS to try
-// again); listApps reads the apps the student can open (for the teacher's
+// again); updater, "Atualizar celulares" (the agent's next version over the
+// network); listApps reads the apps the student can open (for the teacher's
 // list).
 class CommandHandler(
     private val trusted: TrustedMasters,
@@ -31,6 +35,7 @@ class CommandHandler(
     private val appBlock: AppBlockStore,
     private val sites: SiteBlockStore,
     private val optimizer: PhoneOptimizer,
+    private val updater: PhoneUpdater,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -47,6 +52,13 @@ class CommandHandler(
         channel.setTimeout(IDLE_TIMEOUT_MILLIS)
         while (true) {
             if (message.type != MessageType.OPTIMIZE_PHONE) optimizer.teacherSeen()
+            // More than one message each way (the offer, the APK in chunks),
+            // all answered by the updater; the connection ends with it, as
+            // on a PC.
+            if (message.type == MessageType.UPDATE_OFFER) {
+                updater.offer(message.payload, channel)
+                return
+            }
             channel.send(answer(message))
             message = try {
                 channel.receive()
@@ -79,6 +91,11 @@ class CommandHandler(
         MessageType.GET_PHONE_APPS -> Message(MessageType.PHONE_APPS, PhoneAppsAnswer.encode(listApps()))
         // On this connection's own thread: up to ~30 s checking the network.
         MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())
+        // The payload (the attempt's id, from a Master following one) is
+        // for a PC's trial run of a new build; a phone has none.
+        MessageType.GET_UPDATE_STATUS -> Message(MessageType.UPDATE_STATUS, NetworkUpdateCodec.encodeStatus(updater.status()))
+        // A chunk with no update offered before it.
+        MessageType.FILE_CHUNK -> Message(MessageType.COMMAND_ACK, CommandResult.encode(false, ApkUpload.INVALID_TRANSFER))
         // As the Windows AgentServer: the answer is the single byte 1 or 0.
         MessageType.BLOCK_INTERNET, MessageType.UNBLOCK_INTERNET, MessageType.BLOCK_DOMAIN, MessageType.UNBLOCK_DOMAIN -> {
             val done = sites.handle(message.type, message.payload)
