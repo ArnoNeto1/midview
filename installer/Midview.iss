@@ -333,13 +333,36 @@ begin
   WizardForm.DirEdit.Text := PastaDoTipo(Tipo);
 end;
 
-{ Aluno: stop the Midview that is there before its files are replaced. }
+{ Professor: an adb left running from the program's adb folder (the phone
+  cable tool, after a crash) holds adb.exe and its DLLs; it is stopped so
+  they can be replaced. Only that folder's adb, never another program's.
+  A failure here is only logged: the copy then says what it could not replace. }
+procedure PararAdbDoProfessor;
+var
+  Pasta: String;
+  Codigo: Integer;
+begin
+  Codigo := -1;
+  Pasta := ExpandConstant('{app}\adb\');
+  StringChangeEx(Pasta, '''', '''''', True);
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -ExecutionPolicy Bypass -Command "Get-Process adb -ErrorAction SilentlyContinue | ' +
+    'Where-Object { $_.Path -and $_.Path.StartsWith(''' + Pasta + ''', [StringComparison]::OrdinalIgnoreCase) } | ' +
+    'Stop-Process -Force -ErrorAction SilentlyContinue"',
+    '', SW_HIDE, ewWaitUntilTerminated, Codigo);
+  Log(Format('Stop adb under %s: exit code=%d', [Pasta, Codigo]));
+end;
+
+{ Aluno: stop the Midview that is there before its files are replaced.
+  Professor: stop the phone cable tool left running. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ArquivoDeErro: String;
   Codigo: Integer;
 begin
   Result := '';
+  if EhProfessor then
+    PararAdbDoProfessor;
   if not EhAluno then
     Exit;
   ExtractTemporaryFile('Comum.ps1');
