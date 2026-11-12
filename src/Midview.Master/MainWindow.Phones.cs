@@ -2,25 +2,15 @@ using System.Windows;
 
 namespace Midview.Master;
 
-// The CELULARES group ("Otimizar", "Atualizar celulares") and the same two
-// items on a phone's tile menu. The group shows only in a room with a phone;
-// it acts on the selected phones, or on every phone of the room when none is
-// selected (DeviceSupport.ToolbarReach).
+// Optimizing and updating the phones: "Otimizar..." and "Atualizar o Midview
+// do celular..." on a phone's tile menu, "Otimizar celulares e tablets..." in
+// the "Telas" menu (MainWindow.Screens.cs; the selected Android devices, or
+// every one of the room when none is selected) and "Atualizar os celulares" in
+// "Máquinas da sala" (every phone of the room).
 public partial class MainWindow
 {
-    private void ShowPhoneGroup()
-    {
-        PhoneGroupPanel.Visibility = DeviceSupport.ShowsPhoneGroup(_tiles.Select(tile => tile.Machine))
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        UpdateActionButtons();
-    }
-
-    private void OnOptimizePhonesClicked(object sender, RoutedEventArgs e) =>
-        OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize));
-
-    private void OnUpdatePhonesClicked(object sender, RoutedEventArgs e) =>
-        OpenPhoneUpdateWindow(ToolbarReach(ToolbarAction.UpdatePhones));
+    private IReadOnlyList<KnownMachine> RoomPhones() =>
+        _tiles.Select(tile => tile.Machine).Where(machine => machine.IsPhone).ToList();
 
     private void OnOptimizeMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -56,7 +46,7 @@ public partial class MainWindow
     {
         if (phones.Count == 0)
         {
-            StatusTextBlock.Text = "Nenhum celular na lista da sala para otimizar.";
+            StatusTextBlock.Text = "Nenhum celular ou tablet na lista da sala para otimizar.";
             return;
         }
         ShowOnce("otimizar", phones, () => new PhoneOptimizeWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });

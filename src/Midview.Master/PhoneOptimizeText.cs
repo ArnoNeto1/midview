@@ -46,15 +46,16 @@ public static class PhoneOptimizeText
         _ => "DNS sem anúncios desligado: o celular não conseguiu ligá-lo",
     };
 
-    public static string Heading(int phones) => phones == 1 ? "Otimizar o celular" : "Otimizar os celulares";
+    // Every Android device runs the same agent, phones and tablets alike.
+    public static string Heading(int devices) => devices == 1 ? "Otimizar o celular ou tablet" : "Otimizar celulares e tablets";
 
-    // Above the list, once every phone answered (or didn't).
+    // Above the list, once every device answered (or didn't).
     public static string Summary(int done, int total) => (done, total) switch
     {
         (1, 1) => "Pronto.",
-        (_, 1) => "O celular não foi otimizado (veja abaixo).",
-        _ when done == total => $"Pronto nos {total} celulares.",
-        (1, _) => $"Otimizado 1 de {total} celulares (veja abaixo).",
-        _ => $"Otimizados {done} de {total} celulares (veja abaixo).",
+        (_, 1) => "O aparelho não foi otimizado (veja abaixo).",
+        _ when done == total => $"Pronto nos {total} aparelhos.",
+        (1, _) => $"Otimizado 1 de {total} aparelhos (veja abaixo).",
+        _ => $"Otimizados {done} de {total} aparelhos (veja abaixo).",
     };
 }

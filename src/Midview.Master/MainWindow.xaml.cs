@@ -102,7 +102,7 @@ public partial class MainWindow : MidviewWindow
         _onlineOnly = gridView.OnlineOnly;
         OnlineOnlyButton.IsChecked = _onlineOnly;
         _devices = gridView.Devices;
-        CheckDeviceButtons();
+        ShowScreensBadge();
         _powerSchedule = LoadPowerSchedule();
         _appBlockPolicy = LoadAppBlockPolicy();
         _phoneAppPolicy = LoadPhoneAppBlockPolicy();
@@ -115,8 +115,7 @@ public partial class MainWindow : MidviewWindow
         }
         UpdateEmptyHint();
         ShowClassLesson();
-        ShowPhoneGroup();
-        _tiles.CollectionChanged += (_, _) => ShowPhoneGroup();
+        _tiles.CollectionChanged += (_, _) => _machinesWindow?.ShowPhoneUpdateCard();
     }
 
     // A click, left or right, only selects the machine. Watching its screen
@@ -208,13 +207,8 @@ public partial class MainWindow : MidviewWindow
                 continue;
             }
             // One button for both: it also gives the locked screens back.
-            // The CELULARES group's buttons reach the room's phones even
-            // when only PCs are selected (DeviceSupport.ToolbarReach).
-            var enabled = DeviceSupport.IsPhoneOnly(action)
-                ? ToolbarReach(action).Count > 0
-                : reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
-                  || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
-            button.IsEnabled = enabled;
+            button.IsEnabled = reach.Count == 0 || DeviceSupport.IsEnabled(reach, action)
+                || (action == ToolbarAction.ScreenLock && _screenLocks.Count > 0);
         }
     }
 
@@ -295,24 +289,12 @@ public partial class MainWindow : MidviewWindow
         ShowOnlineOnly(false);
     }
 
-    private void OnAllDevicesClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.All);
-
-    private void OnComputersClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.Computers);
-
-    private void OnPhonesClicked(object sender, RoutedEventArgs e) => ShowDevices(DeviceFilter.Phones);
-
-    private void CheckDeviceButtons()
-    {
-        AllDevicesButton.IsChecked = _devices == DeviceFilter.All;
-        ComputersButton.IsChecked = _devices == DeviceFilter.Computers;
-        PhonesButton.IsChecked = _devices == DeviceFilter.Phones;
-    }
-
-    // One of the three is always on: a click on the one already on keeps it.
+    // Chosen in the "Telas" menu (MainWindow.Screens.cs); one of the three
+    // is always on: choosing the one already on keeps it.
     private void ShowDevices(DeviceFilter devices)
     {
         _devices = devices;
-        CheckDeviceButtons();
+        ShowScreensBadge();
         _shownTiles.Refresh();
         UpdateEmptyHint();
         SaveGridView();
@@ -1484,7 +1466,8 @@ public partial class MainWindow : MidviewWindow
         {
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddresses,
-                () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow) { Owner = this };
+                () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
+                () => OpenPhoneUpdateWindow(RoomPhones())) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);

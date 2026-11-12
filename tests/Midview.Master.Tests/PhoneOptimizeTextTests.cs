@@ -60,15 +60,15 @@ public class PhoneOptimizeTextTests
     }
 
     [Theory]
-    [InlineData(1, "Otimizar o celular")]
-    [InlineData(3, "Otimizar os celulares")]
+    [InlineData(1, "Otimizar o celular ou tablet")]
+    [InlineData(3, "Otimizar celulares e tablets")]
     public void Heading(int phones, string expected) => Assert.Equal(expected, PhoneOptimizeText.Heading(phones));
 
     [Theory]
     [InlineData(1, 1, "Pronto.")]
-    [InlineData(0, 1, "O celular não foi otimizado (veja abaixo).")]
-    [InlineData(3, 3, "Pronto nos 3 celulares.")]
-    [InlineData(2, 3, "Otimizados 2 de 3 celulares (veja abaixo).")]
-    [InlineData(1, 3, "Otimizado 1 de 3 celulares (veja abaixo).")]
+    [InlineData(0, 1, "O aparelho não foi otimizado (veja abaixo).")]
+    [InlineData(3, 3, "Pronto nos 3 aparelhos.")]
+    [InlineData(2, 3, "Otimizados 2 de 3 aparelhos (veja abaixo).")]
+    [InlineData(1, 3, "Otimizado 1 de 3 aparelhos (veja abaixo).")]
     public void Summary(int done, int total, string expected) => Assert.Equal(expected, PhoneOptimizeText.Summary(done, total));
 }

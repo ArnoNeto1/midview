@@ -53,8 +53,9 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.IsEnabled(new[] { Pc("PC 01"), Phone("Cel 01") }, action));
     }
 
-    // The CELULARES group: the selected phones, or every phone of the room
-    // when no phone is selected (a selection of PCs alone included).
+    // "Otimizar celulares e tablets..." (Telas menu): the selected Android
+    // devices, or every one of the room when none is selected (a selection of
+    // PCs alone included).
     [Theory]
     [InlineData(ToolbarAction.Optimize)]
     [InlineData(ToolbarAction.UpdatePhones)]
@@ -73,14 +74,25 @@ public class DeviceSupportTests
         Assert.Empty(DeviceSupport.ToolbarReach(action, Array.Empty<KnownMachine>(), new[] { pc }, DeviceFilter.All));
     }
 
-    // The CELULARES group shows only in a room with a phone: a room of PCs stays as it was.
+    // "Celulares" and "Otimizar celulares..." (Telas menu) and the "Atualizar os
+    // celulares" card are for a room with a phone.
     [Fact]
-    public void Phone_group_shows_only_with_a_phone_in_the_room()
+    public void A_room_has_phones_only_with_a_phone_in_it()
     {
-        Assert.False(DeviceSupport.ShowsPhoneGroup(Array.Empty<KnownMachine>()));
-        Assert.False(DeviceSupport.ShowsPhoneGroup(new[] { Pc("PC 01"), Pc("PC 02") }));
-        Assert.True(DeviceSupport.ShowsPhoneGroup(new[] { Pc("PC 01"), Phone("Cel 01") }));
-        Assert.True(DeviceSupport.ShowsPhoneGroup(new[] { Phone("Cel 01") }));
+        Assert.False(DeviceSupport.HasPhones(Array.Empty<KnownMachine>()));
+        Assert.False(DeviceSupport.HasPhones(new[] { Pc("PC 01"), Pc("PC 02") }));
+        Assert.True(DeviceSupport.HasPhones(new[] { Pc("PC 01"), Phone("Cel 01") }));
+        Assert.True(DeviceSupport.HasPhones(new[] { Phone("Cel 01") }));
+    }
+
+    // Phones and tablets run the same Android agent: optimizing is for every Android device.
+    [Fact]
+    public void Optimizing_is_for_every_android_device()
+    {
+        Assert.True(DeviceSupport.IsAndroid(Phone("Tablet 01")));
+        Assert.False(DeviceSupport.IsAndroid(Pc("PC 01")));
+        Assert.False(DeviceSupport.HasAndroid(new[] { Pc("PC 01") }));
+        Assert.True(DeviceSupport.HasAndroid(new[] { Pc("PC 01"), Phone("Tablet 01") }));
     }
 
     // The sites window sends its commands to every machine it reaches.

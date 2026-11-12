@@ -28,6 +28,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly Action _openAdvanced;
     private readonly Action _openGiveAccess;
     private readonly Action _openJoinClass;
+    private readonly Action _openPhoneUpdate;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
     private readonly AdminPasswordStore _adminPasswords = new(MasterData.Folder);
@@ -38,7 +39,7 @@ public partial class MachinesWindow : MidviewWindow
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
         Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, int> refreshAddresses, Action openAdvanced,
-        Action openGiveAccess, Action openJoinClass)
+        Action openGiveAccess, Action openJoinClass, Action openPhoneUpdate)
     {
         InitializeComponent();
         if (!PhoneProvisioning.IsReady)
@@ -50,12 +51,14 @@ public partial class MachinesWindow : MidviewWindow
         _openAdvanced = openAdvanced;
         _openGiveAccess = openGiveAccess;
         _openJoinClass = openJoinClass;
+        _openPhoneUpdate = openPhoneUpdate;
         _masterCertificate = masterCertificate;
         _roster = roster;
         _addPaired = addPaired;
         _refreshAddresses = refreshAddresses;
         FoundItemsControl.ItemsSource = _rows;
         ShowStudentProgramVersion();
+        ShowPhoneUpdateCard();
         CheckTeacherVersion();
         RefreshAdminPasswordStatus();
         ShowPage(MachinesPage.Search);
@@ -71,6 +74,10 @@ public partial class MachinesWindow : MidviewWindow
             panels[i].Visibility = i == (int)page ? Visibility.Visible : Visibility.Collapsed;
         }
         navs[(int)page].IsChecked = true;
+        if (page == MachinesPage.Updates)
+        {
+            ShowPhoneUpdateCard(); // the phone app may have been downloaded since
+        }
     }
 
     private void OnNavChecked(object sender, RoutedEventArgs e)
@@ -361,6 +368,25 @@ public partial class MachinesWindow : MidviewWindow
             OnUpdateClicked(this, new RoutedEventArgs());
         }
     }
+
+    // "Atualizar os celulares": shown only while the room has a phone (the
+    // classroom calls it again when its list changes), with the version of
+    // the phone app this PC sends and whether it is already downloaded.
+    public void ShowPhoneUpdateCard()
+    {
+        if (!DeviceSupport.HasPhones(_roster()))
+        {
+            PhoneUpdateCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var version = TeacherUpdate.CurrentVersion;
+        PhoneVersionTextBlock.Text = PhoneUpdateText.ApkLine(
+            version.ToString(), PhoneAgentApk.IsKept(PhoneAgentApk.DefaultFolder, version));
+        PhoneUpdateCard.Visibility = Visibility.Visible;
+    }
+
+    // The classroom's own window (one at a time, as from a phone's menu).
+    private void OnPhoneUpdateClicked(object sender, RoutedEventArgs e) => _openPhoneUpdate();
 
     // One at a time: asking again brings it back.
     private void OnUpdateClicked(object sender, RoutedEventArgs e)
