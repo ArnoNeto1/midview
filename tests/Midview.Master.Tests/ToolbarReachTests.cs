@@ -107,7 +107,7 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.OpenProgram, true)]
     [InlineData(ToolbarAction.Install, true)]
     [InlineData(ToolbarAction.Uninstall, true)]
-    [InlineData(ToolbarAction.LabConfig, false)]
+    [InlineData(ToolbarAction.LabConfig, true)]
     public void Phones_filter_greys_what_a_phone_cannot_do(ToolbarAction action, bool enabled)
     {
         Assert.Equal(enabled, DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Phones), action));

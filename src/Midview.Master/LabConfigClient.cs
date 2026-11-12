@@ -26,15 +26,18 @@ public static class LabConfigClient
         };
     }
 
+    // timeout: a phone turning its ad-free DNS off first waits for an
+    // optimization under way (up to ~36 s, LabConfigPhones.CommandTimeout).
     public static (bool Succeeded, string Detail) Apply(
-        KnownMachine machine, X509Certificate2 masterCertificate, LabConfig config, int port = ConnectionClient.AgentPort) =>
+        KnownMachine machine, X509Certificate2 masterCertificate, LabConfig config, int port = ConnectionClient.AgentPort,
+        TimeSpan? timeout = null) =>
         CommandClient.SendCommandForResult(
-            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.SetLabConfig, config.Encode());
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.SetLabConfig, config.Encode(), timeout);
 
     public static (bool Succeeded, string Detail) Reset(
-        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>
+        KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort, TimeSpan? timeout = null) =>
         CommandClient.SendCommandForResult(
-            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ResetLabConfig, Array.Empty<byte>());
+            machine.HostAddress, port, AgentThumbprint(machine), masterCertificate, MessageType.ResetLabConfig, Array.Empty<byte>(), timeout);
 
     public static (bool Succeeded, string Detail) ClearChromeProfiles(
         KnownMachine machine, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>

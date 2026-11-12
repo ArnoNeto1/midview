@@ -81,6 +81,8 @@ public class PhoneOptimizeReportTests
         Assert.Equal("offNetworkBlocks", PhoneDnsStates.OffNetworkBlocks);
         Assert.Equal("offInternetBlocked", PhoneDnsStates.OffInternetBlocked);
         Assert.Equal("offError", PhoneDnsStates.OffError);
+        Assert.Equal("offByTeacher", PhoneDnsStates.OffByTeacher);
+        Assert.True(PhoneDnsStates.IsKnown(PhoneDnsStates.OffByTeacher));
     }
 
     [Fact]

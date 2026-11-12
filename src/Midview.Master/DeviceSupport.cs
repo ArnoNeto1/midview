@@ -46,9 +46,10 @@ public enum ToolbarAction
 // PowerTargets; Android lets no app turn it off), opens sites and its apps
 // ("Abrir site", "Abrir programa": RemoteLaunch, PhoneOpenAppWindow), gets
 // apps installed and uninstalled ("Instalar programa": an .apk,
-// InstallWindow; "Desinstalar programa": PhoneUninstallWindow), and is
-// optimized and updated (actions a PC has nothing to do with). "Ligar",
-// "Agendar", the lab panel and the class folder stay for computers.
+// InstallWindow; "Desinstalar programa": PhoneUninstallWindow), takes the
+// lab panel's functions that mean something on a phone (LabConfigPhones),
+// and is optimized and updated (actions a PC has nothing to do with).
+// "Ligar", "Agendar" and the class folder stay for computers.
 // WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
@@ -61,7 +62,7 @@ public static class DeviceSupport
             or ToolbarAction.SendFile or ToolbarAction.CollectFiles
             or ToolbarAction.Power or ToolbarAction.WipePhone
             or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram
-            or ToolbarAction.Install or ToolbarAction.Uninstall
+            or ToolbarAction.Install or ToolbarAction.Uninstall or ToolbarAction.LabConfig
             || IsPhoneOnly(action),
         _ => false,
     };

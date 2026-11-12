@@ -25,7 +25,7 @@ interface DevicePolicyGateway {
     fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String>
 
     // An app's managed configuration (Chrome's policies), each value a
-    // String, a Boolean or an Array<String>; empty clears it.
+    // String, a Boolean, an Int or an Array<String>; empty clears it.
     fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>)
 
     // Hides (or shows again) an app; false when Android would not, and also

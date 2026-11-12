@@ -16,9 +16,10 @@ public static class PhoneOptimizeText
 
     // Fully optimized: every ad app hidden and the ad-free DNS on. With the
     // internet blocked the phone checks the DNS again by itself when it is
-    // released, so that counts as done too.
+    // released, so that counts as done too; and so does a DNS the teacher
+    // turned off in the lab panel.
     public static bool IsDone(PhoneOptimizeReport? report) =>
-        report is { Failed.Count: 0, Dns: PhoneDnsStates.On or PhoneDnsStates.OffInternetBlocked };
+        report is { Failed.Count: 0, Dns: PhoneDnsStates.On or PhoneDnsStates.OffInternetBlocked or PhoneDnsStates.OffByTeacher };
 
     public static string Apps(int hidden, int failed)
     {
@@ -43,6 +44,7 @@ public static class PhoneOptimizeText
         PhoneDnsStates.OffNetworkBlocks => "DNS sem anúncios desligado: a rede bloqueou",
         PhoneDnsStates.OffNoInternet => "DNS sem anúncios desligado: o celular estava sem internet",
         PhoneDnsStates.OffInternetBlocked => "DNS sem anúncios: conferido de novo quando a internet for liberada",
+        PhoneDnsStates.OffByTeacher => "DNS sem anúncios desligado no Painel do laboratório",
         _ => "DNS sem anúncios desligado: o celular não conseguiu ligá-lo",
     };
 

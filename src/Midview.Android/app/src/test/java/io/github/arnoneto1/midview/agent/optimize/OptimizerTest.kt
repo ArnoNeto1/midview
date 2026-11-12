@@ -33,9 +33,12 @@ class OptimizerTest {
     private val optimizer by lazy {
         Optimizer(
             catalog, gw, AdblockDns(gw, network, internetBlocked = { blocked }), store,
-            internetBlocked = { blocked }, clock = { now }, background = { queued += it },
+            internetBlocked = { blocked }, adblockWanted = { adblock }, clock = { now }, background = { queued += it },
         )
     }
+
+    // The lab panel's "Bloqueador de anúncios".
+    private var adblock = true
 
     private fun runQueued() {
         while (queued.isNotEmpty()) queued.removeAt(0).run()
@@ -324,5 +327,76 @@ class OptimizerTest {
         assertEquals(listOf("com.miui.msa.global", "com.xiaomi.glgm", "com.facebook.system"), answer.hidden)
         assertEquals(answer, store.current.report)
         assertEquals(now, store.current.lastDnsAttempt)
+    }
+
+    // The lab panel's "Bloqueador de anúncios" off: "Otimizar" hides the
+    // apps and leaves the DNS automatic, saying the teacher turned it off.
+    @Test fun withTheAdBlockerOffOptimizeOnlyHidesApps() {
+        adblock = false
+        val report = optimizer.run()
+        assertEquals(PhoneDnsStates.OFF_BY_TEACHER, report.dns)
+        assertEquals(listOf("com.miui.msa.global", "com.xiaomi.glgm", "com.facebook.system"), report.hidden)
+        assertEquals(PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null), gw.privateDns)
+        assertTrue(gw.dnsCalls.isEmpty())
+    }
+
+    @Test fun turningTheAdBlockerOffPutsTheAutomaticDnsBackAtOnce() {
+        optimizer.run()
+        assertEquals(ours, gw.privateDns)
+
+        adblock = false
+        optimizer.adblockChanged()
+
+        assertTrue(queued.isEmpty())
+        assertEquals(PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null), gw.privateDns)
+        assertEquals(PhoneDnsStates.OFF_BY_TEACHER, store.current.report.dns)
+        assertEquals(now, store.current.report.optimizedAt)
+    }
+
+    @Test fun turningTheAdBlockerOnAgainTriesTheDnsInTheBackground() {
+        adblock = false
+        optimizer.run()
+        adblock = true
+        optimizer.adblockChanged()
+        assertEquals(1, queued.size)
+        runQueued()
+        assertEquals(PhoneDnsStates.ON, store.current.report.dns)
+        assertEquals(ours, gw.privateDns)
+    }
+
+    @Test fun turningTheAdBlockerOnWithTheDnsOnChangesNothing() {
+        optimizer.run()
+        optimizer.adblockChanged()
+        assertTrue(queued.isEmpty())
+    }
+
+    // Turned on while a run was busy: the next command tries it.
+    @Test fun aCommandTriesTheDnsTurnedOnInThePanel() {
+        adblock = false
+        optimizer.run()
+        adblock = true
+        optimizer.teacherSeen()
+        runQueued()
+        assertEquals(PhoneDnsStates.ON, store.current.report.dns)
+    }
+
+    @Test fun withTheAdBlockerOffACommandTriesNothing() {
+        adblock = false
+        optimizer.run()
+        now = now.plus(Duration.ofHours(1))
+        optimizer.teacherSeen()
+        assertTrue(queued.isEmpty())
+    }
+
+    // A DNS retry with the ad blocker turned off meanwhile leaves it off.
+    @Test fun aRetryAfterTheAdBlockerWasTurnedOffLeavesTheDnsOff() {
+        network.internet = false
+        optimizer.run()
+        adblock = false
+        now = now.plus(Duration.ofMinutes(31))
+        optimizer.teacherSeen()
+        runQueued()
+        assertEquals(PhoneDnsStates.OFF_BY_TEACHER, store.current.report.dns)
+        assertEquals(PrivateDns(PrivateDns.MODE_OPPORTUNISTIC, null), gw.privateDns)
     }
 }

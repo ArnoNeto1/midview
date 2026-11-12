@@ -103,6 +103,18 @@ object MessageType {
     const val SCREEN_STREAM = 48
     const val SCREEN_FRAME = 49
     const val FRAME_ACK = 50
+
+    // The teacher's "Painel do laboratório", as on a PC (a LabConfig
+    // payload), from a trusted teacher only: SET answered with a CommandAck
+    // (CommandResult), GET (no payload) with LAB_CONFIG_STATUS carrying the
+    // LabConfig the phone keeps, RESET (no payload) with a CommandAck. A
+    // phone takes only "Travar downloads" and "Bloqueador de anúncios" of it
+    // (see LabConfigStore); an agent from before it answers CommandAck "Ainda
+    // não funciona em celular.".
+    const val SET_LAB_CONFIG = 51
+    const val GET_LAB_CONFIG = 52
+    const val LAB_CONFIG_STATUS = 53
+    const val RESET_LAB_CONFIG = 54
     // "Desinstalar programa", as a PC's Agent takes it (a ProgramList, on a
     // phone of packages), from a trusted teacher only; answered with a
     // CommandAck (CommandResult) once every app is done (TeacherInstalls).

@@ -5,10 +5,20 @@ package io.github.arnoneto1.midview.agent.sites
 // URLBlocklist policy with each site and its "www." form, as the Windows
 // agent writes both to the hosts file, or every address ("*") while the
 // internet is blocked. Chrome shows its own "blocked" page for them. With
-// nothing blocked Chrome is left with no policy at all.
+// "Travar downloads" of the lab panel on, also DownloadRestrictions 3 ("block
+// all downloads"), which Chrome on Android follows from version 131 on (an
+// older one keeps it and ignores it). With nothing set Chrome is left with
+// no policy at all.
 object ChromePolicy {
     const val PACKAGE = "com.android.chrome"
     const val URL_BLOCKLIST = "URLBlocklist"
+    const val DOWNLOAD_RESTRICTIONS = "DownloadRestrictions"
+
+    // DownloadRestrictions' "Block all downloads".
+    const val BLOCK_ALL_DOWNLOADS = 3
+
+    // The first Chrome on Android that follows DownloadRestrictions.
+    const val DOWNLOADS_FROM_VERSION = 131
 
     // Chrome reads at most 1000 entries of URLBlocklist: 500 sites, each with
     // its "www." form.
@@ -33,9 +43,12 @@ object ChromePolicy {
     // of the managed configuration also takes an array of texts as the list:
     // this was read in Chrome's APK, not yet seen in chrome://policy on a
     // phone (Chrome's first run there is still to be done).
-    fun restrictions(state: SiteBlockState): Map<String, Any> {
+    fun restrictions(state: SiteBlockState, blockDownloads: Boolean = false): Map<String, Any> {
         val blocklist = urlBlocklist(state)
-        return if (blocklist.isEmpty()) emptyMap() else mapOf(URL_BLOCKLIST to blocklist.toTypedArray())
+        val policies = mutableMapOf<String, Any>()
+        if (blocklist.isNotEmpty()) policies[URL_BLOCKLIST] = blocklist.toTypedArray()
+        if (blockDownloads) policies[DOWNLOAD_RESTRICTIONS] = BLOCK_ALL_DOWNLOADS
+        return policies
     }
 
     // HostsFileManager.ExpandBareAndWww: "www." added, or taken off (not

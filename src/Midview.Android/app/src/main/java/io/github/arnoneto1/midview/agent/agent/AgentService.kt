@@ -28,6 +28,7 @@ import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.lab.LabConfigStore
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.lock.ScreenLock
 import io.github.arnoneto1.midview.agent.net.ChatHandler
@@ -56,6 +57,8 @@ import io.github.arnoneto1.midview.agent.screen.FrameCredit
 import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
 import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
 import io.github.arnoneto1.midview.agent.sites.BlockVpnService
+import io.github.arnoneto1.midview.agent.sites.ChromeConfig
+import io.github.arnoneto1.midview.agent.sites.ChromePolicy
 import io.github.arnoneto1.midview.agent.sites.InternetBlock
 import io.github.arnoneto1.midview.agent.sites.OtherBrowsers
 import io.github.arnoneto1.midview.agent.sites.SiteBlockStore
@@ -208,11 +211,25 @@ class AgentService : Service() {
         val policyGateway = AndroidDevicePolicyGateway(this)
         lateinit var internet: InternetBlock
         val internetBlocked = { internet.isBlocked }
-        val optimizer = Optimizer(
+        // The lab panel ("Travar downloads", "Bloqueador de anúncios"): the
+        // download block goes in Chrome's configuration with the site block
+        // (ChromeConfig), the ad blocker is whether the optimizer turns the
+        // ad-free DNS on.
+        lateinit var chromeConfig: ChromeConfig
+        lateinit var optimizer: Optimizer
+        val lab = LabConfigStore(
+            File(filesDir, LAB_CONFIG_FILE), policyGateway::isDeviceOwner,
+            downloads = { chromeConfig.setDownloadsBlocked(it) },
+            adblockChanged = { optimizer.adblockChanged() },
+            chromeVersion = ::chromeMajorVersion,
+            log = log,
+        )
+        chromeConfig = ChromeConfig(policyGateway, lab.current.blockDownloads, log)
+        optimizer = Optimizer(
             installedApps, policyGateway,
             AdblockDns(policyGateway, AndroidDnsNetwork(this), internetBlocked, log),
             OptimizeStore(File(filesDir, OPTIMIZE_FILE), log),
-            internetBlocked, log = log,
+            internetBlocked, adblockWanted = { lab.adblock }, log = log,
         )
         // The site block: Chrome's policy and the internet block, kept the
         // same way and applied again now. Other browsers are hidden, checked
@@ -224,7 +241,8 @@ class AgentService : Service() {
             log = log,
             freed = optimizer::internetFreed,
         )
-        val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(policyGateway, internet, log)::apply, log = log)
+        val sites = SiteBlockStore(File(filesDir, SITE_BLOCK_FILE), apply = SitePolicy(chromeConfig, internet, log)::apply, log = log)
+        // Chrome's configuration, with the site block and the download block.
         sites.reapply()
         val otherBrowsers = OtherBrowsers(installedApps, policyGateway, File(filesDir, HIDDEN_BROWSERS_FILE), log)
         // "Atualizar celulares": the agent's next version comes over the
@@ -321,6 +339,7 @@ class AgentService : Service() {
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
             files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),
             openWebsite = programs.launch::openWebsite, openApp = programs.launch::openApp, installs = programs.installs,
+            lab = lab,
             listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
@@ -404,6 +423,14 @@ class AgentService : Service() {
         return PairingCodeActivity.awaitShown(SHOW_TIMEOUT_MILLIS)
     }
 
+    // Chrome's major version ("126.0.6478.71" -> 126); null without Chrome.
+    private fun chromeMajorVersion(): Int? =
+        try {
+            packageManager.getPackageInfo(ChromePolicy.PACKAGE, 0).versionName?.substringBefore('.')?.toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
+
     private fun hideCode() {
         PairingCodeActivity.hide()
         notifications().cancel(PAIRING_NOTIFICATION)
@@ -465,6 +492,7 @@ class AgentService : Service() {
         private const val INTERNET_BLOCK_FILE = "internet-block.txt"
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val OPTIMIZE_FILE = "optimize.txt"
+        private const val LAB_CONFIG_FILE = "lab-config.bin"
         private const val STATUS_CHANNEL = "status"
         private const val PAIRING_CHANNEL = "pairing"
         private const val STATUS_NOTIFICATION = 1

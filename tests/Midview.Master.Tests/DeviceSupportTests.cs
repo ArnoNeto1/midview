@@ -40,6 +40,7 @@ public class DeviceSupportTests
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
                 or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
                 or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram or ToolbarAction.Install or ToolbarAction.Uninstall
+                or ToolbarAction.LabConfig
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
             Assert.Equal(expected, DeviceSupport.Supports(DeviceKind.Android, action));
         }

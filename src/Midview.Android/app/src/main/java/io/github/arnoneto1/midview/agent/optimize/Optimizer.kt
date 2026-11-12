@@ -40,12 +40,19 @@ interface BloatCatalog {
 // fallback waits for a run, so the two never undo each other; and a
 // "Otimizar" that waited for a DNS try reuses it, so the teacher waits for
 // one DNS step at most (up to ~36 s), never two.
+//
+// Whether the ad-free DNS is wanted at all is the lab panel's "Bloqueador de
+// anúncios" (LabConfigStore, on unless the teacher turned it off there): its
+// one source of truth. Off, every DNS step puts the automatic DNS back (if
+// ours is set) and reports offByTeacher, "Otimizar" included, which then
+// only hides apps; turned on again, the DNS is tried at once (adblockChanged).
 class Optimizer(
     private val catalog: BloatCatalog,
     private val gw: DevicePolicyGateway,
     private val dns: AdblockDns,
     private val store: OptimizeStore,
     private val internetBlocked: () -> Boolean,
+    private val adblockWanted: () -> Boolean = { true },
     private val clock: () -> Instant = Instant::now,
     private val background: (Runnable) -> Unit = { Thread(it, "Midview optimize").apply { isDaemon = true }.start() },
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
@@ -77,6 +84,8 @@ class Optimizer(
                 dnsState in RETRIED && OptimizeStore.retryDue(clock(), held.lastDnsAttempt) -> inBackground { retryDns() }
                 // Freed while the agent was not running to hear it.
                 dnsState == PhoneDnsStates.OFF_INTERNET_BLOCKED && !internetBlocked() -> inBackground { retryDns() }
+                // Turned on in the panel while a run was busy.
+                dnsState == PhoneDnsStates.OFF_BY_TEACHER && adblockWanted() -> inBackground { retryDns() }
             }
         } catch (e: Exception) {
             log("The optimization could not be checked", e)
@@ -86,6 +95,31 @@ class Optimizer(
     // The teacher freed the internet (InternetBlock): the DNS left off for it.
     fun internetFreed() {
         if (store.current.report.dns == PhoneDnsStates.OFF_INTERNET_BLOCKED) inBackground { retryDns() }
+    }
+
+    // The lab panel's "Bloqueador de anúncios" changed (LabConfigStore). On:
+    // the DNS tried in the background, unless it is on already. Off: the
+    // automatic DNS back now (after a run under way, which may take ~36 s),
+    // and the report says the teacher turned it off.
+    fun adblockChanged() {
+        if (adblockWanted()) {
+            val on = try {
+                store.current.report.dns == PhoneDnsStates.ON && dns.isSet()
+            } catch (e: Exception) {
+                false
+            }
+            if (!on) inBackground { retryDns() }
+            return
+        }
+        synchronized(lock) {
+            try {
+                val held = store.current
+                val state = dnsStep()
+                if (held.report.dns != state) store.save(held.copy(report = held.report.copy(dns = state)))
+            } catch (e: Exception) {
+                log("The ad-free DNS could not be turned off", e)
+            }
+        }
     }
 
     // DnsWatcher: with the ad-free DNS on and the network unvalidated for
@@ -116,8 +150,20 @@ class Optimizer(
         }
     }
 
-    // The DNS tried (AdblockDns), counted for a "Otimizar" waiting behind it.
-    private fun dnsStep(): String = dns.apply().also { dnsSteps.incrementAndGet() }
+    // The DNS tried (AdblockDns), counted for a "Otimizar" waiting behind it;
+    // with the panel's "Bloqueador de anúncios" off, ours taken away instead.
+    private fun dnsStep(): String = dnsWanted().also { dnsSteps.incrementAndGet() }
+
+    private fun dnsWanted(): String {
+        if (adblockWanted()) return dns.apply()
+        try {
+            if (dns.isSet()) dns.backToAutomatic()
+        } catch (e: RuntimeException) {
+            log("The private DNS could not be read", e)
+        }
+        log("Ad-free DNS: off in the lab panel.", null)
+        return PhoneDnsStates.OFF_BY_TEACHER
+    }
 
     private fun optimize(reuseDns: Boolean): PhoneOptimizeReport {
         val now = clock()

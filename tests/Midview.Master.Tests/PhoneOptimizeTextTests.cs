@@ -19,6 +19,7 @@ public class PhoneOptimizeTextTests
     [InlineData(PhoneDnsStates.OffNetworkBlocks, "15 apps de anúncios escondidos · DNS sem anúncios desligado: a rede bloqueou")]
     [InlineData(PhoneDnsStates.OffNoInternet, "15 apps de anúncios escondidos · DNS sem anúncios desligado: o celular estava sem internet")]
     [InlineData(PhoneDnsStates.OffError, "15 apps de anúncios escondidos · DNS sem anúncios desligado: o celular não conseguiu ligá-lo")]
+    [InlineData(PhoneDnsStates.OffByTeacher, "15 apps de anúncios escondidos · DNS sem anúncios desligado no Painel do laboratório")]
     public void Dns_off_says_why(string dns, string expected) =>
         Assert.Equal(expected, PhoneOptimizeText.Line(Report(15, dns)));
 
@@ -52,6 +53,8 @@ public class PhoneOptimizeTextTests
     {
         Assert.True(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.On)));
         Assert.True(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffInternetBlocked)));
+        // The teacher's own choice in the lab panel.
+        Assert.True(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffByTeacher)));
         Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffNetworkBlocks)));
         Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.OffNoInternet)));
         Assert.False(PhoneOptimizeText.IsDone(Report(3, PhoneDnsStates.On, failed: 1)));

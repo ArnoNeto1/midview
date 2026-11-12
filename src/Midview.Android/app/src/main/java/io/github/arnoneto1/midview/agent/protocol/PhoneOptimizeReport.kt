@@ -16,9 +16,13 @@ object PhoneDnsStates {
     const val OFF_INTERNET_BLOCKED = "offInternetBlocked"
     const val OFF_ERROR = "offError"
 
+    // Turned off by the teacher's "Painel do laboratório" (Bloqueador de
+    // anúncios desativado): "Otimizar" leaves it off until the panel turns it on.
+    const val OFF_BY_TEACHER = "offByTeacher"
+
     fun isKnown(state: String?): Boolean =
         state == ON || state == OFF_NO_INTERNET || state == OFF_NETWORK_BLOCKS ||
-            state == OFF_INTERNET_BLOCKED || state == OFF_ERROR
+            state == OFF_INTERNET_BLOCKED || state == OFF_ERROR || state == OFF_BY_TEACHER
 }
 
 // Payload of PHONE_OPTIMIZE_REPORT (UTF-8 JSON), the same text as the .NET

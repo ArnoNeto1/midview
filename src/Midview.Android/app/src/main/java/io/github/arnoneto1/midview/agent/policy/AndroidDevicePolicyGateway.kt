@@ -100,6 +100,7 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
             when (value) {
                 is String -> bundle.putString(key, value)
                 is Boolean -> bundle.putBoolean(key, value)
+                is Int -> bundle.putInt(key, value)
                 is Array<*> -> bundle.putStringArray(key, value.map { it as String }.toTypedArray())
                 else -> throw IllegalArgumentException("Restriction $key of an unknown type")
             }

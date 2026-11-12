@@ -57,4 +57,12 @@ class ChromePolicyTest {
         val most = SiteBlockState((1..ChromePolicy.MAX_DOMAINS).map { "s$it.com" }.toSet(), false)
         assertEquals(1000, ChromePolicy.urlBlocklist(most).size)
     }
+
+    // "Travar downloads" of the lab panel: Chrome's "Block all downloads".
+    @Test fun blockedDownloadsGoAsDownloadRestrictions3() {
+        assertEquals(mapOf<String, Any>("DownloadRestrictions" to 3), ChromePolicy.restrictions(SiteBlockState.EMPTY, blockDownloads = true))
+        val both = ChromePolicy.restrictions(state("youtube.com"), blockDownloads = true)
+        assertEquals(setOf("URLBlocklist", "DownloadRestrictions"), both.keys)
+        assertEquals(3, both["DownloadRestrictions"])
+    }
 }

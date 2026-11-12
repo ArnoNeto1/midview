@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.net
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.lab.LabConfigStore
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.programs.PackageChanger
@@ -14,6 +15,7 @@ import io.github.arnoneto1.midview.agent.update.ApkFacts
 import io.github.arnoneto1.midview.agent.update.ApkUpload
 import io.github.arnoneto1.midview.agent.protocol.AppBlockMode
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
+import io.github.arnoneto1.midview.agent.protocol.LabConfig
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
@@ -915,6 +917,59 @@ class CommandHandlerTest {
         assertEquals(phoneApps, PhoneAppList.decode(channel.sent[0].payload))
         assertEquals(PhoneAppList.FORMAT_VERSION, channel.sent[1].payload[0].toInt())
         assertEquals(0, PhoneAppList.decode(channel.sent[1].payload)!!.single().flags)
+    }
+
+    // "Painel do laboratório": the downloads Chrome is told to block.
+    private val downloadsBlocked = mutableListOf<Boolean>()
+    private val lab by lazy {
+        LabConfigStore(File(folder.newFolder(), "lab-config.bin"), { true }, { downloadsBlocked += it; true }, {})
+    }
+    private val withLab by lazy {
+        CommandHandler(trusted, pairing, consent, appBlock, sites, optimizer, updater, gateway, lab = lab) { phoneApps }
+    }
+
+    @Test fun aTrustedTeacherSetsReadsAndResetsTheLabPanel() {
+        trusted.add(teacher)
+        val channel = FakeChannel(
+            teacher,
+            message(MessageType.GET_LAB_CONFIG),
+            message(MessageType.SET_LAB_CONFIG, LabConfig(1_800_000_000, blockDownloads = true, adblock = true).encode()),
+            message(MessageType.GET_LAB_CONFIG),
+            message(MessageType.RESET_LAB_CONFIG),
+        )
+        withLab.handle(channel)
+        assertEquals(
+            listOf(MessageType.LAB_CONFIG_STATUS, MessageType.COMMAND_ACK, MessageType.LAB_CONFIG_STATUS, MessageType.COMMAND_ACK),
+            channel.sent.map { it.type },
+        )
+        assertEquals(LabConfig.DEFAULT, LabConfig.decode(channel.sent[0].payload))
+        assertEquals(true to "travar downloads, bloqueador de anúncios (DNS)", CommandResult.decode(channel.sent[1].payload))
+        assertEquals(LabConfig(1_800_000_000, blockDownloads = true, adblock = true), LabConfig.decode(channel.sent[2].payload))
+        assertEquals(true to "bloqueador de anúncios (DNS)", CommandResult.decode(channel.sent[3].payload))
+        assertEquals(listOf(true, false), downloadsBlocked)
+    }
+
+    @Test fun aStrangerNeitherReadsNorChangesTheLabPanel() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.GET_LAB_CONFIG, MessageType.SET_LAB_CONFIG, MessageType.RESET_LAB_CONFIG)) {
+            val channel = FakeChannel(stranger, message(type, LabConfig(1_800_000_000, true, false).encode()))
+            withLab.handle(channel)
+            assertTrue(channel.sent.isEmpty())
+        }
+        assertEquals(LabConfig.DEFAULT, lab.current)
+        assertTrue(downloadsBlocked.isEmpty())
+    }
+
+    // An agent built without it answers as one from before it, GET_LAB_CONFIG
+    // included, which the teacher's program reads as an older version.
+    @Test fun withoutTheLabPanelThePhoneSaysItDoesNotYet() {
+        trusted.add(teacher)
+        for (type in listOf(MessageType.GET_LAB_CONFIG, MessageType.SET_LAB_CONFIG, MessageType.RESET_LAB_CONFIG)) {
+            val channel = FakeChannel(teacher, message(type, LabConfig.DEFAULT.encode()))
+            handler.handle(channel)
+            assertEquals(MessageType.COMMAND_ACK, channel.sent.single().type)
+            assertEquals(false to CommandResult.NOT_ON_PHONE, CommandResult.decode(channel.sent.single().payload))
+        }
     }
 
     private companion object {

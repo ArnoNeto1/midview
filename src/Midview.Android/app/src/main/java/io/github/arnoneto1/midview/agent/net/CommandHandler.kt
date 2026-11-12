@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.net
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
 import io.github.arnoneto1.midview.agent.apps.PhoneAppsAnswer
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
+import io.github.arnoneto1.midview.agent.lab.LabConfigStore
 import io.github.arnoneto1.midview.agent.optimize.PhoneOptimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.programs.TeacherInstalls
@@ -41,7 +42,9 @@ import java.io.EOFException
 // power is "Desligar" and "Reiniciar" (PowerCountdown), a PC Agent's command.
 // openWebsite and openApp are "Abrir site" and "Abrir programa" (TeacherLaunch),
 // a PC Session's; installs is "Instalar programa" and "Desinstalar programa"
-// (TeacherInstalls), a PC Agent's.
+// (TeacherInstalls), a PC Agent's. lab is the "Painel do laboratório"
+// (LabConfigStore: "Travar downloads" and "Bloqueador de anúncios"), a PC
+// Agent's; without it its commands get "Ainda não funciona em celular.".
 class CommandHandler(
     private val trusted: TrustedMasters,
     private val pairing: PairingFlow,
@@ -77,6 +80,7 @@ class CommandHandler(
     private val openApp: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Instalar programa" and "Desinstalar programa".
     private val installs: TeacherInstalls? = null,
+    private val lab: LabConfigStore? = null,
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
@@ -199,6 +203,17 @@ class CommandHandler(
         MessageType.CLEAR_DELIVERY_FOLDER -> {
             val (cleared, detail) = files?.clear() ?: (false to CommandResult.NOT_ON_PHONE)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(cleared, detail))
+        }
+        MessageType.SET_LAB_CONFIG -> {
+            val (applied, detail) = lab?.handle(message.payload) ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(applied, detail))
+        }
+        MessageType.GET_LAB_CONFIG ->
+            lab?.let { Message(MessageType.LAB_CONFIG_STATUS, it.current.encode()) }
+                ?: Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
+        MessageType.RESET_LAB_CONFIG -> {
+            val (reset, detail) = lab?.reset() ?: (false to CommandResult.NOT_ON_PHONE)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(reset, detail))
         }
         MessageType.SHOW_MESSAGE -> {
             val (shown, detail) = showMessage(message.payload)

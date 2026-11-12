@@ -172,6 +172,15 @@ Aplicada sozinha na primeira conexão com o professor e repetível por um botão
 - As opções do `LabConfig` (Lockdown, BlockDownloads, Adblock) **não** valem
   para celular nesta versão; o bloqueio de anúncios do celular é o DNS da
   otimização. *(Escolha minha.)*
+  - **Atualização 2026-11-12 (pedido do professor):** o Painel do laboratório
+    vale nos celulares onde faz sentido, com as mesmas mensagens do PC
+    (`SetLabConfig`/`GetLabConfig`/`ResetLabConfig`): "Bloqueador de anúncios"
+    liga ou desliga o DNS da otimização (o painel decide; o "Otimizar"
+    respeita e informa `offByTeacher`), "Travar downloads" é a política
+    `DownloadRestrictions` = 3 do Chrome (Chrome 131 ou mais novo), "Bloquear
+    sites de distração" usa o bloqueio de sites, e o RESET volta ao padrão do
+    celular (downloads livres, DNS ligado). As outras funções ficam só nos
+    computadores e nunca vão para o celular.
 - Outros navegadores ficam escondidos ou bloqueados, para o aluno não fugir
   do Chrome.
 

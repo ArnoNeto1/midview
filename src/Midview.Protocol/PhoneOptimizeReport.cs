@@ -13,8 +13,12 @@ public static class PhoneDnsStates
     public const string OffInternetBlocked = "offInternetBlocked";
     public const string OffError = "offError";
 
+    // Turned off in the "Painel do laboratório" ("Bloqueador de anúncios"
+    // desativado): "Otimizar" leaves it off until the panel turns it on.
+    public const string OffByTeacher = "offByTeacher";
+
     public static bool IsKnown(string? state) =>
-        state is On or OffNoInternet or OffNetworkBlocks or OffInternetBlocked or OffError;
+        state is On or OffNoInternet or OffNetworkBlocks or OffInternetBlocked or OffError or OffByTeacher;
 }
 
 // Payload of MessageType.PhoneOptimizeReport (UTF-8 JSON): when the phone was

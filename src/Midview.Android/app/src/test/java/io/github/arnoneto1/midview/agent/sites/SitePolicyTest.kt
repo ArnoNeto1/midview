@@ -50,4 +50,29 @@ class SitePolicyTest {
         assertFalse(policy.apply(SiteBlockState(emptySet(), true)))
         assertArrayEquals(arrayOf("*"), gw.restrictions["com.android.chrome"]!!["URLBlocklist"] as Array<*>)
     }
+
+    // The site block and the lab panel's download block share Chrome's
+    // configuration: each change keeps the other.
+    @Test fun theDownloadBlockAndTheSiteBlockKeepEachOther() {
+        val chrome = ChromeConfig(gw, downloadsBlocked = true)
+        val internet = InternetBlock(gw, File(folder.root, "internet-block.txt"), { vpn += "start" }, { vpn += "stop" }, own)
+        assertTrue(SitePolicy(chrome, internet).apply(SiteBlockState(setOf("youtube.com"), false)))
+        assertEquals(3, gw.restrictions["com.android.chrome"]!!["DownloadRestrictions"])
+        assertArrayEquals(arrayOf("www.youtube.com", "youtube.com"), gw.restrictions["com.android.chrome"]!!["URLBlocklist"] as Array<*>)
+
+        assertTrue(chrome.setDownloadsBlocked(false))
+        assertEquals(setOf("URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
+
+        assertTrue(chrome.setSites(SiteBlockState.EMPTY))
+        assertEquals(emptyMap<String, Any>(), gw.restrictions["com.android.chrome"])
+    }
+
+    @Test fun aRefusedChangeIsNotKept() {
+        val chrome = ChromeConfig(gw)
+        gw.owner = false
+        assertFalse(chrome.setDownloadsBlocked(true))
+        gw.owner = true
+        assertTrue(chrome.setSites(SiteBlockState(setOf("youtube.com"), false)))
+        assertEquals(setOf("URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
+    }
 }
