@@ -103,6 +103,7 @@ class AgentService : Service() {
     private var packageWatcher: PackageWatcher? = null
     private var dnsWatcher: DnsWatcher? = null
     private val wifi by lazy { AgentWifi(this) }
+    private var stopWatchingScreen: () -> Unit = {}
 
     // What a start of the agent made that must end with it (threads that
     // wait, the class folder's timer): ended by closeListeners, so a start
@@ -122,6 +123,7 @@ class AgentService : Service() {
         goForeground(STATUS_TEXT)
         keeper(this).created()
         AgentWatchdog.arm(this)
+        stopWatchingScreen = AgentWatchdog.watchScreen(this)
         wifi.hold()
         // Making the identity the first time takes a moment (an RSA key).
         Thread({ startAgentUntilItRuns() }, "Midview agent start").start()
@@ -155,6 +157,7 @@ class AgentService : Service() {
         }
         stopping.countDown()
         keeper(this).destroyed()
+        stopWatchingScreen()
         main.removeCallbacks(lockAgain)
         wifi.release()
         PairingCodeActivity.hide()

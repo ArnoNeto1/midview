@@ -90,10 +90,17 @@ class AgentKeeperTest {
         assertEquals(WatchdogAlarm.Kind.INEXACT, WatchdogAlarm.kind(sdkInt = 35, canScheduleExact = false))
     }
 
-    // The next check comes within seconds, never sooner than Android's
-    // floor for an alarm (5 s).
-    @Test fun nextCheckWithinSeconds() {
-        assertEquals(1_000L + WatchdogAlarm.INTERVAL_MILLIS, WatchdogAlarm.nextAt(1_000L))
+    // With the screen on the next check comes within seconds, never sooner
+    // than Android's floor for an alarm (5 s).
+    @Test fun nextCheckWithinSecondsWhileScreenOn() {
+        assertEquals(1_000L + WatchdogAlarm.INTERVAL_MILLIS, WatchdogAlarm.nextAt(1_000L, screenOn = true))
         assertTrue(WatchdogAlarm.INTERVAL_MILLIS in 5_000L..10_000L)
+    }
+
+    // With the screen off the phone is woken far less often: every 2 minutes
+    // at most, not 6 times a minute.
+    @Test fun nextCheckSpacedWhileScreenOff() {
+        assertEquals(1_000L + WatchdogAlarm.SCREEN_OFF_INTERVAL_MILLIS, WatchdogAlarm.nextAt(1_000L, screenOn = false))
+        assertTrue(WatchdogAlarm.SCREEN_OFF_INTERVAL_MILLIS in 60_000L..120_000L)
     }
 }

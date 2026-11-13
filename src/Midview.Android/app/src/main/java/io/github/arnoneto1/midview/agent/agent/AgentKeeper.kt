@@ -53,13 +53,19 @@ class AgentKeeper(private val start: () -> Unit) {
 // The watchdog's alarm, which survives the app's process: every few seconds
 // it checks that the agent runs (AgentKeeper) and arms itself again.
 //
-// The trade-off: the phone's processor wakes every 10 s, also with the
-// screen off, for a short check. Chosen for a fast return of the agent on a
-// school phone that usually sits charging; in deep Doze Android delivers it
-// far less often, so the agent then comes back more slowly.
+// The trade-off: while the screen is on the processor wakes every 10 s for a
+// short check, so the agent is back within seconds after the student's
+// "clear all" (measured on the Redmi 10C: about 5 s). With the screen off
+// nobody can clear the recent apps, so the check comes every 2 minutes
+// instead of waking the phone 6 times a minute; turning the screen on brings
+// the 10 s back at once (AgentWatchdog.watchScreen). In deep Doze Android
+// delivers it far less often, so the agent then comes back more slowly.
 object WatchdogAlarm {
     // Android delivers no alarm sooner than 5 s from now.
     const val INTERVAL_MILLIS = 10_000L
+
+    // With the screen off.
+    const val SCREEN_OFF_INTERVAL_MILLIS = 120_000L
 
     enum class Kind { EXACT, INEXACT }
 
@@ -70,7 +76,8 @@ object WatchdogAlarm {
     fun kind(sdkInt: Int, canScheduleExact: Boolean): Kind =
         if (sdkInt < ANDROID_12 || canScheduleExact) Kind.EXACT else Kind.INEXACT
 
-    fun nextAt(nowElapsed: Long): Long = nowElapsed + INTERVAL_MILLIS
+    fun nextAt(nowElapsed: Long, screenOn: Boolean): Long =
+        nowElapsed + if (screenOn) INTERVAL_MILLIS else SCREEN_OFF_INTERVAL_MILLIS
 
     private const val ANDROID_12 = 31
 }
