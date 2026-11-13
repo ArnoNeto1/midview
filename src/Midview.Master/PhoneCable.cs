@@ -183,11 +183,27 @@ public sealed partial class PhoneCable
             return CableProblem.HasUsers;
         }
 
-        if (Shell(Short, "dpm", "list-owners").Text.Contains(PhoneProvisioning.AgentPackage, StringComparison.Ordinal))
+        if (AlreadyOwner())
         {
             return CableProblem.AlreadySchool;
         }
         return null;
+    }
+
+    // Whether the Midview is the phone's Device Owner already. "dpm
+    // list-owners" came with Android 11: Android 10 answers "unknown
+    // command", and its owner is read from "dumpsys device_policy"
+    // ("Device Owner:" followed by "admin=ComponentInfo{package/...}").
+    private bool AlreadyOwner()
+    {
+        var owners = Shell(Short, "dpm", "list-owners").Text;
+        if (!owners.Contains("unknown command", StringComparison.OrdinalIgnoreCase))
+        {
+            return owners.Contains(PhoneProvisioning.AgentPackage, StringComparison.Ordinal);
+        }
+        return Regex.IsMatch(
+            Shell(Short, "dumpsys", "device_policy").Text,
+            @"Device Owner:\s*\n\s*admin=ComponentInfo\{" + Regex.Escape(PhoneProvisioning.AgentPackage) + "/");
     }
 
     // optimize: "Midview otimizado" arranges a Xiaomi's home screen
