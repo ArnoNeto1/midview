@@ -9,8 +9,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // "Preparar celulares" (PreparePhonesWindow): opened by the big button of the
-// empty "Celulares" filter and by the "Configurar celular" and "Configurar
-// tablet" pages of "Máquinas da sala".
+// empty "Celulares" filter ("Preparar tablets" on the empty "Tablets") and by
+// the "Configurar celular" and "Configurar tablet" pages of "Máquinas da sala".
 public partial class MainWindow
 {
     // The phone app is a few MB: a slow school connection still gets it.
@@ -25,7 +25,10 @@ public partial class MainWindow
     private bool _phoneJoinSearching;
 
     private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) =>
-        OpenPreparePhonesWindow((AndroidDeviceKind.Phone, true));
+        OpenPreparePhonesWindow((PreparedKind(), true));
+
+    // What the big button of the empty filter prepares: tablets on "Tablets", phones otherwise.
+    private AndroidDeviceKind PreparedKind() => DeviceSupport.AndroidKindOf(_devices) ?? AndroidDeviceKind.Phone;
 
     // One at a time: asking again brings the open one back. The window is
     // returned so a caller can start it at a number (StartAt). mode: phone or

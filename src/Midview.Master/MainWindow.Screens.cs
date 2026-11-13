@@ -5,12 +5,13 @@ using System.Windows.Controls.Primitives;
 namespace Midview.Master;
 
 // "Telas" (group Configurar): a menu with which screens the grid shows
-// (DeviceFilter: Todos, Computadores, Celulares; Tablets later) and
+// (DeviceFilter: Todos, Computadores, Celulares, Tablets) and
 // "Otimizar celulares e tablets..." and "Senha dos celulares e tablets..."
 // (the selected Android devices, or every one the grid shows, by the rule
 // of every toolbar button: DeviceSupport.ToolbarReach). Celulares is
-// greyed in a room with no phone (unless the "Preparar celulares" assistant
-// is out: its button is on the empty Celulares), and the optimizing is left
+// greyed in a room with no phone, and Tablets in one with no tablet (unless
+// the "Preparar celulares" assistant is out: its button, "Preparar
+// celulares" or "Preparar tablets", is on the empty filter), and the optimizing is left
 // out of a room with no Android device, and so is the PIN; both are greyed
 // while they would reach none (Computadores, or a selection of PCs alone).
 // While the grid leaves machines out, the button carries a filter badge so
@@ -24,7 +25,8 @@ public partial class MainWindow
     {
         var room = _tiles.Select(tile => tile.Machine).ToList();
         var menu = ScreensMenu(
-            _devices, DeviceSupport.HasPhones(room), DeviceSupport.HasAndroid(room),
+            _devices, DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Phone),
+            DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Tablet), DeviceSupport.HasAndroid(room),
             ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)),
             () => OpenPhonePinWindow(ToolbarReach(ToolbarAction.PhonePin)), PhoneProvisioning.Setup,
             reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0);
@@ -43,14 +45,16 @@ public partial class MainWindow
     {
         DeviceFilter.Computers => "Mostrando só os computadores: os botões valem só para eles. Escolha aqui as telas que aparecem; também otimiza celulares e tablets.",
         DeviceFilter.Phones => "Mostrando só os celulares: os botões valem só para eles. Escolha aqui as telas que aparecem; também otimiza celulares e tablets.",
-        _ => "Escolhe as telas que aparecem: todas, só os computadores ou só os celulares. Também otimiza celulares e tablets.",
+        DeviceFilter.Tablets => "Mostrando só os tablets: os botões valem só para eles. Escolha aqui as telas que aparecem; também otimiza celulares e tablets.",
+        _ => "Escolhe as telas que aparecem: todas, só os computadores, só os celulares ou só os tablets. Também otimiza celulares e tablets.",
     };
 
     // Built at each click, so it follows the room as it is then. phoneSetup
-    // decides what the greyed Celulares says about getting the first phone;
-    // reachesAndroid, whether optimizing and the PIN would reach any device.
+    // decides what the greyed Celulares (Tablets) says about getting the
+    // first phone (tablet); reachesAndroid, whether optimizing and the PIN
+    // would reach any device.
     internal static ContextMenu ScreensMenu(
-        DeviceFilter shown, bool hasPhones, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
+        DeviceFilter shown, bool hasPhones, bool hasTablets, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
         PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true)
     {
         var menu = new ContextMenu();
@@ -62,26 +66,20 @@ public partial class MainWindow
             return item;
         }
 
-        Choice("Todos", DeviceFilter.All, "Mostra computadores e celulares; os botões valem para a sala toda.");
+        Choice("Todos", DeviceFilter.All, "Mostra computadores, celulares e tablets; os botões valem para a sala toda.");
         Choice("Computadores", DeviceFilter.Computers, "Mostra só os computadores; os botões valem só para eles.");
         var phones = Choice("Celulares", DeviceFilter.Phones,
             "Mostra só os celulares; os botões valem só para eles, e os que ainda não funcionam em celular ficam cinza.");
         if (!hasPhones)
         {
-            // With the "Preparar celulares" assistant out, the empty Celulares
-            // is where its big button is: it stays open to the teacher.
-            phones.IsEnabled = phoneSetup == PhoneSetupOffer.Wizard;
-            phones.InputGestureText = "nenhum na sala";
-            phones.ToolTip = PhoneProvisioning.NoPhoneYet(phoneSetup);
-            ToolTipService.SetShowOnDisabled(phones, true);
+            NoneInTheRoom(phones, AndroidDeviceKind.Phone);
         }
-        menu.Items.Add(new MenuItem
+        var tablets = Choice("Tablets", DeviceFilter.Tablets,
+            "Mostra só os tablets; os botões valem só para eles, e os que ainda não funcionam em tablet ficam cinza.");
+        if (!hasTablets)
         {
-            Header = "Tablets",
-            IsCheckable = true,
-            IsEnabled = false,
-            InputGestureText = "em breve",
-        });
+            NoneInTheRoom(tablets, AndroidDeviceKind.Tablet);
+        }
 
         if (hasAndroid)
         {
@@ -105,6 +103,16 @@ public partial class MainWindow
         }
         return menu;
 
+        // With the "Preparar celulares" assistant out, the empty Celulares (or
+        // Tablets) is where its big button is: it stays open to the teacher.
+        void NoneInTheRoom(MenuItem item, AndroidDeviceKind kind)
+        {
+            item.IsEnabled = phoneSetup == PhoneSetupOffer.Wizard;
+            item.InputGestureText = "nenhum na sala";
+            item.ToolTip = PhoneProvisioning.NoDeviceYet(kind, phoneSetup);
+            ToolTipService.SetShowOnDisabled(item, true);
+        }
+
         // Greyed while the toolbar reaches no phone or tablet.
         void Unreached(MenuItem item)
         {
@@ -113,7 +121,7 @@ public partial class MainWindow
                 return;
             }
             item.IsEnabled = false;
-            item.ToolTip = "Nenhum celular ou tablet selecionado ou na grade: escolha Todos ou Celulares, ou selecione um celular.";
+            item.ToolTip = "Nenhum celular ou tablet selecionado ou na grade: escolha Todos, Celulares ou Tablets, ou selecione um celular ou tablet.";
             ToolTipService.SetShowOnDisabled(item, true);
         }
     }

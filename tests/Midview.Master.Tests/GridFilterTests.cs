@@ -71,6 +71,44 @@ public class GridFilterTests
     private static MachineTile PhoneTile(string name = "Cel 01") =>
         new(new KnownMachine(name, "192.0.2.9", "ANY", null, Kind: DeviceKind.Android));
 
+    private static MachineTile TabletTile(string name = "Tablet 01") => PhoneTile(name);
+
+    // Celulares shows the phones alone, Tablets the tablets alone ("Tablet 07").
+    [Fact]
+    public void Phones_and_tablets_filters_show_their_own_kind()
+    {
+        Assert.True(GridFilter.Shows(PhoneTile(), onlineOnly: false, DeviceFilter.Phones));
+        Assert.False(GridFilter.Shows(TabletTile(), onlineOnly: false, DeviceFilter.Phones));
+        Assert.True(GridFilter.Shows(TabletTile(), onlineOnly: false, DeviceFilter.Tablets));
+        Assert.False(GridFilter.Shows(PhoneTile(), onlineOnly: false, DeviceFilter.Tablets));
+        Assert.False(GridFilter.Shows(Tile(TilePresence.Online), onlineOnly: false, DeviceFilter.Tablets));
+        Assert.False(GridFilter.Shows(TabletTile(), onlineOnly: false, DeviceFilter.Computers));
+    }
+
+    // With the assistant out, the empty Tablets offers "Preparar tablets",
+    // even when the room has phones (they are not tablets).
+    [Fact]
+    public void Offers_tablet_setup_on_an_empty_tablets_filter()
+    {
+        Assert.True(GridFilter.OffersPhoneSetup(Array.Empty<MachineTile>(), DeviceFilter.Tablets, phonesReady: true));
+        Assert.True(GridFilter.OffersPhoneSetup(new[] { Tile(TilePresence.Online), PhoneTile() }, DeviceFilter.Tablets, phonesReady: true));
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { TabletTile() }, DeviceFilter.Tablets, phonesReady: true));
+        Assert.False(GridFilter.OffersPhoneSetup(new[] { PhoneTile() }, DeviceFilter.Tablets, phonesReady: false));
+        Assert.Equal("Nenhum tablet nesta sala ainda.",
+                     GridFilter.EmptyNotice(new[] { PhoneTile() }, onlineOnly: false, DeviceFilter.Tablets, PhoneSetupOffer.Wizard));
+    }
+
+    // A room of tablets alone still offers "Preparar celulares" on the empty Celulares.
+    [Fact]
+    public void Offers_phone_setup_with_only_tablets_in_the_class() =>
+        Assert.True(GridFilter.OffersPhoneSetup(new[] { TabletTile() }, DeviceFilter.Phones, phonesReady: true));
+
+    [Theory]
+    [InlineData(PhoneSetupOffer.Soon, "Nenhum tablet nesta sala ainda.")]
+    [InlineData(PhoneSetupOffer.Cable, "Nenhum tablet nesta sala ainda. O tablet é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Configurar tablet\".")]
+    public void Empty_notice_when_filter_leaves_no_tablets(PhoneSetupOffer setup, string notice) =>
+        Assert.Equal(notice, GridFilter.EmptyNotice(new[] { Tile(TilePresence.Online), PhoneTile() }, onlineOnly: false, DeviceFilter.Tablets, setup));
+
     [Fact]
     public void Phones_filter_hides_computers()
     {
@@ -176,9 +214,15 @@ public class GridFilterTests
         Assert.Null(GridFilter.EmptyNotice(Array.Empty<MachineTile>(), onlineOnly: false, DeviceFilter.Phones, setup));
 
     [Fact]
-    public void Empty_notice_when_filter_leaves_no_computers() =>
+    public void Empty_notice_when_filter_leaves_no_computers()
+    {
         Assert.Equal("Nenhum computador nesta sala: só há celulares.",
                      GridFilter.EmptyNotice(new[] { PhoneTile() }, onlineOnly: false, DeviceFilter.Computers));
+        Assert.Equal("Nenhum computador nesta sala: só há tablets.",
+                     GridFilter.EmptyNotice(new[] { TabletTile() }, onlineOnly: false, DeviceFilter.Computers));
+        Assert.Equal("Nenhum computador nesta sala: só há celulares e tablets.",
+                     GridFilter.EmptyNotice(new[] { PhoneTile(), TabletTile() }, onlineOnly: false, DeviceFilter.Computers));
+    }
 
     [Fact]
     public void No_notice_when_the_device_filter_shows_something() =>

@@ -75,10 +75,6 @@ public static class DeviceSupport
     public static bool IsPhoneOnly(ToolbarAction action) =>
         action is ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;
 
-    // "Celulares" in the "Telas" menu, and the "Atualizar os celulares" card
-    // of "Máquinas da sala", are for a room with at least one phone.
-    public static bool HasPhones(IEnumerable<KnownMachine> room) => room.Any(machine => machine.IsPhone);
-
     // An Android device: a phone or a tablet, which run the same agent and
     // are optimized alike. A tablet kind of its own, when there is one, goes here too.
     public static bool IsAndroid(KnownMachine machine) => machine.Kind is DeviceKind.Android;
@@ -90,6 +86,19 @@ public static class DeviceSupport
     // "Atualizar os celulares" and "Atualizar os tablets" each reach their own.
     public static bool IsAndroidOf(KnownMachine machine, AndroidDeviceKind kind) =>
         machine.IsPhone && PhoneNumber.KindOf(machine.Name) == kind;
+
+    // "Celulares" and "Tablets" in the "Telas" menu: a room with a device of that kind.
+    public static bool HasAndroidOf(IEnumerable<KnownMachine> room, AndroidDeviceKind kind) =>
+        room.Any(machine => IsAndroidOf(machine, kind));
+
+    // The Android kind a "Telas" filter shows alone (Celulares the phones,
+    // Tablets the tablets); null for Todos and Computadores.
+    public static AndroidDeviceKind? AndroidKindOf(DeviceFilter shown) => shown switch
+    {
+        DeviceFilter.Phones => AndroidDeviceKind.Phone,
+        DeviceFilter.Tablets => AndroidDeviceKind.Tablet,
+        _ => null,
+    };
 
     // The machines that can do the action, in order: what a feature that
     // not every kind takes part in (the class folder, the Windows update) is fed.
@@ -114,19 +123,20 @@ public static class DeviceSupport
     }
 
     // Whether the "Telas" filter shows the machine: Todos every one,
-    // Computadores the PCs, Celulares the phones and tablets. The grid
-    // (GridFilter) and the toolbar's reach (ToolbarReach) go by it.
+    // Computadores the PCs, Celulares the phones, Tablets the tablets
+    // (PhoneNumber.KindOf). The grid (GridFilter) and the toolbar's reach
+    // (ToolbarReach) go by it.
     public static bool Shows(KnownMachine machine, DeviceFilter shown) => shown switch
     {
         DeviceFilter.Computers => !IsAndroid(machine),
-        DeviceFilter.Phones => IsAndroid(machine),
+        DeviceFilter.Phones or DeviceFilter.Tablets => IsAndroidOf(machine, AndroidKindOf(shown)!.Value),
         _ => true,
     };
 
     // Whom a toolbar button reaches: what the teacher sees. The selection
     // when there is one (it only ever holds tiles the grid shows); otherwise
     // every machine the "Telas" filter shows (Todos: the whole room;
-    // Computadores: the PCs; Celulares: the phones and tablets). "Só online"
+    // Computadores: the PCs; Celulares: the phones; Tablets: the tablets). "Só online"
     // does not narrow it: a machine that is off is still there to be turned
     // on. The phone actions keep the Android devices of it. A button whose
     // action none of them can do is greyed (IsEnabled); the ones among them
@@ -162,6 +172,7 @@ public static class DeviceSupport
         return shown switch
         {
             DeviceFilter.Phones => $"Só nos celulares ({reached}).",
+            DeviceFilter.Tablets => $"Só nos tablets ({reached}).",
             DeviceFilter.Computers => $"Só nos computadores ({reached}).",
             _ => null,
         };
@@ -173,6 +184,7 @@ public static class DeviceSupport
     public static string NoneReachedText(DeviceFilter shown, string forWhat) => shown switch
     {
         DeviceFilter.Phones => $"Nenhum celular na lista da sala para {forWhat}.",
+        DeviceFilter.Tablets => $"Nenhum tablet na lista da sala para {forWhat}.",
         DeviceFilter.Computers => $"Nenhum computador na lista da sala para {forWhat}.",
         _ => $"Nenhuma máquina na lista da sala para {forWhat}.",
     };

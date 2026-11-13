@@ -95,8 +95,12 @@ public class PhoneProvisioningTests
         Assert.DoesNotContain("Preparar celular", PhoneProvisioning.NoPhoneYet(setup));
 
     [Fact]
-    public void Wizard_hint_points_to_the_assistant() =>
+    public void Wizard_hint_points_to_the_assistant()
+    {
         Assert.Contains("\"Preparar celulares\"", PhoneProvisioning.NoPhoneYet(PhoneSetupOffer.Wizard));
+        Assert.Equal("Nenhum tablet nesta sala ainda. Para colocar o primeiro, escolha \"Tablets\" e use \"Preparar tablets\".",
+            PhoneProvisioning.NoDeviceYet(AndroidDeviceKind.Tablet, PhoneSetupOffer.Wizard));
+    }
 
     [Fact]
     public void Cable_hint_says_where_the_steps_are()

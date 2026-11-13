@@ -18,6 +18,8 @@ public class ToolbarReachTests
 
     private static readonly KnownMachine[] None = Array.Empty<KnownMachine>();
 
+    private static readonly KnownMachine Tab1 = new("Tablet 01", "192.0.2.20", "ANY", null, Kind: DeviceKind.Android);
+
     // Every toolbar action but the ones made for phones.
     public static TheoryData<ToolbarAction> ToolbarActions()
     {
@@ -124,6 +126,27 @@ public class ToolbarReachTests
         Assert.False(DeviceSupport.Shows(Cel1, DeviceFilter.Computers));
         Assert.False(DeviceSupport.Shows(Pc1, DeviceFilter.Phones));
         Assert.True(DeviceSupport.Shows(Cel1, DeviceFilter.Phones));
+        Assert.False(DeviceSupport.Shows(Tab1, DeviceFilter.Phones));
+        Assert.True(DeviceSupport.Shows(Tab1, DeviceFilter.Tablets));
+        Assert.False(DeviceSupport.Shows(Cel1, DeviceFilter.Tablets));
+        Assert.False(DeviceSupport.Shows(Pc1, DeviceFilter.Tablets));
+        Assert.False(DeviceSupport.Shows(Tab1, DeviceFilter.Computers));
+        Assert.True(DeviceSupport.Shows(Tab1, DeviceFilter.All));
+    }
+
+    // Celulares reaches the phones alone and Tablets the tablets alone, the
+    // phone-only actions (optimizing, the PIN) too; a selection is still the reach.
+    [Fact]
+    public void Phones_and_tablets_each_reach_their_own_kind()
+    {
+        var room = new[] { Pc1, Cel1, Tab1, Cel2 };
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.Phones));
+        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.PhonePin, None, room, DeviceFilter.Phones));
+        Assert.Equal(new[] { Cel1, Tab1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.All));
+        Assert.Equal(new[] { Cel1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Cel1 }, room, DeviceFilter.Tablets));
+        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, None, new[] { Pc1, Cel1 }, DeviceFilter.Tablets));
     }
 
     // The status bar, while nothing is selected and the filter leaves machines out.
@@ -135,6 +158,7 @@ public class ToolbarReachTests
         Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.All, selected: 0, reached: 11, room: 11));
         Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Computers, selected: 0, reached: 8, room: 8));
         Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Phones, selected: 0, reached: 0, room: 8));
+        Assert.Equal("Só nos tablets (2).", DeviceSupport.ReachNotice(DeviceFilter.Tablets, selected: 0, reached: 2, room: 11));
     }
 
     // A selection is the reach under every filter: a button that acted on it
@@ -143,6 +167,7 @@ public class ToolbarReachTests
     [InlineData(DeviceFilter.All)]
     [InlineData(DeviceFilter.Computers)]
     [InlineData(DeviceFilter.Phones)]
+    [InlineData(DeviceFilter.Tablets)]
     public void The_reach_notice_names_a_selection(DeviceFilter shown)
     {
         Assert.Equal("Só na seleção (1).", DeviceSupport.ReachNotice(shown, selected: 1, reached: 1, room: 20));
@@ -155,6 +180,7 @@ public class ToolbarReachTests
     public void A_button_with_nothing_to_reach_says_which_kind_is_missing()
     {
         Assert.Equal("Nenhum celular na lista da sala para desligar.", DeviceSupport.NoneReachedText(DeviceFilter.Phones, "desligar"));
+        Assert.Equal("Nenhum tablet na lista da sala para desligar.", DeviceSupport.NoneReachedText(DeviceFilter.Tablets, "desligar"));
         Assert.Equal("Nenhum computador na lista da sala para bloquear sites.", DeviceSupport.NoneReachedText(DeviceFilter.Computers, "bloquear sites"));
         Assert.Equal("Nenhuma máquina na lista da sala para bloquear.", DeviceSupport.NoneReachedText(DeviceFilter.All, "bloquear"));
     }

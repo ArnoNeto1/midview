@@ -62,10 +62,20 @@ public static class PhoneProvisioning
     public const string CableStepsUrl = "https://github.com/ArnoNeto1/midview#celulares";
 
     // Said where the room has no phone yet (the grid, the Telas menu).
-    public static string NoPhoneYet(PhoneSetupOffer setup) => setup switch
+    public static string NoPhoneYet(PhoneSetupOffer setup) => NoDeviceYet(AndroidDeviceKind.Phone, setup);
+
+    // The same for a tablet ("Tablets" in the Telas menu and its empty grid).
+    public static string NoDeviceYet(AndroidDeviceKind kind, PhoneSetupOffer setup)
     {
-        PhoneSetupOffer.Wizard => "Nenhum celular nesta sala ainda. Para colocar o primeiro, escolha \"Celulares\" e use \"Preparar celulares\".",
-        PhoneSetupOffer.Cable => "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Configurar celular\".",
-        _ => "Nenhum celular nesta sala ainda.",
-    };
+        var none = $"Nenhum {DeviceSetupText.Word(kind)} nesta sala ainda.";
+        return setup switch
+        {
+            PhoneSetupOffer.Wizard => $"{none} Para colocar o primeiro, escolha \"{FilterName(kind)}\" e use \"Preparar {DeviceSetupText.Words(kind)}\".",
+            PhoneSetupOffer.Cable => $"{none} O {DeviceSetupText.Word(kind)} é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"{DeviceSetupText.Heading(kind)}\".",
+            _ => none,
+        };
+    }
+
+    // The "Telas" choice that shows the devices of that kind alone.
+    private static string FilterName(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet ? "Tablets" : "Celulares";
 }

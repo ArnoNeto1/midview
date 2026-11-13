@@ -1852,7 +1852,11 @@ public partial class MainWindow : MidviewWindow
         NoneShownText.Text = notice ?? string.Empty;
         NoneShownPanel.Visibility = notice is null ? Visibility.Collapsed : Visibility.Visible;
         PreparePhonesButton.Visibility = offersPhones ? Visibility.Visible : Visibility.Collapsed;
-        NoneShownIcon.Text = offersPhones ? "\uE8EA" : "\uE7F8"; // a phone, or a computer
+        // "Preparar celulares" on the empty Celulares, "Preparar tablets" on the empty Tablets.
+        var kind = PreparedKind();
+        PreparePhonesIcon.Text = DeviceSetupText.Icon(kind);
+        PreparePhonesText.Text = "Preparar " + DeviceSetupText.Words(kind);
+        NoneShownIcon.Text = offersPhones ? DeviceSetupText.Icon(kind) : "\uE7F8"; // a phone or a tablet, or a computer
     }
 
     private void OnWindowClosed(object sender, EventArgs e)

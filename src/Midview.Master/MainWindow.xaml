@@ -158,7 +158,7 @@
                                  (DeviceFilter), and "Otimizar celulares e tablets...". The filter's badge
                                  shows on the icon while the grid leaves some machines out. -->
                             <local:ToolbarButton x:Name="ScreensButton" Width="54" Content="Telas" Icon="&#xE975;" Click="OnScreensClicked" OpensOptions="True"
-                                                 ToolTip="Escolhe as telas que aparecem: todas, só os computadores ou só os celulares. Também otimiza celulares e tablets." />
+                                                 ToolTip="Escolhe as telas que aparecem: todas, só os computadores, só os celulares ou só os tablets. Também otimiza celulares e tablets." />
                         </StackPanel>
                         <ContentControl Content="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>
@@ -215,7 +215,8 @@
                 </StackPanel>
             </StackPanel>
             <!-- "Só online" or the device filter hiding every machine (GridFilter.EmptyNotice);
-                 with "Celulares" and no phone, the big "Preparar celulares" (GridFilter.OffersPhoneSetup). -->
+                 with "Celulares" and no phone, the big "Preparar celulares" (GridFilter.OffersPhoneSetup);
+                 with "Tablets" and no tablet, "Preparar tablets". -->
             <StackPanel x:Name="NoneShownPanel" Visibility="Collapsed" Panel.ZIndex="1"
                         HorizontalAlignment="Center" VerticalAlignment="Center">
                 <TextBlock x:Name="NoneShownIcon" Text="&#xE7F8;" FontFamily="{StaticResource IconFont}" FontSize="40" HorizontalAlignment="Center"
@@ -226,9 +227,9 @@
                         Style="{StaticResource PrimaryButton}" Padding="28,12" Margin="0,16,0,0" FontSize="16"
                         HorizontalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE8EA;" FontFamily="{StaticResource IconFont}" FontSize="18" VerticalAlignment="Center"
+                        <TextBlock x:Name="PreparePhonesIcon" Text="&#xE8EA;" FontFamily="{StaticResource IconFont}" FontSize="18" VerticalAlignment="Center"
                                    Margin="0,0,10,0" />
-                        <TextBlock Text="Preparar celulares" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PreparePhonesText" Text="Preparar celulares" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
                 <Button Content="Mostrar todas as máquinas" Click="OnShowAllMachinesClicked" Padding="16,7" Margin="0,12,0,0"

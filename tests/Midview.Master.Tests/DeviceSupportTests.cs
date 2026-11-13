@@ -58,16 +58,26 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.IsEnabled(new[] { Pc("PC 01"), Phone("Cel 01") }, action));
     }
 
-    // "Celulares" and "Otimizar celulares..." (Telas menu) and the "Atualizar os
-    // celulares" card are for a room with a phone.
+    // "Celulares" and "Tablets" (Telas menu) are each for a room with a device
+    // of their own kind: a tablet is named "Tablet 07", any other Android device is a phone.
     [Fact]
-    public void A_room_has_phones_only_with_a_phone_in_it()
+    public void A_room_has_phones_or_tablets_only_with_one_of_that_kind_in_it()
     {
-        Assert.False(DeviceSupport.HasPhones(Array.Empty<KnownMachine>()));
-        Assert.False(DeviceSupport.HasPhones(new[] { Pc("PC 01"), Pc("PC 02") }));
-        Assert.True(DeviceSupport.HasPhones(new[] { Pc("PC 01"), Phone("Cel 01") }));
-        Assert.True(DeviceSupport.HasPhones(new[] { Phone("Cel 01") }));
+        Assert.False(DeviceSupport.HasAndroidOf(Array.Empty<KnownMachine>(), AndroidDeviceKind.Phone));
+        Assert.False(DeviceSupport.HasAndroidOf(new[] { Pc("PC 01"), Pc("PC 02") }, AndroidDeviceKind.Phone));
+        Assert.True(DeviceSupport.HasAndroidOf(new[] { Pc("PC 01"), Phone("Cel 01") }, AndroidDeviceKind.Phone));
+        Assert.False(DeviceSupport.HasAndroidOf(new[] { Pc("PC 01"), Phone("Cel 01") }, AndroidDeviceKind.Tablet));
+        Assert.True(DeviceSupport.HasAndroidOf(new[] { Phone("Tablet 01") }, AndroidDeviceKind.Tablet));
+        Assert.False(DeviceSupport.HasAndroidOf(new[] { Phone("Tablet 01") }, AndroidDeviceKind.Phone));
     }
+
+    [Theory]
+    [InlineData(DeviceFilter.Phones, AndroidDeviceKind.Phone)]
+    [InlineData(DeviceFilter.Tablets, AndroidDeviceKind.Tablet)]
+    [InlineData(DeviceFilter.All, null)]
+    [InlineData(DeviceFilter.Computers, null)]
+    public void Each_android_filter_names_its_kind(DeviceFilter shown, AndroidDeviceKind? kind) =>
+        Assert.Equal(kind, DeviceSupport.AndroidKindOf(shown));
 
     // Phones and tablets run the same Android agent: optimizing is for every Android device.
     [Fact]
