@@ -207,4 +207,11 @@ object MessageType {
     // the C# FreePhoneNetwork and SetPhoneAdminPassword.
     const val FREE_PHONE_NETWORK = 103
     const val SET_PHONE_ADMIN_PASSWORD = 104
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Papel de
+    // parede dos celulares e tablets" (a PhoneWallpaper payload: which
+    // screens, then a JPEG or PNG; none puts the phone's own wallpaper back).
+    // Answered with a CommandAck (CommandResult). Number 105 as the C#
+    // SetPhoneWallpaper.
+    const val SET_PHONE_WALLPAPER = 105
 }

@@ -435,6 +435,15 @@ public enum MessageType : byte
     // minutes. The password itself never leaves the Master. Answered as
     // FreePhoneNetwork.
     SetPhoneAdminPassword = 104,
+
+    // Master -> Android agent, from a trusted teacher only: "Papel de parede
+    // dos celulares e tablets" (a PhoneWallpaper payload: which screens, then
+    // a JPEG or PNG; no picture puts the phone's own wallpaper back). One
+    // message: the picture is at most PhoneWallpaper.MaxImageBytes, well
+    // under MessageFramer.MaxMessageLength. Answered with a CommandAck
+    // (CommandResult); an agent from before this answers "Ainda não funciona
+    // em celular.".
+    SetPhoneWallpaper = 105,
 }
 
 public enum CloseAppsMode : byte
