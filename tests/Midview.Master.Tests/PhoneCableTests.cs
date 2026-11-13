@@ -305,6 +305,10 @@ public sealed class PhoneCableTests
             S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
+            S + "shell settings put global window_animation_scale 0",
+            S + "shell settings put global transition_animation_scale 0",
+            S + "shell settings put global animator_duration_scale 0",
+            S + "shell pm list packages",
             ContentCall(),
             "devices",
             SetDeviceOwner,
@@ -486,10 +490,51 @@ public sealed class PhoneCableTests
             .Set(S + "shell pm grant " + Package + " android.permission.READ_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
             .Set(S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
             .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
-            .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255);
+            .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255)
+            .Set(S + "shell settings put global window_animation_scale 0", "Error", 255)
+            .Set(S + "shell settings put global transition_animation_scale 0", "Error", 255)
+            .Set(S + "shell settings put global animator_duration_scale 0", "Error", 255)
+            .Set(S + "shell pm list packages", "package:com.miui.weather2\n")
+            .Set(S + "shell cmd appops set com.miui.weather2 RUN_ANY_IN_BACKGROUND ignore", "Error", 255);
         var result = Prepare(adb);
         Assert.Null(result.Problem);
         Assert.NotNull(result.Phone);
+    }
+
+    [Fact]
+    public void Only_the_heavy_apps_on_the_phone_are_kept_from_running_in_the_background()
+    {
+        var adb = ReadyToPrepare().Set(S + "shell pm list packages",
+            "package:com.android.chrome\npackage:cn.wps.moffice_eng\npackage:com.miui.home\n"
+            + "package:com.google.android.apps.messaging\npackage:" + Package + "\npackage:com.mi.globalminusscreen\n"
+            + "package:com.google.android.gms\npackage:com.android.vending\n");
+
+        Prepare(adb);
+
+        var background = adb.Calls.Where(c => c.Contains("RUN_ANY_IN_BACKGROUND", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[]
+        {
+            S + "shell cmd appops set cn.wps.moffice_eng RUN_ANY_IN_BACKGROUND ignore",
+            S + "shell cmd appops set com.mi.globalminusscreen RUN_ANY_IN_BACKGROUND ignore",
+            S + "shell cmd appops set com.google.android.apps.messaging RUN_ANY_IN_BACKGROUND ignore",
+        }, background);
+        var owner = adb.Calls.IndexOf(SetDeviceOwner);
+        Assert.All(background, c => Assert.True(adb.Calls.IndexOf(c) < owner));
+    }
+
+    [Fact]
+    public void Heavy_app_list_spares_what_the_phone_and_midview_need()
+    {
+        foreach (var app in new[]
+                 {
+                     Package, "com.miui.home", "com.google.android.inputmethod.latin", "com.google.android.dialer",
+                     "com.android.phone", "com.google.android.gms", "com.android.vending", "com.android.chrome",
+                     "com.android.settings",
+                 })
+        {
+            Assert.DoesNotContain(app, PhoneCable.HeavyApps);
+        }
+        Assert.Equal(7, PhoneCable.HeavyApps.Count);
     }
 
     [Fact]

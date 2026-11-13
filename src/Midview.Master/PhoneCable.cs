@@ -150,6 +150,42 @@ public sealed class PhoneCable
         return null;
     }
 
+    // Apps that come with the phone, are heavy and that a class does not need
+    // running unseen. Never Midview, the launcher, the keyboard, the dialer,
+    // Google Play services, the Play Store, Chrome or Settings. Undone on the
+    // phone with "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
+    internal static readonly IReadOnlyList<string> HeavyApps = new[]
+    {
+        "cn.wps.moffice_eng",
+        "com.google.android.apps.docs",
+        "com.miui.weather2",
+        "com.miui.player",
+        "com.miui.videoplayer",
+        "com.mi.globalminusscreen",
+        "com.google.android.apps.messaging",
+    };
+
+    // A lighter phone: no animations, and the heavy apps above kept from
+    // running in the background (only those installed). Only from the cable,
+    // so before the Device Owner step; a failure does not stop the setup.
+    private void Lighten()
+    {
+        foreach (var scale in new[] { "window_animation_scale", "transition_animation_scale", "animator_duration_scale" })
+        {
+            Shell(Short, "settings", "put", "global", scale, "0");
+        }
+        var installed = Shell(Short, "pm", "list", "packages").Text
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("package:", StringComparison.Ordinal))
+            .Select(line => line["package:".Length..])
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var app in HeavyApps.Where(installed.Contains))
+        {
+            Shell(Short, "cmd", "appops", "set", app, "RUN_ANY_IN_BACKGROUND", "ignore");
+        }
+    }
+
     public CableResult Prepare(
         string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage)
     {
@@ -212,6 +248,7 @@ public sealed class PhoneCable
         // Device Owner step; a failure does not stop the setup either.
         Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
+        Lighten();
 
         stage(CableStage.Wifi);
         var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password);
