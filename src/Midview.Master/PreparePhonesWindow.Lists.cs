@@ -84,10 +84,11 @@ public partial class PreparePhonesWindow
         var helps = _progress.Page switch
         {
             SetupPage.Wifi => PhoneSetupGuide.WifiHelp.ToList(),
-            SetupPage.Step => _progress.Step!.Help.ToList(),
+            SetupPage.Step => ShownStep!.Help.ToList(),
+            SetupPage.MiAccount => PhoneSetupGuide.MiAccountHelp.ToList(),
             // What the cable found: the helps of the step that fixes it.
             SetupPage.CableFailed when _progress.ProblemStepId is { } id =>
-                PhoneSetupGuide.Steps.First(step => step.Id == id).Help.ToList(),
+                PhoneSetupGuide.StepFor(PhoneSetupGuide.Steps.First(step => step.Id == id), MiAuto).Help.ToList(),
             _ => new List<GuideHelp>(),
         };
         if (_progress.Page == SetupPage.CableFailed && _progress.Problem == CableProblem.AlreadySchool)

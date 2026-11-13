@@ -60,6 +60,30 @@
                     <StackPanel x:Name="GatherList" />
                 </StackPanel>
 
+                <!-- Conta Mi da escola (once, before the step that signs in with it; or "trocar" there) -->
+                <StackPanel x:Name="MiAccountPage">
+                    <TextBlock Text="Conta Mi da escola" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="MiIntroText" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,12" />
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+                        <TextBlock x:Name="MiCreateText" FontSize="13" TextWrapping="Wrap" />
+                    </Border>
+                    <TextBlock Style="{StaticResource Hint}" Text="E-mail ou telefone da conta Mi" />
+                    <TextBox x:Name="MiLoginInput" Margin="0,3,0,10" Padding="6,4" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Senha" />
+                    <DockPanel Margin="0,3,0,10">
+                        <Button x:Name="MiShowInputButton" DockPanel.Dock="Right" Content="Mostrar" Click="OnMiShowInputClicked"
+                                Padding="12,4" Margin="8,0,0,0" />
+                        <Grid>
+                            <PasswordBox x:Name="MiPasswordInput" Padding="6,4" />
+                            <TextBox x:Name="MiPasswordShownInput" Padding="6,4" Visibility="Collapsed" />
+                        </Grid>
+                    </DockPanel>
+                    <TextBlock x:Name="MiErrorText" Style="{StaticResource ErrorText}" />
+                    <TextBlock x:Name="MiRemoveLine" FontSize="13" Margin="0,8,0,0">
+                        <Hyperlink Click="OnMiRemoveClicked">Tirar a conta guardada deste computador</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
+
                 <!-- One step of PhoneSetupGuide -->
                 <StackPanel x:Name="StepPage">
                     <!-- "Apagar e preparar de novo": the number is a phone of the class, online. Kept to a few
@@ -99,6 +123,41 @@
                             <TextBlock x:Name="StepTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <StackPanel x:Name="TapsPanel" Margin="0,12,0,0" />
                             <TextBlock x:Name="TimingText" Style="{StaticResource Hint}" FontSize="13" Margin="0,4,0,0" />
+
+                            <!-- chip-conta-mi: the school's Mi account, to type on the phone -->
+                            <Border x:Name="MiCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                                <StackPanel>
+                                    <DockPanel>
+                                        <TextBlock x:Name="MiChangeLink" DockPanel.Dock="Right" FontSize="12" VerticalAlignment="Center">
+                                            <Hyperlink Click="OnMiChangeClicked">trocar</Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Text="Conta Mi da escola" Style="{StaticResource CardTitle}" />
+                                    </DockPanel>
+                                    <StackPanel x:Name="MiSavedPanel" Margin="0,8,0,0">
+                                        <TextBlock Style="{StaticResource Hint}" Text="E-mail ou telefone" />
+                                        <DockPanel Margin="0,2,0,8">
+                                            <Button DockPanel.Dock="Right" Content="Copiar" Click="OnMiCopyLoginClicked" Padding="10,3" Margin="8,0,0,0" />
+                                            <TextBlock x:Name="MiLoginText" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                        <TextBlock Style="{StaticResource Hint}" Text="Senha" />
+                                        <DockPanel Margin="0,2,0,0">
+                                            <Button DockPanel.Dock="Right" Content="Copiar" Click="OnMiCopyPasswordClicked" Padding="10,3" Margin="6,0,0,0" />
+                                            <Button x:Name="MiShowButton" DockPanel.Dock="Right" Content="Mostrar" Click="OnMiShowClicked" Padding="10,3"
+                                                    Margin="8,0,0,0" />
+                                            <TextBlock x:Name="MiPasswordText" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                        <TextBlock x:Name="MiCopyText" Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                    <StackPanel x:Name="MiMissingPanel" Margin="0,6,0,0">
+                                        <TextBlock x:Name="MiMissingText" FontSize="13" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="13" Margin="0,8,0,0">
+                                            <Hyperlink Click="OnMiChangeClicked">Guardar a conta Mi da escola</Hyperlink>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <!-- cabo: what the cable sees now, checked every second -->
                             <Border x:Name="CableWaitCard" Style="{StaticResource Card}" Margin="0,14,0,0">

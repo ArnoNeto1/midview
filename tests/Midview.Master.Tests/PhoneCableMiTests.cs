@@ -1,0 +1,149 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Midview.Master;
+using Xunit;
+
+namespace Midview.Master.Tests;
+
+// PhoneCable.Prepare on a Redmi still in the school's Mi account: signed out
+// over the cable when the password is saved, sent back to the step otherwise.
+public sealed class PhoneCableMiTests
+{
+    private const string Serial = "79a61f85";
+    private const string Apk = @"C:\Midview\agent.apk";
+    private const string Admin = "io.github.arnoneto1.midview.agent/.AdminReceiver";
+    private const string Thumb = "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12";
+    private const string Password = "Escola2026";
+
+    // The Redmi's answers ("shell" commands without "-s <serial> shell"),
+    // its accounts, and the Mi settings screen whose "Sair" signs out at once.
+    private sealed class MiRedmi : IAdb
+    {
+        public readonly List<string> Calls = new();
+        public string Accounts = "  Accounts: 1\n    Account {name=6512345678, type=com.xiaomi}\n";
+        public bool SignOutWorks = true;
+        public string AdbInputAfter = "1\n";
+        private bool _signedOut;
+
+        private readonly Dictionary<string, string> _shell = new()
+        {
+            ["getprop ro.build.version.sdk"] = "33\n",
+            ["getprop ro.miui.ui.version.name"] = "V140\n",
+            ["getprop persist.security.adbinstall"] = "1\n",
+            ["pm list users"] = "Users:\n\tUserInfo{0:Propriet\u00e1rio:c13} running\n",
+            ["dpm list-owners"] = "no owners\n",
+            ["content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+             + CableSetupPayload.Encode("07", Thumb, "Lab", "pw")] =
+                "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n",
+            ["dpm set-device-owner " + Admin] = "Success: Device owner set\n",
+            ["cat " + MiSignOut.DumpFile] =
+                "<hierarchy><node text=\"Sair\" resource-id=\"com.xiaomi.account:id/logout_btn\" class=\"android.widget.Button\" " +
+                "package=\"com.xiaomi.account\" password=\"false\" scrollable=\"false\" bounds=\"[60,1300][660,1380]\" /></hierarchy>",
+        };
+
+        public AdbOutput Run(TimeSpan timeout, params string[] args)
+        {
+            var key = string.Join(' ', args);
+            Calls.Add(key);
+            if (key == "devices")
+            {
+                return Out("List of devices attached\n" + Serial + "\tdevice\n\n");
+            }
+            if (key == "-s " + Serial + " install -r " + Apk)
+            {
+                return Out("Success\n");
+            }
+            var shell = "-s " + Serial + " shell ";
+            if (!key.StartsWith(shell, StringComparison.Ordinal))
+            {
+                return Out("");
+            }
+            var command = key[shell.Length..];
+            if (command == "dumpsys account")
+            {
+                return Out(_signedOut ? "  Accounts: 0\n" : Accounts);
+            }
+            if (command == "getprop persist.security.adbinput")
+            {
+                return Out(_signedOut ? AdbInputAfter : "1\n");
+            }
+            if (command == "input tap 360 1340" && SignOutWorks)
+            {
+                _signedOut = true;
+            }
+            return Out(_shell.TryGetValue(command, out var answer) ? answer : "");
+        }
+
+        private static AdbOutput Out(string text) => new(0, text, false);
+    }
+
+    private static CableResult Prepare(MiRedmi adb, string? miPassword, List<CableStage> stages)
+    {
+        var elapsed = TimeSpan.Zero;
+        var cable = new PhoneCable(adb)
+        {
+            MakeSignOut = shell => new MiSignOut(shell, pause => elapsed += pause, () => elapsed),
+        };
+        return cable.Prepare(Apk, "07", Thumb, "Lab", "pw", stages.Add, miPassword: miPassword);
+    }
+
+    [Fact]
+    public void A_phone_in_the_mi_account_is_signed_out_and_prepared()
+    {
+        var adb = new MiRedmi();
+        var stages = new List<CableStage>();
+        var result = Prepare(adb, Password, stages);
+
+        Assert.Null(result.Problem);
+        Assert.NotNull(result.Phone);
+        Assert.Equal(
+            new[] { CableStage.Checking, CableStage.MiSignOut, CableStage.Installing, CableStage.Wifi, CableStage.Pairing, CableStage.Owner },
+            stages);
+        // Signed out before anything is installed.
+        Assert.True(adb.Calls.IndexOf("-s " + Serial + " shell input tap 360 1340") < adb.Calls.IndexOf("-s " + Serial + " install -r " + Apk));
+    }
+
+    [Fact]
+    public void Without_the_saved_password_the_account_goes_back_to_the_step()
+    {
+        var adb = new MiRedmi();
+        var stages = new List<CableStage>();
+        Assert.Equal(CableProblem.HasAccounts, Prepare(adb, null, stages).Problem);
+        Assert.DoesNotContain(CableStage.MiSignOut, stages);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("uiautomator", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_google_account_beside_it_is_left_to_the_teacher()
+    {
+        var adb = new MiRedmi
+        {
+            Accounts = "  Accounts: 2\n    Account {name=6512345678, type=com.xiaomi}\n    Account {name=escola@gmail.com, type=com.google}\n",
+        };
+        var stages = new List<CableStage>();
+        Assert.Equal(CableProblem.HasAccounts, Prepare(adb, Password, stages).Problem);
+        Assert.DoesNotContain(CableStage.MiSignOut, stages);
+    }
+
+    [Fact]
+    public void A_sign_out_that_does_not_work_leaves_the_phone_and_says_so()
+    {
+        var adb = new MiRedmi { SignOutWorks = false };
+        var stages = new List<CableStage>();
+        var result = Prepare(adb, Password, stages);
+
+        Assert.Equal(CableProblem.MiSignOutFailed, result.Problem);
+        Assert.Null(result.Phone);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("install -r", StringComparison.Ordinal));
+        Assert.Equal(("O Midview não conseguiu sair da conta Mi sozinho. Saia dela no celular e tente de novo.", "sair-contas"),
+            PhoneCable.Describe(CableProblem.MiSignOutFailed));
+    }
+
+    [Fact]
+    public void The_switches_are_checked_again_after_the_sign_out()
+    {
+        var adb = new MiRedmi { AdbInputAfter = "0\n" };
+        Assert.Equal(CableProblem.SecurityOff, Prepare(adb, Password, new List<CableStage>()).Problem);
+    }
+}

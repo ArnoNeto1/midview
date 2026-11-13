@@ -42,6 +42,7 @@ internal static class PhoneSetupGuide
     private const string DeveloperPrint = Folder + "desenvolvedor.png";
 
     // PROVISIONAL: a drawing, not a print. The Mi account login screen blocks screenshots.
+    // The outline is on the e-mail and password fields.
     // Swap it for a real print after the first real preparation (the outline follows the Target
     // fractions, so nothing else changes).
     private const string MiLoginDrawing = Folder + "conta-mi.png";
@@ -70,7 +71,7 @@ internal static class PhoneSetupGuide
             "O cabo USB do celular (tem de ser um cabo que passa dados, não só carrega).",
             "Um chip qualquer (pode ser o do seu celular). Ele é usado só por alguns minutos em cada celular e depois você tira.",
             "A agulha da gaveta do chip (ou um clipe de papel aberto).",
-            "O e-mail e a senha da conta Google da escola. O Midview não guarda nenhum dos dois.",
+            "A conta Mi da escola (e-mail e senha), a mesma em todos os celulares. O Midview pede uma vez e guarda só neste computador.",
         });
 
     public static GuideHelp UnknownAccount { get; } = new(
@@ -217,16 +218,22 @@ internal static class PhoneSetupGuide
                 "Com a agulha da gaveta do chip (ou um clipe), abra a gaveta, na lateral do celular.",
                 "Coloque o chip e feche a gaveta.",
                 "Abra as Configurações e toque em \"Conta Mi\", no topo da lista.",
-                "Toque no botão do Google.",
-                "Entre com o e-mail e a senha da conta Google da escola.",
+                "Digite o e-mail (ou o telefone) e a senha da conta Mi da escola, que estão abaixo. Não use o botão do Google.",
+                "Marque \"Eu li e aceitei\" e toque em \"Fazer login\".",
+                "Se o celular perguntar sobre a Xiaomi Cloud ou o Encontrar dispositivo, pode pular.",
             },
-            MiLoginDrawing, new Rect(0.069, 0.606, 0.861, 0.055),
+            MiLoginDrawing, new Rect(0.069, 0.218, 0.861, 0.121),
             "Leva uns 2 minutos.",
             "Entrei na conta Mi, próximo passo",
             new GuideHelp[]
             {
+                new("Pede um código",
+                    "A Xiaomi manda um código por SMS para o número cadastrado na conta Mi da escola. Peça o código a quem está com esse celular e digite-o."),
+                new("A escola ainda não tem conta Mi",
+                    "Crie uma em account.xiaomi.com, uma só para a escola, com um e-mail da escola e um número de celular que fique com a escola (para os códigos por SMS). " +
+                    "Depois guarde-a no Midview pelo link deste passo."),
                 new("Já tem outra conta Mi",
-                    "Saia dela primeiro (o celular pede a senha dessa conta) e depois entre com o Google da escola. " +
+                    "Saia dela primeiro (o celular pede a senha dessa conta) e depois entre com a conta Mi da escola. " +
                     "Se ninguém sabe a senha, veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
                 new("Fica carregando no \"não sou robô\"",
                     "Confira se o celular está no Wi-Fi e se a data e a hora estão no automático. " + SearchTip("data e hora")),
@@ -302,5 +309,56 @@ internal static class PhoneSetupGuide
                 new("Outro programa de celular está aberto",
                     "Feche outros programas de celular abertos neste computador e ligue o cabo de novo."),
             }),
+    };
+
+    /// <summary>
+    /// "sair-contas" when the school's Mi account is saved: only the chip comes out, as the
+    /// Midview signs the phone out of the account over the cable (PhoneCable). When that fails,
+    /// the step goes back to its own words, done by hand.
+    /// </summary>
+    public static GuideStep ChipOnly { get; } = new(
+        "sair-contas",
+        "Tire o chip",
+        new[]
+        {
+            "Abra a gaveta do chip e tire o chip, sem desligar o celular.",
+            "Não saia da conta Mi: no fim, o Midview sai dela sozinho pelo cabo, com a senha guardada neste computador.",
+            "Se ficou uma conta Google no celular, tire-a como no passo 3: Contas e sincronização, Google, a conta, Mais, Remover conta.",
+            "As três chaves do passo anterior continuam ligadas.",
+        },
+        null, null,
+        "Leva menos de 1 minuto.",
+        "Tirei o chip, próximo passo",
+        new GuideHelp[]
+        {
+            new("O Midview não conseguiu sair da conta",
+                "Ele avisa no fim e volta a este passo, com o jeito de sair à mão: Configurações, Conta Mi, Sair da conta."),
+            new("Não aparece \"Conta Mi\" no topo",
+                "Então não há conta Mi neste celular. Tire só o chip e siga."),
+            NotFound("Conta Mi", "conta"),
+        });
+
+    /// <summary>The step as the window shows it. miAuto: the Midview signs out of the Mi account by itself.</summary>
+    public static GuideStep StepFor(GuideStep step, bool miAuto) =>
+        miAuto && step.Id == ChipOnly.Id ? ChipOnly : step;
+
+    /// <summary>The words of the "Conta Mi da escola" page.</summary>
+    public const string MiAccountIntro =
+        "Os celulares Xiaomi só deixam o Midview terminar a preparação com um chip e uma conta Mi dentro. " +
+        "A escola usa uma conta Mi só dela, a mesma em todos os celulares, e só durante a preparação: no fim, o Midview sai dela sozinho pelo cabo. " +
+        "Ela fica guardada só neste computador, protegida pelo Windows.";
+
+    public const string MiAccountCreate =
+        "Ainda não tem? Crie uma em account.xiaomi.com, uma só para a escola: com um e-mail da escola e um número de celular que fique com a escola " +
+        "(a Xiaomi manda códigos por SMS para ele).";
+
+    public static IReadOnlyList<GuideHelp> MiAccountHelp { get; } = new GuideHelp[]
+    {
+        new("Por que uma conta só da escola?",
+            "A mesma conta entra e sai de todos os celulares. Uma conta pessoal ficaria com os celulares da escola ligados a ela."),
+        new("Posso pular?",
+            "Pode. Aí, no passo 5, você entra com a conta que tiver, e no passo 7 sai dela à mão em cada celular."),
+        new("Esqueci a senha",
+            "Troque a senha em account.xiaomi.com (\"Esqueci a senha\") e guarde aqui a nova."),
     };
 }

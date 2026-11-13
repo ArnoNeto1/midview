@@ -19,6 +19,7 @@ public partial class PreparePhonesWindow
     private static readonly (CableStage Stage, string Text, string? Hint)[] CableItems =
     {
         (CableStage.Checking, "Conferindo o celular", null),
+        (CableStage.MiSignOut, "Saindo da conta Mi da escola", "Não mexa no celular: o Midview toca na tela dele sozinho, por até 1 minuto."),
         (CableStage.Installing, "Instalando o Midview no celular", "Olhe o celular. Se perguntar \"Enviar o app para uma verificação de segurança?\", toque em Não enviar. Quando aparecer \"Instalar via USB\", toque em Instalar (não em Recusar): ele recusa sozinho em 10 segundos."),
         (CableStage.Wifi, "Entregando o Wi-Fi do laboratório", null),
         (CableStage.Pairing, "Dando o número e pareando com este computador", null),
@@ -88,10 +89,12 @@ public partial class PreparePhonesWindow
     private void FillCableList()
     {
         CableList.Children.Clear();
-        var reached = _progress.Stage is { } stage ? Array.FindIndex(CableItems, item => item.Stage == stage) : -1;
-        for (var i = 0; i < CableItems.Length; i++)
+        // "Saindo da conta Mi" only for a phone the cable signs out.
+        var items = CableItems.Where(item => item.Stage != CableStage.MiSignOut || _progress.MiSignOutShown).ToArray();
+        var reached = _progress.Stage is { } stage ? Array.FindIndex(items, item => item.Stage == stage) : -1;
+        for (var i = 0; i < items.Length; i++)
         {
-            var (_, text, hint) = CableItems[i];
+            var (_, text, hint) = items[i];
             var (glyph, brush, label) = i < reached
                 ? ("", "OnlineBrush", "feito")
                 : i == reached ? ("", "AccentBrush", "agora") : ("", "TextMutedBrush", "");

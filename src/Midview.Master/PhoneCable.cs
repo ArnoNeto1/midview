@@ -12,9 +12,11 @@ public enum CableProblem
 {
     NoPhone, TooMany, Unauthorized, TooOld, SecurityOff, InstallOff,
     HasAccounts, HasUsers, AlreadySchool, InstallDeclined, InstallFailed, Refused, Lost,
+    MiSignOutFailed,
 }
 
-public enum CableStage { Checking, Installing, Wifi, Pairing, Owner }
+// MiSignOut: only for a phone still in the school's Mi account (MiSignOut).
+public enum CableStage { Checking, MiSignOut, Installing, Wifi, Pairing, Owner }
 
 // Phone is set when the phone is ready; Problem when it is not. OwnerUnconfirmed:
 // the cable dropped while the last command ran, so whether the phone became the
@@ -45,6 +47,12 @@ public sealed class PhoneCable
     // check names it ("-s"), so a second phone plugged in meanwhile is never
     // the one changed, nor makes adb refuse the command.
     private string? _serial;
+
+    // What "dumpsys account" said at the last Check.
+    private string _accounts = "";
+
+    // How the Mi sign-out gets its clock: a fake one in the tests.
+    internal Func<Func<string[], AdbOutput>, MiSignOut> MakeSignOut { get; init; } = MiSignOut.WithRealClock;
 
     public PhoneCable(IAdb adb)
     {
@@ -131,7 +139,7 @@ public sealed class PhoneCable
             }
         }
 
-        var accounts = Shell(Short, "dumpsys", "account").Text;
+        var accounts = _accounts = Shell(Short, "dumpsys", "account").Text;
         if (AccountsLine.Matches(accounts).Any(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > 0))
         {
             return CableProblem.HasAccounts;
@@ -285,14 +293,27 @@ public sealed class PhoneCable
     // optimize: "Midview otimizado" lightens the phone (Lighten); "Só o
     // Midview" leaves the rest of it as it came. kind names the device
     // ("Tablet 07") here and on the device itself (the package's "kind").
+    // miPassword: the school's Mi account password, saved on this PC; with
+    // it, a phone whose only accounts are Mi accounts is signed out here
+    // (MiSignOut), before anything else, instead of sent back to the step.
     public CableResult Prepare(
         string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage,
-        bool optimize = true, AndroidDeviceKind kind = AndroidDeviceKind.Phone)
+        bool optimize = true, AndroidDeviceKind kind = AndroidDeviceKind.Phone, string? miPassword = null)
     {
         static CableResult Fail(CableProblem problem) => new(null, problem, false);
 
         stage(CableStage.Checking);
-        if (Check() is { } problem)
+        var checkedProblem = Check();
+        if (checkedProblem == CableProblem.HasAccounts && miPassword is not null && MiSignOut.OnlyXiaomi(_accounts))
+        {
+            stage(CableStage.MiSignOut);
+            // Checked again in full: the sign-out must leave no account at all,
+            // and the switches on.
+            checkedProblem = MakeSignOut(command => Shell(Short, command)).Run(miPassword)
+                ? Check()
+                : CableProblem.MiSignOutFailed;
+        }
+        if (checkedProblem is { } problem)
         {
             return Fail(problem);
         }
@@ -448,6 +469,7 @@ public sealed class PhoneCable
         CableProblem.InstallFailed => ("O Midview não foi instalado no celular. Se apareceu uma pergunta no celular, toque em Instalar e tente de novo.", "cabo"),
         CableProblem.Refused => ("O celular recusou a preparação. Tente de novo.", "cabo"),
         CableProblem.Lost => ("O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo"),
+        CableProblem.MiSignOutFailed => ("O Midview não conseguiu sair da conta Mi sozinho. Saia dela no celular e tente de novo.", "sair-contas"),
         _ => throw new ArgumentOutOfRangeException(nameof(p)),
     };
 }

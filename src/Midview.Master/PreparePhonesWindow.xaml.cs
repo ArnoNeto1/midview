@@ -59,6 +59,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         _devicesInClass = host.DevicesInClass;
         _phoneOnline = host.PhoneOnline;
         _wipe = host.Wipe;
+        _progress.AsksMiAccount = _mi is null;
         // "Antes de começar, separe:" only before the first phone or tablet
         // of the class: the same things are needed for both.
         _progress.Start(_wifi is not null, gathered:
@@ -96,6 +97,12 @@ public partial class PreparePhonesWindow : MidviewWindow
         {
             case SetupPage.Wifi:
                 if (!SaveWifi())
+                {
+                    return;
+                }
+                break;
+            case SetupPage.MiAccount:
+                if (!SaveMiAccount())
                 {
                     return;
                 }
@@ -143,6 +150,14 @@ public partial class PreparePhonesWindow : MidviewWindow
         if (_progress.Page == SetupPage.CableFailed)
         {
             _progress.Again();
+            ShowPage();
+            return;
+        }
+        // "Pular por agora": on to the step, no account saved.
+        if (_progress.Page == SetupPage.MiAccount)
+        {
+            _progress.AsksMiAccount = false;
+            _progress.Next();
             ShowPage();
             return;
         }
@@ -234,6 +249,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         var page = _progress.Page;
         WifiPage.Visibility = Shown(page == SetupPage.Wifi);
         GatherPage.Visibility = Shown(page == SetupPage.Gather);
+        MiAccountPage.Visibility = Shown(page == SetupPage.MiAccount);
         StepPage.Visibility = Shown(page == SetupPage.Step);
         ConfirmRedoPage.Visibility = Shown(page == SetupPage.ConfirmRedo);
         CablePage.Visibility = Shown(page == SetupPage.Cable);
@@ -251,6 +267,7 @@ public partial class PreparePhonesWindow : MidviewWindow
                 : _progress.StepCaption,
             SetupPage.Wifi => _progress.ReturnsAfterWifi ? "Trocar o Wi-Fi" : "Antes de começar",
             SetupPage.Gather => "Antes de começar",
+            SetupPage.MiAccount => _progress.Name is { } named ? $"Conta Mi da escola · {named}" : "Conta Mi da escola",
             SetupPage.Cable or SetupPage.CableFailed => $"{_progress.Name} · no cabo",
             _ => _progress.Name ?? "",
         };
@@ -268,8 +285,11 @@ public partial class PreparePhonesWindow : MidviewWindow
             case SetupPage.Gather:
                 ShowGather();
                 break;
+            case SetupPage.MiAccount:
+                ShowMiAccountPage();
+                break;
             case SetupPage.Step:
-                ShowStep(_progress.Step!);
+                ShowStep(ShownStep!);
                 break;
             case SetupPage.ConfirmRedo:
                 ConfirmRedoTitle.Text = _progress.ConfirmRedoText;
@@ -331,6 +351,7 @@ public partial class PreparePhonesWindow : MidviewWindow
             CableWaitText.Text = _cableWait;
         }
 
+        ShowMiCard(step);
         ShowPrint(step, ScreenWidth);
         ShowWipe();
     }

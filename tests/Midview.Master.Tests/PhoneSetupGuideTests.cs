@@ -9,7 +9,7 @@ public class PhoneSetupGuideTests
 
     private static IEnumerable<string> AllTexts()
     {
-        foreach (var s in PhoneSetupGuide.Steps)
+        foreach (var s in PhoneSetupGuide.Steps.Append(PhoneSetupGuide.ChipOnly))
         {
             yield return s.Title;
             yield return s.NextText;
@@ -17,6 +17,9 @@ public class PhoneSetupGuideTests
             foreach (var t in s.Taps) yield return t;
             foreach (var h in s.Help) { yield return h.Problem; yield return h.Answer; }
         }
+        yield return PhoneSetupGuide.MiAccountIntro;
+        yield return PhoneSetupGuide.MiAccountCreate;
+        foreach (var h in PhoneSetupGuide.MiAccountHelp) { yield return h.Problem; yield return h.Answer; }
         yield return PhoneSetupGuide.Gather.Title;
         foreach (var item in PhoneSetupGuide.Gather.Items) yield return item;
         foreach (var h in new[] { PhoneSetupGuide.UnknownAccount, PhoneSetupGuide.LockedWithPin })
@@ -144,7 +147,7 @@ public class PhoneSetupGuideTests
     {
         var all = PhoneSetupGuide.Gather.Title + " " + string.Join(" ", PhoneSetupGuide.Gather.Items);
         Assert.StartsWith("Antes de começar, separe", PhoneSetupGuide.Gather.Title);
-        foreach (var word in new[] { "cabo", "chip", "agulha", "conta Google da escola" })
+        foreach (var word in new[] { "cabo", "chip", "agulha", "conta Mi da escola" })
         {
             Assert.Contains(word, all, StringComparison.OrdinalIgnoreCase);
         }

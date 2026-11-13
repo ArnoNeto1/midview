@@ -45,6 +45,14 @@ internal static class DeviceSetupText
         "Câmera, galeria, calculadora, arquivos, gravador de tela, WPS e Chrome ficam. " +
         $"Os apps tirados voltam se o {Word(kind)} for restaurado de fábrica.";
 
+    // The school's Mi account line: where it is saved and changed (the
+    // assistant), and that it can be taken off this PC here.
+    public const string MiAccountNone =
+        "Conta Mi da escola (para os aparelhos Xiaomi): nenhuma guardada. O assistente pede no passo 5 e guarda só neste computador.";
+
+    public static string MiAccountSaved(string login) =>
+        $"Conta Mi da escola: {login}, guardada só neste computador. Para trocar, use \"trocar\" no passo 5 do assistente. ";
+
     // Why the buttons are off; null when they work (the assistant is out).
     public static string? Gate(AndroidDeviceKind kind, PhoneSetupOffer setup) => setup switch
     {
@@ -112,6 +120,52 @@ public partial class DeviceSetupPage : UserControl
             }
         }
         GateText.Visibility = works ? Visibility.Collapsed : Visibility.Visible;
+        ShowMiAccount();
+    }
+
+    // Read again each time the page shows: the assistant may have saved it meanwhile.
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (IsVisible)
+        {
+            ShowMiAccount();
+        }
+    }
+
+    private void ShowMiAccount()
+    {
+        MiAccountLine.Inlines.Clear();
+        if (MiAccountFile.Load() is not { } account)
+        {
+            MiAccountLine.Inlines.Add(new Run(DeviceSetupText.MiAccountNone));
+            return;
+        }
+        MiAccountLine.Inlines.Add(new Run(DeviceSetupText.MiAccountSaved(account.Login)));
+        var remove = new Hyperlink(new Run("Tirar deste computador"));
+        remove.Click += (_, _) => RemoveMiAccount();
+        MiAccountLine.Inlines.Add(remove);
+    }
+
+    private void RemoveMiAccount()
+    {
+        var answer = MidviewMessage.Show(
+            Window.GetWindow(this),
+            "Tirar a conta Mi da escola deste computador? Os aparelhos já preparados não mudam. " +
+            "Sem ela, o Midview não sai sozinho da conta Mi: em cada aparelho, você sai à mão.",
+            Header.Heading, MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        try
+        {
+            MiAccountFile.Clear();
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            // Left as it was: the line still shows it.
+        }
+        ShowMiAccount();
     }
 
     private void OnOptimizedClicked(object sender, RoutedEventArgs e) => Prepare?.Invoke(_kind, true);

@@ -5,6 +5,7 @@ internal enum SetupPage
 {
     Wifi,
     Gather,
+    MiAccount,
     Step,
     ConfirmRedo,
     Cable,
@@ -28,7 +29,7 @@ internal enum WipeState
 // which page, which step of PhoneSetupGuide, the phone's number and how the
 // cable part goes. The window draws the page and calls these as the teacher
 // clicks, as the cable answers and as a timer ticks.
-internal sealed class PhoneSetupProgress
+internal sealed partial class PhoneSetupProgress
 {
     // How long after "Pronto" the assistant waits before "ainda não apareceu".
     public static readonly TimeSpan NotAppearedAfter = TimeSpan.FromMinutes(5);
@@ -198,6 +199,10 @@ internal sealed class PhoneSetupProgress
                 ShowStep(step);
                 _afterWifi = null;
                 break;
+            // "Guardar e continuar" (or "Pular por agora").
+            case SetupPage.MiAccount:
+                LeaveMiAccount();
+                break;
             case SetupPage.Wifi when !_gathered:
                 ShowGather();
                 break;
@@ -219,7 +224,7 @@ internal sealed class PhoneSetupProgress
             case SetupPage.Step when StepIndex == CableStep:
                 break;
             case SetupPage.Step:
-                ShowStep(StepIndex + 1);
+                ShowStepOrMiAccount(StepIndex + 1);
                 break;
             // "Tentar de novo".
             case SetupPage.CableFailed:
@@ -242,6 +247,9 @@ internal sealed class PhoneSetupProgress
                 break;
             case SetupPage.ConfirmRedo:
                 ShowStep(NumberStep);
+                break;
+            case SetupPage.MiAccount:
+                BackFromMiAccount();
                 break;
             case SetupPage.Step when StepIndex > NumberStep:
                 ShowStep(StepIndex - 1);
@@ -282,6 +290,7 @@ internal sealed class PhoneSetupProgress
         if (Page == SetupPage.Cable)
         {
             Stage = stage;
+            MiSignOutShown |= stage == CableStage.MiSignOut;
         }
     }
 
@@ -292,6 +301,7 @@ internal sealed class PhoneSetupProgress
             return;
         }
         var (text, step) = PhoneCable.Describe(problem);
+        SignOutByHand |= problem is CableProblem.HasAccounts or CableProblem.MiSignOutFailed;
         Problem = problem;
         ProblemText = text;
         ProblemStepId = step;
@@ -398,6 +408,7 @@ internal sealed class PhoneSetupProgress
     private void ShowCable()
     {
         Stage = null;
+        MiSignOutShown = false;
         Problem = null;
         ProblemText = null;
         ProblemStepId = null;
@@ -418,6 +429,8 @@ internal sealed class PhoneSetupProgress
         HasAppeared = false;
         OwnerUnconfirmed = false;
         OpensWelcomeHelp = false;
+        SignOutByHand = false;
+        MiSignOutShown = false;
     }
 
     private void SetWipe(WipeState state)

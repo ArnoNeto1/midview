@@ -15,7 +15,7 @@ public partial class PreparePhonesWindow
     // (recovery mode), and the steps come back once it is done.
     private void ShowWipe()
     {
-        if (_progress.Step is not { } step)
+        if (ShownStep is not { } step)
         {
             return;
         }
