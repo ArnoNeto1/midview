@@ -158,6 +158,25 @@ public class WakeTaskTests : IDisposable
             WakeTask.LastRun(log));
     }
 
+    // Nothing turns a phone or a tablet on: it is no machine "sem a placa de rede conhecida".
+    [Fact]
+    public void RunFromCommandLine_LeavesPhonesAndTabletsOut()
+    {
+        var roster = Path.Combine(_directory, "known-machines.json");
+        var log = Path.Combine(_directory, "ligar-turma.log");
+        KnownMachinesFile.Save(roster, new[]
+        {
+            new KnownMachine("Aluno-1", "10.0.0.1", "S1", "A1", "00-1A-2B-3C-4D-5E"),
+            new KnownMachine("Celular 01", "10.0.0.51", "S51", "A51", Kind: DeviceKind.Android),
+            new KnownMachine("Tablet 01", "10.0.0.61", "S61", "A61", Kind: DeviceKind.Android),
+        });
+
+        var exitCode = WakeTask.RunFromCommandLine("07:00", Monday.AddHours(7), roster, log, macAddresses => (macAddresses.Count, null));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("28/09/2026 07:00: pedido para ligar enviado para 1 máquina(s)", WakeTask.LastRun(log));
+    }
+
     [Fact]
     public void RunFromCommandLine_TooLate_SendsNothing()
     {

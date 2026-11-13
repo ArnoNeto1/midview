@@ -169,7 +169,9 @@ public static class WakeTask
         List<KnownMachine> machines;
         try
         {
-            machines = KnownMachinesFile.Load(rosterPath, out _);
+            // Phones and tablets: nothing turns one on (no Wake-on-LAN), so
+            // none is reported as a machine without its network card known.
+            machines = KnownMachinesFile.Load(rosterPath, out _).Where(machine => !DeviceSupport.IsAndroid(machine)).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

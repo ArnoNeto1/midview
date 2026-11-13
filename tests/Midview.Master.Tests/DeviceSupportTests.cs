@@ -31,14 +31,14 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.Supports(DeviceKind.Windows, action));
 
     [Fact]
-    public void Phone_supports_view_control_screen_lock_blocking_closing_messages_chat_files_power_programs_class_folder_wiping_and_its_own_actions_only()
+    public void Phone_supports_view_control_screen_lock_blocking_closing_messages_chat_files_power_schedule_programs_class_folder_wiping_and_its_own_actions_only()
     {
         foreach (var action in Enum.GetValues<ToolbarAction>())
         {
             var expected = action is ToolbarAction.View or ToolbarAction.Control or ToolbarAction.ScreenLock
                 or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites or ToolbarAction.CloseApps
                 or ToolbarAction.Message or ToolbarAction.Chat or ToolbarAction.WipePhone
-                or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power
+                or ToolbarAction.SendFile or ToolbarAction.CollectFiles or ToolbarAction.Power or ToolbarAction.Schedule
                 or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram or ToolbarAction.Install or ToolbarAction.Uninstall
                 or ToolbarAction.LabConfig or ToolbarAction.ClassFolder
                 or ToolbarAction.Optimize or ToolbarAction.UpdatePhones or ToolbarAction.PhonePin;

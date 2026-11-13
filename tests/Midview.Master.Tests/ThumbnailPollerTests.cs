@@ -183,8 +183,8 @@ public partial class ThumbnailPollerTests
 
         await ThreeThumbnails(poller);
 
+        // The power schedule a phone takes too (ThumbnailPollerTests.Phone).
         Assert.Equal(0, agent.Questions);
-        Assert.Empty(agent.SchedulesReceived);
         Assert.False(learned);
     }
 

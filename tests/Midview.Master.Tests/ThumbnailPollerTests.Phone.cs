@@ -70,6 +70,48 @@ public partial class ThumbnailPollerTests
         await WaitUntil(() => agent.PhoneBlocksReceived.Length >= 2);
     }
 
+    // "Agendar": a phone turns its screen off at the time, so it gets the
+    // schedule like a PC's Agent, once and again when it changes.
+    [Fact]
+    public async Task PowerSchedule_IsHandedToThePhoneOnce_AndAgainWhenItChanges()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate, new Message(MessageType.CommandAck, CommandResult.Encode(true, "ok")));
+        var schedule = new PowerSchedule(1000, PowerSchedule.Weekdays, 7 * 60, 18 * 60);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint, Kind = DeviceKind.Android },
+            session.MasterCertificate, session.Port, agent.Port, () => schedule, agentRetryInterval: RetryAtOnce);
+        var polls = new Polls(poller);
+        poller.Start();
+
+        await WaitUntil(() => agent.SchedulesReceived.Length > 0);
+        await polls.OneMoreAsync();
+        Assert.Equal(new[] { 1000L }, agent.SchedulesReceived);
+
+        schedule = schedule with { SavedAt = 2000 };
+        await WaitUntil(() => agent.SchedulesReceived.Length > 1);
+        await polls.OneMoreAsync();
+        Assert.Equal(new[] { 1000L, 2000L }, agent.SchedulesReceived);
+    }
+
+    // An older phone agent answers "Ainda não funciona em celular.": not
+    // delivered, so it is tried again after a while (here at once).
+    [Fact]
+    public async Task PowerSchedule_APhoneThatDidNotTakeIt_IsTriedAgain()
+    {
+        using var session = new LoopbackSession();
+        using var agent = new FakeAgent(session.MasterCertificate,
+            new Message(MessageType.CommandAck, CommandResult.Encode(false, "Ainda não funciona em celular.")));
+        var schedule = new PowerSchedule(1000, PowerSchedule.Weekdays, null, 18 * 60);
+        using var poller = new ThumbnailPoller(
+            session.Machine() with { AgentThumbprint = agent.Thumbprint, Kind = DeviceKind.Android },
+            session.MasterCertificate, session.Port, agent.Port, () => schedule, agentRetryInterval: TimeSpan.Zero);
+
+        poller.Start();
+
+        await WaitUntil(() => agent.SchedulesReceived.Length >= 2);
+    }
+
     [Fact]
     public async Task PhoneAppBlockObserved_ReportsWhatThePhoneFollows()
     {

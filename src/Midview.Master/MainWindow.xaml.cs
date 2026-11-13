@@ -1408,7 +1408,7 @@ public partial class MainWindow : MidviewWindow
         }
         if (everyone.Count > 0 && DeviceSupport.Only(ToolbarReach(ToolbarAction.Schedule), ToolbarAction.Schedule).Count < everyone.Count)
         {
-            ShowNotice("O agendamento vale para todos os computadores da sala.");
+            ShowNotice("O agendamento vale para todas as máquinas da sala.");
         }
         ShowOnce("agendar", Array.Empty<KnownMachine>(), () => new ScheduleWindow(
             () => _tiles.Select(tile => tile.Machine).Where(machine => DeviceSupport.Supports(machine.Kind, ToolbarAction.Schedule)).ToList(),

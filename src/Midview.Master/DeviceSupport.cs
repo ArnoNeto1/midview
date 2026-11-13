@@ -50,8 +50,9 @@ public enum ToolbarAction
 // lab panel's functions that mean something on a phone (LabConfigPhones),
 // takes part in the class folder ("Pasta da turma": its Download/Midview/
 // Pasta da turma – <turma>, with the same messages as a PC's Agent and
-// Session), and is optimized and updated (actions a PC has nothing to do with).
-// "Ligar" and "Agendar" stay for computers.
+// Session), follows "Agendar"'s time to turn off by turning its screen off
+// (ScheduleText; turning on is for computers alone), and is optimized and
+// updated (actions a PC has nothing to do with). "Ligar" stays for computers.
 // WipePhone (a tile's menu only) is for Android devices alone.
 public static class DeviceSupport
 {
@@ -62,7 +63,7 @@ public static class DeviceSupport
             or ToolbarAction.BlockPrograms or ToolbarAction.BlockSites
             or ToolbarAction.CloseApps or ToolbarAction.Message or ToolbarAction.Chat
             or ToolbarAction.SendFile or ToolbarAction.CollectFiles
-            or ToolbarAction.Power or ToolbarAction.WipePhone
+            or ToolbarAction.Power or ToolbarAction.Schedule or ToolbarAction.WipePhone
             or ToolbarAction.OpenWebsite or ToolbarAction.OpenProgram
             or ToolbarAction.Install or ToolbarAction.Uninstall or ToolbarAction.LabConfig
             or ToolbarAction.ClassFolder

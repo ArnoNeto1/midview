@@ -99,7 +99,7 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.Chat, true)]
     [InlineData(ToolbarAction.Power, true)]
     [InlineData(ToolbarAction.Wake, false)]
-    [InlineData(ToolbarAction.Schedule, false)]
+    [InlineData(ToolbarAction.Schedule, true)]
     [InlineData(ToolbarAction.SendFile, true)]
     [InlineData(ToolbarAction.CollectFiles, true)]
     [InlineData(ToolbarAction.ClassFolder, true)]

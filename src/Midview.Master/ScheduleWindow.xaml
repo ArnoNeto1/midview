@@ -32,6 +32,9 @@
         </local:DialogHeader>
 
         <StackPanel Grid.Row="1" Margin="0,16,0,0">
+            <!-- Only for a room with phones or tablets (ScheduleText.AndroidHint). -->
+            <TextBlock x:Name="AndroidHintTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap"
+                       Visibility="Collapsed" Margin="0,0,0,12" />
             <TextBlock Text="Nos dias" Style="{StaticResource CardTitle}" Margin="0,0,0,8" />
             <WrapPanel x:Name="DaysPanel">
                 <CheckBox x:Name="MondayCheckBox" Content="Seg" Style="{StaticResource DayPillCheckBox}" Margin="0,0,6,0" />

@@ -9,8 +9,9 @@ namespace Midview.Master;
 
 // The lab's power timetable: which days, when it turns on and when it turns
 // off. Saving it keeps it in PowerScheduleFile, sets up this PC's wake task
-// (WakeTask) and hands the shutdown part to every machine's Agent; a
-// machine that's offline gets it later from its tile's poller.
+// (WakeTask) and hands the shutdown part to every machine's Agent (a phone's
+// or tablet's turns its screen off then: ScheduleText); a machine that's
+// offline gets it later from its tile's poller.
 public partial class ScheduleWindow : MidviewWindow
 {
     private readonly Func<IReadOnlyList<KnownMachine>> _targets;
@@ -25,7 +26,10 @@ public partial class ScheduleWindow : MidviewWindow
         _targets = targets;
         _masterCertificate = masterCertificate;
         _onSaved = onSaved;
-        TargetsTextBlock.Text = $"Na turma toda ({targets().Count} máquinas)";
+        var reached = targets();
+        TargetsTextBlock.Text = ScheduleText.Targets(reached);
+        AndroidHintTextBlock.Text = ScheduleText.AndroidHint;
+        AndroidHintTextBlock.Visibility = DeviceSupport.HasAndroid(reached) ? Visibility.Visible : Visibility.Collapsed;
 
         var schedule = current ?? new PowerSchedule(0, PowerSchedule.Weekdays, null, null);
         foreach (var (day, box) in DayBoxes)
@@ -90,11 +94,13 @@ public partial class ScheduleWindow : MidviewWindow
         var masterPath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Midview.Master.exe");
         var wakeTask = Task.Run(() => WakeTask.Apply(schedule, masterPath, DateTime.Now, WakeTask.RunSchtasks));
         var payload = schedule.Encode();
-        var machineResults = Task.WhenAll(_targets().Select(machine => Task.Run(() => SendTo(machine, payload))));
+        var machines = _targets();
+        var machineResults = Task.WhenAll(machines.Select(machine => Task.Run(() => SendTo(machine, payload))));
 
-        var (wakeSucceeded, wakeDetail) = await wakeTask;
+        var (wakeTaskSucceeded, wakeDetail) = await wakeTask;
         var results = await machineResults;
-        var lines = new[] { $"{(wakeSucceeded ? "✓" : "✗")} Ligar: {wakeDetail}" }
+        var (wakeSucceeded, wakeLine) = ScheduleText.WakeLine(wakeTaskSucceeded, wakeDetail, schedule.WakeMinute is not null, machines);
+        var lines = new[] { wakeLine }
             .Concat(results.Select(result => $"{(result.Succeeded ? "✓" : "✗")} {result.Name}: {result.Detail}"));
         ResultTextBlock.Text = string.Join("\n", lines);
 
@@ -153,27 +159,13 @@ public partial class ScheduleWindow : MidviewWindow
         return new PowerSchedule(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), days, wakeMinute, shutdownMinute);
     }
 
+    // A phone's or tablet's agent takes it on the same port as a PC's Agent.
     private (string Name, bool Succeeded, string Detail) SendTo(KnownMachine machine, byte[] payload)
     {
-        if (machine.AgentThumbprint is not { Length: > 0 } agentThumbprint)
-        {
-            return (machine.Name, false,
-                "falta o thumbprint do Agent (reinstale com o pacote de instalação, ou preencha em \"Testar / bloquear sites...\")");
-        }
-
-        try
-        {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                machine.HostAddress, ConnectionClient.AgentPort, agentThumbprint, _masterCertificate,
-                MessageType.SetPowerSchedule, payload);
-            // An Agent from before scheduling answers a bare "no".
-            return (machine.Name, succeeded,
-                !succeeded && detail.Length == 0 ? "o Midview dessa máquina é de uma versão anterior: reinstale com o pacote atual" : detail);
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, $"{FailureText.DescribeAgent(ex)}; ela recebe o agendamento quando o MidviewMaster a vir ligada");
-        }
+        var (succeeded, detail) = ScheduleText.Send(machine, agentThumbprint => CommandClient.SendCommandForResult(
+            machine.HostAddress, ConnectionClient.AgentPort, agentThumbprint, _masterCertificate,
+            MessageType.SetPowerSchedule, payload));
+        return (machine.Name, succeeded, detail);
     }
 
     private void ShowLastRun()

@@ -159,14 +159,16 @@ public sealed partial class ThumbnailPoller : IDisposable
                 }
 
                 // A phone has no PC Agent: its own app block applies to it,
-                // and the class folder's lesson, which its agent keeps as a
-                // PC Agent does. Not the class folders' home: a phone keeps
-                // none (ClassLessonOnAgents.Online).
+                // and the class folder's lesson and the power timetable
+                // (its screen goes off at the time), which its agent keeps
+                // as a PC Agent does. Not the class folders' home: a phone
+                // keeps none (ClassLessonOnAgents.Online).
                 if (_machine.IsPhone)
                 {
                     SendPhoneAppBlockIfChanged();
                     ObservePhoneAppBlock();
                     SendClassLessonIfChanged();
+                    SendPowerScheduleIfChanged();
                 }
                 else
                 {
@@ -235,6 +237,9 @@ public sealed partial class ThumbnailPoller : IDisposable
     // Once per poller and again after each change, so a machine that was
     // off when the teacher saved the schedule gets it the next time it's on.
     // An older schedule than the one the Agent has is kept out by the Agent.
+    // A phone's counts as delivered only when its agent took it: one from
+    // before "Agendar" ("Ainda não funciona em celular.") is tried again
+    // after a while, so it follows the schedule once it is updated.
     private void SendPowerScheduleIfChanged()
     {
         if (_powerSchedule?.Invoke() is not { } schedule || schedule.SavedAt == _sentScheduleSavedAt
@@ -246,10 +251,17 @@ public sealed partial class ThumbnailPoller : IDisposable
 
         try
         {
-            CommandClient.SendCommandForResult(
+            var (succeeded, _) = CommandClient.SendCommandForResult(
                 _machine.HostAddress, _agentPort, agentThumbprint, _masterCertificate,
                 MessageType.SetPowerSchedule, schedule.Encode());
-            _sentScheduleSavedAt = schedule.SavedAt;
+            if (succeeded || !_machine.IsPhone)
+            {
+                _sentScheduleSavedAt = schedule.SavedAt;
+            }
+            else
+            {
+                _nextScheduleAttempt = DateTime.UtcNow + _agentRetryInterval;
+            }
         }
         catch (Exception)
         {
