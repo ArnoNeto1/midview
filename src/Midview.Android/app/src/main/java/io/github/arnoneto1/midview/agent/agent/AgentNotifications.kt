@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.util.Log
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
 import io.github.arnoneto1.midview.agent.ui.SchoolSettingsActivity
 
@@ -17,7 +18,6 @@ import io.github.arnoneto1.midview.agent.ui.SchoolSettingsActivity
 // How long the code screen has to come up when it is the only way
 // to show the code.
 private const val SHOW_TIMEOUT_MILLIS = 3_000L
-private const val STATUS_CHANNEL = "status"
 private const val PAIRING_CHANNEL = "pairing"
 private const val STATUS_NOTIFICATION = 1
 private const val PAIRING_NOTIFICATION = 2
@@ -61,11 +61,12 @@ internal fun AgentService.goForeground(text: String) {
     val settings = PendingIntent.getActivity(
         this, 0, SchoolSettingsActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
-    val notification = Notification.Builder(this, STATUS_CHANNEL)
+    val notification = Notification.Builder(this, StatusChannel.ID)
         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
         .setContentTitle(DeviceWord.say(text))
         .setStyle(Notification.BigTextStyle().bigText(DeviceWord.say(text)))
         .setOngoing(true)
+        .setVisibility(StatusChannel.LOCK_SCREEN)
         .addAction(
             Notification.Action.Builder(
                 Icon.createWithResource(this, android.R.drawable.ic_lock_idle_lock), SchoolSettingsActivity.TITLE, settings,
@@ -79,9 +80,21 @@ internal fun AgentService.goForeground(text: String) {
     }
 }
 
+// Before the fixed notification goes up (onCreate), so the old status
+// channel carries no foreground notification of this process when deleted.
 internal fun AgentService.createChannels() {
+    val existing = notifications().notificationChannels.map { it.id }
+    for (id in StatusChannel.stale(existing)) {
+        try {
+            notifications().deleteNotificationChannel(id)
+        } catch (e: SecurityException) {
+            Log.w("Midview", "The old status channel was not deleted", e)
+        }
+    }
     notifications().createNotificationChannel(
-        NotificationChannel(STATUS_CHANNEL, "Midview", NotificationManager.IMPORTANCE_LOW),
+        NotificationChannel(StatusChannel.ID, "Midview", NotificationManager.IMPORTANCE_LOW).apply {
+            lockscreenVisibility = StatusChannel.LOCK_SCREEN
+        },
     )
     notifications().createNotificationChannel(
         NotificationChannel(PAIRING_CHANNEL, "Pareamento com o professor", NotificationManager.IMPORTANCE_HIGH),
