@@ -40,7 +40,8 @@ import java.io.EOFException
 // não funciona em celular.", which the teacher's program can tell apart).
 // files is "Enviar arquivo", "Recolher arquivos" and "Apagar as pastas dos
 // alunos" (FileHandler), a PC Session's too; without it they get that answer.
-// power is "Desligar" and "Reiniciar" (PowerCountdown), a PC Agent's command.
+// power is "Desligar" and "Reiniciar" (PowerCountdown), a PC Agent's command;
+// powerSchedule, "Agendar" (PowerScheduleStore), a PC Agent's too.
 // openWebsite and openApp are "Abrir site" and "Abrir programa" (TeacherLaunch),
 // a PC Session's; installs is "Instalar programa" and "Desinstalar programa"
 // (TeacherInstalls), a PC Agent's. lab is the "Painel do laboratório"
@@ -72,6 +73,9 @@ class CommandHandler(
     // shut down, 1 restart, 2 cancel) and the warning's time in seconds in,
     // the CommandAck's result out.
     private val power: (action: Int, delaySeconds: Int) -> Pair<Boolean, String> = { _, _ -> false to CommandResult.NOT_ON_PHONE },
+    // "Agendar" (PowerScheduleStore): the SetPowerSchedule payload in, the
+    // CommandAck's result out.
+    private val powerSchedule: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Mensagem" (TeacherMessages): the ShowMessage payload in, the
     // CommandAck's result out.
     private val showMessage: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -213,6 +217,12 @@ class CommandHandler(
             val request = powerRequest(message.payload)
             val (done, detail) = if (request == null) false to INVALID_REQUEST else power(request.first, request.second)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        // The PC's payload: the phone keeps the newest and turns its screen
+        // off at the shutdown time; the wake time is a PC's only.
+        MessageType.SET_POWER_SCHEDULE -> {
+            val (taken, detail) = powerSchedule(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(taken, detail))
         }
         MessageType.CLEAR_DELIVERY_FOLDER -> {
             val (cleared, detail) = files?.clear() ?: (false to CommandResult.NOT_ON_PHONE)

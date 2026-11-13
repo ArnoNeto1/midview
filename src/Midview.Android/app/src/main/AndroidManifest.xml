@@ -200,6 +200,11 @@
             android:name=".agent.AgentWatchdog"
             android:exported="false" />
 
+        <!-- The teacher's "Agendar": the screen off at the shutdown time. -->
+        <receiver
+            android:name=".agent.PowerScheduleAlarm"
+            android:exported="false" />
+
         <!-- The cable door: adb shell (no permission to ask for) calls
              "prepare"; CableSetupDoor checks the caller is uid 2000. Only
              "call" does anything. -->

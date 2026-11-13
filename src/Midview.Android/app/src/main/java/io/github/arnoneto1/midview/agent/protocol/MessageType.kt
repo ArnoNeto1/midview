@@ -60,6 +60,12 @@ object MessageType {
     // (PowerCountdown).
     const val POWER = 21
 
+    // "Agendar": the lab's power timetable (PowerSchedule), from a trusted
+    // teacher only; answered with a CommandAck (CommandResult). The phone
+    // keeps it and turns its screen off at the shutdown time
+    // (ScheduledScreenOff); the wake time is a PC's only.
+    const val SET_POWER_SCHEDULE = 24
+
     // Updating the agent over the network, from a trusted teacher only (see
     // NetworkUpdateCodec): offer -> accepted, the file as FILE_CHUNKs, then
     // GET_UPDATE_STATUS -> UPDATE_STATUS.

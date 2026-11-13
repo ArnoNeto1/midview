@@ -297,10 +297,13 @@ class AgentService : Service() {
         )
         val countdown = closeCountdown(closer, log, ::own)
         val power = powerCountdown(log, ::own)
+        // "Agendar": the screen off at the teacher's shutdown time, by the same countdown.
+        val powerSchedule = scheduledScreenOff(power, log, ::own)
         val classFolder = AgentClassFolder(this, log, ::own)
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
+            powerSchedule = powerSchedule::handle,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
