@@ -87,6 +87,10 @@ class Optimizer(
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
     private val remover: AppRemover = AppRemover { _, _ -> "não há como desinstalar" },
     private val ticker: () -> Long = System::nanoTime,
+    // The cable's "Midview otimizado" (CableSetup.optimizes): with "Só o
+    // Midview" the first trusted command does not optimize; the teacher's
+    // "Otimizar" (run) still does.
+    private val tidiesByItself: () -> Boolean = { true },
 ) : PhoneOptimizer {
     private val lock = ReentrantLock()
     private val busy = AtomicBoolean(false)
@@ -113,7 +117,7 @@ class Optimizer(
             val held = store.current
             val dnsState = held.report.dns
             when {
-                held.report.optimizedAt == null -> inBackground { run() }
+                held.report.optimizedAt == null -> if (tidiesByItself()) inBackground { run() }
                 dnsState in RETRIED && OptimizeStore.retryDue(clock(), held.lastDnsAttempt) -> inBackground { retryDns() }
                 // Freed while the agent was not running to hear it.
                 dnsState == PhoneDnsStates.OFF_INTERNET_BLOCKED && !internetBlocked() -> inBackground { retryDns() }

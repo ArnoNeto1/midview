@@ -141,6 +141,10 @@ public sealed class PhoneCableTests
         S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
         + CableSetupPayload.Encode("07", Thumb, "Lab", "pw");
 
+    private static string OnlyMidviewCall() =>
+        S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+        + CableSetupPayload.Encode("07", Thumb, "Lab", "pw", optimize: false);
+
     private static FakeAdb ReadyToPrepare() => Redmi()
         .Set(S + "install -r " + Apk, "Performing Streamed Install\nSuccess\n")
         .Set(ContentCall(), "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n")
@@ -608,9 +612,13 @@ public sealed class PhoneCableTests
     {
         var adb = ReadyToPrepare()
             .Set(S + "shell pm list packages", "package:com.miui.daemon\npackage:cn.wps.moffice_eng\n")
-            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n");
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n")
+            .Set(OnlyMidviewCall(), "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n");
 
         var result = new PhoneCable(adb).Prepare(Apk, "07", Thumb, "Lab", "pw", _ => { }, optimize: false);
+
+        // The phone is told too, so its agent leaves the apps as they came.
+        Assert.Contains(OnlyMidviewCall(), adb.Calls);
 
         Assert.Null(result.Problem);
         Assert.Equal(new KnownMachine("Celular 07", "0.0.0.0", Thumb, Thumb, null, DeviceKind.Android), result.Phone);
@@ -624,7 +632,6 @@ public sealed class PhoneCableTests
         // Everything else runs as with the optimized setup.
         Assert.Contains(S + "install -r " + Apk, adb.Calls);
         Assert.Contains(S + "shell settings put secure accessibility_enabled 1", adb.Calls);
-        Assert.Contains(ContentCall(), adb.Calls);
         Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
     }
 

@@ -68,7 +68,7 @@ public sealed class PhoneCableLocalAccountsTests
         .Set(S + "shell dumpsys device_policy", "Current Device Policy Manager state:\n  Immutable state:\n")
         .Set(S + "install -r " + Apk, "Performing Streamed Install\nSuccess\n")
         .Set(S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
-             + CableSetupPayload.Encode("01", Thumb, "Lab", "pw", AndroidDeviceKind.Tablet),
+             + CableSetupPayload.Encode("01", Thumb, "Lab", "pw", AndroidDeviceKind.Tablet, optimize: false),
             "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Tablet 01}]\n")
         .Set(SetDeviceOwner, "Success: Device owner set to package ComponentInfo{" + Admin + "}\n");
 

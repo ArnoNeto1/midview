@@ -8,19 +8,23 @@ import org.json.JSONObject
 // What the Master hands the phone through the cable while it prepares it:
 // the phone's number, the Master's certificate thumbprint and the Wi-Fi.
 // tablet: the Master prepared it from "Configurar tablet", so it is named
-// "Tablet 07" instead of "Celular 07".
+// "Tablet 07" instead of "Celular 07". optimize: "Midview otimizado" (true)
+// or "Só o Midview" (false), which leaves the device's apps as they came.
 data class CableSetupData(
     val number: String,
     val master: String,
     val ssid: String,
     val password: String?,
     val tablet: Boolean = false,
+    val optimize: Boolean = true,
 )
 
 // The package of the "prepare" call: Base64 URL without "=" of the UTF-8
 // JSON {"number","master","ssid","password"} (the Master's CableSetupPayload),
-// with "kind":"tablet" after them only for a tablet. A Master that never
-// sends "kind", or a kind this app does not know, means a phone.
+// with "kind":"tablet" after them only for a tablet and "optimize":false
+// only for "Só o Midview". A Master that never sends "kind", or a kind this
+// app does not know, means a phone; one that never sends "optimize", the
+// optimized device it always prepared.
 object CableSetupPayload {
     private val NUMBER = Regex("[0-9]{1,3}")
     private val THUMBPRINT = Regex("[0-9A-Fa-f]{40,64}")
@@ -41,19 +45,22 @@ object CableSetupPayload {
         val password = if (obj.isNull("password")) "" else obj.optString("password", "")
         if (!NUMBER.matches(number) || !THUMBPRINT.matches(master) || ssid.isEmpty()) return null
         val tablet = obj.optString("kind", "") == KIND_TABLET
-        return CableSetupData(number, master.uppercase(), ssid, password.ifEmpty { null }, tablet)
+        val optimize = obj.optBoolean("optimize", true)
+        return CableSetupData(number, master.uppercase(), ssid, password.ifEmpty { null }, tablet, optimize)
     }
 }
 
 data class SchoolWifiName(val ssid: String, val open: Boolean)
 
 // The setup file (filesDir/cable-setup.json): the number and the kind, which
-// name the phone for good, and the Wi-Fi, whose password is erased once used.
+// name the phone for good, whether the agent tidies it up (optimize), and the
+// Wi-Fi, whose password is erased once used.
 class CableSetup(private val file: File) {
     fun save(data: CableSetupData) {
         val text = JSONObject()
             .put("number", data.number)
             .put("kind", if (data.tablet) CableSetupPayload.KIND_TABLET else KIND_PHONE)
+            .put("optimize", data.optimize)
             .put("ssid", data.ssid)
             .put("password", data.password ?: JSONObject.NULL)
             .put("open", data.password == null)
@@ -70,6 +77,11 @@ class CableSetup(private val file: File) {
     // Whether the Master prepared this device as a tablet. A file saved
     // before the kind existed has none: a phone, as it was prepared.
     fun isTablet(): Boolean = synchronized(lock) { load()?.optString("kind", "") == CableSetupPayload.KIND_TABLET }
+
+    // Whether the agent tidies the device up by itself (Optimizer.teacherSeen):
+    // only "Só o Midview" says no. A file saved before the choice existed, or
+    // a device not prepared over the cable, says yes, as it always did.
+    fun optimizes(): Boolean = synchronized(lock) { load()?.optBoolean("optimize", true) ?: true }
 
     // Forgets the setup (a preparation that failed midway).
     fun clear() = synchronized(lock) { file.delete(); Unit }

@@ -282,7 +282,7 @@ public sealed partial class PhoneCable
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
 
         stage(CableStage.Wifi);
-        var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password, kind);
+        var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password, kind, optimize);
         var call = Shell(
             Short, "content", "call", "--uri", Authority, "--method", "prepare", "--extra", "setup:s:" + payload);
         var bundle = ParseBundle(call.Text);

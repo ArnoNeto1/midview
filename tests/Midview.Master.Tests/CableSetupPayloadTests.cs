@@ -70,4 +70,23 @@ public sealed class CableSetupPayloadTests
         var json = Decode(CableSetupPayload.Encode("07", "ab", "Lab", "pw", AndroidDeviceKind.Tablet));
         Assert.Equal("{\"number\":\"07\",\"master\":\"AB\",\"ssid\":\"Lab\",\"password\":\"pw\",\"kind\":\"tablet\"}", json);
     }
+
+    // "Midview otimizado" adds nothing: the package stays as it was.
+    [Fact]
+    public void Optimized_json_has_no_optimize()
+    {
+        Assert.Equal(FixedVector, CableSetupPayload.Encode("07", "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12", "Lab \"1\"; é", "s'nh@ 1;",
+            AndroidDeviceKind.Phone, optimize: true));
+    }
+
+    [Fact]
+    public void Only_midview_ends_with_optimize_false()
+    {
+        Assert.Equal(
+            "{\"number\":\"07\",\"master\":\"AB\",\"ssid\":\"Lab\",\"password\":\"pw\",\"optimize\":false}",
+            Decode(CableSetupPayload.Encode("07", "ab", "Lab", "pw", AndroidDeviceKind.Phone, optimize: false)));
+        Assert.Equal(
+            "{\"number\":\"07\",\"master\":\"AB\",\"ssid\":\"Lab\",\"password\":\"pw\",\"kind\":\"tablet\",\"optimize\":false}",
+            Decode(CableSetupPayload.Encode("07", "ab", "Lab", "pw", AndroidDeviceKind.Tablet, optimize: false)));
+    }
 }

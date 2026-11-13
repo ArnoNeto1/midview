@@ -151,6 +151,29 @@ class CableSetupTest {
         assertFalse(CableSetup(file).isTablet())
     }
 
+    // "Só o Midview" sends "optimize":false; a Master that sends nothing
+    // prepared the optimized device it always did.
+    @Test fun onlyMidviewIsKeptAndEverythingElseOptimizes() {
+        val json = "{\"number\":\"07\",\"master\":\"" + "AB".repeat(20) + "\",\"ssid\":\"x\",\"password\":\"y\",\"optimize\":false}"
+        val data = CableSetupPayload.decode(encode(json))!!
+        assertFalse(data.optimize)
+        assertTrue(CableSetupPayload.decode(vector)!!.optimize)
+
+        val file = File(folder.root, "cable-setup.json")
+        CableSetup(file).save(data)
+        CableSetup(file).takeWifi()
+        assertFalse(CableSetup(file).optimizes())
+        CableSetup(file).save(CableSetupData("08", "AB".repeat(20), "x", "p"))
+        assertTrue(CableSetup(file).optimizes())
+    }
+
+    @Test fun anOlderFileOrNoSetupOptimizes() {
+        val file = File(folder.root, "cable-setup.json")
+        file.writeText("{\"number\":\"07\",\"ssid\":\"x\",\"password\":null,\"readyShown\":true}")
+        assertTrue(CableSetup(file).optimizes())
+        assertTrue(CableSetup(File(folder.root, "none.json")).optimizes())
+    }
+
     // A file saved before the kind existed names a phone.
     @Test fun anOlderFileWithoutKindIsAPhone() {
         val file = File(folder.root, "cable-setup.json")

@@ -34,8 +34,12 @@ class OptimizerTest {
         Optimizer(
             catalog, gw, AdblockDns(gw, network, internetBlocked = { blocked }), store,
             internetBlocked = { blocked }, adblockWanted = { adblock }, clock = { now }, background = { queued += it },
+            tidiesByItself = { optimized },
         )
     }
+
+    // The cable's "Midview otimizado" (false: "Só o Midview").
+    private var optimized = true
 
     // The lab panel's "Bloqueador de anúncios".
     private var adblock = true
@@ -150,6 +154,22 @@ class OptimizerTest {
         runQueued()
         optimizer.teacherSeen()
         assertTrue(queued.isEmpty())
+    }
+
+    // "Só o Midview": the device's apps stay as they came until the teacher asks.
+    @Test fun onlyMidviewLeavesTheFirstCommandAlone() {
+        optimized = false
+        optimizer.teacherSeen()
+        assertTrue(queued.isEmpty())
+        assertNull(store.current.report.optimizedAt)
+        assertTrue(gw.hiddenCalls.isEmpty())
+    }
+
+    @Test fun onlyMidviewStillOptimizesWhenTheTeacherAsks() {
+        optimized = false
+        val report = optimizer.run()
+        assertEquals(now, report.optimizedAt)
+        assertEquals(3, gw.hidden.size)
     }
 
     @Test fun onceOptimizedACommandStartsNothing() {

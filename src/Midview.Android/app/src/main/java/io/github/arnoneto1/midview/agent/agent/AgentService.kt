@@ -43,6 +43,7 @@ import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 import io.github.arnoneto1.midview.agent.programs.SilentUninstaller
 import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
+import io.github.arnoneto1.midview.agent.provisioning.CableSetup
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
 import io.github.arnoneto1.midview.agent.screen.FrameCredit
@@ -244,6 +245,7 @@ class AgentService : Service() {
             OptimizeStore(File(filesDir, OPTIMIZE_FILE), log),
             internetBlocked, adblockWanted = { lab.adblock }, log = log,
             remover = SilentUninstaller(this),
+            tidiesByItself = { CableSetup(File(filesDir, CableSetup.FILE_NAME)).optimizes() },
         )
         // The site block: Chrome's policy and the internet block, kept the
         // same way and applied again now. Other browsers are hidden, checked

@@ -36,6 +36,9 @@ public sealed class PhoneCableHomeScreenTests
             ["content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
              + CableSetupPayload.Encode("07", Thumb, "Lab", "pw")] =
                 "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n",
+            ["content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+             + CableSetupPayload.Encode("07", Thumb, "Lab", "pw", optimize: false)] =
+                "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n",
             ["dpm set-device-owner " + Admin] = "Success: Device owner set\n",
         };
 
