@@ -11,14 +11,22 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.sites.AlwaysOnVpn
 
-// DevicePolicyManager for Lockdown, as the app's AdminReceiver.
+// DevicePolicyManager for Lockdown, as the app's AdminReceiver. Once the
+// Midview is leaving the phone (PhoneLeaving), every call that would lock
+// something (a restriction, a suspended or hidden app, Chrome's policies, the
+// agent's VPN, the ad-free DNS) is refused, whoever asks: lifting still works.
 class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     private val app = context.applicationContext
     private val dpm = app.getSystemService(DevicePolicyManager::class.java)
     private val admin = ComponentName(app, AdminReceiver::class.java)
+
+    private fun leaving(): Boolean = PhoneLeaving.isActive(app)
+
+    private fun refuseWhileLeaving() = check(!leaving()) { "The Midview is leaving this phone" }
 
     override val sdkInt: Int = Build.VERSION.SDK_INT
 
@@ -65,14 +73,21 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         log = { text, e -> Log.w(TAG, text, e) },
     )
 
-    override fun addUserRestriction(r: String) = dpm.addUserRestriction(admin, r)
+    override fun addUserRestriction(r: String) {
+        refuseWhileLeaving()
+        dpm.addUserRestriction(admin, r)
+    }
 
     // Only NetworkFree lifts a lock, for "Liberar Wi-Fi e modo avião".
     fun clearUserRestriction(r: String) = dpm.clearUserRestriction(admin, r)
 
-    override fun setUninstallBlocked(pkg: String, blocked: Boolean) = dpm.setUninstallBlocked(admin, pkg, blocked)
+    override fun setUninstallBlocked(pkg: String, blocked: Boolean) {
+        if (blocked) refuseWhileLeaving()
+        dpm.setUninstallBlocked(admin, pkg, blocked)
+    }
 
     override fun setUserControlDisabled(pkgs: List<String>) {
+        if (pkgs.isNotEmpty()) refuseWhileLeaving()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             dpm.setUserControlDisabledPackages(admin, pkgs)
         }
@@ -84,20 +99,25 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         }
     }
 
-    override fun setLockTaskPackages(pkgs: List<String>) = dpm.setLockTaskPackages(admin, pkgs.toTypedArray())
+    override fun setLockTaskPackages(pkgs: List<String>) {
+        if (pkgs.isNotEmpty()) refuseWhileLeaving()
+        dpm.setLockTaskPackages(admin, pkgs.toTypedArray())
+    }
 
     override fun setLockTaskFeatures(features: Int) = dpm.setLockTaskFeatures(admin, features)
 
     override fun setPermittedAccessibilityServices(pkgs: List<String>?) {
+        if (pkgs != null) refuseWhileLeaving()
         if (!dpm.setPermittedAccessibilityServices(admin, pkgs)) {
             throw SecurityException("Accessibility services $pkgs were not permitted")
         }
     }
 
     override fun setPackagesSuspended(pkgs: List<String>, suspended: Boolean): List<String> =
-        dpm.setPackagesSuspended(admin, pkgs.toTypedArray(), suspended).toList()
+        if (suspended && leaving()) pkgs else dpm.setPackagesSuspended(admin, pkgs.toTypedArray(), suspended).toList()
 
     override fun setApplicationRestrictions(pkg: String, restrictions: Map<String, Any>) {
+        if (restrictions.isNotEmpty()) refuseWhileLeaving()
         val bundle = Bundle()
         for ((key, value) in restrictions) {
             when (value) {
@@ -112,7 +132,7 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     }
 
     override fun setApplicationHidden(pkg: String, hidden: Boolean): Boolean =
-        dpm.setApplicationHidden(admin, pkg, hidden)
+        if (hidden && leaving()) false else dpm.setApplicationHidden(admin, pkg, hidden)
 
     override fun isApplicationHidden(pkg: String): Boolean = dpm.isApplicationHidden(admin, pkg)
 
@@ -122,7 +142,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     // Android first connects to the host (DNS over TLS, port 853) from this
     // app's process and answers PRIVATE_DNS_SET_ERROR_HOST_NOT_SERVING,
     // changing nothing, if it cannot.
-    override fun setPrivateDnsHost(host: String): Int = dpm.setGlobalPrivateDnsModeSpecifiedHost(admin, host)
+    override fun setPrivateDnsHost(host: String): Int =
+        if (leaving()) PrivateDns.SET_ERROR_FAILURE_SETTING else dpm.setGlobalPrivateDnsModeSpecifiedHost(admin, host)
 
     override fun setPrivateDnsAutomatic(): Int = dpm.setGlobalPrivateDnsModeOpportunistic(admin)
 
@@ -131,6 +152,7 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     // their Settings names are hidden), as the system: the private DNS
     // restriction (Lockdown) does not stop it, and Android checks no host.
     override fun writePrivateDnsHost(host: String) {
+        refuseWhileLeaving()
         dpm.setGlobalSetting(admin, PRIVATE_DNS_SPECIFIER, host)
         dpm.setGlobalSetting(admin, PRIVATE_DNS_MODE, PRIVATE_DNS_MODE_HOSTNAME)
     }
@@ -141,6 +163,7 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     }
 
     override fun setAlwaysOnVpn(vpn: AlwaysOnVpn?) {
+        if (vpn?.pkg == app.packageName) refuseWhileLeaving()
         try {
             dpm.setAlwaysOnVpnPackage(admin, vpn?.pkg, vpn?.lockdown ?: false)
         } catch (e: PackageManager.NameNotFoundException) {
@@ -165,6 +188,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         // logged, and the next start of the agent tries again. The Wi-Fi and
         // airplane mode stay free while their time runs (SchoolNetwork).
         fun lockDown(context: Context) {
+            // The Midview is leaving the phone (PhoneLeaving): never locked again.
+            if (PhoneLeaving.isActive(context)) return
             try {
                 val network = SchoolNetwork.network(context)
                 // Once the Device Owner: the school's network out of the user's hands.

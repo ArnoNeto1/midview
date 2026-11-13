@@ -27,7 +27,8 @@ import io.github.arnoneto1.midview.agent.protocol.PhoneAdminPassword
 // "Ajustes da escola", from the agent's notification: whoever knows the
 // phones' admin password frees the Wi-Fi and airplane mode for 10 minutes
 // (AdminUnlock), and then may open the Wi-Fi settings from here or lock them
-// again at once. It opens nothing else: the only way out to the system is
+// again at once. With a password set, "Tirar o Midview deste celular..."
+// opens LeaveActivity, which asks for it again. It opens nothing else: the only way out to the system is
 // Android's own Wi-Fi screen, and only while the network is free. Without a
 // password set by the teacher it says so; after five wrong ones it waits.
 // Kept out of the screenshots (the teacher's view of the screen too).
@@ -39,6 +40,8 @@ class SchoolSettingsActivity : Activity() {
     private lateinit var freeButton: Button
     private lateinit var wifiButton: Button
     private lateinit var lockButton: Button
+    private lateinit var leaveButton: Button
+    private lateinit var leaveNote: TextView
     private var checking = false
     private var afterAttempt: String? = null
     private val refresh = object : Runnable {
@@ -91,6 +94,9 @@ class SchoolSettingsActivity : Activity() {
         note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
         wifiButton.visibility = if (until != null) View.VISIBLE else View.GONE
         lockButton.visibility = wifiButton.visibility
+        val hasPassword = SchoolNetwork.admin(this).state() !is AdminUnlock.State.NoPassword
+        leaveButton.visibility = if (hasPassword) View.VISIBLE else View.GONE
+        leaveNote.visibility = if (hasPassword) View.GONE else View.VISIBLE
     }
 
     // Off the main thread: the check takes about a second, on purpose.
@@ -162,6 +168,8 @@ class SchoolSettingsActivity : Activity() {
         freeButton = button("Liberar") { submit() }.also { addView(it) }
         wifiButton = button("Abrir Wi-Fi") { openWifi() }.also { addView(it) }
         lockButton = button("Travar agora") { lockNow() }.also { addView(it) }
+        leaveButton = button(LeaveTexts.OPEN) { startActivity(LeaveActivity.intent(this@SchoolSettingsActivity)) }.also { addView(it) }
+        leaveNote = text(LeaveTexts.NEEDS_PASSWORD, 15f).also { addView(it) }
         addView(button("Fechar") { finish() })
     }
 

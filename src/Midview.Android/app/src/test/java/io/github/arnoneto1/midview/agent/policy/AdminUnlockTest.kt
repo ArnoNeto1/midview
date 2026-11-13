@@ -160,4 +160,28 @@ class AdminUnlockTest {
         assertEquals(AdminUnlock.Attempt.LockedOut(end), admin().tryPassword("abc123"))
         assertTrue(freed.isEmpty())
     }
+
+    // "Tirar o Midview deste celular": the password checked alone frees
+    // nothing, and counts its wrong tries with the Wi-Fi's.
+    @Test fun checkingAloneFreesNothing() {
+        val admin = admin()
+        admin.setPassword(payload)
+
+        assertEquals(AdminUnlock.Attempt.Verified, admin.checkOnly("abc123"))
+        assertTrue(freed.isEmpty())
+    }
+
+    @Test fun checkingAloneSharesTheWrongTries() {
+        val admin = admin()
+        admin.setPassword(payload)
+        repeat(4) { admin.tryPassword("errada") }
+
+        val locked = admin.checkOnly("errada")
+
+        assertTrue(locked is AdminUnlock.Attempt.LockedOut)
+        assertTrue(admin.checkOnly("abc123") is AdminUnlock.Attempt.LockedOut)
+    }
+
+    @Test fun withoutAPasswordCheckingSaysSo() =
+        assertEquals(AdminUnlock.Attempt.NoPassword, admin().checkOnly("abc123"))
 }

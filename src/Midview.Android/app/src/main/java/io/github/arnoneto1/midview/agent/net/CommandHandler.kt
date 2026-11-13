@@ -99,11 +99,25 @@ class CommandHandler(
     private val installs: TeacherInstalls? = null,
     private val lab: LabConfigStore? = null,
     private val classLesson: ClassLessonStore? = null,
+    // "Desfazer e tirar o Midview" (PhoneLeave): whether the phone is leaving
+    // (nobody pairs and no command is taken then), the payload in and the
+    // CommandAck's result out (the locks undone), and the rest once the
+    // answer is on its way (the teachers forgotten, the Device Owner given
+    // up, the uninstall asked).
+    private val isLeaving: () -> Boolean = { false },
+    private val leave: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    private val finishLeaving: () -> Unit = {},
     private val listApps: () -> List<PhoneApp>,
 ) {
     fun handle(channel: Channel) {
         val isTrusted = trusted.isTrusted(channel.remoteThumbprint)
         var message = channel.receive(if (isTrusted) Int.MAX_VALUE else UNTRUSTED_MAX_LENGTH)
+        if (isLeaving()) {
+            if (isTrusted && message.type != MessageType.PAIR_REQUEST) {
+                channel.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, LEAVING)))
+            }
+            return
+        }
         if (message.type == MessageType.PAIR_REQUEST) {
             pairing.run(channel, message)
             return
@@ -137,6 +151,24 @@ class CommandHandler(
             // connection, as on a PC.
             if (files != null && message.type in FILE_TRANSFERS) {
                 if (message.type == MessageType.COLLECT_FILES) files.collect(channel) else files.receive(channel, message)
+                return
+            }
+            // The locks undone on this thread, then the answer; the rest after
+            // it, off this thread (forgetting the teachers ends the trust this
+            // connection runs on), even if the teacher hung up meanwhile.
+            if (message.type == MessageType.REMOVE_MIDVIEW_FROM_PHONE) {
+                val (leaving, detail) = leave(message.payload)
+                try {
+                    channel.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(leaving, detail)))
+                } finally {
+                    if (leaving) runLater(WIPE_DELAY_MILLIS) {
+                        try {
+                            finishLeaving()
+                        } catch (e: RuntimeException) {
+                            log("The Midview could not finish leaving", e)
+                        }
+                    }
+                }
                 return
             }
             channel.send(answer(message, channel.remoteThumbprint))
@@ -310,6 +342,7 @@ class CommandHandler(
         const val WIPING = "apagando"
         const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."
         const val INVALID_REQUEST = "pedido inválido"
+        const val LEAVING = "o Midview está saindo deste celular"
 
         private val FILE_TRANSFERS = setOf(MessageType.SEND_FILE, MessageType.SEND_FILE_WITH_OPTIONS, MessageType.COLLECT_FILES)
 

@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 
 // WifiControl on WifiManager, as the Device Owner. setWifiEnabled,
 // addNetwork and enableNetwork are deprecated and fail for an ordinary app
@@ -36,7 +37,10 @@ class AndroidWifiControl(context: Context) : WifiControl {
     @Suppress("DEPRECATION")
     override fun join(networkId: Int): Boolean = wifi.enableNetwork(networkId, true)
 
-    override fun lockOwnersNetworks() = dpm.setGlobalSetting(admin, WIFI_DEVICE_OWNER_CONFIGS_LOCKDOWN, "1")
+    // Never once the Midview is leaving the phone (PhoneLeaving).
+    override fun lockOwnersNetworks() {
+        if (!PhoneLeaving.isActive(app)) dpm.setGlobalSetting(admin, WIFI_DEVICE_OWNER_CONFIGS_LOCKDOWN, "1")
+    }
 
     private companion object {
         // Settings.Global.WIFI_DEVICE_OWNER_CONFIGS_LOCKDOWN.

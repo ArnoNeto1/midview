@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.policy
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.provisioning.CableSetup
 import java.io.File
 
@@ -63,6 +64,7 @@ object SchoolNetwork {
     // The watchdog's check: the Wi-Fi locked again once its free time is up.
     // Never fails its caller.
     fun check(context: Context) {
+        if (PhoneLeaving.isActive(context)) return
         try {
             network(context).check()
         } catch (e: RuntimeException) {

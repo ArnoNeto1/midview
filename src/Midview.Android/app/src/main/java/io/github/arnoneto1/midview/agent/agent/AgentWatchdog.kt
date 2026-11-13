@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 
@@ -21,6 +22,11 @@ import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 // while it is off (WatchdogAlarm).
 class AgentWatchdog : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        // The Midview is leaving the phone: finished, nothing started or locked again.
+        if (PhoneLeaving.isActive(context)) {
+            PhoneLeaving.resumeInBackground(context)
+            return
+        }
         AgentService.ensureRunning(context, "watchdog")
         // The lock screen too: the teacher's PIN put back if Android's
         // "password changed" never came.
@@ -31,13 +37,15 @@ class AgentWatchdog : BroadcastReceiver() {
     }
 
     companion object {
+        private fun check(app: Context): PendingIntent = PendingIntent.getBroadcast(
+            app, 0, Intent(app, AgentWatchdog::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
         fun arm(context: Context) {
             val app = context.applicationContext
             val alarms = app.getSystemService(AlarmManager::class.java)
-            val check = PendingIntent.getBroadcast(
-                app, 0, Intent(app, AgentWatchdog::class.java),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
+            val check = check(app)
             val screenOn = app.getSystemService(PowerManager::class.java)?.isInteractive ?: true
             val at = WatchdogAlarm.nextAt(SystemClock.elapsedRealtime(), screenOn)
             val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarms.canScheduleExactAlarms()
@@ -52,6 +60,12 @@ class AgentWatchdog : BroadcastReceiver() {
                 // The exact alarm permission taken back in between.
                 alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, check)
             }
+        }
+
+        // The Midview left the phone (PhoneLeave): no more checks.
+        fun cancel(context: Context) {
+            val app = context.applicationContext
+            app.getSystemService(AlarmManager::class.java).cancel(check(app))
         }
 
         // While the agent runs: the screen turned on brings the 10 s check

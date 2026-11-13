@@ -78,6 +78,9 @@ class ScreenPassword(
     // "pendente" or "sem chave".
     fun tokenState(): ResetToken = synchronized(gate) { tokenNow(gw.isDeviceSecure()) }
 
+    // Whether the teacher's PIN is on the phone (for PhoneLeave).
+    fun teacherPinSet(): Boolean = synchronized(gate) { store.current.teacherPin != null }
+
     // SET_PHONE_SCREEN_PASSWORD: the teacher's PIN (empty payload: none).
     fun setTeacherPin(payload: ByteArray): Pair<Boolean, String> {
         val pin = PhoneScreenPassword.decode(payload) ?: return false to PhoneScreenPassword.INVALID

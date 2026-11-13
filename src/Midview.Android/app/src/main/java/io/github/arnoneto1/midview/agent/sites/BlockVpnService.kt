@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import java.io.IOException
 
 // The agent's VPN while the internet is blocked (InternetBlock): every
@@ -42,6 +43,11 @@ class BlockVpnService : VpnService() {
     private fun establish() {
         synchronized(lock) {
             if (tunnel != null) return
+            // The Midview is leaving the phone: the internet is never blocked again.
+            if (PhoneLeaving.isActive(this)) {
+                stopSelf()
+                return
+            }
             if (prepare(this) != null) {
                 // Not this phone's always-on VPN (the internet was freed).
                 Log.w(TAG, "The block VPN is not allowed now; not started.")

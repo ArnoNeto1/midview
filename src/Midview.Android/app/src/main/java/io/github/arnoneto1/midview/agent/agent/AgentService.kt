@@ -20,6 +20,7 @@ import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.lab.LabConfigStore
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.lock.ScreenLock
 import io.github.arnoneto1.midview.agent.net.ChatHandler
@@ -100,6 +101,9 @@ class AgentService : Service() {
         ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)
         keeper(this).created()
+        // The Midview is leaving this phone (PhoneLeaving): no agent, no
+        // watchdog; onStartCommand finishes the leaving.
+        if (PhoneLeaving.isActive(this)) return
         AgentWatchdog.arm(this)
         stopWatchingScreen = AgentWatchdog.watchScreen(this)
         wifi.hold()
@@ -117,6 +121,12 @@ class AgentService : Service() {
     // (START_STICKY). onCreate already put it back in the foreground.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) Log.i(TAG, "Agent started again by Android.")
+        // Leaving (a process that ended midway, or the uninstall still to be
+        // confirmed): finished, never locked again.
+        if (PhoneLeaving.isActive(this)) {
+            PhoneLeaving.resumeInBackground(this)
+            return START_NOT_STICKY
+        }
         AgentWatchdog.arm(this)
         AndroidDevicePolicyGateway.lockDown(this)
         // The lock screen's reset token and the teacher's PIN.
@@ -318,6 +328,10 @@ class AgentService : Service() {
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
             freeNetwork = SchoolNetwork.network(this)::handle, adminPassword = SchoolNetwork.admin(this)::setPassword,
             powerSchedule = powerSchedule::handle,
+            // "Desfazer e tirar o Midview" (PhoneLeave).
+            isLeaving = { PhoneLeaving.isActive(this) },
+            leave = { PhoneLeaving.teacherAsked(this, it) },
+            finishLeaving = { PhoneLeaving.get(this).finish() },
             wallpaper = TeacherWallpaper(
                 AndroidWallpaper(this), policyGateway::isDeviceOwner, log,
                 showPickers = { show -> TeacherWallpaper.PICKERS.forEach { policyGateway.setApplicationHidden(it, !show) } },
@@ -410,7 +424,7 @@ class AgentService : Service() {
 
         private const val APP_BLOCK_FILE = "app-block.bin"
         private const val SITE_BLOCK_FILE = "site-block.txt"
-        private const val INTERNET_BLOCK_FILE = "internet-block.txt"
+        const val INTERNET_BLOCK_FILE = "internet-block.txt"
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val OPTIMIZE_FILE = "optimize.txt"
         private const val LAB_CONFIG_FILE = "lab-config.bin"

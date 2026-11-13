@@ -109,7 +109,7 @@ class ScreenPasswordStore(
             return ScreenPasswordState(token, tokenBoot, pin, changed, unknown)
         }
 
-        private const val BACKUP_SUFFIX = ".bak"
+        const val BACKUP_SUFFIX = ".bak"
 
         // Nothing written yet reads as nothing kept. A damaged file is read
         // from its copy; with both damaged the teacher's PIN is unknown (a

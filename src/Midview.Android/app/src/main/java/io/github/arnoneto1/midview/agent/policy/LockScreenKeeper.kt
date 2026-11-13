@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import java.io.File
 import java.security.SecureRandom
 import java.util.concurrent.Executors
@@ -32,14 +33,18 @@ class AndroidScreenLockGateway(context: Context) : ScreenLockGateway {
 
     // Android makes digits only a PIN (PasswordMetrics.isNumericOnly); null
     // removes the lock.
-    override fun resetPassword(pin: String, token: ByteArray): Boolean =
-        dpm.resetPasswordWithToken(admin, pin.ifEmpty { null }, token, 0)
+    // Once the Midview is leaving (PhoneLeaving), a PIN is only ever taken off.
+    override fun resetPassword(pin: String, token: ByteArray): Boolean {
+        if (pin.isNotEmpty() && PhoneLeaving.isActive(app)) return false
+        return dpm.resetPasswordWithToken(admin, pin.ifEmpty { null }, token, 0)
+    }
 
     // PASSWORD_QUALITY_NUMERIC, at least 4 digits (the admin declares
     // limit-password for it), or no rule at all.
     @Suppress("DEPRECATION")
     override fun requirePin(required: Boolean) {
         if (required) {
+            check(!PhoneLeaving.isActive(app)) { "The Midview is leaving this phone" }
             dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_NUMERIC)
             dpm.setPasswordMinimumLength(admin, PIN_LENGTH)
         } else {
@@ -84,12 +89,24 @@ object LockScreenKeeper {
         )
     }
 
+    // The Midview left the phone (PhoneLeave): the lock screen's state is
+    // deleted and the next get starts from nothing.
+    fun forget(context: Context) {
+        synchronized(this) {
+            val folder = context.applicationContext.createDeviceProtectedStorageContext().filesDir
+            File(folder, STATE_FILE).delete()
+            File(folder, STATE_FILE + ScreenPasswordStore.BACKUP_SUFFIX).delete()
+            instance = null
+        }
+    }
+
     // A check in the background; never fails its caller. done runs after it.
+    // Nothing once the Midview is leaving the phone (PhoneLeaving).
     fun check(context: Context, starting: Boolean = false, done: () -> Unit = {}) {
         val app = context.applicationContext
         worker.execute {
             try {
-                get(app).check(starting)
+                if (!PhoneLeaving.isActive(app)) get(app).check(starting)
             } catch (e: RuntimeException) {
                 Log.e(TAG, "The lock screen check failed", e)
             } finally {
@@ -101,6 +118,7 @@ object LockScreenKeeper {
     // Android says the lock changed (AdminReceiver): undone unless the
     // agent did it.
     fun lockChanged(context: Context) {
+        if (PhoneLeaving.isActive(context)) return
         val keeper = get(context)
         if (keeper.isOwnChange()) return
         worker.execute {

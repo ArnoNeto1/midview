@@ -214,4 +214,12 @@ object MessageType {
     // Answered with a CommandAck (CommandResult). Number 105 as the C#
     // SetPhoneWallpaper.
     const val SET_PHONE_WALLPAPER = 105
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Desfazer e
+    // tirar o Midview" (a PhoneLeaveRequest payload: the word the teacher
+    // typed, "REMOVER"). The agent lifts every school lock and setting it
+    // applied (PhoneLeave), answers one CommandAck (CommandResult) saying what
+    // it undid, then forgets the teachers, stops being the Device Owner and
+    // asks Android to uninstall it. Number 106 as the C# RemoveMidviewFromPhone.
+    const val REMOVE_MIDVIEW_FROM_PHONE = 106
 }

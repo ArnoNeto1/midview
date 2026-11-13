@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import java.lang.ref.WeakReference
 
 // Puts Android's own request on the screen ("Iniciar agora"), with nothing
@@ -173,6 +174,8 @@ class ConsentActivity : Activity() {
         // brings it back in front (a second ConsentActivity only finishes,
         // see onCreate) and the notice goes up again.
         fun show(context: Context) {
+            // The Midview is leaving the phone (PhoneLeaving): nobody is asked again.
+            if (PhoneLeaving.isActive(context)) return
             try {
                 context.startActivity(intent(context))
             } catch (e: RuntimeException) {

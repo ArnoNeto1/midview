@@ -31,6 +31,9 @@ class AdminUnlock(
         data class LockedOut(val untilMillis: Long) : Attempt
         data class Wrong(val triesLeft: Int) : Attempt
         object Freed : Attempt
+
+        // The password is right; nothing was freed (checkOnly).
+        object Verified : Attempt
         data class Refused(val detail: String) : Attempt
     }
 
@@ -74,15 +77,30 @@ class AdminUnlock(
     // Slow on purpose (PBKDF2): never on the main thread.
     @Synchronized
     fun tryPassword(typed: String): Attempt {
+        val checked = check(typed)
+        if (checked != Attempt.Verified) return checked
+        val (freed, detail) = free(MINUTES)
+        log("Admin password typed on the phone: Wi-Fi freed=$freed.", null)
+        return if (freed) Attempt.Freed else Attempt.Refused(detail)
+    }
+
+    // The password checked alone, with the same count of wrong ones and the
+    // same wait ("Tirar o Midview deste celular"): Verified when it is right.
+    @Synchronized
+    fun checkOnly(typed: String): Attempt {
+        val checked = check(typed)
+        if (checked == Attempt.Verified) log("Admin password typed on the phone to take the Midview off.", null)
+        return checked
+    }
+
+    private fun check(typed: String): Attempt {
         val stored = stored() ?: return Attempt.NoPassword
         lockout()?.let { return Attempt.LockedOut(it) }
         failures++
         saveAttempts()
         if (PhoneAdminPassword.verify(typed, stored)) {
             resetAttempts()
-            val (freed, detail) = free(MINUTES)
-            log("Admin password typed on the phone: Wi-Fi freed=$freed.", null)
-            return if (freed) Attempt.Freed else Attempt.Refused(detail)
+            return Attempt.Verified
         }
         if (failures >= MAX_TRIES) {
             failures = 0
