@@ -30,4 +30,10 @@ public static class PhoneNumber
 
     public static string NameOf(string number, AndroidDeviceKind kind) =>
         (kind == AndroidDeviceKind.Tablet ? "Tablet " : "Celular ") + number;
+
+    // The kind of an Android device, from the name NameOf gave it: "Tablet 07"
+    // is a tablet; any other name ("Celular 07", one from before tablets) is
+    // a phone. The only tablet marker there is.
+    public static AndroidDeviceKind KindOf(string name) =>
+        name.StartsWith("Tablet ", StringComparison.Ordinal) ? AndroidDeviceKind.Tablet : AndroidDeviceKind.Phone;
 }

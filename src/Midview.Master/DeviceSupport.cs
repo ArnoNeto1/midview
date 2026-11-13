@@ -85,6 +85,11 @@ public static class DeviceSupport
     // "Otimizar celulares e tablets..." in the "Telas" menu: a room with an Android device.
     public static bool HasAndroid(IEnumerable<KnownMachine> room) => room.Any(IsAndroid);
 
+    // An Android device of that kind (PhoneNumber.KindOf, from its name):
+    // "Atualizar os celulares" and "Atualizar os tablets" each reach their own.
+    public static bool IsAndroidOf(KnownMachine machine, AndroidDeviceKind kind) =>
+        machine.IsPhone && PhoneNumber.KindOf(machine.Name) == kind;
+
     // The machines that can do the action, in order: what a feature that
     // not every kind takes part in (the class folder, the Windows update) is fed.
     public static IReadOnlyList<KnownMachine> Only(IEnumerable<KnownMachine> machines, ToolbarAction action) =>

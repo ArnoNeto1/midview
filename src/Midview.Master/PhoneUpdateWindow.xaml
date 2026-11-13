@@ -13,8 +13,7 @@
             <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock x:Name="ApkTextBlock" TextWrapping="Wrap" FontWeight="SemiBold" Margin="0,0,0,8" />
-                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                               Text="Manda pela rede o Midview desta versão para os celulares: um celular primeiro e, quando ele confirmar que a versão nova funciona, os outros. O aluno não precisa tocar em nada. O Midview do celular some por alguns segundos e volta sozinho, e os bloqueios continuam valendo. O Android mostra ao aluno o aviso &quot;Atualizado pelo seu administrador&quot;." />
+                    <TextBlock x:Name="IntroTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
             <DockPanel Margin="0,14,0,10">

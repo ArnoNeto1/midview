@@ -28,7 +28,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly Action _openAdvanced;
     private readonly Action _openGiveAccess;
     private readonly Action _openJoinClass;
-    private readonly Action _openPhoneUpdate;
+    private readonly Action<AndroidDeviceKind> _openPhoneUpdate;
     private readonly Action<AndroidDeviceKind, bool> _openPreparePhones;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
@@ -40,7 +40,8 @@ public partial class MachinesWindow : MidviewWindow
     public MachinesWindow(
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
         Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, Task<int>> refreshAddresses, Action openAdvanced,
-        Action openGiveAccess, Action openJoinClass, Action openPhoneUpdate, Action<AndroidDeviceKind, bool> openPreparePhones)
+        Action openGiveAccess, Action openJoinClass, Action<AndroidDeviceKind> openPhoneUpdate,
+        Action<AndroidDeviceKind, bool> openPreparePhones)
     {
         InitializeComponent();
         ShowPhoneSetup(PreparePhoneSpan, PhoneProvisioning.Setup, OpenCableSteps);
@@ -366,24 +367,32 @@ public partial class MachinesWindow : MidviewWindow
         }
     }
 
-    // "Atualizar os celulares": shown only while the room has a phone (the
-    // classroom calls it again when its list changes), with the version of
-    // the phone app this PC sends and whether it is already downloaded.
+    // "Atualizar os celulares" and "Atualizar os tablets", always there so the
+    // teacher knows where to update: with the version of the app this PC
+    // sends (the same for both) and whether it is already downloaded, or
+    // saying the room has none yet. The classroom calls it again when its
+    // list changes.
     public void ShowPhoneUpdateCard()
     {
-        if (!DeviceSupport.HasPhones(_roster()))
-        {
-            PhoneUpdateCard.Visibility = Visibility.Collapsed;
-            return;
-        }
+        var room = _roster();
         var version = TeacherUpdate.CurrentVersion;
-        PhoneVersionTextBlock.Text = PhoneUpdateText.ApkLine(
-            version.ToString(), PhoneAgentApk.IsKept(PhoneAgentApk.DefaultFolder, version));
-        PhoneUpdateCard.Visibility = Visibility.Visible;
+        var kept = PhoneAgentApk.IsKept(PhoneAgentApk.DefaultFolder, version);
+        foreach (var (line, button, kind) in new[]
+        {
+            (PhoneVersionTextBlock, PhoneUpdateButton, AndroidDeviceKind.Phone),
+            (TabletVersionTextBlock, TabletUpdateButton, AndroidDeviceKind.Tablet),
+        })
+        {
+            var any = room.Any(machine => DeviceSupport.IsAndroidOf(machine, kind));
+            line.Text = any ? PhoneUpdateText.ApkLine(version.ToString(), kept, kind) : PhoneUpdateText.NoneInRoom(kind);
+            button.IsEnabled = any;
+        }
     }
 
     // The classroom's own window (one at a time, as from a phone's menu).
-    private void OnPhoneUpdateClicked(object sender, RoutedEventArgs e) => _openPhoneUpdate();
+    private void OnPhoneUpdateClicked(object sender, RoutedEventArgs e) => _openPhoneUpdate(AndroidDeviceKind.Phone);
+
+    private void OnTabletUpdateClicked(object sender, RoutedEventArgs e) => _openPhoneUpdate(AndroidDeviceKind.Tablet);
 
     // One at a time: asking again brings it back.
     private void OnUpdateClicked(object sender, RoutedEventArgs e)

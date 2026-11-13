@@ -6,12 +6,13 @@ namespace Midview.Master;
 // do celular..." on a phone's tile menu, "Otimizar celulares e tablets..." in
 // the "Telas" menu (MainWindow.Screens.cs; the selected Android devices, or
 // every one of the room when none is selected), "Senha dos celulares e
-// tablets..." next to it (the same devices) and "Atualizar os celulares" in
-// "Máquinas da sala" (every phone of the room).
+// tablets..." next to it (the same devices) and "Atualizar os celulares" /
+// "Atualizar os tablets" in "Máquinas da sala" (every phone, or every tablet,
+// of the room).
 public partial class MainWindow
 {
-    private IReadOnlyList<KnownMachine> RoomPhones() =>
-        _tiles.Select(tile => tile.Machine).Where(machine => machine.IsPhone).ToList();
+    private IReadOnlyList<KnownMachine> RoomPhones(AndroidDeviceKind kind) =>
+        _tiles.Select(tile => tile.Machine).Where(machine => DeviceSupport.IsAndroidOf(machine, kind)).ToList();
 
     private void OnOptimizeMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -25,7 +26,8 @@ public partial class MainWindow
     {
         if (((FrameworkElement)sender).DataContext is MachineTile tile)
         {
-            OpenPhoneUpdateWindow(PhonesSaying(MachinesOf(tile)));
+            var phones = PhonesSaying(MachinesOf(tile));
+            OpenPhoneUpdateWindow(phones, PhoneUpdateText.KindOf(phones));
         }
     }
 
@@ -65,20 +67,23 @@ public partial class MainWindow
     }
 
     // The APK of this Master's version, from GitHub, kept in
-    // PhoneAgentApk.DefaultFolder; the client goes with the window.
-    private void OpenPhoneUpdateWindow(IReadOnlyList<KnownMachine> phones)
+    // PhoneAgentApk.DefaultFolder; the client goes with the window. kind
+    // words the window (PhoneUpdateText.KindOf for a menu's devices); phones
+    // and tablets get the same APK.
+    private void OpenPhoneUpdateWindow(IReadOnlyList<KnownMachine> phones, AndroidDeviceKind kind)
     {
         if (phones.Count == 0)
         {
-            StatusTextBlock.Text = "Nenhum celular na lista da sala para atualizar.";
+            StatusTextBlock.Text = PhoneUpdateText.NoneToUpdate(kind);
             return;
         }
-        ShowOnce("atualizar-celulares", phones, () =>
+        var everyOne = phones.All(phone => DeviceSupport.IsAndroidOf(phone, kind)) && phones.Count == RoomPhones(kind).Count;
+        ShowOnce(kind == AndroidDeviceKind.Tablet ? "atualizar-tablets" : "atualizar-celulares", phones, () =>
         {
             var client = TeacherUpdate.CreateClient();
             var window = new PhoneUpdateWindow(
-                phones, IsEveryPhone(phones), _masterCertificate,
-                PhoneApkSource.GitHub(TeacherUpdate.CurrentVersion, client, PhoneAgentApk.DefaultFolder))
+                phones, everyOne, _masterCertificate,
+                PhoneApkSource.GitHub(TeacherUpdate.CurrentVersion, client, PhoneAgentApk.DefaultFolder), kind)
             {
                 Owner = this,
             };

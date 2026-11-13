@@ -31,4 +31,23 @@ public class PhoneNumberTests
     [InlineData(AndroidDeviceKind.Tablet, "Tablet 07")]
     public void NameOf_follows_the_kind(AndroidDeviceKind kind, string expected) =>
         Assert.Equal(expected, PhoneNumber.NameOf("07", kind));
+
+    // The name is the only tablet marker; any other name is a phone's.
+    [Theory]
+    [InlineData("Tablet 07", AndroidDeviceKind.Tablet)]
+    [InlineData("Tablet 105", AndroidDeviceKind.Tablet)]
+    [InlineData("Celular 07", AndroidDeviceKind.Phone)]
+    [InlineData("Cel 01", AndroidDeviceKind.Phone)]
+    [InlineData("tablet 07", AndroidDeviceKind.Phone)]
+    [InlineData("Tablet07", AndroidDeviceKind.Phone)]
+    [InlineData("Meu Tablet 07", AndroidDeviceKind.Phone)]
+    [InlineData("", AndroidDeviceKind.Phone)]
+    public void KindOf_reads_the_name(string name, AndroidDeviceKind expected) =>
+        Assert.Equal(expected, PhoneNumber.KindOf(name));
+
+    [Theory]
+    [InlineData(AndroidDeviceKind.Phone)]
+    [InlineData(AndroidDeviceKind.Tablet)]
+    public void KindOf_reads_back_NameOf(AndroidDeviceKind kind) =>
+        Assert.Equal(kind, PhoneNumber.KindOf(PhoneNumber.NameOf("07", kind)));
 }

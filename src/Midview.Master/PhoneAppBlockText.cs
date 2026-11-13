@@ -221,19 +221,20 @@ public static class PhoneAppBlockText
         return choices;
     }
 
-    // The line under the window's title. allPhones: every phone in the
-    // classroom list.
-    public static string Targets(IReadOnlyList<string> names, bool allPhones)
+    // The line under the window's title. allPhones: every phone (every
+    // tablet, for kind Tablet) in the classroom list.
+    public static string Targets(IReadOnlyList<string> names, bool allPhones, AndroidDeviceKind kind = AndroidDeviceKind.Phone)
     {
+        var many = kind == AndroidDeviceKind.Tablet ? "tablets" : "celulares";
         if (names.Count == 1)
         {
             return $"Em: {names[0]}";
         }
         if (allPhones)
         {
-            return $"Em todos os celulares da sala ({names.Count})";
+            return $"Em todos os {many} da sala ({names.Count})";
         }
-        return $"Em {names.Count} celulares: {Names(names)}";
+        return $"Em {names.Count} {many}: {Names(names)}";
     }
 
     // "Bloquear programas" on PCs and phones together opens the PCs' window;

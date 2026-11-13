@@ -256,6 +256,16 @@ public class PhoneAppBlockTextTests
         Assert.Equal("Em 2 celulares: Cel 01, Cel 02", PhoneAppBlockText.Targets(new[] { "Cel 01", "Cel 02" }, allPhones: false));
     }
 
+    [Fact]
+    public void Targets_of_tablets()
+    {
+        Assert.Equal("Em: Tablet 01", PhoneAppBlockText.Targets(new[] { "Tablet 01" }, allPhones: true, AndroidDeviceKind.Tablet));
+        Assert.Equal("Em todos os tablets da sala (2)",
+                     PhoneAppBlockText.Targets(new[] { "Tablet 01", "Tablet 02" }, allPhones: true, AndroidDeviceKind.Tablet));
+        Assert.Equal("Em 2 tablets: Tablet 01, Tablet 02",
+                     PhoneAppBlockText.Targets(new[] { "Tablet 01", "Tablet 02" }, allPhones: false, AndroidDeviceKind.Tablet));
+    }
+
     // "Bloquear programas" with PCs and phones together opens the PCs' window.
     [Fact]
     public void LeftOutNotice_TellsHowToReachThePhones()

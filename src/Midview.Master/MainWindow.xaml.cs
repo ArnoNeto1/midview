@@ -553,7 +553,8 @@ public partial class MainWindow : MidviewWindow
         NameBlockProgramsItem(menu, targets.Select(target => target.Machine).ToList());
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.UpdatePhones))
         {
-            item.Header = PhoneUpdateText.MenuItem(targets.Count(target => target.Machine.IsPhone));
+            var phones = targets.Select(target => target.Machine).Where(machine => machine.IsPhone).ToList();
+            item.Header = PhoneUpdateText.MenuItem(phones.Count, PhoneUpdateText.KindOf(phones));
         }
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
@@ -1563,7 +1564,7 @@ public partial class MainWindow : MidviewWindow
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddressesAsync,
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
-                () => OpenPhoneUpdateWindow(RoomPhones()), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize))) { Owner = this };
+                kind => OpenPhoneUpdateWindow(RoomPhones(kind), kind), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize))) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);

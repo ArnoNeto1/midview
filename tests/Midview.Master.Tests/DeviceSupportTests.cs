@@ -79,6 +79,18 @@ public class DeviceSupportTests
         Assert.True(DeviceSupport.HasAndroid(new[] { Pc("PC 01"), Phone("Tablet 01") }));
     }
 
+    // "Atualizar os celulares" and "Atualizar os tablets" each reach their own kind; never a PC.
+    [Fact]
+    public void Android_devices_of_a_kind()
+    {
+        Assert.True(DeviceSupport.IsAndroidOf(Phone("Tablet 01"), AndroidDeviceKind.Tablet));
+        Assert.False(DeviceSupport.IsAndroidOf(Phone("Tablet 01"), AndroidDeviceKind.Phone));
+        Assert.True(DeviceSupport.IsAndroidOf(Phone("Celular 01"), AndroidDeviceKind.Phone));
+        Assert.False(DeviceSupport.IsAndroidOf(Phone("Celular 01"), AndroidDeviceKind.Tablet));
+        Assert.False(DeviceSupport.IsAndroidOf(Pc("Tablet 01"), AndroidDeviceKind.Tablet));
+        Assert.False(DeviceSupport.IsAndroidOf(Pc("PC 01"), AndroidDeviceKind.Phone));
+    }
+
     // The sites window sends its commands to every machine it reaches; so do
     // "Mensagem", "Bate-papo", "Enviar arquivo" and "Recolher arquivos".
     [Theory]

@@ -14,12 +14,14 @@ namespace Midview.Master;
 // over NetworkUpdate's messages. One phone goes first, and the others only
 // after its new version answered: an APK that doesn't start stops at one
 // phone. A phone keeps its old agent whenever the update doesn't go through.
+// "Atualizar os tablets" is this window with a tablet's words (kind).
 public partial class PhoneUpdateWindow : MidviewWindow
 {
     private const int MaxConcurrentTransfers = 4;
 
     private readonly X509Certificate2 _masterCertificate;
     private readonly PhoneApkSource _source;
+    private readonly AndroidDeviceKind _kind;
     private readonly ObservableCollection<PhoneRow> _rows;
     private readonly CancellationTokenSource _closing = new();
     private StatusResult?[] _statuses;
@@ -33,15 +35,19 @@ public partial class PhoneUpdateWindow : MidviewWindow
         NoAnswer,
     }
 
-    // allPhones: phones is every phone in the classroom list.
+    // allPhones: phones is every phone (every tablet, for kind Tablet) in the
+    // classroom list.
     public PhoneUpdateWindow(
-        IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate, PhoneApkSource source)
+        IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate, PhoneApkSource source,
+        AndroidDeviceKind kind = AndroidDeviceKind.Phone)
     {
         InitializeComponent();
         _masterCertificate = masterCertificate;
         _source = source;
-        Title = DialogHeading.Heading = PhoneUpdateText.Heading(phones.Count);
-        TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones);
+        _kind = kind;
+        Title = DialogHeading.Heading = PhoneUpdateText.Heading(phones.Count, kind);
+        TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones, kind);
+        IntroTextBlock.Text = PhoneUpdateText.Intro(kind);
         _rows = new ObservableCollection<PhoneRow>(phones.Select(phone => new PhoneRow(phone)));
         _statuses = new StatusResult?[_rows.Count];
         PhonesList.ItemsSource = _rows;
@@ -50,7 +56,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
         Closed += (_, _) => _closing.Cancel();
     }
 
-    private void ShowApk() => ApkTextBlock.Text = PhoneUpdateText.ApkLine(_source.Version, _source.IsKept());
+    private void ShowApk() => ApkTextBlock.Text = PhoneUpdateText.ApkLine(_source.Version, _source.IsKept(), _kind);
 
     private void UpdateButtons() => UpdateButton.IsEnabled = CheckButton.IsEnabled = !_busy;
 
@@ -101,12 +107,12 @@ public partial class PhoneUpdateWindow : MidviewWindow
     {
         if (phone.AgentThumbprint is not { Length: > 0 })
         {
-            return (null, "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"");
+            return (null, PhoneUpdateText.NoIdentity(_kind));
         }
         try
         {
             var status = UpdateClient.GetStatus(phone, _masterCertificate);
-            return (status, PhoneUpdateText.Installed(status));
+            return (status, PhoneUpdateText.Installed(status, _kind));
         }
         catch (Exception ex)
         {
@@ -150,10 +156,10 @@ public partial class PhoneUpdateWindow : MidviewWindow
     private async Task<PhoneAgentApk?> GetApkAsync()
     {
         var kept = _source.IsKept();
-        ProgressTextBlock.Text = kept ? "Conferindo o app do celular..." : PhoneUpdateText.Downloading(0);
+        ProgressTextBlock.Text = kept ? PhoneUpdateText.CheckingApk(_kind) : PhoneUpdateText.Downloading(0, _kind);
         try
         {
-            var percent = new Progress<int>(value => ProgressTextBlock.Text = PhoneUpdateText.Downloading(value));
+            var percent = new Progress<int>(value => ProgressTextBlock.Text = PhoneUpdateText.Downloading(value, _kind));
             var apk = await _source.GetAsync(percent, _closing.Token);
             ShowApk();
             return apk;
@@ -164,7 +170,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
-            ProgressTextBlock.Text = $"O app do celular não pôde ser obtido: {ex.Message}.";
+            ProgressTextBlock.Text = PhoneUpdateText.ApkFailed(ex.Message, _kind);
             return null;
         }
     }
@@ -184,7 +190,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
                     _rows[index].Show(PhoneRowState.Done, PhoneUpdateText.UpToDate(status.Report!.Build));
                     break;
                 case PhoneUpdateStep.OldAgent:
-                    _rows[index].Show(PhoneRowState.Failed, PhoneUpdateText.OldAgent);
+                    _rows[index].Show(PhoneRowState.Failed, PhoneUpdateText.OldAgentOf(_kind));
                     break;
                 default:
                     _rows[index].Show(PhoneRowState.Waiting, "na fila para atualizar");
@@ -197,7 +203,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
         {
             // One phone at a time until one proves the APK works; a phone that
             // refused before trying proves nothing.
-            ProgressTextBlock.Text = "Atualizando o primeiro celular...";
+            ProgressTextBlock.Text = PhoneUpdateText.UpdatingFirst(_kind);
             var proven = false;
             while (!proven && queue.Count > 0 && !_closing.IsCancellationRequested)
             {
@@ -206,9 +212,9 @@ public partial class PhoneUpdateWindow : MidviewWindow
                 {
                     foreach (var index in queue)
                     {
-                        _rows[index].Show(PhoneRowState.Partial, "não começou: o primeiro celular não confirmou a versão nova");
+                        _rows[index].Show(PhoneRowState.Partial, PhoneUpdateText.NotStarted(_kind));
                     }
-                    ProgressTextBlock.Text = "O primeiro celular não confirmou a versão nova; os outros não foram atualizados.";
+                    ProgressTextBlock.Text = PhoneUpdateText.FirstFailed(_kind);
                     return;
                 }
                 proven = outcome == Outcome.Current;
@@ -216,7 +222,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
 
             if (queue.Count > 0)
             {
-                ProgressTextBlock.Text = "Atualizando os outros celulares...";
+                ProgressTextBlock.Text = PhoneUpdateText.UpdatingOthers(_kind);
                 using var slots = new SemaphoreSlim(MaxConcurrentTransfers);
                 await Task.WhenAll(queue.Select(async index =>
                 {
@@ -245,7 +251,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
 
         if (!_closing.IsCancellationRequested)
         {
-            ProgressTextBlock.Text = PhoneUpdateText.Summary(_rows.Count(row => row.State == PhoneRowState.Done), _rows.Count);
+            ProgressTextBlock.Text = PhoneUpdateText.Summary(_rows.Count(row => row.State == PhoneRowState.Done), _rows.Count, _kind);
         }
     }
 
@@ -289,7 +295,7 @@ public partial class PhoneUpdateWindow : MidviewWindow
 
         if (PhoneUpdateText.IsOldAgent(push))
         {
-            row.Show(PhoneRowState.Failed, PhoneUpdateText.OldAgent);
+            row.Show(PhoneRowState.Failed, PhoneUpdateText.OldAgentOf(_kind));
             return Outcome.Skipped;
         }
         switch (push.Outcome)
