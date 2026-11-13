@@ -419,6 +419,22 @@ public enum MessageType : byte
     // before this answers CommandAck [0], a phone's "Ainda não funciona em
     // celular.".
     ForgetOtherTeachers = 102,
+
+    // Master -> Android agent, from a trusted teacher only: "Liberar Wi-Fi e
+    // modo avião" (a PhoneNetworkFree payload: the minutes, 1 to 60, the
+    // student may change the Wi-Fi and airplane mode, or 0 to lock them again
+    // now). The agent locks them again by itself when the time is up.
+    // Answered with a CommandAck (CommandResult); an agent from before this
+    // answers "Ainda não funciona em celular.".
+    FreePhoneNetwork = 103,
+
+    // Master -> Android agent, from a trusted teacher only: the phones' admin
+    // password, as a salted PBKDF2 hash (a PhoneAdminPassword payload; empty
+    // to remove it). With it typed on the phone ("Ajustes da escola" in the
+    // Midview notification) the Wi-Fi and airplane mode are freed for 10
+    // minutes. The password itself never leaves the Master. Answered as
+    // FreePhoneNetwork.
+    SetPhoneAdminPassword = 104,
 }
 
 public enum CloseAppsMode : byte
