@@ -77,7 +77,7 @@ public sealed class MiSignOut
     internal static IReadOnlyList<string> AccountTypes(string dumpsys) =>
         AccountType.Matches(dumpsys).Select(m => m.Groups[1].Value).ToList();
 
-    private static bool IsXiaomi(string type) => type == "com.xiaomi" || type.StartsWith("com.xiaomi.", StringComparison.Ordinal);
+    internal static bool IsXiaomi(string type) => type == "com.xiaomi" || type.StartsWith("com.xiaomi.", StringComparison.Ordinal);
 
     // Every account on the phone is a Mi account: only then is the sign-out
     // tried (a Google account left over is the teacher's to remove).

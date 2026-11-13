@@ -128,6 +128,7 @@ public sealed partial class PhoneCable
     {
         MiAccountsLeft = false;
         Miui = false;
+        _localAuthenticators = Array.Empty<string>();
         var (problem, serial) = Devices();
         _serial = serial;
         if (problem is not null)
@@ -157,15 +158,24 @@ public sealed partial class PhoneCable
             }
         }
 
+        // The phone's own local accounts (LocalAccounts) do not count. Mi
+        // accounts are let through only when every other account is one (a
+        // Google account left over is the teacher's to remove).
         var accounts = Shell(Short, "dumpsys", "account").Text;
-        if (AnyAccount(accounts))
+        if (BlockingAccounts(accounts))
         {
-            if (!allowMiAccounts || !MiSignOut.OnlyXiaomi(accounts))
+            var others = MiSignOut.AccountTypes(accounts).Where(t => !IsLocalAccount(t)).ToList();
+            if (!allowMiAccounts || others.Count == 0 || !others.All(MiSignOut.IsXiaomi))
             {
                 return CableProblem.HasAccounts;
             }
             MiAccountsLeft = true;
         }
+        if (LocalAuthenticators(accounts) is not { } local)
+        {
+            return CableProblem.HasAccounts;
+        }
+        _localAuthenticators = local;
 
         var users = Shell(Short, "pm", "list", "users").Text;
         if (users.Split("UserInfo{").Length - 1 > 1)
@@ -291,7 +301,7 @@ public sealed partial class PhoneCable
             // longer needed. A failure leaves the app installed and the
             // phone not the school's; "Tentar de novo" starts over.
             if (!MakeSignOut(command => Shell(Short, command)).Run(miPassword!)
-                || AnyAccount(Shell(Short, "dumpsys", "account").Text))
+                || BlockingAccounts(Shell(Short, "dumpsys", "account").Text))
             {
                 return Fail(Present() ? CableProblem.MiSignOutFailed : CableProblem.Lost);
             }
@@ -312,7 +322,8 @@ public sealed partial class PhoneCable
             return Fail(CableProblem.Lost);
         }
 
-        var owner = Shell(Short, "dpm", "set-device-owner", PhoneProvisioning.AdminComponent);
+        var owner = WithLocalAccountsHidden(
+            () => Shell(Short, "dpm", "set-device-owner", PhoneProvisioning.AdminComponent));
         // From here on nothing else touches the cable.
         if (owner.Text.Contains("Success", StringComparison.Ordinal))
         {
