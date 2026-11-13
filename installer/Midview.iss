@@ -335,7 +335,9 @@ end;
 
 { Professor: an adb left running from the program's adb folder (the phone
   cable tool, after a crash) holds adb.exe and its DLLs; it is stopped so
-  they can be replaced, or removed by the uninstaller. Only that folder's
+  they can be removed by the uninstaller. Only Midview up to 0.0.51 put adb
+  there (now the Master downloads Google's adb into the teacher's own data
+  folder at first use), and a newer Master may still run it. Only that folder's
   adb, never another program's. A failure here is only logged: the copy
   then says what it could not replace, and the uninstaller what it left. }
 procedure PararAdbDoProfessor;

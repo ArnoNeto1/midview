@@ -1,22 +1,33 @@
 using System.Text.RegularExpressions;
+using Midview.Master;
 using Xunit;
 
-// The teacher's setup carries the adb folder (the phone cable tool): the
-// notices name it, and the uninstaller stops an adb left running from that
-// folder before the files go, as the setup does before it replaces them.
+// Google's adb (the phone cable tool) is not in the teacher's setup any
+// more: the Master downloads it from Google at first use (AdbTool), and the
+// notices say so. The uninstaller still stops an adb an older setup left
+// running from the program's adb folder before the files go, as the setup
+// does before it replaces them.
 public sealed class TeacherSetupAdbTests
 {
     [Fact]
-    public void The_notices_name_the_platform_tools_and_their_license()
+    public void The_notices_say_the_platform_tools_come_from_google_at_first_use()
     {
         var notices = File.ReadAllText(Path.Combine(RepoRoot(), "THIRD-PARTY-NOTICES.txt"));
 
         Assert.Contains("Android SDK Platform-Tools", notices);
         Assert.Contains("adb.exe, AdbWinApi.dll e AdbWinUsbApi.dll", notices);
-        Assert.Contains("Apache License 2.0", notices);
-        Assert.Contains("NOTICE.txt", notices);
-        // The NOTICE.txt the notices point to ships in the adb folder.
-        Assert.True(File.Exists(Path.Combine(RepoRoot(), "src", "Midview.Master", "adb", "NOTICE.txt")));
+        Assert.Contains("Baixado do Google na primeira vez que é usado (não vem com o Midview)", notices);
+        Assert.Contains(AdbToolPin.Google.Url.ToString(), notices);
+        Assert.Contains(AdbTool.TermsUrl, notices);
+    }
+
+    [Fact]
+    public void The_teacher_program_ships_no_adb()
+    {
+        var master = Path.Combine(RepoRoot(), "src", "Midview.Master");
+
+        Assert.False(Directory.Exists(Path.Combine(master, "adb")));
+        Assert.DoesNotContain("adb\\", File.ReadAllText(Path.Combine(master, "Midview.Master.csproj")));
     }
 
     [Fact]

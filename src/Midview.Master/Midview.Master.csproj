@@ -17,10 +17,6 @@
     <Resource Include="Assets\PrepararCelular\*.png" />
   </ItemGroup>
   <ItemGroup>
-    <!-- The phone-cable tool (AdbProcess): lands in the build and publish output under adb\. -->
-    <Content Include="adb\*" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>

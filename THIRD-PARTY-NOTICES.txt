@@ -23,13 +23,15 @@ O Midview é licenciado pelos termos do arquivo LICENSE. Ele inclui os component
    Copyright (c) 2013-2018 Raffael Herrmann
    Licença: MIT (texto abaixo, depois da licença dos itens 1 a 3)
 
-5. Android SDK Platform-Tools 37.0.1: adb.exe, AdbWinApi.dll e AdbWinUsbApi.dll
-   (só no Midview Professor, na pasta "adb" do programa, para preparar os celulares pelo cabo USB)
-   Copyright (c) The Android Open Source Project
-   Licença: Apache License 2.0 e as licenças de cada componente, no arquivo NOTICE.txt
-   que vai junto, na mesma pasta "adb" (o aviso que acompanha o Platform-Tools)
+Baixado do Google na primeira vez que é usado (não vem com o Midview):
+
+- Android SDK Platform-Tools 37.0.1, do Google: adb.exe, AdbWinApi.dll e AdbWinUsbApi.dll
+   O Midview não traz esses arquivos. Na primeira vez que o professor prepara um celular
+   pelo cabo USB, e só quando ele pede, o Midview Professor baixa o Platform-Tools do
+   próprio Google (https://dl.google.com/android/repository/platform-tools_r37.0.1-win.zip),
+   confere o tamanho e a soma SHA-256 do arquivo e guarda esses três arquivos em
+   %LOCALAPPDATA%\Midview\adb, no computador do professor. Eles seguem os termos do Google:
    https://developer.android.com/tools/releases/platform-tools
-   https://www.apache.org/licenses/LICENSE-2.0
 
 
 Licença MIT

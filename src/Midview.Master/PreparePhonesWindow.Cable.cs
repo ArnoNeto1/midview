@@ -11,7 +11,8 @@ namespace Midview.Master;
 // the list's stages are sent with Dispatcher.BeginInvoke); once one allowed phone is there, the
 // Midview finishes it (PhoneCable.Prepare) and puts it in the class. The
 // cable tool is stopped when the window closes, after a preparation still
-// running ends.
+// running ends. Google's adb is found (or downloaded) first: see
+// PreparePhonesWindow.Tool.
 public partial class PreparePhonesWindow
 {
     private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(1);
@@ -42,17 +43,15 @@ public partial class PreparePhonesWindow
         FetchApp();
     }
 
-    private PhoneCable Cable()
-    {
-        _adb ??= _host.Adb();
-        return _cable ??= new PhoneCable(_adb);
-    }
+    // Only once the adb is in hand (FindToolAsync or the download).
+    private PhoneCable Cable() => _cable ??= new PhoneCable(_adb ?? throw new InvalidOperationException("sem adb"));
 
-    // The cable is looked at only while its step is shown and nothing else
-    // uses it; the ready pages keep their own timer.
+    // The cable is looked at only while its step is shown, nothing else
+    // uses it and the adb is not waiting for the teacher; the ready pages
+    // keep their own timer.
     private void UpdateCableWatch()
     {
-        var polling = !_closed && OnCableStep && !_preparing;
+        var polling = !_closed && OnCableStep && !_preparing && !ToolNeeded;
         if (polling && !_pollTimer.IsEnabled)
         {
             _cableWait = WaitingText;
@@ -71,16 +70,25 @@ public partial class PreparePhonesWindow
 
     private async void LookAtCable()
     {
-        if (_checking || _preparing || _closed || !OnCableStep)
+        if (_checking || _preparing || _closed || !OnCableStep || ToolNeeded)
         {
             return;
         }
         _checking = true;
-        CableProblem? problem;
+        CableProblem? problem = null;
+        var hasTool = true;
         try
         {
-            var cable = Cable();
-            problem = await Task.Run(() => cable.Check());
+            // Google's adb, checked again before this window first uses it.
+            if (_adb is null)
+            {
+                hasTool = await FindToolAsync();
+            }
+            if (hasTool)
+            {
+                var cable = Cable();
+                problem = await Task.Run(() => cable.Check());
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or Win32Exception or UnauthorizedAccessException)
         {
@@ -98,6 +106,13 @@ public partial class PreparePhonesWindow
         }
         if (!OnCableStep)
         {
+            return;
+        }
+        if (!hasTool)
+        {
+            // Said by the step; the cable waits for the teacher's click.
+            ShowTool();
+            UpdateCableWatch();
             return;
         }
 
@@ -136,7 +151,7 @@ public partial class PreparePhonesWindow
 
     private async void Prepare()
     {
-        if (_wifi is not { } wifi || _apkPath is not { } apk || _progress.Number is not { } number)
+        if (_wifi is not { } wifi || _apkPath is not { } apk || _progress.Number is not { } number || _adb is null)
         {
             // "Tentar de novo" without the phone app (or the Wi-Fi): back to
             // the cable step, which says what lacks (no Wi-Fi: its page first,
@@ -149,7 +164,7 @@ public partial class PreparePhonesWindow
             ShowPage();
             if (OnCableStep)
             {
-                ShowCableWait(_appProblem ?? "Esperando o Midview baixar o app do celular...");
+                ShowCableWait(_appProblem ?? (_apkPath is null ? "Esperando o Midview baixar o app do celular..." : WaitingText));
             }
             return;
         }
@@ -219,6 +234,7 @@ public partial class PreparePhonesWindow
         _pollTimer.Stop();
         StopReadyWatch();
         _appCancel.Cancel();
+        _toolCancel.Cancel();
         // A look at the cable or a preparation still running stops the tool when it ends.
         if (!_preparing && !_checking)
         {

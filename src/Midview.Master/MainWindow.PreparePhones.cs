@@ -16,6 +16,10 @@ public partial class MainWindow
     // The phone app is a few MB: a slow school connection still gets it.
     private static readonly HttpClient PhoneAppHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
 
+    // Google's adb, about 8 MB: no overall limit, AdbTool gives up on a
+    // read that waits too long instead.
+    private static readonly HttpClient AdbToolHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
+
     private PreparePhonesWindow? _preparePhonesWindow;
 
     // The phones just prepared, searched for on the network until they
@@ -52,7 +56,8 @@ public partial class MainWindow
         var window = new PreparePhonesWindow(new PreparePhonesHost(
             kind => PhoneNumber.CountOf(_tiles.Select(tile => tile.Machine), kind),
             PhoneOnline,
-            () => new AdbProcess(),
+            AdbTool.ForThisComputer(AdbToolHttp),
+            path => new AdbProcess(path),
             GetPhoneAppAsync,
             _masterCertificate.Thumbprint,
             AddPreparedPhone,

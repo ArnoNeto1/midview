@@ -69,6 +69,19 @@ foreach ($program in 'aluno\Midview.Agent.exe', 'aluno\Midview.Session.exe', 'pr
     }
 }
 
+# Google's adb (Android SDK Platform-Tools) is not passed on with Midview:
+# the teacher's program downloads it from Google at first use (AdbTool).
+$teacher = Join-Path $Pacote 'programa\professor'
+$googleTools = @(Get-ChildItem -LiteralPath (Join-Path $Pacote 'programa') -Recurse -File -Force |
+        Where-Object { $_.Name -in 'adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'fastboot.exe' })
+Check ($googleTools.Count -eq 0) "the setup carries no Google adb ($(($googleTools | ForEach-Object { $_.FullName }) -join ', '))"
+Check (-not (Test-Path -LiteralPath (Join-Path $teacher 'adb'))) 'nor an adb folder in the teacher program'
+$notices = Join-Path $teacher 'THIRD-PARTY-NOTICES.txt'
+if (Test-Path -LiteralPath $notices) {
+    $noticeText = [IO.File]::ReadAllText($notices, [Text.Encoding]::UTF8)
+    Check ($noticeText.Contains('https://developer.android.com/tools/releases/platform-tools')) 'its notices point to Google for adb'
+}
+
 # What the MidviewMaster reads to push the student program over the network
 # (BuildManifest): exactly the files in the folder, besides itself.
 $student = Join-Path $Pacote 'programa\aluno'

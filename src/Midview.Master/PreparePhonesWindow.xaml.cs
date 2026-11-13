@@ -10,8 +10,10 @@ namespace Midview.Master;
 
 // What the assistant needs from the main window. DevicesInClass: phones (or
 // tablets) in the class now. PhoneOnline: for a name, null when the class
-// has no phone with it, else whether it answers now. Adb: the cable tool, made when the
-// cable step first needs it. GetApp: the phone app, downloaded and checked.
+// has no phone with it, else whether it answers now. Tool: finds Google's adb
+// (checked) or downloads it, on the teacher's click. Adb: the cable tool for that
+// adb.exe, made when the cable step first needs it. GetApp: the phone app,
+// downloaded and checked.
 // AddPhone: puts a phone prepared over the cable in the class (and saves),
 // and the main window searches the network for it for 5 minutes, open
 // assistant or not. IsOnline: whether that phone answers now. WatchAgain:
@@ -21,7 +23,8 @@ namespace Midview.Master;
 internal sealed record PreparePhonesHost(
     Func<AndroidDeviceKind, int> DevicesInClass,
     Func<string, bool?> PhoneOnline,
-    Func<IAdb> Adb,
+    AdbTool Tool,
+    Func<string, IAdb> Adb,
     Func<CancellationToken, Task<(AgentApkResult Result, string ApkPath)>> GetApp,
     string MasterThumbprint,
     Action<KnownMachine> AddPhone,
@@ -345,7 +348,7 @@ public partial class PreparePhonesWindow : MidviewWindow
             TotalInputs.Visibility = Shown(!PhoneTotalFile.Asked(kind: _progress.Kind));
             Dispatcher.BeginInvoke(() => NumberInput.Focus(), DispatcherPriority.Input);
         }
-        CableWaitCard.Visibility = Shown(step.Id == "cabo");
+        CableWaitCard.Visibility = Shown(step.Id == "cabo" && !ToolNeeded);
         if (step.Id == "cabo")
         {
             CableWaitText.Text = _cableWait;
@@ -354,6 +357,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowMiCard(step);
         ShowPrint(step, ScreenWidth);
         ShowWipe();
+        ShowTool();
     }
 
     // The phone print at a fixed width, the outline drawn over its Target.

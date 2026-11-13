@@ -141,7 +141,7 @@ O celular é preparado uma vez, pelo cabo USB ligado ao computador do professor.
 1. Restaure o celular para o padrão de fábrica e, na configuração inicial, pule todas as contas.
 2. Ligue as **Opções do desenvolvedor** (toque 7 vezes em **Versão do MIUI**, na Xiaomi) e, dentro delas, a **Depuração USB**. Na Xiaomi, ligue também a **Depuração USB (configurações de segurança)**: ela só liga com uma conta Mi conectada, e às vezes com um chip no celular.
 3. Saia de todas as contas do celular (a conta Mi também). Sem nenhuma conta, o celular aceita o Midview como dono.
-4. Ligue o cabo e toque em **Permitir** no aviso de depuração. No computador, com o `adb` (Android SDK Platform Tools) e o `MidviewAgent.apk` da versão do Midview do professor (na página da versão no GitHub), rode nesta ordem:
+4. Ligue o cabo e toque em **Permitir** no aviso de depuração. No computador, com o `adb` (Android SDK Platform-Tools, baixado do [site do Google](https://developer.android.com/tools/releases/platform-tools)) e o `MidviewAgent.apk` da versão do Midview do professor (na página da versão no GitHub), rode nesta ordem:
 
    ```
    adb install MidviewAgent.apk
@@ -214,4 +214,4 @@ A versão fica em `Directory.Build.props`. No GitHub, quatro fluxos conferem cad
 
 Copyright © 2026 MidView. Todos os direitos reservados.
 
-O Midview é software proprietário, de uso gratuito para escolas, nos termos da [Licença de Uso](LICENSE). Os componentes de terceiros incluídos e suas licenças estão em [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+O Midview é software proprietário, de uso gratuito para escolas, nos termos da [Licença de Uso](LICENSE). Os componentes de terceiros incluídos e suas licenças estão em [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). O `adb` do Google, que o Midview Professor usa para preparar os celulares pelo cabo USB, não vem no instalador: na primeira vez que o professor prepara um celular, e só quando ele pede, o Midview o baixa do próprio Google, confere o arquivo e o guarda neste computador; ele segue os termos do Google.

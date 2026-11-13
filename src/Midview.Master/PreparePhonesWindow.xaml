@@ -164,6 +164,18 @@
                                 <TextBlock x:Name="CableWaitText" FontSize="13" TextWrapping="Wrap" />
                             </Border>
 
+                            <!-- cabo, until this PC has Google's adb: said first, downloaded on the teacher's click -->
+                            <Border x:Name="ToolCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                                <StackPanel>
+                                    <TextBlock x:Name="ToolText" FontSize="13" TextWrapping="Wrap" />
+                                    <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0">
+                                        <Run Text="A ferramenta vem do Google, nos termos do Google:" />
+                                        <Hyperlink Click="OnToolTermsClicked">Android SDK Platform-Tools</Hyperlink><Run Text="." />
+                                    </TextBlock>
+                                    <Button x:Name="ToolButton" Click="OnToolClicked" HorizontalAlignment="Left" Padding="12,6" Margin="0,10,0,0" />
+                                </StackPanel>
+                            </Border>
+
                             <!-- numero: the phone's number, and once the school's total -->
                             <StackPanel x:Name="NumberInputs">
                                 <TextBlock x:Name="NumberNameHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,0,0,10"

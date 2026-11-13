@@ -143,7 +143,7 @@ A phone is prepared once, over a USB cable plugged into the teacher's computer. 
 1. Factory reset the phone and skip every account during setup.
 2. Turn on **Developer options** (tap **MIUI version** 7 times, on Xiaomi) and, inside them, **USB debugging**. On Xiaomi, also turn on **USB debugging (Security settings)**: it only turns on with a Mi account signed in, and sometimes with a SIM card in the phone.
 3. Sign out of every account on the phone (the Mi account too). With no account, the phone accepts Midview as its owner.
-4. Plug in the cable and tap **Allow** on the debugging prompt. On the computer, with `adb` (Android SDK Platform Tools) and the `MidviewAgent.apk` of the teacher's Midview version (on that version's GitHub release page), run, in this order:
+4. Plug in the cable and tap **Allow** on the debugging prompt. On the computer, with `adb` (Android SDK Platform-Tools, downloaded from [Google's site](https://developer.android.com/tools/releases/platform-tools)) and the `MidviewAgent.apk` of the teacher's Midview version (on that version's GitHub release page), run, in this order:
 
    ```
    adb install MidviewAgent.apk
@@ -216,4 +216,4 @@ The version lives in `Directory.Build.props`. On GitHub, four workflows check ev
 
 Copyright © 2026 MidView. All rights reserved.
 
-Midview is proprietary software, free to use for schools, under the terms of the [License](LICENSE) (in Portuguese). The third-party components included and their licenses are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+Midview is proprietary software, free to use for schools, under the terms of the [License](LICENSE) (in Portuguese). The third-party components included and their licenses are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). Google's `adb`, which the teacher's Midview uses to prepare phones over the USB cable, is not in the setup: the first time the teacher prepares a phone, and only when asked, Midview downloads it from Google itself, checks the file and keeps it on that computer; it is under Google's terms.

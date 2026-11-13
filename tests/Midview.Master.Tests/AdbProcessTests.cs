@@ -10,17 +10,6 @@ public sealed class AdbProcessTests
     private static readonly string Cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
 
     [Fact]
-    public void Shipped_adb_runs_without_a_phone()
-    {
-        // "version" needs no device and starts no server.
-        using var adb = new AdbProcess(Path.Combine(AppContext.BaseDirectory, "adb", "adb.exe"));
-        var output = adb.Run(TimeSpan.FromSeconds(20), "version");
-        Assert.Equal(0, output.ExitCode);
-        Assert.False(output.TimedOut);
-        Assert.Contains("Android Debug Bridge", output.Text);
-    }
-
-    [Fact]
     public void Reads_stdout_and_stderr_fully()
     {
         using var adb = new AdbProcess(Cmd);

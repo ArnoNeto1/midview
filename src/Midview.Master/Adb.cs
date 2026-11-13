@@ -16,8 +16,8 @@ public interface IAdb
     AdbOutput Run(TimeSpan timeout, params string[] args);
 }
 
-// Runs the adb.exe that ships beside the program (the "adb" folder), on its own
-// server port so it never fights another adb server on the PC. Never shows a
+// Runs Google's adb.exe (found or downloaded by AdbTool), on its own server
+// port so it never fights another adb server on the PC. Never shows a
 // console window.
 public sealed class AdbProcess : IAdb, IDisposable
 {
@@ -25,10 +25,6 @@ public sealed class AdbProcess : IAdb, IDisposable
 
     private readonly string _adbPath;
     private bool _used;
-
-    public AdbProcess() : this(Path.Combine(Folder, "adb.exe"))
-    {
-    }
 
     public AdbProcess(string adbPath)
     {
@@ -100,15 +96,17 @@ public sealed class AdbProcess : IAdb, IDisposable
         }
     }
 
-    // The folder of the adb.exe that ships beside the program.
-    public static string Folder => Path.Combine(AppContext.BaseDirectory, "adb");
-
     // On the Master's exit, synchronously: an adb server (or call) left
-    // running from the program's adb folder would hold adb.exe and its DLLs
-    // and make the next update of the teacher's program fail. The server is
+    // running from the folder it was kept in, or from the program's adb
+    // folder an older Midview installed, would hold adb.exe and its DLLs
+    // (and fail the next update of the teacher's program). The server is
     // asked to stop, then whatever still runs from that folder is killed.
-    // Only adb.exe from that folder is touched, never another program's adb.
-    public static void StopLeftovers() => StopLeftovers(Folder, TimeSpan.FromSeconds(5));
+    // Only adb.exe from those folders is touched, never another program's adb.
+    public static void StopLeftovers()
+    {
+        StopLeftovers(AdbTool.DefaultFolder, TimeSpan.FromSeconds(5));
+        StopLeftovers(AdbTool.ProgramFolder, TimeSpan.FromSeconds(5));
+    }
 
     internal static void StopLeftovers(string folder, TimeSpan killServerTimeout)
     {
