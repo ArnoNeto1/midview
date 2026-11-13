@@ -30,7 +30,7 @@ public partial class PreparePhonesWindow
     // The phone prepared last, until "Preparar o próximo".
     private KnownMachine? _preparedPhone;
 
-    private const string WaitingText = "Esperando o celular no cabo...";
+    private static readonly string WaitingText = PhoneCable.NoPhoneWait(otherAdb: false);
 
     private bool OnCableStep => _progress.Page == SetupPage.Step && _progress.StepId == "cabo";
 
@@ -78,6 +78,7 @@ public partial class PreparePhonesWindow
         }
         _checking = true;
         CableProblem? problem = null;
+        var otherAdb = false;
         var hasTool = true;
         try
         {
@@ -89,7 +90,12 @@ public partial class PreparePhonesWindow
             if (hasTool)
             {
                 var cable = Cable();
-                problem = await Task.Run(() => cable.Check());
+                var ours = Path.GetDirectoryName(_adbPath);
+                (problem, otherAdb) = await Task.Run(() =>
+                {
+                    var found = cable.Check();
+                    return (found, found == CableProblem.NoPhone && ours is not null && AdbProcess.OthersRunning(ours));
+                });
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or Win32Exception or UnauthorizedAccessException)
@@ -125,7 +131,7 @@ public partial class PreparePhonesWindow
                 CableProblem.Unauthorized =>
                     "O celular está no cabo. Falta tocar em Permitir no celular (marque \"Sempre permitir deste computador\").",
                 CableProblem.TooMany => "Há mais de um celular no cabo. Deixe só um.",
-                _ => WaitingText,
+                _ => PhoneCable.NoPhoneWait(otherAdb),
             });
             return;
         }

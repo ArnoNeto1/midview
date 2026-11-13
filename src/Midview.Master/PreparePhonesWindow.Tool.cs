@@ -23,6 +23,9 @@ public partial class PreparePhonesWindow
 
     private readonly CancellationTokenSource _toolCancel = new();
     private ToolState _tool;
+
+    // The adb.exe in use (FindToolAsync), so another program's adb is told apart from it.
+    private string? _adbPath;
     private int _toolPercent;
     private string? _toolProblem;
 
@@ -39,6 +42,7 @@ public partial class PreparePhonesWindow
             return false;
         }
         _adb = _host.Adb(path);
+        _adbPath = path;
         _tool = ToolState.Ready;
         return true;
     }

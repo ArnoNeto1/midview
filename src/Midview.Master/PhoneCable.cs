@@ -12,7 +12,7 @@ public enum CableProblem
 {
     NoPhone, TooMany, Unauthorized, TooOld, SecurityOff, InstallOff,
     HasAccounts, HasUsers, AlreadySchool, InstallDeclined, InstallFailed, Refused, Lost,
-    MiSignOutFailed,
+    MiSignOutFailed, ScreenLocked,
 }
 
 // HomeScreen: only for a Xiaomi phone in "Midview otimizado" (PhoneHomeScreen).
@@ -35,6 +35,9 @@ public sealed partial class PhoneCable
     private static readonly TimeSpan Short = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan InstallTime = TimeSpan.FromMinutes(3);
     private static readonly Regex AccountsLine = new(@"Accounts:\s*(\d+)", RegexOptions.Compiled);
+    // The keyguard's own state in "dumpsys window policy" (Android 10 to 14):
+    // "secure=true" while a PIN, pattern or password is set.
+    private static readonly Regex SecureKeyguard = new(@"^\s*secure=true\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
     // What adb says when the phone left the cable while a command ran.
     // "more than one device" is not here: it means the command never ran.
     private static readonly Regex GoneText = new(
@@ -186,6 +189,15 @@ public sealed partial class PhoneCable
         if (AlreadyOwner())
         {
             return CableProblem.AlreadySchool;
+        }
+
+        // A screen lock set before the Midview: Android 10 then turns off for
+        // good the reset token the teacher's PIN needs ("Escrow token is
+        // disabled", seen on the school's Multilaser M10 tablet). A device
+        // that does not say is let through.
+        if (SecureKeyguard.IsMatch(Shell(Short, "dumpsys", "window", "policy").Text))
+        {
+            return CableProblem.ScreenLocked;
         }
         return null;
     }
@@ -393,9 +405,19 @@ public sealed partial class PhoneCable
         return values;
     }
 
+    // Another adb on this PC (Android Studio, scrcpy, another Midview) holds
+    // the phone: the Midview's own adb server (AdbProcess) then sees nothing.
+    public const string OtherAdbHint =
+        "Feche outros programas que usam o celular pelo cabo (Android Studio, scrcpy, outro Midview) e tente de novo.";
+
+    // What the cable step says while no phone is seen; with another adb
+    // running on this PC (AdbProcess.OthersRunning), how to free the phone.
+    public static string NoPhoneWait(bool otherAdb) =>
+        otherAdb ? "Esperando o celular no cabo...\n" + OtherAdbHint : "Esperando o celular no cabo...";
+
     public static (string Text, string? BackToStep) Describe(CableProblem p) => p switch
     {
-        CableProblem.NoPhone => ("O celular não está no cabo.", "cabo"),
+        CableProblem.NoPhone => ("O celular não está no cabo.\n" + OtherAdbHint, "cabo"),
         CableProblem.TooMany => ("Há mais de um celular no cabo. Deixe só um.", "cabo"),
         CableProblem.Unauthorized => ("Falta tocar em Permitir no celular.", "cabo"),
         CableProblem.TooOld => ("Este celular é antigo demais para o Midview (precisa do Android 10 ou mais novo).", null),
@@ -409,6 +431,7 @@ public sealed partial class PhoneCable
         CableProblem.Refused => ("O celular recusou a preparação. Tente de novo.", "cabo"),
         CableProblem.Lost => ("O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo"),
         CableProblem.MiSignOutFailed => ("O Midview não conseguiu sair da conta Mi sozinho. Saia dela no celular e tente de novo.", "sair-contas"),
+        CableProblem.ScreenLocked => ("Tire a senha de bloqueio do aparelho antes (Configurações > Segurança > Bloqueio de tela > Nenhum): com ela, o PIN do professor não funciona neste aparelho.", "cabo"),
         _ => throw new ArgumentOutOfRangeException(nameof(p)),
     };
 }

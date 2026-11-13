@@ -298,6 +298,7 @@ public sealed class PhoneCableTests
         var afterCheck = adb.Calls.SkipWhile(c => c != S + "shell dpm list-owners").Skip(1).ToList();
         Assert.Equal(new[]
         {
+            S + "shell dumpsys window policy",
             S + "shell pm list packages " + Package,
             S + "shell input keyevent KEYCODE_WAKEUP",
             S + "shell wm dismiss-keyguard",
@@ -750,7 +751,8 @@ public sealed class PhoneCableTests
     // ---- Describe ----
 
     [Theory]
-    [InlineData(CableProblem.NoPhone, "O celular n\u00e3o est\u00e1 no cabo.", "cabo")]
+    [InlineData(CableProblem.NoPhone, "O celular n\u00e3o est\u00e1 no cabo.\nFeche outros programas que usam o celular pelo cabo (Android Studio, scrcpy, outro Midview) e tente de novo.", "cabo")]
+    [InlineData(CableProblem.ScreenLocked, "Tire a senha de bloqueio do aparelho antes (Configura\u00e7\u00f5es > Seguran\u00e7a > Bloqueio de tela > Nenhum): com ela, o PIN do professor n\u00e3o funciona neste aparelho.", "cabo")]
     [InlineData(CableProblem.TooMany, "H\u00e1 mais de um celular no cabo. Deixe s\u00f3 um.", "cabo")]
     [InlineData(CableProblem.Unauthorized, "Falta tocar em Permitir no celular.", "cabo")]
     [InlineData(CableProblem.TooOld, "Este celular \u00e9 antigo demais para o Midview (precisa do Android 10 ou mais novo).", null)]
@@ -766,6 +768,54 @@ public sealed class PhoneCableTests
     public void Describe_gives_the_exact_text_and_step(CableProblem problem, string text, string? step)
     {
         Assert.Equal((text, step), PhoneCable.Describe(problem));
+    }
+
+    [Fact]
+    public void Waiting_for_the_phone_mentions_other_adb_programs_only_when_one_runs()
+    {
+        Assert.Equal("Esperando o celular no cabo...", PhoneCable.NoPhoneWait(otherAdb: false));
+        Assert.Equal(
+            "Esperando o celular no cabo...\nFeche outros programas que usam o celular pelo cabo (Android Studio, scrcpy, outro Midview) e tente de novo.",
+            PhoneCable.NoPhoneWait(otherAdb: true));
+    }
+
+    // ---- Screen lock ----
+
+    // "dumpsys window policy" of the school's Multilaser M10 (Android 10) with a PIN.
+    private const string SecureKeyguard =
+        "    KeyguardServiceDelegate\r\n      showing=true\r\n      showingAndNotOccluded=true\r\n      inputRestricted=true\r\n" +
+        "      occluded=false\r\n      secure=true\r\n      dreaming=false\r\n      deviceHasKeyguard=true\r\n" +
+        "      KeyguardStateMonitor\r\n        mIsShowing=true\r\n        mSimSecure=false\r\n";
+
+    [Fact]
+    public void A_screen_lock_stops_the_check()
+    {
+        var adb = Redmi().Set(S + "shell dumpsys window policy", SecureKeyguard);
+        Assert.Equal(CableProblem.ScreenLocked, new PhoneCable(adb).Check());
+    }
+
+    [Fact]
+    public void Without_a_screen_lock_the_check_passes()
+    {
+        var adb = Redmi().Set(S + "shell dumpsys window policy", SecureKeyguard.Replace("secure=true", "secure=false", StringComparison.Ordinal));
+        Assert.Null(new PhoneCable(adb).Check());
+    }
+
+    [Fact]
+    public void Only_the_sim_being_secure_is_no_screen_lock()
+    {
+        var adb = Redmi().Set(S + "shell dumpsys window policy", "      secure=false\n        mSimSecure=true\n");
+        Assert.Null(new PhoneCable(adb).Check());
+    }
+
+    // A device already the school's says so first: its lock may be the teacher's PIN.
+    [Fact]
+    public void Already_the_schools_comes_before_the_screen_lock()
+    {
+        var adb = Redmi()
+            .Set(S + "shell dumpsys window policy", SecureKeyguard)
+            .Set(S + "shell dpm list-owners", "1 owner:\nUser  0: admin=io.github.arnoneto1.midview.agent/.AdminReceiver,DeviceOwner\n");
+        Assert.Equal(CableProblem.AlreadySchool, new PhoneCable(adb).Check());
     }
 
     [Fact]

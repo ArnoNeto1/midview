@@ -84,6 +84,33 @@ public sealed class AdbProcessTests
     }
 
     [Fact]
+    public void Another_programs_adb_is_seen()
+    {
+        // A copy of ping named adb.exe, outside the Midview's folder, stands
+        // in for Android Studio's adb server.
+        var root = Path.Combine(Path.GetTempPath(), "midview-adb-" + Guid.NewGuid().ToString("N"));
+        var ours = Path.Combine(root, "adb");
+        var other = Path.Combine(root, "studio");
+        Directory.CreateDirectory(ours);
+        Directory.CreateDirectory(other);
+        File.Copy(Path.Combine(Environment.SystemDirectory, "PING.EXE"), Path.Combine(other, "adb.exe"));
+        using var studio = StartHidden(Path.Combine(other, "adb.exe"));
+        try
+        {
+            Assert.True(AdbProcess.OthersRunning(ours));
+        }
+        finally
+        {
+            if (!studio.HasExited)
+            {
+                studio.Kill();
+                studio.WaitForExit(5000);
+            }
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Nothing_left_running_means_nothing_is_run()
     {
         var folder = Path.Combine(Path.GetTempPath(), "midview-adb-" + Guid.NewGuid().ToString("N"));

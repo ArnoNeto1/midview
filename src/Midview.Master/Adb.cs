@@ -154,6 +154,34 @@ public sealed class AdbProcess : IAdb, IDisposable
         return found;
     }
 
+    // Whether an adb.exe runs on this PC from anywhere but folder (the
+    // Midview's own): another program's adb server (Android Studio, scrcpy)
+    // holds the phone, and the Midview's own server then sees none. One whose
+    // path cannot be read is not the Midview's (which runs as this user).
+    public static bool OthersRunning(string folder)
+    {
+        var found = false;
+        foreach (var process in Process.GetProcessesByName("adb"))
+        {
+            using (process)
+            {
+                try
+                {
+                    found |= !IsUnder(process.MainModule?.FileName, folder);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Gone meanwhile.
+                }
+                catch (Exception e) when (e is Win32Exception or NotSupportedException)
+                {
+                    found = true;
+                }
+            }
+        }
+        return found;
+    }
+
     // Whether a program's full path is inside folder (not merely beside it:
     // "adb2\adb.exe" is not in "adb").
     internal static bool IsUnder(string? path, string folder)
