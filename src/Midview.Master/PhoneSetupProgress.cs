@@ -90,6 +90,13 @@ internal sealed partial class PhoneSetupProgress
     // the school's own is told only by its screen.
     public bool OwnerUnconfirmed { get; private set; }
 
+    // The cable could not arrange the phone's home screen: the ready page
+    // says how to do it by hand (PhoneSetupGuide.HomeScreenByHand).
+    public bool HomeByHand { get; private set; }
+
+    // The cable list shows "Arrumando a tela inicial": the cable reached it.
+    public bool HomeScreenShown { get; private set; }
+
     // The "ligar" page opens with "Apareceu Bem-vindo" in sight: the phone was
     // just wiped (or restored by hand) and is on that screen.
     public bool OpensWelcomeHelp { get; private set; }
@@ -293,6 +300,7 @@ internal sealed partial class PhoneSetupProgress
         {
             Stage = stage;
             MiSignOutShown |= stage == CableStage.MiSignOut;
+            HomeScreenShown |= stage == CableStage.HomeScreen;
         }
     }
 
@@ -322,8 +330,8 @@ internal sealed partial class PhoneSetupProgress
     }
 
     // The phone is the school's own: "Pronto. Pode tirar o cabo."
-    // ownerUnconfirmed: as far as the Midview knows (see CableResult).
-    public void CablePrepared(DateTimeOffset at, bool ownerUnconfirmed = false)
+    // ownerUnconfirmed and homeByHand: as far as the Midview knows (see CableResult).
+    public void CablePrepared(DateTimeOffset at, bool ownerUnconfirmed = false, bool homeByHand = false)
     {
         if (Page != SetupPage.Cable)
         {
@@ -332,6 +340,7 @@ internal sealed partial class PhoneSetupProgress
         ReadyAt = at;
         HasAppeared = false;
         OwnerUnconfirmed = ownerUnconfirmed;
+        HomeByHand = homeByHand;
         Page = SetupPage.Ready;
     }
 
@@ -411,6 +420,7 @@ internal sealed partial class PhoneSetupProgress
     {
         Stage = null;
         MiSignOutShown = false;
+        HomeScreenShown = false;
         Problem = null;
         ProblemText = null;
         ProblemStepId = null;
@@ -430,9 +440,11 @@ internal sealed partial class PhoneSetupProgress
         ReadyAt = null;
         HasAppeared = false;
         OwnerUnconfirmed = false;
+        HomeByHand = false;
         OpensWelcomeHelp = false;
         SignOutByHand = false;
         MiSignOutShown = false;
+        HomeScreenShown = false;
         ResetChrome();
     }
 

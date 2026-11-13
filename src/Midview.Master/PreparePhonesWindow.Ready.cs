@@ -22,6 +22,7 @@ public partial class PreparePhonesWindow
         (CableStage.Installing, "Instalando o Midview no celular", "Olhe o celular. Se perguntar \"Enviar o app para uma verificação de segurança?\", toque em Não enviar. Quando aparecer \"Instalar via USB\", toque em Instalar (não em Recusar): ele recusa sozinho em 10 segundos."),
         (CableStage.Wifi, "Entregando o Wi-Fi do laboratório", null),
         (CableStage.Pairing, "Dando o número e pareando com este computador", null),
+        (CableStage.HomeScreen, "Arrumando a tela inicial", "Não mexa no celular: o Midview toca na tela dele sozinho, por até 3 minutos."),
         (CableStage.MiSignOut, "Saindo da conta Mi da escola", "Não mexa no celular: o Midview toca na tela dele sozinho, por até 1 minuto."),
         (CableStage.Owner, "Transformando em celular da escola", null),
     };
@@ -71,6 +72,8 @@ public partial class PreparePhonesWindow
                 var chromeWarning = PhoneSetupGuide.ChromeWarning(_progress.ChromeSkipped, _progress.WebViewSkipped, _progress.ChromeSeen);
                 ReadyChromeText.Text = chromeWarning ?? "";
                 ReadyChromeCard.Visibility = Shown(chromeWarning is not null);
+                ReadyHomeText.Text = PhoneSetupGuide.HomeScreenByHand;
+                ReadyHomeCard.Visibility = Shown(_progress.HomeByHand);
                 ShowReadyStatus();
                 Footer(back: false, next: "Preparar o próximo", other: "Terminei");
                 break;
@@ -92,8 +95,11 @@ public partial class PreparePhonesWindow
     private void FillCableList()
     {
         CableList.Children.Clear();
-        // "Saindo da conta Mi" only for a phone the cable signs out.
-        var items = CableItems.Where(item => item.Stage != CableStage.MiSignOut || _progress.MiSignOutShown).ToArray();
+        // "Arrumando a tela inicial" and "Saindo da conta Mi" only for a phone the cable does them on.
+        var items = CableItems
+            .Where(item => (item.Stage != CableStage.MiSignOut || _progress.MiSignOutShown)
+                           && (item.Stage != CableStage.HomeScreen || _progress.HomeScreenShown))
+            .ToArray();
         var reached = _progress.Stage is { } stage ? Array.FindIndex(items, item => item.Stage == stage) : -1;
         for (var i = 0; i < items.Length; i++)
         {

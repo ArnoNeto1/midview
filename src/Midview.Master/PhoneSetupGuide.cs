@@ -371,6 +371,16 @@ internal static class PhoneSetupGuide
         miAuto && step.Id == ChipOnly.Id ? ChipOnly : step;
 
     /// <summary>
+    /// The ready page's note when the cable could not arrange the phone's home screen
+    /// ("Midview otimizado" on a Xiaomi): the same three things, by hand.
+    /// </summary>
+    public const string HomeScreenByHand =
+        "Arrume a tela inicial à mão: 1) Configurações > Tela inicial > Com Gaveta de apps; " +
+        "2) tire da tela inicial todos os ícones, pastas e widgets (toque e segure, Remover); " +
+        "3) ponha embaixo Chrome, Câmera, Galeria, Gerenciador de Arquivos e Calculadora e ligue " +
+        "Bloquear layout da Tela inicial (Configurações > Tela inicial).";
+
+    /// <summary>
     /// The ready page's warning for a phone whose "chrome" step was skipped (null: none). A school
     /// phone takes no account any more, so the Play Store cannot update it later.
     /// </summary>

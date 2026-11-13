@@ -239,6 +239,10 @@
                     <Border x:Name="ReadyChromeCard" Style="{StaticResource Card}" Margin="0,14,0,0">
                         <TextBlock x:Name="ReadyChromeText" Style="{StaticResource WarningText}" FontSize="13" TextWrapping="Wrap" />
                     </Border>
+                    <!-- The cable could not arrange the home screen: how to do it by hand -->
+                    <Border x:Name="ReadyHomeCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                        <TextBlock x:Name="ReadyHomeText" FontSize="13" TextWrapping="Wrap" />
+                    </Border>
                     <Border Style="{StaticResource Card}" Margin="0,14,0,0">
                         <TextBlock x:Name="ReadyStatus" FontSize="13" TextWrapping="Wrap" />
                     </Border>

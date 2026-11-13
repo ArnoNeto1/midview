@@ -103,11 +103,16 @@ public sealed class PhoneCableMiTests
         Assert.Null(result.Problem);
         Assert.NotNull(result.Phone);
         Assert.Equal(
-            new[] { CableStage.Checking, CableStage.Installing, CableStage.Wifi, CableStage.Pairing, CableStage.MiSignOut, CableStage.Owner },
+            new[]
+            {
+                CableStage.Checking, CableStage.Installing, CableStage.Wifi, CableStage.Pairing,
+                CableStage.HomeScreen, CableStage.MiSignOut, CableStage.Owner,
+            },
             stages);
-        // Signed out last: after the setup is handed over, right before the Owner step.
+        // Signed out last: after the setup is handed over and the home screen, right before the Owner step.
         var signOut = adb.Calls.IndexOf("-s " + Serial + " shell input tap 360 1340");
         Assert.True(signOut > adb.Calls.FindIndex(c => c.Contains("content call", StringComparison.Ordinal)));
+        Assert.True(signOut > adb.Calls.FindIndex(c => c.Contains(PhoneHomeScreen.SettingsActivity, StringComparison.Ordinal)));
         // The optimized cleanup (it removes Xiaomi cloud apps) only after the sign-out.
         Assert.True(signOut < adb.Calls.IndexOf("-s " + Serial + " shell settings put global window_animation_scale 0"));
         Assert.True(signOut < adb.Calls.IndexOf("-s " + Serial + " shell pm list packages"));

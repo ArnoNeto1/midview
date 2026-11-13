@@ -306,6 +306,16 @@ public sealed class PhoneCableTests
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
             ContentCall(),
+            // The home screen (PhoneHomeScreen), on a Xiaomi: its settings do
+            // not open here, so it stops there and the phone goes on.
+            S + "shell input keyevent KEYCODE_WAKEUP",
+            S + "shell wm dismiss-keyguard",
+            S + "shell settings put system miui_home_lock_screen_cells 0",
+            S + "shell settings put system QSB_SCROLL_ENTRANCE_STATUS 0",
+            S + "shell settings put system open_personal_assistant 0",
+            S + "shell am start -W --activity-clear-task -n com.miui.home/.settings.MiuiHomeSettingActivity",
+            S + "shell input keyevent KEYCODE_HOME",
+            S + "shell rm -f /data/local/tmp/midview-home.xml",
             // Lighten: last before the Owner step (after a Mi sign-out, when there is one).
             S + "shell settings put global window_animation_scale 0",
             S + "shell settings put global transition_animation_scale 0",
@@ -317,8 +327,9 @@ public sealed class PhoneCableTests
             SetDeviceOwner,
         }, afterCheck);
         Assert.Equal(
-            new[] { CableStage.Checking, CableStage.Installing, CableStage.Wifi, CableStage.Pairing, CableStage.Owner },
+            new[] { CableStage.Checking, CableStage.Installing, CableStage.Wifi, CableStage.Pairing, CableStage.HomeScreen, CableStage.Owner },
             stages);
+        Assert.True(result.HomeByHand);
         Assert.Equal(TimeSpan.FromMinutes(3), adb.LastInstallTimeout);
     }
 
