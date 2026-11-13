@@ -12,8 +12,10 @@
 #   clear error if one is missing) and the signed APK's certificate must match
 #   that checksum, so an unsigned, debug or wrongly signed APK is never
 #   published (phones prepared with it could not be updated later).
-# The tag must be v<Version> or v<Version>-<suffix>, Version being the one in
-# Directory.Build.props. Publish by pushing the annotated tag: pacote.yml's
+# The tag must be exactly v<Version>, Version being the one in
+# Directory.Build.props: "Atualizar celulares" looks for the APK on the
+# release tagged v<Version> (PhoneAgentApk), so a suffixed tag would publish
+# an APK no Master ever finds. Publish by pushing the annotated tag: pacote.yml's
 # manual "publicar" path (tag made with GITHUB_TOKEN) doesn't start this
 # workflow, so it refuses once the phone app is enabled.
 # Running a tag build again, with MidviewAgent.apk already on the Release,
@@ -134,8 +136,8 @@ jobs:
             exit 1
           fi
           tag="$GITHUB_REF_NAME"
-          if [ "$tag" != "v$version" ] && [[ "$tag" != "v$version-"?* ]]; then
-            echo "::error::A tag $tag não combina com a versão $version de Directory.Build.props: use v$version ou v$version-<sufixo>."
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::A tag $tag não combina com a versão $version de Directory.Build.props: use v$version, sem sufixo (o Master procura o APK na versão v$version)."
             exit 1
           fi
 
