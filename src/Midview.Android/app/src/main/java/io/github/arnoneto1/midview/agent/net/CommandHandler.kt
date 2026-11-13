@@ -70,6 +70,9 @@ class CommandHandler(
     // password (AdminUnlock): the payload in, the CommandAck's result out.
     private val freeNetwork: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val adminPassword: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Papel de parede dos celulares e tablets" (TeacherWallpaper): the
+    // payload in, the CommandAck's result out.
+    private val wallpaper: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Fechar programas" (CloseCountdown): the warning's time in seconds in,
     // the CommandAck's result out.
     private val closeApps: (delaySeconds: Int) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -221,6 +224,11 @@ class CommandHandler(
         }
         MessageType.SET_PHONE_ADMIN_PASSWORD -> {
             val (done, detail) = adminPassword(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        // On this connection's thread: Android scales the picture, a second or two.
+        MessageType.SET_PHONE_WALLPAPER -> {
+            val (done, detail) = wallpaper(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
         // The PC's payload: the student is warned for the time in it, then

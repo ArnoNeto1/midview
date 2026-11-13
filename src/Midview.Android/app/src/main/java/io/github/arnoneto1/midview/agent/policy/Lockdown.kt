@@ -159,6 +159,10 @@ class Lockdown(
         // Redmi 10C: the "Controlar" strip and the countdown still show).
         // DISALLOW_CONFIG_TETHERING keeps the hotspot off (turning it on can
         // drop the school's Wi-Fi), also while the Wi-Fi is freed.
+        // DISALLOW_SET_WALLPAPER keeps the teacher's wallpaper ("Papel de
+        // parede dos celulares e tablets") on: Android lets the Device
+        // Owner itself still set it (checked on the Redmi 10C). Xiaomi's own
+        // picker goes around it; TeacherWallpaper hides that one.
         val RESTRICTIONS = listOf(
             "no_factory_reset",
             "no_debugging_features",
@@ -173,6 +177,7 @@ class Lockdown(
             "no_config_date_time",
             "no_create_windows",
             "no_config_tethering",
+            "no_set_wallpaper",
         )
 
         // UserManager.DISALLOW_CONFIG_WIFI, DISALLOW_AIRPLANE_MODE (Android 9

@@ -40,6 +40,9 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- "Fechar programas": the closed apps' background processes are ended too. -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- "Papel de parede dos celulares e tablets": the teacher's picture on
+         the home and lock screens. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <!-- "Recolher arquivos": what other apps saved in Download/Midview (a
          Chrome download, a document) is hidden from the agent without
          "acesso a todos os arquivos", which the cable setup turns on

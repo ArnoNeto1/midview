@@ -63,6 +63,8 @@ import io.github.arnoneto1.midview.agent.update.ApkUpdater
 import io.github.arnoneto1.midview.agent.update.ApkUpload
 import io.github.arnoneto1.midview.agent.update.PackageApkReader
 import io.github.arnoneto1.midview.agent.update.SelfInstaller
+import io.github.arnoneto1.midview.agent.wallpaper.AndroidWallpaper
+import io.github.arnoneto1.midview.agent.wallpaper.TeacherWallpaper
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -316,6 +318,10 @@ class AgentService : Service() {
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
             freeNetwork = SchoolNetwork.network(this)::handle, adminPassword = SchoolNetwork.admin(this)::setPassword,
             powerSchedule = powerSchedule::handle,
+            wallpaper = TeacherWallpaper(
+                AndroidWallpaper(this), policyGateway::isDeviceOwner, log,
+                showPickers = { show -> TeacherWallpaper.PICKERS.forEach { policyGateway.setApplicationHidden(it, !show) } },
+            )::handle,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
