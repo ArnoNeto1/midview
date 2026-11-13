@@ -42,4 +42,29 @@ class FileNamesTest {
         assertEquals("leia-me (2)", FileNames.unique("leia-me") { it == "leia-me" })
         assertEquals("novo.txt", FileNames.unique("novo.txt") { it in taken })
     }
+
+    // Android 10 lists the incoming pending file under its own name: it is
+    // not taken by itself, so the first "notas.pdf" stays "notas.pdf".
+    @Test
+    fun onAndroid10TheIncomingFileDoesNotTakeItsOwnName() {
+        val taken = FileNames.taken(listOf("Notas.pdf", "outro.txt"), incoming = "notas.pdf", sdk = 29)
+        assertEquals(setOf("outro.txt"), taken)
+        assertEquals("notas.pdf", FileNames.unique("notas.pdf") { it in taken })
+    }
+
+    // A file already there: Android 10 names the pending one "notas (1).pdf",
+    // and the new file still gets a name of its own.
+    @Test
+    fun onAndroid10AnOlderFileStillCounts() {
+        val taken = FileNames.taken(listOf("notas.pdf", "notas (1).pdf"), incoming = "notas (1).pdf", sdk = 29)
+        assertEquals(setOf("notas.pdf"), taken)
+        assertEquals("notas (2).pdf", FileNames.unique("notas.pdf") { it in taken })
+    }
+
+    // Android 11 hides the pending file (".pending-..."): its name is never dropped.
+    @Test
+    fun fromAndroid11EveryListedNameCounts() {
+        assertEquals(setOf("notas.pdf"), FileNames.taken(listOf("notas.pdf"), incoming = "notas.pdf", sdk = 30))
+        assertEquals(setOf("notas.pdf"), FileNames.taken(listOf("Notas.pdf"), incoming = null, sdk = 29))
+    }
 }

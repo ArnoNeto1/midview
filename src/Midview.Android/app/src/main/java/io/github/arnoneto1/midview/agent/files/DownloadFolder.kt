@@ -133,7 +133,7 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
         // then does the new one show, under its name.
         override fun complete(overwrite: Boolean): Pair<String, String?> {
             out.close()
-            val names = visibleNames()
+            val names = visibleNames(savedName(uri))
             var note: String? = null
             val target = when {
                 safeName.lowercase() !in names -> safeName
@@ -176,10 +176,11 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
         }
     }
 
-    // The names in the folder itself (not its subfolders), in lower case.
-    private fun visibleNames(): Set<String> =
+    // The names in the folder itself (not its subfolders), in lower case;
+    // from the storage, without the incoming file (FileNames.taken).
+    private fun visibleNames(incoming: String?): Set<String> =
         if (seesEverything) {
-            directory.list()?.map { it.lowercase() }?.toSet() ?: emptySet()
+            FileNames.taken(directory.list()?.toList() ?: emptyList(), incoming, Build.VERSION.SDK_INT)
         } else {
             ownRows().filter { '/' !in it.path }.map { it.path.lowercase() }.toSet()
         }

@@ -44,6 +44,19 @@ object FileNames {
         }
     }
 
+    // The names taken in the folder as listed from the storage (in lower
+    // case), but for the incoming file itself: Android 10 (sdk 29) writes a
+    // pending MediaStore file under its own name, where Android 11 and newer
+    // hide it as ".pending-...", so the first "notas.pdf" would take its own
+    // name and come out as "notas (2).pdf" (seen on the school's Multilaser
+    // M10). incoming: the name MediaStore gave the pending file.
+    fun taken(listed: Collection<String>, incoming: String?, sdk: Int): Set<String> {
+        val names = listed.map { it.lowercase() }.toSet()
+        return if (sdk < ANDROID_11 && incoming != null) names - incoming.lowercase() else names
+    }
+
+    private const val ANDROID_11 = 30
+
     // ".pdf" for "notas.pdf", "" for "notas": from the last dot on, as
     // .NET's Path.GetExtension (".bashrc" is all extension there too).
     fun extensionOf(name: String): String {
