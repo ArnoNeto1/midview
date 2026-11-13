@@ -136,10 +136,11 @@
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                                 <!-- "Opens a window of choices": just right of the icon, outside its box,
-                                     so the icon stays centred over the label. -->
+                                     so the icon stays centred over the label, but inside the button's
+                                     border (-17 put it past the rounded edge on hover and selection). -->
                                 <TextBlock x:Name="OptionsArrow" Text="&#xE70D;" FontFamily="{StaticResource IconFont}" FontSize="10"
                                            Foreground="{StaticResource TextMutedBrush}"
-                                           Margin="0,0,-17,0" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Margin="0,0,-11,0" HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Visibility="Collapsed" />
                             </Grid>
                             <!-- Two lines of label. The caption pill (Caption) takes the second one,
