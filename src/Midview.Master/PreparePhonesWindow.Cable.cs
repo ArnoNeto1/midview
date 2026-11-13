@@ -38,6 +38,7 @@ public partial class PreparePhonesWindow
     {
         _pollTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = PollEvery };
         _pollTimer.Tick += (_, _) => LookAtCable();
+        InitializeChrome();
         InitializeReady();
         Closed += OnClosedCable;
         FetchApp();
@@ -62,6 +63,7 @@ public partial class PreparePhonesWindow
         {
             _pollTimer.Stop();
         }
+        UpdateChromeWatch();
         UpdateReadyWatch();
     }
 
@@ -70,7 +72,7 @@ public partial class PreparePhonesWindow
 
     private async void LookAtCable()
     {
-        if (_checking || _preparing || _closed || !OnCableStep || ToolNeeded)
+        if (_checking || _chromeChecking || _preparing || _closed || !OnCableStep || ToolNeeded)
         {
             return;
         }
@@ -232,11 +234,12 @@ public partial class PreparePhonesWindow
     {
         _closed = true;
         _pollTimer.Stop();
+        _chromeTimer.Stop();
         StopReadyWatch();
         _appCancel.Cancel();
         _toolCancel.Cancel();
         // A look at the cable or a preparation still running stops the tool when it ends.
-        if (!_preparing && !_checking)
+        if (!_preparing && !_checking && !_chromeChecking)
         {
             StopCableTool();
         }

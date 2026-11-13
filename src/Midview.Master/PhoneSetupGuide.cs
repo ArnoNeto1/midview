@@ -72,6 +72,7 @@ internal static class PhoneSetupGuide
             "Um chip qualquer (pode ser o do seu celular). Ele é usado só por alguns minutos em cada celular e depois você tira.",
             "A agulha da gaveta do chip (ou um clipe de papel aberto).",
             "A conta Mi da escola (e-mail e senha), a mesma em todos os celulares. O Midview pede uma vez e guarda só neste computador.",
+            "Uma conta Google (pode ser a da escola), para atualizar o Chrome pela Play Store quando ele estiver velho. Ela sai do celular antes do fim.",
         });
 
     public static GuideHelp UnknownAccount { get; } = new(
@@ -152,7 +153,7 @@ internal static class PhoneSetupGuide
             {
                 "Ligue o celular e desbloqueie a tela.",
                 "Confira que a bateria tem carga (mais de metade).",
-                "Conecte o celular ao Wi-Fi: ele precisa de internet para entrar na conta Mi, mais adiante.",
+                "Conecte o celular ao Wi-Fi: ele precisa de internet para entrar na conta Mi e atualizar o Chrome, mais adiante.",
             },
             null, null,
             "Leva 1 minuto.",
@@ -165,29 +166,6 @@ internal static class PhoneSetupGuide
                     "Veja a ajuda \"Celular travado com PIN\".", new[] { LockedWithPin }),
                 new("O celular não liga",
                     "Ligue o celular no carregador e espere 5 minutos. Se continua sem ligar, separe este celular e use outro."),
-            }),
-
-        new("conta-google",
-            "Tire a conta Google do celular",
-            new[]
-            {
-                "Abra as Configurações (ícone de engrenagem).",
-                "Toque em \"Contas e sincronização\".",
-                "Na seção \"GOOGLE\", toque na conta.",
-                "Toque em \"Mais\" e depois em \"Remover conta\".",
-                "Se o celular pedir, digite a senha de tela do celular ou da conta.",
-                "Com uma conta Google no celular, o Midview não consegue terminar a preparação.",
-            },
-            AccountsPrint, new Rect(0.06, 0.55, 0.88, 0.09),
-            "Leva 1 minuto.",
-            "Já tirei, próximo passo",
-            new GuideHelp[]
-            {
-                new("Não aparece \"Google\"",
-                    "Então não há conta Google neste celular. Siga para o próximo passo."),
-                new("Pediu a senha e ninguém sabe",
-                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
-                NotFound("Contas e sincronização", "conta"),
             }),
 
         new("desenvolvedor",
@@ -257,12 +235,62 @@ internal static class PhoneSetupGuide
             new GuideHelp[]
             {
                 new("A chave volta a desligar",
-                    "O chip não está bem colocado ou a conta Mi não entrou. Volte ao passo 5, confira os dois e tente de novo."),
+                    "O chip não está bem colocado ou a conta Mi não entrou. Volte ao passo 4, confira os dois e tente de novo."),
                 new("Pede para inserir um cartão SIM",
-                    "Falta o chip. Volte ao passo 5 e coloque o chip na gaveta."),
+                    "Falta o chip. Volte ao passo 4 e coloque o chip na gaveta."),
                 new("Não aparece \"Opções do desenvolvedor\"",
-                    "Falta ligar o modo de desenvolvedor. Volte ao passo 4. " + SearchTip("desenvolvedor")),
+                    "Falta ligar o modo de desenvolvedor. Volte ao passo 3. " + SearchTip("desenvolvedor")),
                 NotFound("Configurações adicionais", "depuração"),
+            }),
+
+        new("chrome",
+            "Atualize o Chrome",
+            new[]
+            {
+                "Ligue o celular neste computador pelo cabo USB.",
+                "No celular aparece \"Permitir depuração USB?\": marque \"Sempre permitir deste computador\" e toque em Permitir.",
+                "O Midview confere o Chrome do celular. Se ele estiver velho, o Midview abre a Play Store no celular: toque em Atualizar.",
+                "Se a Play Store pedir para entrar, entre na conta Google digitando no celular. Ela sai no próximo passo.",
+                "Depois do Chrome, o Midview abre o Android System WebView: toque em Atualizar de novo.",
+                "Quando os dois estão atualizados, o assistente avança sozinho.",
+            },
+            null, null,
+            "Leva de 2 a 10 minutos, conforme o Wi-Fi. Se o Chrome já estiver atualizado, nem para aqui.",
+            "Próximo passo",
+            new GuideHelp[]
+            {
+                new("A Play Store abriu na tela inicial, não no Chrome",
+                    "Acontece depois de entrar na conta Google. Toque em \"Abrir a Play Store de novo\", aqui no Midview, ou procure \"Chrome\" na busca da Play Store."),
+                new("Não aparece Atualizar, só Abrir",
+                    "A Play Store ainda não viu a versão nova. Espere um minuto e toque em \"Abrir a Play Store de novo\". Se continuar só com Abrir, toque em Pular."),
+                new("A atualização não termina",
+                    "Cada app tem cerca de 200 MB. Deixe o celular perto do roteador, com a tela acesa, e espere. No Wi-Fi lento pode passar de 10 minutos."),
+                new("Não tenho conta Google",
+                    "Sem conta Google a Play Store não atualiza nada. Toque em Pular: o celular fica pronto, mas o bloqueio de downloads não funciona nele."),
+            }),
+
+        new("conta-google",
+            "Tire a conta Google do celular",
+            new[]
+            {
+                "Abra as Configurações (ícone de engrenagem).",
+                "Toque em \"Contas e sincronização\".",
+                "Na seção \"GOOGLE\", toque na conta.",
+                "Toque em \"Mais\" e depois em \"Remover conta\".",
+                "Se o celular pedir, digite a senha de tela do celular ou da conta.",
+                "Se entrou numa conta Google na Play Store, no passo anterior, é ela que sai agora.",
+                "Com uma conta Google no celular, o Midview não consegue terminar a preparação.",
+            },
+            AccountsPrint, new Rect(0.06, 0.55, 0.88, 0.09),
+            "Leva 1 minuto.",
+            "Já tirei, próximo passo",
+            new GuideHelp[]
+            {
+                new("Não aparece \"Google\"",
+                    "Então não há conta Google neste celular. Siga para o próximo passo."),
+                new("Pediu a senha e ninguém sabe",
+                    "Veja a ajuda \"Celular com conta desconhecida\": sem a senha, este celular não pode ser preparado.", new[] { UnknownAccount }),
+                NotFound("Contas e sincronização", "conta"),
             }),
 
         new("sair-contas",
@@ -272,7 +300,7 @@ internal static class PhoneSetupGuide
                 "Abra as Configurações e toque em \"Conta Mi\", no topo da lista.",
                 "Se \"Encontrar dispositivo\" estiver ligado, desligue.",
                 "Toque em \"Sair da conta\".",
-                "Se o login pelo Google deixou uma conta Google no celular, tire-a como no passo 3: Contas e sincronização, Google, a conta, Mais, Remover conta.",
+                "Se ainda sobrou uma conta Google no celular, tire-a como no passo 7: Contas e sincronização, Google, a conta, Mais, Remover conta.",
                 "Abra a gaveta do chip e tire o chip, sem desligar o celular.",
                 "As três chaves do passo anterior continuam ligadas. Com qualquer conta no celular, o Midview não consegue terminar.",
             },
@@ -284,7 +312,7 @@ internal static class PhoneSetupGuide
                 new("Pede a senha da conta e ninguém sabe",
                     "Veja a ajuda \"Celular com conta desconhecida\".", new[] { UnknownAccount }),
                 new("Não aparece \"Conta Mi\" no topo",
-                    "Então não há conta Mi neste celular. Confira só se sobrou conta Google (passo 3) e tire o chip."),
+                    "Então não há conta Mi neste celular. Confira só se sobrou conta Google (passo 7) e tire o chip."),
                 NotFound("Conta Mi", "conta"),
             }),
 
@@ -292,8 +320,8 @@ internal static class PhoneSetupGuide
             "Ligue o celular no computador pelo cabo",
             new[]
             {
-                "Ligue o celular neste computador pelo cabo USB.",
-                "No celular aparece \"Permitir depuração USB?\": marque \"Sempre permitir deste computador\" e toque em Permitir.",
+                "Deixe o celular ligado neste computador pelo cabo USB, como no passo 6 (se tirou o cabo, ligue de novo).",
+                "Se aparecer \"Permitir depuração USB?\": marque \"Sempre permitir deste computador\" e toque em Permitir.",
                 "Depois o celular pergunta se pode instalar: toque em Instalar.",
                 "O assistente avança sozinho quando vê o celular no cabo.",
             },
@@ -323,7 +351,7 @@ internal static class PhoneSetupGuide
         {
             "Abra a gaveta do chip e tire o chip, sem desligar o celular.",
             "Não saia da conta Mi: no fim, o Midview sai dela sozinho pelo cabo, com a senha guardada neste computador.",
-            "Se ficou uma conta Google no celular, tire-a como no passo 3: Contas e sincronização, Google, a conta, Mais, Remover conta.",
+            "Se ainda sobrou uma conta Google no celular, tire-a como no passo 7: Contas e sincronização, Google, a conta, Mais, Remover conta.",
             "As três chaves do passo anterior continuam ligadas.",
         },
         null, null,
@@ -342,6 +370,28 @@ internal static class PhoneSetupGuide
     public static GuideStep StepFor(GuideStep step, bool miAuto) =>
         miAuto && step.Id == ChipOnly.Id ? ChipOnly : step;
 
+    /// <summary>
+    /// The ready page's warning for a phone whose "chrome" step was skipped (null: none). A school
+    /// phone takes no account any more, so the Play Store cannot update it later.
+    /// </summary>
+    public static string? ChromeWarning(bool chromeSkipped, bool webViewSkipped, ChromeVersions? seen)
+    {
+        const string Later = "Para atualizar depois, é preciso apagar o celular e prepará-lo de novo.";
+        if (chromeSkipped)
+        {
+            var version = seen?.Chrome is { } chrome
+                ? $" (está na versão {chrome}; precisa da {PhoneCable.ChromeMinimum} ou mais nova)"
+                : "";
+            return $"Atenção: o Chrome deste celular não foi atualizado{version}, e o bloqueio de downloads não vai funcionar nele. " + Later;
+        }
+        if (webViewSkipped)
+        {
+            var version = seen?.WebView is { } webView ? $" (está na versão {webView})" : "";
+            return $"Atenção: o Android System WebView deste celular não foi atualizado{version}. " + Later;
+        }
+        return null;
+    }
+
     /// <summary>The words of the "Conta Mi da escola" page.</summary>
     public const string MiAccountIntro =
         "Os celulares Xiaomi só deixam o Midview terminar a preparação com um chip e uma conta Mi dentro. " +
@@ -357,7 +407,7 @@ internal static class PhoneSetupGuide
         new("Por que uma conta só da escola?",
             "A mesma conta entra e sai de todos os celulares. Uma conta pessoal ficaria com os celulares da escola ligados a ela."),
         new("Posso pular?",
-            "Pode. Aí, no passo 5, você entra com a conta que tiver, e no passo 7 sai dela à mão em cada celular."),
+            "Pode. Aí, no passo 4, você entra com a conta que tiver, e no passo 8 sai dela à mão em cada celular."),
         new("Esqueci a senha",
             "Troque a senha em account.xiaomi.com (\"Esqueci a senha\") e guarde aqui a nova."),
     };

@@ -13,7 +13,7 @@ public class PhoneSetupProgressMiTests
         progress.SetNumber("7");
         while (progress.Page == SetupPage.Step && progress.StepId != id)
         {
-            progress.Next();
+            PhoneSetupProgressTests.NextOrUpToDate(progress);
         }
         return progress;
     }

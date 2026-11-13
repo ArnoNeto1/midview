@@ -48,10 +48,10 @@ internal static class DeviceSetupText
     // The school's Mi account line: where it is saved and changed (the
     // assistant), and that it can be taken off this PC here.
     public const string MiAccountNone =
-        "Conta Mi da escola (para os aparelhos Xiaomi): nenhuma guardada. O assistente pede no passo 5 e guarda só neste computador.";
+        "Conta Mi da escola (para os aparelhos Xiaomi): nenhuma guardada. O assistente pede no passo 4 e guarda só neste computador.";
 
     public static string MiAccountSaved(string login) =>
-        $"Conta Mi da escola: {login}, guardada só neste computador. Para trocar, use \"trocar\" no passo 5 do assistente. ";
+        $"Conta Mi da escola: {login}, guardada só neste computador. Para trocar, use \"trocar\" no passo 4 do assistente. ";
 
     // Why the buttons are off; null when they work (the assistant is out).
     public static string? Gate(AndroidDeviceKind kind, PhoneSetupOffer setup) => setup switch

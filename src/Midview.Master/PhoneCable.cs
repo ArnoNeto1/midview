@@ -27,7 +27,7 @@ public sealed record CableResult(KnownMachine? Phone, CableProblem? Problem, boo
 // Prepares one school phone over USB, driving adb in a fixed order:
 // check, install, allow past the phone's cleaner, hand over the setup, make it
 // the school's own. Nothing uses the cable after that last command.
-public sealed class PhoneCable
+public sealed partial class PhoneCable
 {
     private static readonly TimeSpan Short = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan InstallTime = TimeSpan.FromMinutes(3);

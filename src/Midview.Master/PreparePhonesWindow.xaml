@@ -164,6 +164,17 @@
                                 <TextBlock x:Name="CableWaitText" FontSize="13" TextWrapping="Wrap" />
                             </Border>
 
+                            <!-- chrome: the versions read over the cable, what to tap on the phone, and "Pular" -->
+                            <Border x:Name="ChromeCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                                <StackPanel>
+                                    <TextBlock x:Name="ChromeStatusText" FontSize="13" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="ChromeDetailText" Style="{StaticResource Hint}" FontSize="12" Margin="0,6,0,0" />
+                                    <TextBlock x:Name="ChromeSkipLine" FontSize="12" TextWrapping="Wrap" Margin="0,10,0,0">
+                                        <Hyperlink Click="OnChromeSkipClicked">Pular (o bloqueio de downloads não vai funcionar neste celular)</Hyperlink>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
                             <!-- cabo, until this PC has Google's adb: said first, downloaded on the teacher's click -->
                             <Border x:Name="ToolCard" Style="{StaticResource Card}" Margin="0,14,0,0">
                                 <StackPanel>
@@ -224,6 +235,10 @@
                     <TextBlock Text="Pronto. Pode tirar o cabo." FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock x:Name="ReadyTitle" FontSize="15" TextWrapping="Wrap" Margin="0,8,0,0" />
                     <TextBlock x:Name="ReadyHint" Style="{StaticResource Hint}" FontSize="13" Margin="0,8,0,0" />
+                    <!-- The Chrome step was skipped: this phone does not block downloads -->
+                    <Border x:Name="ReadyChromeCard" Style="{StaticResource Card}" Margin="0,14,0,0">
+                        <TextBlock x:Name="ReadyChromeText" Style="{StaticResource WarningText}" FontSize="13" TextWrapping="Wrap" />
+                    </Border>
                     <Border Style="{StaticResource Card}" Margin="0,14,0,0">
                         <TextBlock x:Name="ReadyStatus" FontSize="13" TextWrapping="Wrap" />
                     </Border>

@@ -17,15 +17,26 @@ public class PhoneSetupProgressTests
         return progress;
     }
 
-    // Through every step up to the cable (the last one of the guide).
+    // Through every step up to the cable (the last one of the guide); the
+    // Chrome step goes on by itself, as for a phone already up to date.
     private static PhoneSetupProgress AtCable()
     {
         var progress = AtNumber();
         while (progress.StepId != "cabo")
         {
-            progress.Next();
+            NextOrUpToDate(progress);
         }
         return progress;
+    }
+
+    internal static void NextOrUpToDate(PhoneSetupProgress progress)
+    {
+        if (progress.StepId == "chrome")
+        {
+            progress.ChromeLooked(null, new ChromeVersions(PhoneCable.ChromeMinimum, PhoneCable.ChromeMinimum), ReadyAt);
+            return;
+        }
+        progress.Next();
     }
 
     // The cable saw the phone and the Midview is finishing it.
@@ -151,7 +162,7 @@ public class PhoneSetupProgressTests
         Assert.True(progress.ReturnsAfterWifi);
         progress.Next();
 
-        Assert.Equal("conta-google", progress.StepId);
+        Assert.Equal("desenvolvedor", progress.StepId);
     }
 
     [Fact]
@@ -581,7 +592,7 @@ public class PhoneSetupProgressTests
         progress.WipeSucceeded();
         // The teacher went on meanwhile.
         progress.Next();
-        Assert.Equal("conta-google", progress.StepId);
+        Assert.Equal("desenvolvedor", progress.StepId);
 
         progress.WipeNotDone("o celular não se apagou");
 

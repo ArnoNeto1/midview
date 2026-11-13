@@ -122,6 +122,10 @@ public partial class PreparePhonesWindow : MidviewWindow
                 }
                 ShowPage();
                 return;
+            // The Chrome step's button, until both apps are up to date.
+            case SetupPage.Step when _progress.StepId == "chrome" && _progress.Chrome != ChromeStage.Done:
+                OnChromeNext();
+                return;
             // "Liguei o cabo e toquei em Permitir": look at the cable now.
             case SetupPage.Step when _progress.StepId == "cabo":
                 CheckCableNow();
@@ -357,6 +361,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowMiCard(step);
         ShowPrint(step, ScreenWidth);
         ShowWipe();
+        ShowChrome();
         ShowTool();
     }
 

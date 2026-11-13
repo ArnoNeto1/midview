@@ -68,6 +68,9 @@ public partial class PreparePhonesWindow
             case SetupPage.Ready:
                 ReadyTitle.Text = _progress.ReadyText(_devicesInClass(_progress.Kind), PhoneTotalFile.Load(kind: _progress.Kind));
                 ReadyHint.Text = $"No {DeviceWord} aparece \"Pronto. Este é o {name} da escola.\" Ele aparece no filtro Celulares quando entrar no Wi-Fi.";
+                var chromeWarning = PhoneSetupGuide.ChromeWarning(_progress.ChromeSkipped, _progress.WebViewSkipped, _progress.ChromeSeen);
+                ReadyChromeText.Text = chromeWarning ?? "";
+                ReadyChromeCard.Visibility = Shown(chromeWarning is not null);
                 ShowReadyStatus();
                 Footer(back: false, next: "Preparar o próximo", other: "Terminei");
                 break;

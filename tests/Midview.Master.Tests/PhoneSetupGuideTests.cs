@@ -49,16 +49,72 @@ public class PhoneSetupGuideTests
     public void Steps_come_in_the_expected_order()
     {
         Assert.Equal(
-            new[] { "numero", "ligar", "conta-google", "desenvolvedor", "chip-conta-mi", "chaves", "sair-contas", "cabo" },
+            new[] { "numero", "ligar", "desenvolvedor", "chip-conta-mi", "chaves", "chrome", "conta-google", "sair-contas", "cabo" },
             PhoneSetupGuide.Steps.Select(s => s.Id).ToArray());
     }
 
     [Fact]
-    public void The_google_account_goes_before_developer_mode_and_the_accounts_leave_before_the_cable()
+    public void Chrome_is_updated_with_the_cable_allowed_and_before_the_google_account_leaves()
     {
         var ids = PhoneSetupGuide.Steps.Select(s => s.Id).ToList();
-        Assert.True(ids.IndexOf("conta-google") < ids.IndexOf("desenvolvedor"));
+        // "Depuração USB" (chaves) lets the Midview read it; the Google account lets the Play Store update it.
+        Assert.True(ids.IndexOf("chaves") < ids.IndexOf("chrome"));
+        Assert.True(ids.IndexOf("chrome") < ids.IndexOf("conta-google"));
+        Assert.True(ids.IndexOf("conta-google") < ids.IndexOf("sair-contas"));
         Assert.True(ids.IndexOf("sair-contas") < ids.IndexOf("cabo"));
+    }
+
+    private static int Number(string id) => PhoneSetupGuide.Steps.Select(s => s.Id).ToList().IndexOf(id) + 1;
+
+    private static string Texts(GuideStep step) =>
+        string.Join(" ", step.Taps.Concat(step.Help.Select(h => h.Answer)));
+
+    [Fact]
+    public void Step_numbers_in_the_texts_point_to_the_right_steps()
+    {
+        var chaves = Texts(PhoneSetupGuide.Steps.Single(s => s.Id == "chaves"));
+        Assert.Contains($"Volte ao passo {Number("chip-conta-mi")}, confira os dois", chaves);
+        Assert.Contains($"Falta o chip. Volte ao passo {Number("chip-conta-mi")}", chaves);
+        Assert.Contains($"Falta ligar o modo de desenvolvedor. Volte ao passo {Number("desenvolvedor")}.", chaves);
+        var google = $"como no passo {Number("conta-google")}:";
+        Assert.Contains(google, Texts(PhoneSetupGuide.Steps.Single(s => s.Id == "sair-contas")));
+        Assert.Contains($"(passo {Number("conta-google")})", Texts(PhoneSetupGuide.Steps.Single(s => s.Id == "sair-contas")));
+        Assert.Contains(google, Texts(PhoneSetupGuide.ChipOnly));
+        Assert.Contains($"como no passo {Number("chrome")}", Texts(PhoneSetupGuide.Steps.Single(s => s.Id == "cabo")));
+        var skip = PhoneSetupGuide.MiAccountHelp.Single(h => h.Problem == "Posso pular?").Answer;
+        Assert.Contains($"no passo {Number("chip-conta-mi")}, você entra", skip);
+        Assert.Contains($"no passo {Number("sair-contas")} sai dela", skip);
+        Assert.Contains($"volte ao passo {Number("ligar")}", PhoneSetupGuide.LockedWithPin.Answer);
+    }
+
+    [Fact]
+    public void The_chrome_step_says_what_to_tap_and_that_the_google_account_leaves_next()
+    {
+        var step = PhoneSetupGuide.Steps.Single(s => s.Id == "chrome");
+        var text = string.Join(" ", step.Taps);
+        Assert.Equal("Atualize o Chrome", step.Title);
+        Assert.Contains("Permitir depuração USB?", text);
+        Assert.Contains("toque em Atualizar", text);
+        Assert.Contains("Android System WebView", text);
+        Assert.Contains("Ela sai no próximo passo", text);
+        Assert.Contains(step.Help, h => h.Problem == "Não tenho conta Google" && h.Answer.Contains("Pular"));
+        Assert.Contains("conta Google", string.Join(" ", PhoneSetupGuide.Gather.Items));
+    }
+
+    [Fact]
+    public void A_skipped_chrome_warns_on_the_ready_page_and_an_updated_one_does_not()
+    {
+        var old = new ChromeVersions(126, 126);
+        Assert.Null(PhoneSetupGuide.ChromeWarning(false, false, new ChromeVersions(131, 131)));
+        Assert.Equal(
+            "Atenção: o Chrome deste celular não foi atualizado (está na versão 126; precisa da 131 ou mais nova), " +
+            "e o bloqueio de downloads não vai funcionar nele. Para atualizar depois, é preciso apagar o celular e prepará-lo de novo.",
+            PhoneSetupGuide.ChromeWarning(true, true, old));
+        Assert.Contains("não foi atualizado, e o bloqueio", PhoneSetupGuide.ChromeWarning(true, true, null));
+        Assert.Equal(
+            "Atenção: o Android System WebView deste celular não foi atualizado (está na versão 126). " +
+            "Para atualizar depois, é preciso apagar o celular e prepará-lo de novo.",
+            PhoneSetupGuide.ChromeWarning(false, true, new ChromeVersions(131, 126)));
     }
 
     [Fact]

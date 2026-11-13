@@ -5,7 +5,7 @@ using System.Windows;
 
 namespace Midview.Master;
 
-// Google's adb on the cable step. The first look at the cable checks it
+// Google's adb on the steps that use the cable (the Chrome step and the cable step). The first look at the cable checks it
 // again (AdbTool.Find); when this PC doesn't have it, the step says it comes
 // from Google, on Google's terms, and the teacher's click downloads it. The
 // cable is not looked at until it is here.
@@ -46,10 +46,11 @@ public partial class PreparePhonesWindow
     // Called by ShowStep, after the footer is drawn, and when the download moves.
     private void ShowTool()
     {
-        var needed = OnCableStep && ToolNeeded;
+        var needed = UsesCable && ToolNeeded;
         ToolCard.Visibility = Shown(needed);
         CableWaitCard.Visibility = Shown(OnCableStep && !ToolNeeded);
-        if (!OnCableStep)
+        ChromeCard.Visibility = Shown(OnChromeStep && !ToolNeeded);
+        if (!UsesCable)
         {
             return;
         }

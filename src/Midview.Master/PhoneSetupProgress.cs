@@ -220,8 +220,10 @@ internal sealed partial class PhoneSetupProgress
                     ShowStep(StepIndex + 1);
                 }
                 break;
-            // The cable step moves on by itself, when the cable sees the phone.
+            // The cable step moves on by itself, when the cable sees the phone;
+            // the Chrome step when both apps are up to date (or on "Pular").
             case SetupPage.Step when StepIndex == CableStep:
+            case SetupPage.Step when StepIndex == ChromeStep && Chrome != ChromeStage.Done:
                 break;
             case SetupPage.Step:
                 ShowStepOrMiAccount(StepIndex + 1);
@@ -431,6 +433,7 @@ internal sealed partial class PhoneSetupProgress
         OpensWelcomeHelp = false;
         SignOutByHand = false;
         MiSignOutShown = false;
+        ResetChrome();
     }
 
     private void SetWipe(WipeState state)
