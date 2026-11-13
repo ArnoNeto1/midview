@@ -6,10 +6,12 @@ import android.app.Notification
 // gerenciado pelo Midview"): kept off the lock screen, where the school's
 // rules on the wallpaper are read, and shown as before once the device is
 // unlocked. Only this one: the teacher's messages, the countdowns, the
-// screen request and the leaving notice keep their own channels. Android
-// fixes a channel's lock screen visibility when the channel is created, so
-// this one has an id of its own and the one before it ("status", shown on
-// the lock screen) is deleted.
+// screen request and the leaving notice keep their own channels. What hides
+// it is the notification's own visibility (secret): Android 10 resets the
+// lock screen visibility an app gives its channel (seen on the school's
+// Multilaser M10), and fixes it once the channel exists. The channel asks
+// for secret all the same, under an id of its own, and the one before it
+// ("status") is deleted.
 internal object StatusChannel {
     const val ID = "status-unlocked"
     const val OLD_ID = "status"
