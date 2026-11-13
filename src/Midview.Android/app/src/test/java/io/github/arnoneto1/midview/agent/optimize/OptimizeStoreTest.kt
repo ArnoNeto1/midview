@@ -61,6 +61,17 @@ class OptimizeStoreTest {
         assertEquals(withUninstalled, OptimizeStore(file).current)
     }
 
+    // Nothing is uninstalled in the background after a restart: pending is
+    // not kept, though the running agent still holds it.
+    @Test fun pendingIsNotKeptAcrossARestart() {
+        val store = OptimizeStore(file)
+        val leaving = state.copy(report = state.report.copy(pending = 5))
+        store.save(leaving)
+        assertEquals(5, store.current.report.pending)
+        assertFalse(file.readText(Charsets.UTF_8).contains("pending"))
+        assertEquals(state, OptimizeStore(file).current)
+    }
+
     // What 0.0.70 and before wrote is read too.
     @Test fun theOldFormatIsReadToo() {
         file.writeBytes("lastDnsAttempt=2026-11-12T13:00:25+00:00\n".toByteArray() + state.report.encode())

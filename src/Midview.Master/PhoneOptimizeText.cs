@@ -15,7 +15,10 @@ public static class PhoneOptimizeText
     public static string Line(PhoneOptimizeReport? report) =>
         report is null
             ? OldAgent
-            : $"{Apps(report.Uninstalled.Count, report.Hidden.Count, report.Failed.Count)} · {Dns(report.Dns)}";
+            : $"{Apps(report.Uninstalled.Count, report.Hidden.Count, report.Failed.Count, report.PendingCount)} · {Dns(report.Dns)}";
+
+    // Done, but apps still leaving the phone in the background (0.0.75 on).
+    public static bool IsRemoving(PhoneOptimizeReport? report) => report is { PendingCount: > 0 };
 
     // Fully optimized: every listed app uninstalled or hidden and the ad-free
     // DNS on (apps still being uninstalled in the background are not failed). With the
@@ -26,9 +29,23 @@ public static class PhoneOptimizeText
         report is { Failed.Count: 0, Dns: PhoneDnsStates.On or PhoneDnsStates.OffInternetBlocked or PhoneDnsStates.OffByTeacher };
 
     // "28 apps desinstalados · 6 escondidos", and those Android refused
-    // both ways (failed).
-    public static string Apps(int uninstalled, int hidden, int failed)
+    // both ways (failed); pending: still leaving the phone in the background,
+    // "13 apps desinstalados (mais 22 saindo no celular) · 21 escondidos".
+    public static string Apps(int uninstalled, int hidden, int failed, int pending = 0)
     {
+        if (pending > 0)
+        {
+            var removed = uninstalled == 0 ? "nenhum app desinstalado ainda" : Uninstalled(uninstalled);
+            var leaving = $"{removed} (mais {pending} saindo no celular)";
+            var withHidden = hidden switch
+            {
+                0 => leaving,
+                1 => $"{leaving} · 1 escondido",
+                _ => $"{leaving} · {hidden} escondidos",
+            };
+            return Refused(withHidden, failed);
+        }
+
         var apps = (uninstalled, hidden, failed) switch
         {
             (0, 0, 0) => "nenhum app desnecessário neste celular",
@@ -39,13 +56,15 @@ public static class PhoneOptimizeText
             (_, 1, _) => $"{Uninstalled(uninstalled)} · 1 escondido",
             _ => $"{Uninstalled(uninstalled)} · {hidden} escondidos",
         };
-        return failed switch
-        {
-            0 => apps,
-            1 => $"{apps} (1 não pôde ser removido)",
-            _ => $"{apps} ({failed} não puderam ser removidos)",
-        };
+        return Refused(apps, failed);
     }
+
+    private static string Refused(string apps, int failed) => failed switch
+    {
+        0 => apps,
+        1 => $"{apps} (1 não pôde ser removido)",
+        _ => $"{apps} ({failed} não puderam ser removidos)",
+    };
 
     private static string Uninstalled(int count) => count == 1 ? "1 app desinstalado" : $"{count} apps desinstalados";
 
@@ -62,7 +81,25 @@ public static class PhoneOptimizeText
     // Every Android device runs the same agent, phones and tablets alike.
     public static string Heading(int devices) => devices == 1 ? "Otimizar o celular ou tablet" : "Otimizar celulares e tablets";
 
-    // Above the list, once every device answered (or didn't).
+    // Above the list, once every device answered (or didn't). removing: how
+    // many of the done ones still uninstall apps in the background; while
+    // any does, it is not "Pronto." yet.
+    public static string Summary(int done, int total, int removing)
+    {
+        if (removing <= 0)
+        {
+            return Summary(done, total);
+        }
+        if (total == 1)
+        {
+            return "Quase pronto: o celular continua desinstalando os apps que faltam.";
+        }
+        var still = removing == 1 ? "1 continua desinstalando" : $"{removing} continuam desinstalando";
+        return done == total
+            ? $"Quase pronto nos {total} aparelhos: {still} os apps que faltam."
+            : $"{Summary(done, total)} Dos otimizados, {still} os apps que faltam.";
+    }
+
     public static string Summary(int done, int total) => (done, total) switch
     {
         (1, 1) => "Pronto.",

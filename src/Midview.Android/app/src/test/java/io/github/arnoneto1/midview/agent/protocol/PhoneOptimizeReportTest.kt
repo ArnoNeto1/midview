@@ -13,9 +13,16 @@ class PhoneOptimizeReportTest {
     private val fullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
             "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
-            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}"
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}"
     private val emptyJson =
-        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\",\"uninstalled\":[]}"
+        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\"," +
+            "\"uninstalled\":[],\"pending\":0}"
+
+    // What a 0.0.74 agent sends: "uninstalled" but no "pending".
+    private val noPendingJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
+            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}"
 
     // What an agent before 0.0.74 sends: no "uninstalled".
     private val olderJson =
@@ -26,7 +33,7 @@ class PhoneOptimizeReportTest {
 
     private val full = PhoneOptimizeReport(
         at, listOf("com.miui.msa.global", "com.miui.analytics"), listOf("com.xiaomi.mipicks"),
-        PhoneDnsStates.ON, "dns.adguard-dns.com", listOf("com.king.candycrushsaga", "com.zhiliaoapp.musically"),
+        PhoneDnsStates.ON, "dns.adguard-dns.com", listOf("com.king.candycrushsaga", "com.zhiliaoapp.musically"), pending = 22,
     )
     private val empty = PhoneOptimizeReport(null, emptyList(), emptyList(), PhoneDnsStates.OFF_INTERNET_BLOCKED, "")
 
@@ -44,9 +51,23 @@ class PhoneOptimizeReportTest {
 
     @Test
     fun decode_readsAReportWithoutUninstalledAsNone() {
-        assertEquals(full.copy(uninstalled = emptyList()), PhoneOptimizeReport.decode(olderJson.toByteArray()))
-        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null}"
-        assertEquals(full.copy(uninstalled = emptyList()), PhoneOptimizeReport.decode(withNull.toByteArray()))
+        assertEquals(full.copy(uninstalled = emptyList(), pending = 0), PhoneOptimizeReport.decode(olderJson.toByteArray()))
+        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null,\"pending\":null}"
+        assertEquals(full.copy(uninstalled = emptyList(), pending = 0), PhoneOptimizeReport.decode(withNull.toByteArray()))
+    }
+
+    @Test
+    fun decode_readsAReportWithoutPendingAsNone() {
+        assertEquals(full.copy(pending = 0), PhoneOptimizeReport.decode(noPendingJson.toByteArray()))
+    }
+
+    @Test
+    fun encode_refusesANegativePending() {
+        try {
+            full.copy(pending = -1).encode()
+            fail("expected IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+        }
     }
 
     @Test
@@ -63,6 +84,10 @@ class PhoneOptimizeReportTest {
             "{\"optimizedAt\":null,\"hidden\":[1],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\"}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[1]}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":\"x\"}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":-1}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":1.5}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":\"3\"}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}",
         )
         for (json in bad) {
             assertNull(json, PhoneOptimizeReport.decode(json.toByteArray()))

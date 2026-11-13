@@ -24,9 +24,11 @@ public static class PhoneDnsStates
 // Payload of MessageType.PhoneOptimizeReport (UTF-8 JSON): when the phone was
 // last optimized (null if never), the packages hidden and those neither
 // hidden nor uninstalled, the DNS state (PhoneDnsStates), the DNS server's
-// host name and, since 0.0.74, the packages uninstalled ("uninstalled",
-// written last). A report without it (an older agent), or with null, has
-// none; a Master before 0.0.74 ignores it.
+// host name, the packages uninstalled ("uninstalled", since 0.0.74) and how
+// many listed apps are still being uninstalled in the background ("pending",
+// since 0.0.75). Both are written last. A report without them (an older
+// agent), or with null, has none; an older Master ignores them. pending is a
+// whole number, never negative.
 public sealed record PhoneOptimizeReport(
     [property: JsonPropertyName("optimizedAt")] DateTimeOffset? OptimizedAt,
     [property: JsonPropertyName("hidden")] IReadOnlyList<string> Hidden,
@@ -36,6 +38,14 @@ public sealed record PhoneOptimizeReport(
 {
     [JsonPropertyName("uninstalled")]
     public IReadOnlyList<string> Uninstalled { get; init; } = Array.Empty<string>();
+
+    // Null only as read from JSON (pending: null): TryDecode makes it 0.
+    [JsonPropertyName("pending")]
+    public int? Pending { get; init; } = 0;
+
+    // The apps still leaving the phone (0 when none or unknown).
+    [JsonIgnore]
+    public int PendingCount => Pending ?? 0;
 
     private static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.Never };
 
@@ -51,11 +61,16 @@ public sealed record PhoneOptimizeReport(
             if (decoded is null || decoded.Hidden is null || decoded.Failed is null || decoded.DnsHost is null
                 || !PhoneDnsStates.IsKnown(decoded.Dns)
                 || decoded.Hidden.Any(p => p is null) || decoded.Failed.Any(p => p is null)
-                || (decoded.Uninstalled is not null && decoded.Uninstalled.Any(p => p is null)))
+                || (decoded.Uninstalled is not null && decoded.Uninstalled.Any(p => p is null))
+                || decoded.Pending < 0)
             {
                 return false;
             }
-            report = decoded.Uninstalled is null ? decoded with { Uninstalled = Array.Empty<string>() } : decoded;
+            report = decoded with
+            {
+                Uninstalled = decoded.Uninstalled ?? Array.Empty<string>(),
+                Pending = decoded.Pending ?? 0,
+            };
             return true;
         }
         catch (Exception ex) when (ex is JsonException or DecoderFallbackException or NotSupportedException)

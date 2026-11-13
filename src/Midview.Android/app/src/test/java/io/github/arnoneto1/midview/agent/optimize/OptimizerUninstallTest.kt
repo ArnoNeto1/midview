@@ -51,6 +51,7 @@ class OptimizerUninstallTest {
         assertEquals(PhoneDnsStates.ON, report.dns)
         assertEquals(listOf(CANDY, TIKTOK, BOOKING), remover.calls.map { it.first })
         assertEquals(setOf("com.miui.msa.global", GMAIL, YOUTUBE), gw.hidden)
+        assertEquals(0, report.pending)
         assertTrue(queued.isEmpty())
         assertEquals(report, OptimizeStore(file).current.report)
     }
@@ -127,11 +128,18 @@ class OptimizerUninstallTest {
         val report = optimizer.run()
         assertEquals(listOf(CANDY, WOW, TIKTOK), report.uninstalled)
         assertTrue(NETFLIX in catalog.present && BOOKING in catalog.present)
+        // The teacher reads that 2 are still leaving the phone.
+        assertEquals(2, report.pending)
         assertEquals(1, queued.size)
 
+        // What a "Otimizar" would read while the background works.
+        val seen = mutableListOf<Pair<Int, List<String>>>()
+        remover.before = { seen += store.current.report.pending to store.current.report.uninstalled }
         runQueued()
 
+        assertEquals(listOf(2 to listOf(CANDY, WOW, TIKTOK), 1 to listOf(CANDY, WOW, TIKTOK, NETFLIX)), seen)
         val kept = store.current.report
+        assertEquals(0, kept.pending)
         assertEquals(listOf(CANDY, WOW, TIKTOK, NETFLIX, BOOKING), kept.uninstalled)
         assertEquals(15_000L, remover.calls.last().second)
         assertFalse(NETFLIX in catalog.present || BOOKING in catalog.present)
@@ -142,11 +150,13 @@ class OptimizerUninstallTest {
         remover.noAnswer = setOf(TIKTOK)
         val report = optimizer.run()
         assertFalse(TIKTOK in report.uninstalled || TIKTOK in report.hidden || TIKTOK in report.failed)
+        assertEquals(1, report.pending)
         assertEquals(1, queued.size)
 
         remover.noAnswer = emptySet()
         runQueued()
         assertTrue(TIKTOK in store.current.report.uninstalled)
+        assertEquals(0, store.current.report.pending)
     }
 
     // Still no answer in the background: hidden, so it is gone from the screen.
@@ -156,6 +166,30 @@ class OptimizerUninstallTest {
         runQueued()
         assertTrue(TIKTOK in store.current.report.hidden)
         assertTrue(TIKTOK in gw.hidden)
+    }
+
+    // Gone by the time the background gets to it (a "Otimizar" in between
+    // took it): pending still counts down to 0.
+    @Test fun anAppAlreadyGoneStillCountsDown() {
+        remover.noAnswer = setOf(TIKTOK)
+        optimizer.run()
+        catalog.present -= TIKTOK
+        runQueued()
+        assertEquals(0, store.current.report.pending)
+    }
+
+    // The background cannot even start: nothing is said to be leaving.
+    @Test fun aBackgroundThatCannotStartLeavesNothingPending() {
+        val failing = Optimizer(
+            catalog, gw, AdblockDns(gw, FakeDnsNetwork(), internetBlocked = { false }), store,
+            internetBlocked = { false }, clock = { now }, background = { throw IllegalStateException("stopping") },
+            remover = remover, ticker = { nanos },
+        )
+        remover.noAnswer = setOf(TIKTOK)
+        val report = failing.run()
+        assertEquals(0, report.pending)
+        assertEquals(0, store.current.report.pending)
+        assertFalse(TIKTOK in report.uninstalled)
     }
 
     @Test fun notTheSchoolsPhoneNothingIsUninstalled() {

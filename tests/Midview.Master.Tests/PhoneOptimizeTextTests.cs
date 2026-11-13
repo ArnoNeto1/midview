@@ -4,14 +4,50 @@ using Xunit;
 
 public class PhoneOptimizeTextTests
 {
-    private static PhoneOptimizeReport Report(int hidden, string dns, int failed = 0, int uninstalled = 0) => new(
+    private static PhoneOptimizeReport Report(int hidden, string dns, int failed = 0, int uninstalled = 0, int pending = 0) => new(
         DateTimeOffset.UnixEpoch,
         Enumerable.Range(0, hidden).Select(i => $"com.anuncio.{i}").ToList(),
         Enumerable.Range(0, failed).Select(i => $"com.falhou.{i}").ToList(),
         dns, "dns.adguard-dns.com")
     {
         Uninstalled = Enumerable.Range(0, uninstalled).Select(i => $"com.jogo.{i}").ToList(),
+        Pending = pending,
     };
+
+    // Apps still leaving the phone in the background (0.0.75 on).
+    [Fact]
+    public void Apps_still_leaving_are_said() =>
+        Assert.Equal("13 apps desinstalados (mais 22 saindo no celular) · 21 escondidos · DNS sem anúncios ligado",
+                     PhoneOptimizeText.Line(Report(21, PhoneDnsStates.On, uninstalled: 13, pending: 22)));
+
+    [Theory]
+    [InlineData(1, 0, 1, 0, "1 app desinstalado (mais 1 saindo no celular)")]
+    [InlineData(0, 6, 3, 0, "nenhum app desinstalado ainda (mais 3 saindo no celular) · 6 escondidos")]
+    [InlineData(2, 1, 4, 1, "2 apps desinstalados (mais 4 saindo no celular) · 1 escondido (1 não pôde ser removido)")]
+    public void Leaving_variants(int uninstalled, int hidden, int pending, int failed, string apps) =>
+        Assert.Equal($"{apps} · DNS sem anúncios ligado",
+                     PhoneOptimizeText.Line(Report(hidden, PhoneDnsStates.On, failed, uninstalled, pending)));
+
+    // Done (a check mark), but not "Pronto." while apps are still leaving.
+    [Fact]
+    public void Still_leaving_is_done_but_not_finished()
+    {
+        var report = Report(21, PhoneDnsStates.On, uninstalled: 13, pending: 22);
+        Assert.True(PhoneOptimizeText.IsDone(report));
+        Assert.True(PhoneOptimizeText.IsRemoving(report));
+        Assert.False(PhoneOptimizeText.IsRemoving(Report(21, PhoneDnsStates.On, uninstalled: 35)));
+        Assert.False(PhoneOptimizeText.IsRemoving(null));
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1, "Quase pronto: o celular continua desinstalando os apps que faltam.")]
+    [InlineData(3, 3, 1, "Quase pronto nos 3 aparelhos: 1 continua desinstalando os apps que faltam.")]
+    [InlineData(3, 3, 2, "Quase pronto nos 3 aparelhos: 2 continuam desinstalando os apps que faltam.")]
+    [InlineData(2, 3, 1, "Otimizados 2 de 3 aparelhos (veja abaixo). Dos otimizados, 1 continua desinstalando os apps que faltam.")]
+    [InlineData(1, 1, 0, "Pronto.")]
+    [InlineData(3, 3, 0, "Pronto nos 3 aparelhos.")]
+    public void Summary_while_removing(int done, int total, int removing, string expected) =>
+        Assert.Equal(expected, PhoneOptimizeText.Summary(done, total, removing));
 
     [Fact]
     public void Everything_on() =>

@@ -62,6 +62,8 @@ class OptimizeStore(
         // network form: lastDnsAttempt and optimizedAt (ISO-8601, empty for
         // none), a "hidden=", "failed=" and "uninstalled=" per app, dns and
         // dnsHost. A file from before 0.0.74 has no "uninstalled=": none.
+        // The report's pending is not kept: after a restart nothing is being
+        // uninstalled in the background any more, so it reads as 0.
         fun encode(state: OptimizeState): ByteArray {
             val report = state.report
             return StoredText.encode(

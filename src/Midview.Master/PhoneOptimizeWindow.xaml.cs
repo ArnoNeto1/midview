@@ -47,7 +47,8 @@ public partial class PhoneOptimizeWindow : MidviewWindow
         try
         {
             var done = await Task.WhenAll(_rows.Select(row => Task.Run(() => OptimizeOne(row))));
-            ProgressTextBlock.Text = PhoneOptimizeText.Summary(done.Count(ok => ok), _rows.Count);
+            ProgressTextBlock.Text = PhoneOptimizeText.Summary(
+                done.Count(r => r.Done), _rows.Count, done.Count(r => r.Done && r.Removing));
         }
         finally
         {
@@ -56,19 +57,22 @@ public partial class PhoneOptimizeWindow : MidviewWindow
         }
     }
 
-    // Off the UI thread; the row is updated on it. True when fully optimized.
-    private bool OptimizeOne(PhoneRow row)
+    // Off the UI thread; the row is updated on it. Done: fully optimized;
+    // Removing: apps still leaving the phone in the background (the row is
+    // a check mark with the "saindo" note, and the summary is not "Pronto."
+    // yet).
+    private (bool Done, bool Removing) OptimizeOne(PhoneRow row)
     {
-        var (state, line, done) = Optimize(row.Phone);
+        var (state, line, done, removing) = Optimize(row.Phone);
         Dispatcher.Invoke(() => row.Show(state, line));
-        return done;
+        return (done, removing);
     }
 
-    private (PhoneRowState State, string Line, bool Done) Optimize(KnownMachine phone)
+    private (PhoneRowState State, string Line, bool Done, bool Removing) Optimize(KnownMachine phone)
     {
         if (phone.AgentThumbprint is not { Length: > 0 })
         {
-            return (PhoneRowState.Failed, "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"", false);
+            return (PhoneRowState.Failed, "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"", false, false);
         }
         try
         {
@@ -76,14 +80,14 @@ public partial class PhoneOptimizeWindow : MidviewWindow
             var line = PhoneOptimizeText.Line(report);
             if (report is null)
             {
-                return (PhoneRowState.Failed, line, false);
+                return (PhoneRowState.Failed, line, false, false);
             }
             var done = PhoneOptimizeText.IsDone(report);
-            return (done ? PhoneRowState.Done : PhoneRowState.Partial, line, done);
+            return (done ? PhoneRowState.Done : PhoneRowState.Partial, line, done, PhoneOptimizeText.IsRemoving(report));
         }
         catch (Exception ex)
         {
-            return (PhoneRowState.Failed, FailureText.DescribePhoneAgent(ex), false);
+            return (PhoneRowState.Failed, FailureText.DescribePhoneAgent(ex), false, false);
         }
     }
 }

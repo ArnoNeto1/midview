@@ -58,6 +58,8 @@ fun interface AppRemover {
 // the apps left then are uninstalled right after, in the background, one at
 // a time (each waits at most APP_WAIT for Android, so a teacher's
 // "Otimizar" never waits long behind it), and the next report counts them.
+// Meanwhile the report says how many are still to go (pending), so the
+// teacher reads that they are still leaving the phone.
 // A failure on one app never stops the others. It runs by itself at the first
 // command of a trusted teacher (after pairing) and again whenever the teacher
 // asks, changing nothing the second time. A DNS left off for no internet or a
@@ -233,7 +235,10 @@ class Optimizer(
             left = removed.left
             val uninstalled = (held.report.uninstalled.filter(::isGone) + removed.uninstalled).distinct()
             OptimizeState(
-                PhoneOptimizeReport(now, (hidden + removed.hidden).distinct(), failed + removed.failed, dnsState, AdblockDns.HOST, uninstalled),
+                PhoneOptimizeReport(
+                    now, (hidden + removed.hidden).distinct(), failed + removed.failed, dnsState, AdblockDns.HOST,
+                    uninstalled, pending = left.size,
+                ),
                 lastDnsAttempt = attempt,
             )
         } else {
@@ -249,7 +254,10 @@ class Optimizer(
             null,
         )
         if (left.isNotEmpty()) removeLater()
-        return report
+        // As kept: pending is 0 again if the background could not start.
+        // (The background waits for this run's lock, so it changed nothing
+        // else yet.)
+        return store.current.report
     }
 
     // What "Otimizar" does to the phone's apps: those to hide (BloatList's,
@@ -363,34 +371,56 @@ class Optimizer(
                 Runnable {
                     try {
                         val target = lock.withLock { if (gw.isDeviceOwner()) plan().uninstall else emptyList() }
-                        for (pkg in target) {
+                        for ((done, pkg) in target.withIndex()) {
                             lock.withLock {
-                                if (!isGone(pkg)) keep(removeApps(listOf(pkg), until = null))
+                                val removal = if (isGone(pkg)) Removal() else removeApps(listOf(pkg), until = null)
+                                keep(removal, pending = target.size - done - 1)
                             }
                         }
                     } catch (e: Exception) {
                         log("The apps left could not be uninstalled", e)
                     } finally {
+                        noneLeft()
                         removing.set(false)
                     }
                 },
             )
         } catch (e: Exception) {
+            noneLeft()
             removing.set(false)
             log("The apps left could not be uninstalled", e)
         }
     }
 
-    private fun keep(removal: Removal) {
+    // Nothing is being uninstalled in the background any more.
+    private fun noneLeft() {
+        try {
+            lock.withLock {
+                val held = store.current
+                if (held.report.pending != 0) store.save(held.copy(report = held.report.copy(pending = 0)))
+            }
+        } catch (e: Exception) {
+            log("The report could not be updated", e)
+        }
+    }
+
+    // One app done in the background (or found gone already); pending: how
+    // many are still to go.
+    private fun keep(removal: Removal, pending: Int) {
         val held = store.current
         val report = held.report
         val done = (removal.uninstalled + removal.hidden).toSet()
+        if (done.isEmpty() && removal.failed.isEmpty()) {
+            if (report.pending != pending) store.save(held.copy(report = report.copy(pending = pending)))
+            return
+        }
         store.save(
             held.copy(
                 report = report.copy(
                     uninstalled = (report.uninstalled + removal.uninstalled).distinct(),
                     hidden = (report.hidden + removal.hidden).distinct(),
                     failed = (report.failed.filter { it !in done } + removal.failed).distinct(),
+                    pending = pending,
                 ),
             ),
         )

@@ -8,10 +8,17 @@ public class PhoneOptimizeReportTests
     private const string FullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
         + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
-        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}";
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}";
 
     private const string EmptyJson =
-        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\",\"uninstalled\":[]}";
+        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\","
+        + "\"uninstalled\":[],\"pending\":0}";
+
+    // What a 0.0.74 agent sends: "uninstalled" but no "pending".
+    private const string NoPendingJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}";
 
     // What an agent before 0.0.74 sends: no "uninstalled".
     private const string OlderJson =
@@ -40,6 +47,7 @@ public class PhoneOptimizeReportTests
         PhoneDnsStates.On, "dns.adguard-dns.com")
     {
         Uninstalled = new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" },
+        Pending = 22,
     };
 
     [Fact]
@@ -60,6 +68,7 @@ public class PhoneOptimizeReportTests
         Assert.Equal("on", full.Dns);
         Assert.Equal("dns.adguard-dns.com", full.DnsHost);
         Assert.Equal(new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" }, full.Uninstalled);
+        Assert.Equal(22, full.PendingCount);
 
         Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(EmptyJson), out var empty));
         Assert.Null(empty.OptimizedAt);
@@ -67,6 +76,17 @@ public class PhoneOptimizeReportTests
         Assert.Empty(empty.Failed);
         Assert.Equal("offInternetBlocked", empty.Dns);
         Assert.Empty(empty.Uninstalled);
+        Assert.Equal(0, empty.PendingCount);
+    }
+
+    [Theory]
+    [InlineData(NoPendingJson)]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":null}")]
+    public void TryDecode_AReportWithoutPending_HasNone(string json)
+    {
+        Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out var report));
+        Assert.Equal(0, report.Pending);
+        Assert.Equal(0, report.PendingCount);
     }
 
     [Theory]
@@ -109,6 +129,10 @@ public class PhoneOptimizeReportTests
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[1]}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[null]}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":\"x\"}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":-1}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":1.5}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":\"3\"}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}")]
     public void TryDecode_RefusesBadJson(string json) =>
         Assert.False(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out _));
 
