@@ -308,6 +308,8 @@ public sealed class PhoneCableTests
             S + "shell settings put global window_animation_scale 0",
             S + "shell settings put global transition_animation_scale 0",
             S + "shell settings put global animator_duration_scale 0",
+            S + "shell settings put system QSB_SCROLL_ENTRANCE_STATUS 0",
+            S + "shell settings put system open_personal_assistant 0",
             S + "shell pm list packages",
             ContentCall(),
             "devices",
@@ -494,7 +496,10 @@ public sealed class PhoneCableTests
             .Set(S + "shell settings put global window_animation_scale 0", "Error", 255)
             .Set(S + "shell settings put global transition_animation_scale 0", "Error", 255)
             .Set(S + "shell settings put global animator_duration_scale 0", "Error", 255)
-            .Set(S + "shell pm list packages", "package:com.miui.weather2\n")
+            .Set(S + "shell settings put system QSB_SCROLL_ENTRANCE_STATUS 0", "Error", 255)
+            .Set(S + "shell settings put system open_personal_assistant 0", "Error", 255)
+            .Set(S + "shell pm list packages", "package:com.miui.weather2\npackage:com.miui.daemon\n")
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Failure [-1000]", 1)
             .Set(S + "shell cmd appops set com.miui.weather2 RUN_ANY_IN_BACKGROUND ignore", "Error", 255);
         var result = Prepare(adb);
         Assert.Null(result.Problem);
@@ -534,6 +539,54 @@ public sealed class PhoneCableTests
             Assert.DoesNotContain(app, PhoneCable.HeavyApps);
         }
         Assert.Equal(6, PhoneCable.HeavyApps.Count);
+    }
+
+    [Fact]
+    public void Only_the_listed_apps_on_the_phone_are_removed_and_a_removed_one_is_not_restricted()
+    {
+        var adb = ReadyToPrepare()
+            .Set(S + "shell pm list packages",
+                "package:com.android.chrome\npackage:com.miui.daemon\npackage:com.google.android.googlequicksearchbox\n"
+                + "package:com.mi.globalminusscreen\npackage:cn.wps.moffice_eng\npackage:com.miui.calculator\n")
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n")
+            .Set(S + "shell pm uninstall --user 0 com.google.android.googlequicksearchbox", "Success\n")
+            .Set(S + "shell pm uninstall --user 0 com.mi.globalminusscreen", "Success\n");
+
+        Prepare(adb);
+
+        var removed = adb.Calls.Where(c => c.Contains("pm uninstall --user 0", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[]
+        {
+            S + "shell pm uninstall --user 0 com.google.android.googlequicksearchbox",
+            S + "shell pm uninstall --user 0 com.mi.globalminusscreen",
+            S + "shell pm uninstall --user 0 com.miui.daemon",
+        }, removed);
+        // App Vault is gone, so only WPS is still kept from the background.
+        var background = adb.Calls.Where(c => c.Contains("RUN_ANY_IN_BACKGROUND", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[] { S + "shell cmd appops set cn.wps.moffice_eng RUN_ANY_IN_BACKGROUND ignore" }, background);
+        var owner = adb.Calls.IndexOf(SetDeviceOwner);
+        Assert.All(removed, c => Assert.True(adb.Calls.IndexOf(c) < owner));
+    }
+
+    [Fact]
+    public void Removed_app_list_spares_what_the_class_the_phone_and_midview_need()
+    {
+        foreach (var app in new[]
+                 {
+                     Package, "com.miui.home", "com.google.android.inputmethod.latin", "com.google.android.dialer",
+                     "com.google.android.apps.messaging", "com.android.phone", "com.google.android.gms", "com.google.android.gsf",
+                     "com.android.vending", "com.android.chrome", "com.google.android.webview", "com.android.settings",
+                     "com.android.camera", "com.miui.gallery", "com.miui.calculator", "com.mi.android.globalFileexplorer",
+                     "com.google.android.documentsui", "com.miui.screenrecorder", "com.miui.securitycenter",
+                     "com.miui.global.packageinstaller", "com.google.android.packageinstaller", "com.android.managedprovisioning",
+                     "com.android.vpndialogs", "com.android.providers.media", "com.android.externalstorage",
+                     "com.google.android.setupwizard", "com.android.shell", "cn.wps.moffice_eng", "cn.wps.xiaomi.abroad.lite",
+                 })
+        {
+            Assert.DoesNotContain(app, PhoneCable.RemovedApps);
+        }
+        Assert.Equal(67, PhoneCable.RemovedApps.Count);
+        Assert.Equal(PhoneCable.RemovedApps.Count, PhoneCable.RemovedApps.Distinct().Count());
     }
 
     [Fact]
