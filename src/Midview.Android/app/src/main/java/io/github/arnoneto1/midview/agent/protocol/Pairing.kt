@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.protocol
 
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Locale
@@ -67,7 +68,7 @@ object Pairing {
         return kept.ifEmpty { "?" }
     }
 
-    fun refused(reason: String) = Message(MessageType.PAIR_REFUSED, reason.toByteArray(Charsets.UTF_8))
+    fun refused(reason: String) = Message(MessageType.PAIR_REFUSED, DeviceWord.say(reason).toByteArray(Charsets.UTF_8))
 
     fun refusalText(payload: ByteArray) = String(payload, Charsets.UTF_8)
 

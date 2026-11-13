@@ -98,6 +98,7 @@ class AgentService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        DeviceWord.tablet = CableSetup(File(filesDir, CableSetup.FILE_NAME)).isTablet()
         createChannels()
         ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)

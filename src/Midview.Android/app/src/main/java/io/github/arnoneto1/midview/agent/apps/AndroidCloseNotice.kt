@@ -13,6 +13,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
 
 // The student's warning before "Fechar programas" (CloseCountdown), in two
@@ -41,7 +42,7 @@ class AndroidCloseNotice(context: Context, private val notification: Int = CLOSE
     init {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL, "Avisos do professor", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "A contagem antes de o professor fechar os apps, reiniciar o celular ou apagar a tela"
+                description = DeviceWord.say("A contagem antes de o professor fechar os apps, reiniciar o celular ou apagar a tela")
                 setShowBadge(false)
             },
         )
@@ -50,11 +51,11 @@ class AndroidCloseNotice(context: Context, private val notification: Int = CLOSE
     override fun show(headline: String, text: String, alert: Boolean) {
         main.post {
             try {
-                notify(headline, text, alert)
+                notify(DeviceWord.say(headline), DeviceWord.say(text), alert)
             } catch (e: RuntimeException) {
                 Log.w(TAG, "The warning notification did not show", e)
             }
-            showStrip(text)
+            showStrip(DeviceWord.say(text))
         }
     }
 

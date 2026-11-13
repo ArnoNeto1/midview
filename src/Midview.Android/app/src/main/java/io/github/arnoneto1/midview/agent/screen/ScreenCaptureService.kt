@@ -24,6 +24,7 @@ import android.os.SystemClock
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 
 // The capture of the screen, once the student tapped "Iniciar agora"
 // (ConsentActivity): a foreground service of type mediaProjection, as
@@ -232,7 +233,7 @@ class ScreenCaptureService : Service() {
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Tela compartilhada", NotificationManager.IMPORTANCE_LOW))
         val notification = Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle(NOTIFICATION_TEXT)
+            .setContentTitle(DeviceWord.say(NOTIFICATION_TEXT))
             .setOngoing(true)
             .build()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)

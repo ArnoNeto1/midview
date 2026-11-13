@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
 
 // The student's "Este celular está sendo controlado pelo professor", as a
@@ -75,7 +76,7 @@ object ControlNotice {
             val windows = service.getSystemService(WindowManager::class.java)
             val density = service.resources.displayMetrics.density
             val view = TextView(service).apply {
-                text = TEXT
+                text = DeviceWord.say(TEXT)
                 setTextColor(INK)
                 setTypeface(typeface, Typeface.BOLD)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)

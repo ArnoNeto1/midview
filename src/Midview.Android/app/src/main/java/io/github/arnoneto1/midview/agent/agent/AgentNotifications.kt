@@ -63,8 +63,8 @@ internal fun AgentService.goForeground(text: String) {
     )
     val notification = Notification.Builder(this, STATUS_CHANNEL)
         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-        .setContentTitle(text)
-        .setStyle(Notification.BigTextStyle().bigText(text))
+        .setContentTitle(DeviceWord.say(text))
+        .setStyle(Notification.BigTextStyle().bigText(DeviceWord.say(text)))
         .setOngoing(true)
         .addAction(
             Notification.Action.Builder(

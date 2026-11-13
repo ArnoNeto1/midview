@@ -20,6 +20,7 @@ import android.os.SystemClock
 import io.github.arnoneto1.midview.agent.AdminReceiver
 import io.github.arnoneto1.midview.agent.agent.AgentService
 import io.github.arnoneto1.midview.agent.agent.AgentWatchdog
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
@@ -177,8 +178,8 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
             Notification.Builder(app, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_menu_delete)
                 .setContentTitle(TAP_TITLE)
-                .setContentText(TAP_TEXT)
-                .setStyle(Notification.BigTextStyle().bigText(TAP_TEXT))
+                .setContentText(DeviceWord.say(TAP_TEXT))
+                .setStyle(Notification.BigTextStyle().bigText(DeviceWord.say(TAP_TEXT)))
                 .setContentIntent(tap)
                 .setOngoing(true)
                 .build(),
