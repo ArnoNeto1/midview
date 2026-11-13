@@ -1,37 +1,20 @@
 package io.github.arnoneto1.midview.agent.agent
 
 import android.app.ActivityManager
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.net.wifi.WifiManager
-import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.StatFs
 import android.util.Log
 import io.github.arnoneto1.midview.agent.apps.AppBlockStore
-import io.github.arnoneto1.midview.agent.apps.AndroidCloseNotice
 import io.github.arnoneto1.midview.agent.apps.AppCloser
-import io.github.arnoneto1.midview.agent.apps.CloseCountdown
 import io.github.arnoneto1.midview.agent.apps.AppSuspender
 import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
-import io.github.arnoneto1.midview.agent.classfolder.ClassFileTimes
-import io.github.arnoneto1.midview.agent.classfolder.ClassFolderFollow
-import io.github.arnoneto1.midview.agent.classfolder.ClassLessonNotice
-import io.github.arnoneto1.midview.agent.classfolder.ClassLessonStore
-import io.github.arnoneto1.midview.agent.classfolder.PhoneClassFolder
 import io.github.arnoneto1.midview.agent.control.AndroidControlTarget
-import io.github.arnoneto1.midview.agent.files.DownloadFolder
 import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
@@ -55,12 +38,9 @@ import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
-import io.github.arnoneto1.midview.agent.power.AndroidPhonePower
-import io.github.arnoneto1.midview.agent.power.PowerCountdown
 import io.github.arnoneto1.midview.agent.programs.SilentUninstaller
 import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
-import io.github.arnoneto1.midview.agent.protocol.Discovery
 import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
 import io.github.arnoneto1.midview.agent.screen.FrameCredit
@@ -83,11 +63,7 @@ import io.github.arnoneto1.midview.agent.update.ApkUpload
 import io.github.arnoneto1.midview.agent.update.PackageApkReader
 import io.github.arnoneto1.midview.agent.update.SelfInstaller
 import java.io.File
-import java.net.DatagramSocket
-import java.net.InetSocketAddress
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 // The Midview agent on the phone: always running (a foreground service with
@@ -98,8 +74,7 @@ import java.util.concurrent.TimeUnit
 class AgentService : Service() {
     private val lock = Any()
     private var tlsServers = emptyList<TlsServer>()
-    private var discoverySocket: DatagramSocket? = null
-    private var multicastLock: WifiManager.MulticastLock? = null
+    private val discovery = AgentDiscovery(this)
     private var packageWatcher: PackageWatcher? = null
     private var dnsWatcher: DnsWatcher? = null
     private val wifi by lazy { AgentWifi(this) }
@@ -200,10 +175,7 @@ class AgentService : Service() {
         dnsWatcher = null
         tlsServers.forEach { it.close() }
         tlsServers = emptyList()
-        discoverySocket?.close()
-        discoverySocket = null
-        multicastLock?.let { if (it.isHeld) it.release() }
-        multicastLock = null
+        discovery.close()
     }
 
     private fun startAgent() {
@@ -323,77 +295,9 @@ class AgentService : Service() {
             killBackground = { getSystemService(ActivityManager::class.java).killBackgroundProcesses(it) },
             log = log,
         )
-        // The student's warning and the wait, then the closing, on one thread of its own.
-        val closing = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview close apps").apply { isDaemon = true } }
-        own { closing.shutdownNow() }
-        val countdown = CloseCountdown(
-            closer, AndroidCloseNotice(this),
-            schedule = { delay, task ->
-                closing.schedule(
-                    Runnable {
-                        try {
-                            task()
-                        } catch (e: RuntimeException) {
-                            log("The warning before closing the apps failed", e)
-                        }
-                    },
-                    delay, TimeUnit.MILLISECONDS,
-                )
-            },
-            log = log,
-        )
-        // "Desligar" and "Reiniciar": the student's warning and the wait,
-        // then the screen off or the restart, on a thread of their own.
-        val powering = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview power").apply { isDaemon = true } }
-        own { powering.shutdownNow() }
-        val power = PowerCountdown(
-            AndroidPhonePower(this), AndroidCloseNotice(this, AndroidCloseNotice.POWER_NOTIFICATION),
-            schedule = { delay, task ->
-                powering.schedule(
-                    Runnable {
-                        try {
-                            task()
-                        } catch (e: RuntimeException) {
-                            log("The warning before the restart or the screen off failed", e)
-                        }
-                    },
-                    delay, TimeUnit.MILLISECONDS,
-                )
-            },
-            log = log,
-        )
-        // "Pasta da turma": the lesson and the class folders' home (a PC
-        // Agent's part, on the commands port) and the lesson's folder in
-        // Download/Midview (a PC Session's part, on the screen port),
-        // followed every few seconds and at once when the lesson changes.
-        val downloads = DownloadFolder(this)
-        lateinit var classLessons: ClassLessonStore
-        val classFolder = PhoneClassFolder(
-            downloads.directory, { classLessons.lessonOn }, ClassFileTimes(File(filesDir, CLASS_TIMES_FILE), log),
-            canSee = { downloads.seesEverything },
-            freeBytes = { StatFs(Environment.getExternalStorageDirectory().path).availableBytes },
-        )
-        val lessonNotice = ClassLessonNotice(this)
-        val follow = ClassFolderFollow(
-            classFolder, { classLessons.current }, File(filesDir, CLASS_FOLLOW_FILE), canSee = { downloads.seesEverything },
-            notice = { if (it == null) lessonNotice.hide() else lessonNotice.show(it) },
-            remind = lessonNotice::showIfMissing,
-            log = log,
-        )
-        val classTimer = Executors.newSingleThreadScheduledExecutor { Thread(it, "Midview class folder").apply { isDaemon = true } }
-        own { classTimer.shutdownNow() }
-        classLessons = ClassLessonStore(
-            File(filesDir, CLASS_LESSON_FILE),
-            prepare = follow::prepare,
-            changed = {
-                try {
-                    classTimer.execute { follow.follow() }
-                } catch (e: RejectedExecutionException) {
-                    // The agent is stopping.
-                }
-            },
-            log = log,
-        )
+        val countdown = closeCountdown(closer, log, ::own)
+        val power = powerCountdown(log, ::own)
+        val classFolder = AgentClassFolder(this, log, ::own)
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
@@ -403,7 +307,7 @@ class AgentService : Service() {
             files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),
             openWebsite = programs.launch::openWebsite, openApp = programs.launch::openApp, installs = programs.installs,
             lab = lab,
-            classLesson = classLessons,
+            classLesson = classFolder.lessons,
             listApps = installedApps::list,
         )
         val frames = ScreenCaptureService.frames
@@ -425,26 +329,9 @@ class AgentService : Service() {
                 ).run()
             },
             lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
-            classFolder = ClassFolderHandler(classFolder)::serve,
+            classFolder = ClassFolderHandler(classFolder.folder)::serve,
         )
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
-
-        // The class folder looked at every few seconds while a lesson is on
-        // (or just ended), far less often otherwise.
-        fun look() {
-            try {
-                classLessons.endIfFromAnEarlierDay()
-                follow.follow()
-            } catch (e: RuntimeException) {
-                log("The class folder's look failed", e)
-            }
-            val next = if (follow.needsLooking()) CLASS_FOLDER_LOOK_SECONDS else CLASS_FOLDER_IDLE_LOOK_SECONDS
-            try {
-                classTimer.schedule(Runnable { look() }, next, TimeUnit.SECONDS)
-            } catch (e: RejectedExecutionException) {
-                // The agent is stopping.
-            }
-        }
 
         synchronized(lock) {
             if (stopped) return
@@ -460,54 +347,12 @@ class AgentService : Service() {
                 otherBrowsers.apply()
             }.also { it.start() }
             dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
-            classTimer.execute { look() }
+            classFolder.startLooking()
             agentServer.start()
             sessionServer.start()
-
-            // Many phones drop broadcast packets to save battery unless
-            // an app asks for them.
-            multicastLock = (applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-                .createMulticastLock("Midview discovery").apply {
-                    setReferenceCounted(false)
-                    acquire()
-                }
-            val socket = DatagramSocket(null).apply {
-                reuseAddress = true
-                broadcast = true
-                bind(InetSocketAddress(Discovery.PORT))
-            }
-            discoverySocket = socket
-            Thread({ responder.run(socket) }, "Midview discovery").apply { isDaemon = true }.start()
+            discovery.start(responder)
         }
         Log.i(TAG, "Agent listening as $name (${identity.thumbprint}).")
-    }
-
-    // True only when the code is really on the screen: the notification
-    // can show (the app's notifications and the pairing channel are on), or
-    // else the code screen came up.
-    private fun showCode(code: String, teacher: String): Boolean {
-        PairingCodeActivity.show(this, code, teacher)
-        val manager = notifications()
-        val notified = manager.areNotificationsEnabled() &&
-            manager.getNotificationChannel(PAIRING_CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
-        if (notified) {
-            val open = PendingIntent.getActivity(
-                this, 0, PairingCodeActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-            val (title, detail) = PairingCodeActivity.texts(code, teacher)
-            val notification = Notification.Builder(this, PAIRING_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                .setContentTitle("$title: $code")
-                .setContentText(detail)
-                .setCategory(Notification.CATEGORY_CALL)
-                .setOngoing(true)
-                .setContentIntent(open)
-                .setFullScreenIntent(open, true)
-                .build()
-            manager.notify(PAIRING_NOTIFICATION, notification)
-            return true
-        }
-        return PairingCodeActivity.awaitShown(SHOW_TIMEOUT_MILLIS)
     }
 
     // Chrome's major version ("126.0.6478.71" -> 126); null without Chrome.
@@ -517,36 +362,6 @@ class AgentService : Service() {
         } catch (e: Exception) {
             null
         }
-
-    private fun hideCode() {
-        PairingCodeActivity.hide()
-        notifications().cancel(PAIRING_NOTIFICATION)
-    }
-
-    private fun goForeground(text: String) {
-        val notification = Notification.Builder(this, STATUS_CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-            .setContentTitle(text)
-            .setStyle(Notification.BigTextStyle().bigText(text))
-            .setOngoing(true)
-            .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(STATUS_NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(STATUS_NOTIFICATION, notification)
-        }
-    }
-
-    private fun createChannels() {
-        notifications().createNotificationChannel(
-            NotificationChannel(STATUS_CHANNEL, "Midview", NotificationManager.IMPORTANCE_LOW),
-        )
-        notifications().createNotificationChannel(
-            NotificationChannel(PAIRING_CHANNEL, "Pareamento com o professor", NotificationManager.IMPORTANCE_HIGH),
-        )
-    }
-
-    private fun notifications() = getSystemService(NotificationManager::class.java)
 
     // Starts the agent after the phone restarts (after the app is updated:
     // PackageReplacedReceiver).
@@ -571,27 +386,12 @@ class AgentService : Service() {
         private const val RETRY_MILLIS = 30_000L
         private const val LOCK_AGAIN_MILLIS = 3_000L
 
-        // How long the code screen has to come up when it is the only way
-        // to show the code.
-        private const val SHOW_TIMEOUT_MILLIS = 3_000L
         private const val APP_BLOCK_FILE = "app-block.bin"
         private const val SITE_BLOCK_FILE = "site-block.txt"
         private const val INTERNET_BLOCK_FILE = "internet-block.txt"
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val OPTIMIZE_FILE = "optimize.txt"
         private const val LAB_CONFIG_FILE = "lab-config.bin"
-        private const val CLASS_LESSON_FILE = "class-lesson.bin"
-        private const val CLASS_FOLLOW_FILE = "class-folder-follow.txt"
-        private const val CLASS_TIMES_FILE = "class-folder-times.txt"
-
-        // As often as a PC's Session follows the lesson; with no lesson, only
-        // to let go of old set-aside files (a lesson's start looks at once).
-        private const val CLASS_FOLDER_LOOK_SECONDS = 5L
-        private const val CLASS_FOLDER_IDLE_LOOK_SECONDS = 60L
-        private const val STATUS_CHANNEL = "status"
-        private const val PAIRING_CHANNEL = "pairing"
-        private const val STATUS_NOTIFICATION = 1
-        private const val PAIRING_NOTIFICATION = 2
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, AgentService::class.java))

@@ -1,0 +1,79 @@
+package io.github.arnoneto1.midview.agent.agent
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
+import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
+
+// The agent's notifications: its fixed one (the foreground service's) and
+// the pairing code's.
+
+// How long the code screen has to come up when it is the only way
+// to show the code.
+private const val SHOW_TIMEOUT_MILLIS = 3_000L
+private const val STATUS_CHANNEL = "status"
+private const val PAIRING_CHANNEL = "pairing"
+private const val STATUS_NOTIFICATION = 1
+private const val PAIRING_NOTIFICATION = 2
+
+// True only when the code is really on the screen: the notification
+// can show (the app's notifications and the pairing channel are on), or
+// else the code screen came up.
+internal fun AgentService.showCode(code: String, teacher: String): Boolean {
+    PairingCodeActivity.show(this, code, teacher)
+    val manager = notifications()
+    val notified = manager.areNotificationsEnabled() &&
+        manager.getNotificationChannel(PAIRING_CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+    if (notified) {
+        val open = PendingIntent.getActivity(
+            this, 0, PairingCodeActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val (title, detail) = PairingCodeActivity.texts(code, teacher)
+        val notification = Notification.Builder(this, PAIRING_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+            .setContentTitle("$title: $code")
+            .setContentText(detail)
+            .setCategory(Notification.CATEGORY_CALL)
+            .setOngoing(true)
+            .setContentIntent(open)
+            .setFullScreenIntent(open, true)
+            .build()
+        manager.notify(PAIRING_NOTIFICATION, notification)
+        return true
+    }
+    return PairingCodeActivity.awaitShown(SHOW_TIMEOUT_MILLIS)
+}
+
+internal fun AgentService.hideCode() {
+    PairingCodeActivity.hide()
+    notifications().cancel(PAIRING_NOTIFICATION)
+}
+
+internal fun AgentService.goForeground(text: String) {
+    val notification = Notification.Builder(this, STATUS_CHANNEL)
+        .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+        .setContentTitle(text)
+        .setStyle(Notification.BigTextStyle().bigText(text))
+        .setOngoing(true)
+        .build()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        startForeground(STATUS_NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+    } else {
+        startForeground(STATUS_NOTIFICATION, notification)
+    }
+}
+
+internal fun AgentService.createChannels() {
+    notifications().createNotificationChannel(
+        NotificationChannel(STATUS_CHANNEL, "Midview", NotificationManager.IMPORTANCE_LOW),
+    )
+    notifications().createNotificationChannel(
+        NotificationChannel(PAIRING_CHANNEL, "Pareamento com o professor", NotificationManager.IMPORTANCE_HIGH),
+    )
+}
+
+private fun Context.notifications() = getSystemService(NotificationManager::class.java)
