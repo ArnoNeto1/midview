@@ -102,7 +102,8 @@ Use `/TIPO=professor` on the teacher's computer. Without `/TIPO`, the silent ins
 In **Máquinas da sala** > **Outro professor**:
 
 - **Dar acesso a um colega...** (give a colleague access) shows a 9-character code, valid for 10 minutes. The colleague types the code in **Entrar na sala de um colega...** (join a colleague's classroom) and sees the same machines.
-- **Permitir novo professor (10 minutos)** (allow a new teacher) lets the machines accept another teacher's pairing for 10 minutes.
+- **Permitir novo professor (10 minutos)** (allow a new teacher) shows an 8-character code. For 10 minutes, the machines accept the pairing of the teacher who types that code in **Procurar e parear** (search and pair), once on each machine.
+- **Esquecer os outros professores...** (forget the other teachers) makes the room's machines accept only you.
 
 ## Phones
 

@@ -36,6 +36,26 @@ class TrustedMasters(private val file: File) {
         }
     }
 
+    // "Esquecer os outros professores": the list becomes this teacher alone.
+    // Returns how many others were dropped; with none the file is left as it
+    // is. The memory every instance shares is updated with the file, so no
+    // instance trusts a forgotten teacher a moment longer.
+    fun keepOnly(thumb: String): Int {
+        val kept = normalize(thumb)
+        require(kept.isNotEmpty()) { "keepOnly needs a teacher" }
+
+        synchronized(lock) {
+            val current = load()
+            val dropped = current.count { it != kept }
+            if (dropped > 0) {
+                file.parentFile?.mkdirs()
+                writeAtomically(file, "$kept\n".toByteArray(Charsets.US_ASCII))
+                cache[file.absolutePath] = Cached(Stamp(file.lastModified(), file.length()), setOf(kept))
+            }
+            return dropped
+        }
+    }
+
     // How many teachers are trusted (none: nobody paired yet).
     fun count(): Int = synchronized(lock) { load().size }
 

@@ -148,8 +148,16 @@ public sealed class AgentServer
 
         if (message.Type == MessageType.AllowNewTeacher)
         {
-            var (allowed, allowDetail) = _pairing?.AllowNewTeacher() ?? (false, "esta máquina não aceita pareamento");
+            var (allowed, allowDetail) = _pairing?.AllowNewTeacher(message.Payload) ?? (false, "esta máquina não aceita pareamento");
             channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(allowed, allowDetail)));
+            return;
+        }
+
+        if (message.Type == MessageType.ForgetOtherTeachers)
+        {
+            var (kept, keptDetail) = _pairing?.ForgetOtherTeachers(channel.RemoteThumbprint)
+                ?? (false, "esta máquina não aceita pareamento");
+            channel.Send(new Message(MessageType.CommandAck, CommandResult.Encode(kept, keptDetail)));
             return;
         }
 

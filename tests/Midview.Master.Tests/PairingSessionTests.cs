@@ -62,6 +62,18 @@ public class PairingSessionTests : IDisposable
 
         public string? Kind { get; init; }
 
+        // What PairConfirm carried, and whether it proves this code of
+        // "Permitir novo professor" (NewTeacherInvite).
+        public byte[] ConfirmPayload { get; private set; } = Array.Empty<byte>();
+
+        public bool ProvesCode(string code) =>
+            NewTeacherInvite.Verifies(code, ConfirmPayload, _teacherThumbprint, _agentThumbprint, _agentNonce, _masterNonce);
+
+        private string _teacherThumbprint = string.Empty;
+        private string _agentThumbprint = string.Empty;
+        private byte[] _agentNonce = Array.Empty<byte>();
+        private byte[] _masterNonce = Array.Empty<byte>();
+
         public void Run(SecureChannel channel, string agentThumbprint)
         {
             var request = channel.Receive();
@@ -72,7 +84,10 @@ public class PairingSessionTests : IDisposable
             var masterNonce = channel.Receive().Payload;
             Code = Pairing.Code(channel.RemoteThumbprint, agentThumbprint, agentNonce, masterNonce);
             channel.Send(new Message(MessageType.PairReveal, agentNonce));
-            Answer = channel.Receive().Type;
+            var answer = channel.Receive();
+            Answer = answer.Type;
+            ConfirmPayload = answer.Payload;
+            (_teacherThumbprint, _agentThumbprint, _agentNonce, _masterNonce) = (channel.RemoteThumbprint, agentThumbprint, agentNonce, masterNonce);
             if (Answer == MessageType.PairConfirm)
             {
                 channel.Send(new Message(MessageType.PairDone, new PairingResult("ALUNO-07", Session, "00:1a:2b:3c:4d:5e", Kind).Encode()));
@@ -96,6 +111,53 @@ public class PairingSessionTests : IDisposable
 
         Assert.Equal("PROF-01", agent.TeacherName);
         Assert.Equal(new KnownMachine("ALUNO-07", "127.0.0.1", Session, _agentCert.Thumbprint, "00-1A-2B-3C-4D-5E"), machine);
+    }
+
+    // A teacher with no colleague's code confirms with nothing, as before.
+    [Fact]
+    public async Task Confirming_WithoutACode_SendsNoProof()
+    {
+        var agent = new HonestAgent();
+        var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
+
+        using var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port)).WaitAsync(TimeSpan.FromSeconds(30));
+        await OwnThread(session.Confirm).WaitAsync(TimeSpan.FromSeconds(30));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Empty(agent.ConfirmPayload);
+    }
+
+    [Fact]
+    public async Task Confirming_WithAColleaguesCode_ProvesIt()
+    {
+        var agent = new HonestAgent();
+        var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
+
+        using var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port, "K7PQ2M94"))
+            .WaitAsync(TimeSpan.FromSeconds(30));
+        await OwnThread(session.Confirm).WaitAsync(TimeSpan.FromSeconds(30));
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(agent.ProvesCode("K7PQ2M94"));
+        Assert.False(agent.ProvesCode("K7PQ2M95"));
+    }
+
+    // Before the teacher compared the codes, the proof goes nowhere.
+    [Fact]
+    public async Task Cancelling_WithAColleaguesCode_SendsNoProof()
+    {
+        var agent = new HonestAgent();
+        var (port, done) = FakeAgent(channel => agent.Run(channel, _agentCert.Thumbprint));
+
+        using (var session = await OwnThread(() => PairingSession.Start("127.0.0.1", _teacher, "PROF-01", port, "K7PQ2M94"))
+            .WaitAsync(TimeSpan.FromSeconds(30)))
+        {
+            session.Cancel();
+        }
+        await done.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(MessageType.PairCancel, agent.Answer);
+        Assert.Empty(agent.ConfirmPayload);
     }
 
     [Fact]

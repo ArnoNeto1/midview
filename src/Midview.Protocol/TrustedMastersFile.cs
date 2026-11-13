@@ -4,7 +4,8 @@ namespace Midview.Protocol;
 
 // %ProgramData%\Midview\trusted-masters.json: the thumbprints of the
 // teachers this machine trusts, as a JSON list of strings. The Agent adds
-// to it when a teacher pairs; the Agent and the Session read it
+// to it when a teacher pairs, and cuts it to one teacher at "Esquecer os
+// outros professores"; the Agent and the Session read it
 // (TrustStore.FromFile).
 public static class TrustedMastersFile
 {
@@ -26,27 +27,54 @@ public static class TrustedMastersFile
     // (InvalidDataException): it holds the teachers this machine trusts.
     public static IReadOnlyList<string> Add(string path, string thumbprint)
     {
-        IReadOnlyList<string> current;
-        try
-        {
-            current = Load(path);
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidDataException(
-                $"a lista de professores desta máquina não pôde ser lida ({ErrorText.Describe(ex)})", ex);
-        }
-
-        var updated = current
+        var updated = LoadForChange(path)
             .Append(thumbprint)
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Select(item => item.Trim().ToUpperInvariant())
             .Distinct()
             .ToList();
 
-        var tempPath = path + ".tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(updated));
-        File.Move(tempPath, path, overwrite: true);
+        Write(path, updated);
         return updated;
+    }
+
+    // "Esquecer os outros professores": the list becomes this teacher alone.
+    // Returns how many others were dropped; with none the file is left as it
+    // is. Always shorter when it changes, so TrustStore sees the change.
+    public static int KeepOnly(string path, string thumbprint)
+    {
+        var kept = thumbprint.Trim().ToUpperInvariant();
+        var current = LoadForChange(path)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item.Trim().ToUpperInvariant())
+            .Distinct()
+            .ToList();
+        var dropped = current.Count(item => item != kept);
+        if (dropped > 0)
+        {
+            Write(path, new List<string> { kept });
+        }
+        return dropped;
+    }
+
+    // A list that can't be read is left alone (InvalidDataException).
+    private static IReadOnlyList<string> LoadForChange(string path)
+    {
+        try
+        {
+            return Load(path);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                $"a lista de professores desta máquina não pôde ser lida ({ErrorText.Describe(ex)})", ex);
+        }
+    }
+
+    private static void Write(string path, List<string> teachers)
+    {
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, JsonSerializer.Serialize(teachers));
+        File.Move(tempPath, path, overwrite: true);
     }
 }

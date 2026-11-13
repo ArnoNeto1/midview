@@ -46,7 +46,7 @@ public class DiscoveryResponderTests : IDisposable
     {
         File.WriteAllText(_path, $"[\"{Teacher}\"]");
         var service = Service();
-        service.AllowNewTeacher();
+        service.AllowNewTeacher(NewTeacherInvite.Encode("K7PQ2M94"));
 
         Assert.True(Ask(new DiscoveryResponder(service, AgentThumbprint, "ALUNO-07"), Other, Guid.NewGuid()).NewTeacherOpen);
     }

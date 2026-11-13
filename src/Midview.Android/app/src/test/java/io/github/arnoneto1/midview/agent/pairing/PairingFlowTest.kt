@@ -5,6 +5,7 @@ import io.github.arnoneto1.midview.agent.identity.TrustedMasters
 import io.github.arnoneto1.midview.agent.net.FakeChannel
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.protocol.NewTeacherInvite
 import io.github.arnoneto1.midview.agent.protocol.Pairing
 import io.github.arnoneto1.midview.agent.protocol.TeacherStatus
 import org.json.JSONObject
@@ -67,6 +68,20 @@ class PairingFlowTest {
     private fun request(name: String) = Message(MessageType.PAIR_REQUEST, name.toByteArray(Charsets.UTF_8))
     private fun nonce(bytes: ByteArray = masterNonce) = Message(MessageType.PAIR_NONCE, bytes)
     private fun confirm() = Message(MessageType.PAIR_CONFIRM, ByteArray(0))
+
+    // A new teacher who typed this code: the proof, from the phone's nonce.
+    private fun confirmWithCode(thumb: String, code: String = CODE) = Message(
+        MessageType.PAIR_CONFIRM,
+        NewTeacherInvite.proof(NewTeacherInvite.key(code, identity.thumbprint), thumb, identity.thumbprint, agentNonce, masterNonce),
+    )
+
+    private fun allow(code: String = CODE) = flow.allowNewTeacher(code.toByteArray(Charsets.US_ASCII))
+
+    private fun pairsWithCode(thumb: String, code: String = CODE): FakeChannel {
+        val channel = teacher(thumb, nonce(), confirmWithCode(thumb, code))
+        flow.run(channel, request("PROF"))
+        return channel
+    }
     private fun cancel() = Message(MessageType.PAIR_CANCEL, ByteArray(0))
 
     private fun teacher(thumb: String, vararg script: Message) = FakeChannel(thumb, *script, events = events)
@@ -128,27 +143,96 @@ class PairingFlowTest {
         assertFalse(flow.newTeacherOpen)
 
         val until = Date(clock + 10 * 60 * 1000L)
-        assertEquals(true to "liberada até ${SimpleDateFormat("HH:mm", Locale.ROOT).format(until)}", flow.allowNewTeacher())
+        assertEquals(true to "liberada até ${SimpleDateFormat("HH:mm", Locale.ROOT).format(until)} com o código", allow())
         assertTrue(flow.newTeacherOpen)
 
         pass(9 * 60 * 1000L)
-        assertEquals(MessageType.PAIR_DONE, pairs(teacherB).sent.last().type)
+        assertEquals(MessageType.PAIR_DONE, pairsWithCode(teacherB).sent.last().type)
         assertTrue(trusted.isTrusted(teacherB))
 
-        // The window lets one teacher in.
+        // The code lets one teacher in.
         assertFalse(flow.newTeacherOpen)
-        val third = teacher(teacherC, nonce(), confirm())
+        val third = teacher(teacherC, nonce(), confirmWithCode(teacherC))
         flow.run(third, request("PROF-03"))
         assertEquals(MessageType.PAIR_REFUSED, third.sent.single().type)
     }
 
+    // A Master from before the code: opening for it would let anyone in.
+    @Test fun anOldMastersAllowNewTeacherOpensNothing() {
+        pairs(teacherA)
+        assertEquals(false to PairingFlow.OLD_TEACHER_PROGRAM, flow.allowNewTeacher(ByteArray(0)))
+        assertEquals(false to "pedido inválido", flow.allowNewTeacher("K7PQ2M9U".toByteArray(Charsets.US_ASCII)))
+        assertFalse(flow.newTeacherOpen)
+    }
+
+    @Test fun insideTheWindowATeacherWithoutTheCodeIsRefused() {
+        pairs(teacherA)
+        allow()
+        val channel = pairs(teacherB)
+
+        assertEquals(PairingFlow.NEEDS_CODE, Pairing.refusalText(channel.sent.last().payload))
+        assertFalse(trusted.isTrusted(teacherB))
+        assertTrue(flow.newTeacherOpen)
+    }
+
+    @Test fun aWrongCodeIsRefusedAndTheRightOneStillGetsIn() {
+        pairs(teacherA)
+        allow()
+        val wrong = pairsWithCode(teacherB, "K7PQ2M95")
+        assertEquals(PairingFlow.WRONG_CODE, Pairing.refusalText(wrong.sent.last().payload))
+        assertFalse(trusted.isTrusted(teacherB))
+        assertTrue(flow.newTeacherOpen)
+
+        assertEquals(MessageType.PAIR_DONE, pairsWithCode(teacherC).sent.last().type)
+    }
+
+    // A proof made for another teacher's certificate is no proof.
+    @Test fun aProofForAnotherTeacherIsRefused() {
+        pairs(teacherA)
+        allow()
+        val channel = teacher(teacherB, nonce(), confirmWithCode(teacherC))
+        flow.run(channel, request("PROF-02"))
+        assertEquals(PairingFlow.WRONG_CODE, Pairing.refusalText(channel.sent.last().payload))
+        assertFalse(trusted.isTrusted(teacherB))
+    }
+
+    // Asking again draws a new code and starts the tries over.
+    @Test fun allowingAgainReplacesTheCodeAndTheTries() {
+        pairs(teacherA)
+        allow("AAAAAAAA")
+        repeat(NewTeacherInvite.MAX_TRIES - 1) { flow.run(teacher(teacherB, nonce(), cancel()), request("ALUNO")) }
+        allow("BBBBBBBB")
+        pairsWithCode(teacherB, "AAAAAAAA")
+        assertTrue(flow.newTeacherOpen)
+        assertEquals(MessageType.PAIR_DONE, pairsWithCode(teacherB, "BBBBBBBB").sent.last().type)
+    }
+
+    // Only a new teacher needs the code: a first one's payload means nothing.
+    @Test fun aFirstTeachersProofIsIgnored() {
+        assertEquals(MessageType.PAIR_DONE, pairsWithCode(teacherA, "AAAAAAAA").sent.last().type)
+    }
+
+    @Test fun forgetOtherTeachersKeepsTheSenderAndClosesTheWindow() {
+        pairs(teacherA)
+        allow()
+        pairsWithCode(teacherB)
+        allow()
+        assertEquals(true to "1 professor esquecido", flow.forgetOtherTeachers(teacherB.lowercase()))
+
+        assertFalse(trusted.isTrusted(teacherA))
+        assertTrue(trusted.isTrusted(teacherB))
+        assertFalse(flow.newTeacherOpen)
+        assertEquals(TeacherStatus.OTHERS, flow.teachersSeenBy(teacherA))
+        assertEquals(true to "nenhum outro professor", flow.forgetOtherTeachers(teacherB))
+    }
+
     @Test fun theWindowEndsAfterTenMinutes() {
         pairs(teacherA)
-        flow.allowNewTeacher()
+        allow()
         pass(10 * 60 * 1000L)
         assertFalse(flow.newTeacherOpen)
 
-        val channel = teacher(teacherB, nonce(), confirm())
+        val channel = teacher(teacherB, nonce(), confirmWithCode(teacherB))
         flow.run(channel, request("PROF-02"))
         assertEquals(MessageType.PAIR_REFUSED, channel.sent.single().type)
     }
@@ -157,7 +241,7 @@ class PairingFlowTest {
     // window open: it runs on the time since the phone started.
     @Test fun settingTheClockBackDoesNotKeepTheWindowOpen() {
         pairs(teacherA)
-        flow.allowNewTeacher()
+        allow()
         clock -= 24 * 60 * 60 * 1000L
         uptime += 10 * 60 * 1000L
         assertFalse(flow.newTeacherOpen)
@@ -177,28 +261,38 @@ class PairingFlowTest {
         assertEquals(0, trusted.count())
     }
 
-    // The window ends with the first new teacher whose code came up, even
-    // one who never confirms (a classmate who got there first): the real
-    // teacher asks for it again.
-    @Test fun theWindowEndsWithTheFirstCodeShownEvenUnconfirmed() {
+    // A classmate who gets there first no longer uses the window up: wrong
+    // codes, none, cancels and dropped connections after the code came up
+    // are tries, and the fifth closes the window, before anyone can guess at
+    // the code or flash codes on the screen for ten minutes.
+    @Test fun fiveTriesWithoutTheCodeCloseTheWindow() {
         pairs(teacherA)
-        flow.allowNewTeacher()
-        val classmate = teacher(teacherB, nonce(), cancel())
-        flow.run(classmate, request("ALUNO"))
-        assertFalse(trusted.isTrusted(teacherB))
-        assertFalse(flow.newTeacherOpen)
+        allow()
+        flow.run(teacher(teacherB, nonce(), cancel()), request("ALUNO"))
+        assertTrue(flow.newTeacherOpen)
+        pairsWithCode(teacherB, "K7PQ2M95")
+        pairs(teacherB)
+        try {
+            flow.run(teacher(teacherB, nonce()), request("ALUNO"))
+        } catch (e: java.io.IOException) {
+            // The dropped connection.
+        }
+        assertTrue(flow.newTeacherOpen)
+        pairsWithCode(teacherB, "AAAAAAAA")
 
-        val real = teacher(teacherC, nonce(), confirm())
+        assertFalse(flow.newTeacherOpen)
+        val real = teacher(teacherC, nonce(), confirmWithCode(teacherC))
         flow.run(real, request("PROF-03"))
         assertEquals(MessageType.PAIR_REFUSED, real.sent.single().type)
+        assertEquals(1, trusted.count())
     }
 
-    // A code the phone could not show uses nothing up.
+    // A code the phone could not show is no try.
     @Test fun aCodeThatDidNotShowLeavesTheWindowOpen() {
         pairs(teacherA)
-        flow.allowNewTeacher()
+        allow()
         canShow = false
-        flow.run(teacher(teacherB, nonce(), confirm()), request("PROF-02"))
+        repeat(NewTeacherInvite.MAX_TRIES + 1) { flow.run(teacher(teacherB, nonce(), confirmWithCode(teacherB)), request("PROF-02")) }
         assertTrue(flow.newTeacherOpen)
     }
 
@@ -333,6 +427,8 @@ class PairingFlowTest {
     }
 
     private companion object {
+        const val CODE = "K7PQ2M94"
+
         // One RSA key for the whole class: making one takes a moment.
         val identity: AgentIdentity by lazy {
             AgentIdentity(Files.createTempDirectory("pairing-flow").toFile().apply { deleteOnExit() }, "Cel 01")

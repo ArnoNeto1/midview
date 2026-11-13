@@ -31,6 +31,10 @@ public sealed class FoundRow : INotifyPropertyChanged
 
     public PairingSession? Session { get; set; }
 
+    // Another teacher's machine taking one more: pairing needs the code of
+    // that teacher's "Permitir novo professor".
+    public bool NeedsCode { get; init; }
+
     // Being paired: left out of another "Parear".
     public bool IsBusy { get; set; }
 

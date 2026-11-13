@@ -117,6 +117,7 @@ public class AgentPairingTests : IDisposable
     [InlineData(MessageType.UnblockDomain)]
     [InlineData(MessageType.AllowNewTeacher)]
     [InlineData(MessageType.TrustTeacher)]
+    [InlineData(MessageType.ForgetOtherTeachers)]
     public async Task ATeacherItDoesNotTrust_IsCutOffUnanswered(MessageType command)
     {
         File.WriteAllText(_trustedPath, $"[\"{new string('C', 40)}\"]");
@@ -126,6 +127,7 @@ public class AgentPairingTests : IDisposable
         Assert.Null(reply);
         Assert.Equal(0, _firewall.ApplyBlockCalls);
         Assert.Equal(0, _firewall.ApplyUnblockCalls);
+        Assert.Equal(new[] { new string('C', 40) }, TrustedMastersFile.Load(_trustedPath));
     }
 
     [Fact]
@@ -133,11 +135,41 @@ public class AgentPairingTests : IDisposable
     {
         File.WriteAllText(_trustedPath, $"[\"{_teacher.Thumbprint}\"]");
 
-        var ack = await Task.Run(() => Command(MessageType.AllowNewTeacher)).WaitAsync(TimeSpan.FromSeconds(30));
+        var ack = await Task.Run(() => Command(MessageType.AllowNewTeacher, NewTeacherInvite.Encode("K7PQ2M94")))
+            .WaitAsync(TimeSpan.FromSeconds(30));
 
         var (succeeded, detail) = CommandResult.Decode(ack!.Payload);
         Assert.True(succeeded);
         Assert.StartsWith("liberada até", detail);
+        Assert.True(NewTeacherInvite.AsksForCode(detail));
+    }
+
+    // A Master from before the code would let anyone on the network in.
+    [Fact]
+    public async Task AllowNewTeacher_WithoutACode_OpensNothing()
+    {
+        File.WriteAllText(_trustedPath, $"[\"{_teacher.Thumbprint}\"]");
+
+        var ack = await Task.Run(() => Command(MessageType.AllowNewTeacher)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal((false, PairingService.OldTeacherProgram), CommandResult.Decode(ack!.Payload));
+    }
+
+    [Fact]
+    public async Task ForgetOtherTeachers_FromATrustedTeacher_LeavesItAlone()
+    {
+        using var colleague = SelfSignedCertificate.Create("colleague-under-test");
+        File.WriteAllText(_trustedPath, $"[\"{colleague.Thumbprint}\",\"{_teacher.Thumbprint}\"]");
+        var before = await Task.Run(() => Command(MessageType.UnblockInternet, teacher: colleague)).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(MessageType.CommandAck, before!.Type);
+
+        var ack = await Task.Run(() => Command(MessageType.ForgetOtherTeachers)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal((true, "1 professor esquecido"), CommandResult.Decode(ack!.Payload));
+        Assert.Equal(new[] { _teacher.Thumbprint }, TrustedMastersFile.Load(_trustedPath));
+        Assert.Null(await Task.Run(() => Command(MessageType.UnblockInternet, teacher: colleague)).WaitAsync(TimeSpan.FromSeconds(30)));
+        var after = await Task.Run(() => Command(MessageType.UnblockInternet)).WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(MessageType.CommandAck, after!.Type);
     }
 
     [Fact]

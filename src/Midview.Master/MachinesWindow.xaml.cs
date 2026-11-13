@@ -14,7 +14,8 @@ namespace Midview.Master;
 // pair with them (each shows a code the teacher compares), push the student
 // program installed with this one to the class, give a colleague the class
 // with a code or take a colleague's (GiveAccessWindow, JoinClassWindow), let
-// another teacher pair for 10 minutes, and open the advanced settings
+// another teacher with a code pair for 10 minutes or forget the other
+// teachers (MachinesWindow.OtherTeacher), and open the advanced settings
 // (AddMachineWindow).
 public partial class MachinesWindow : MidviewWindow
 {
@@ -214,10 +215,14 @@ public partial class MachinesWindow : MidviewWindow
             {
                 continue;
             }
-            var row = new FoundRow(machine, FoundMachineText.Status(machine, roster), FoundMachineText.CheckedByDefault(machine, roster));
+            var row = new FoundRow(machine, FoundMachineText.Status(machine, roster), FoundMachineText.CheckedByDefault(machine, roster))
+            {
+                NeedsCode = FoundMachineText.NeedsNewTeacherCode(machine, roster),
+            };
             row.PropertyChanged += OnRowChanged;
             _rows.Add(row);
         }
+        ShowNewTeacherCodeField();
     }
 
     private void OnRowChanged(object? sender, PropertyChangedEventArgs e)
@@ -234,10 +239,13 @@ public partial class MachinesWindow : MidviewWindow
     {
         var chosen = _rows.Where(row => row.IsChecked && !row.IsBusy).ToList();
         var teacherName = Environment.MachineName;
-        await Task.WhenAll(chosen.Select(row => StartPairingAsync(row, teacherName)));
+        var code = ChosenNewTeacherCode(chosen);
+        await Task.WhenAll(chosen
+            .Where(row => !row.NeedsCode || code is not null)
+            .Select(row => StartPairingAsync(row, teacherName, row.NeedsCode ? code : null)));
     }
 
-    private async Task StartPairingAsync(FoundRow row, string teacherName)
+    private async Task StartPairingAsync(FoundRow row, string teacherName, string? newTeacherCode)
     {
         row.IsBusy = true;
         row.IsChecked = false;
@@ -246,7 +254,8 @@ public partial class MachinesWindow : MidviewWindow
         UpdatePairButton();
         try
         {
-            var session = await Task.Run(() => PairingSession.Start(row.Address, _masterCertificate, teacherName));
+            var session = await Task.Run(() => PairingSession.Start(
+                row.Address, _masterCertificate, teacherName, newTeacherCode: newTeacherCode));
             if (_closed)
             {
                 session.Cancel();
@@ -411,36 +420,6 @@ public partial class MachinesWindow : MidviewWindow
         _updateWindow.Closed += (_, _) => _updateWindow = null;
         OwnedWindow.ReturnToOwnerWhenClosed(_updateWindow);
         _updateWindow.Show();
-    }
-
-    private async void OnAllowNewTeacherClicked(object sender, RoutedEventArgs e)
-    {
-        AllowNewTeacherButton.IsEnabled = false;
-        AllowNewTeacherResultTextBlock.Text = "Avisando as máquinas...";
-        var machines = _roster();
-        var results = await Task.WhenAll(machines.Select(machine => Task.Run(() => AllowNewTeacher(machine))));
-        AllowNewTeacherResultTextBlock.Text = FoundMachineText.AllowNewTeacherSummary(results);
-        AllowNewTeacherButton.IsEnabled = true;
-    }
-
-    private (string Name, bool Opened, string Detail) AllowNewTeacher(KnownMachine machine)
-    {
-        if (machine.AgentThumbprint is null)
-        {
-            return (machine.Name, false, "sem a identificação do Agent");
-        }
-
-        try
-        {
-            var (succeeded, detail) = CommandClient.SendCommandForResult(
-                machine.HostAddress, ConnectionClient.AgentPort, machine.AgentThumbprint, _masterCertificate,
-                MessageType.AllowNewTeacher, Array.Empty<byte>());
-            return (machine.Name, succeeded, succeeded || detail.Length > 0 ? detail : "Midview antigo: atualize-a");
-        }
-        catch (Exception ex)
-        {
-            return (machine.Name, false, FailureText.DescribeAgent(ex));
-        }
     }
 
     private void OnClosed(object? sender, EventArgs e)

@@ -11,6 +11,14 @@
             <Setter Property="Margin" Value="28,24,28,20" />
             <Setter Property="Visibility" Value="Collapsed" />
         </Style>
+        <!-- A result line that takes no room until there is something to say. -->
+        <Style x:Key="CollapsedWhenEmpty" TargetType="TextBlock">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -44,6 +52,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -57,7 +66,17 @@
                     <TextBlock x:Name="SearchStatusTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center"
                                Margin="14,0,0,0" MaxWidth="260" />
                 </StackPanel>
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                <!-- Only when a colleague's machine takes one more teacher (ShowNewTeacherCodeField). -->
+                <Border x:Name="NewTeacherCodePanel" Grid.Row="2" Style="{StaticResource Card}" Padding="12,10" Margin="0,0,0,10"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,6"
+                                   Text="Para parear as máquinas de outro professor, digite o código que apareceu na tela dele em &quot;Permitir novo professor&quot;:" />
+                        <TextBox x:Name="NewTeacherCodeTextBox" Width="200" HorizontalAlignment="Left" FontFamily="Consolas" FontSize="20"
+                                 Padding="6,3" MaxLength="20" CharacterCasing="Upper" />
+                    </StackPanel>
+                </Border>
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="FoundItemsControl" Focusable="False">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -123,7 +142,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-                <TextBlock Grid.Row="3" Style="{StaticResource Hint}" Margin="0,10,0,0">
+                <TextBlock Grid.Row="4" Style="{StaticResource Hint}" Margin="0,10,0,0">
                     <Run Text="Um colega já tem?" />
                     <Hyperlink Click="OnJoinClassClicked">Entrar na sala de um colega...</Hyperlink>
                     <Span x:Name="PreparePhoneSpan">
@@ -188,7 +207,7 @@
             <Grid x:Name="OtherTeacherPanel" Style="{StaticResource PagePanel}">
                 <StackPanel>
                     <local:DialogHeader Icon="&#xE716;" Heading="Outro professor" Accent="{StaticResource ConfigurarBrush}"
-                        Content="Dê um código a um colega (nada aparece na tela dos alunos) ou deixe as máquinas aceitarem o pareamento dele por 10 minutos." />
+                        Content="Dê um código a um colega (nada aparece na tela dos alunos) ou deixe as máquinas aceitarem o pareamento dele por 10 minutos, com um código." />
                     <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
@@ -196,17 +215,26 @@
                                 <Button x:Name="AllowNewTeacherButton" Content="Permitir novo professor (10 minutos)" Click="OnAllowNewTeacherClicked"
                                         Margin="8,0,0,0" Padding="14,6" />
                             </StackPanel>
-                            <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,10,0,0" FontSize="12">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Style.Triggers>
-                                            <Trigger Property="Text" Value="">
-                                                <Setter Property="Visibility" Value="Collapsed" />
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                            <!-- The code of the last "Permitir novo professor", to be read out (MachinesWindow.OtherTeacher). -->
+                            <StackPanel x:Name="NewTeacherCodeCard" Margin="0,12,0,0" Visibility="Collapsed">
+                                <TextBlock x:Name="NewTeacherCodeTextBlock" FontFamily="Consolas" FontSize="28" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0">
+                                    <Run Text="Diga este código ao colega. Ele digita o código em &quot;Procurar e parear&quot; ao parear as máquinas. Vale por 10 minutos, uma vez em cada máquina." />
+                                </TextBlock>
+                            </StackPanel>
+                            <TextBlock x:Name="AllowNewTeacherResultTextBlock" TextWrapping="Wrap" Margin="0,10,0,0" FontSize="12"
+                                       Style="{StaticResource CollapsedWhenEmpty}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Esquecer os outros professores" Style="{StaticResource CardTitle}" />
+                            <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,3,0,10"
+                                       Text="As máquinas desta sala passam a aceitar só você. Os outros professores precisam parear de novo, com a sua permissão." />
+                            <Button x:Name="ForgetOtherTeachersButton" Content="Esquecer os outros professores..." Click="OnForgetOtherTeachersClicked"
+                                    Style="{StaticResource DangerButton}" HorizontalAlignment="Left" Padding="14,6" />
+                            <TextBlock x:Name="ForgetOtherTeachersResultTextBlock" TextWrapping="Wrap" Margin="0,10,0,0" FontSize="12"
+                                       Style="{StaticResource CollapsedWhenEmpty}" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

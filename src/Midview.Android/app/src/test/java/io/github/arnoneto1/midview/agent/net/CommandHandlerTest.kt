@@ -131,8 +131,38 @@ class CommandHandlerTest {
 
     @Test fun untrustedTeacherCannotOpenTheWindowEither() {
         trusted.add(teacher)
-        handler.handle(FakeChannel(stranger, message(MessageType.ALLOW_NEW_TEACHER)))
+        handler.handle(FakeChannel(stranger, message(MessageType.ALLOW_NEW_TEACHER, "K7PQ2M94".toByteArray())))
         assertFalse(pairing.newTeacherOpen)
+    }
+
+    @Test fun untrustedTeacherCannotMakeThePhoneForgetTeachers() {
+        trusted.add(teacher)
+        val channel = FakeChannel(stranger, message(MessageType.FORGET_OTHER_TEACHERS))
+        handler.handle(channel)
+        assertTrue(channel.sent.isEmpty())
+        assertTrue(trusted.isTrusted(teacher))
+    }
+
+    @Test fun forgetOtherTeachersLeavesTheSenderAlone() {
+        trusted.add(teacher)
+        trusted.add(stranger)
+        val channel = FakeChannel(teacher, message(MessageType.FORGET_OTHER_TEACHERS))
+        handler.handle(channel)
+
+        assertEquals(true to "1 professor esquecido", CommandResult.decode(channel.sent.single().payload))
+        assertTrue(trusted.isTrusted(teacher))
+        assertFalse(trusted.isTrusted(stranger))
+    }
+
+    // A teacher forgotten while its connection is open gets nothing more on it.
+    @Test fun aForgottenTeachersOpenConnectionEnds() {
+        trusted.add(teacher)
+        trusted.add(stranger)
+        val channel = FakeChannel(stranger, message(MessageType.HEARTBEAT), message(MessageType.HEARTBEAT))
+        channel.onReceive = { if (it.type == MessageType.HEARTBEAT && channel.sent.isNotEmpty()) pairing.forgetOtherTeachers(teacher) }
+        handler.handle(channel)
+
+        assertEquals(listOf(MessageType.HEARTBEAT), channel.sent.map { it.type })
     }
 
     @Test fun untrustedTeacherMaySendOnlyASmallFirstMessage() {
@@ -179,13 +209,23 @@ class CommandHandlerTest {
 
     @Test fun allowNewTeacherOpensTheWindow() {
         trusted.add(teacher)
-        val channel = FakeChannel(teacher, message(MessageType.ALLOW_NEW_TEACHER))
+        val channel = FakeChannel(teacher, message(MessageType.ALLOW_NEW_TEACHER, "K7PQ2M94".toByteArray()))
         handler.handle(channel)
 
         assertTrue(pairing.newTeacherOpen)
         val (succeeded, detail) = CommandResult.decode(channel.sent.single().also { assertEquals(MessageType.COMMAND_ACK, it.type) }.payload)
         assertTrue(succeeded)
-        assertTrue(detail, detail.matches(Regex("liberada até \\d\\d:\\d\\d")))
+        assertTrue(detail, detail.matches(Regex("liberada até \\d\\d:\\d\\d com o código")))
+    }
+
+    // A Master from before the code opens nothing.
+    @Test fun allowNewTeacherWithoutACodeOpensNothing() {
+        trusted.add(teacher)
+        val channel = FakeChannel(teacher, message(MessageType.ALLOW_NEW_TEACHER))
+        handler.handle(channel)
+
+        assertFalse(pairing.newTeacherOpen)
+        assertEquals(false to PairingFlow.OLD_TEACHER_PROGRAM, CommandResult.decode(channel.sent.single().payload))
     }
 
     @Test fun aTrustedTeacherWaitsLongerThanTheHandshake() {

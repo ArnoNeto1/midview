@@ -82,4 +82,82 @@ public class TrustedMastersFileTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void KeepOnly_LeavesThatTeacherAlone()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "[\"AAAA\", \"bbbb\", \"CCCC\"]");
+
+            Assert.Equal(2, TrustedMastersFile.KeepOnly(path, " bbbb"));
+            Assert.Equal(new[] { "BBBB" }, TrustedMastersFile.Load(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void KeepOnly_WithNoOtherTeacher_LeavesTheFileAsItIs()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "[\"bbbb\"]");
+            var written = File.GetLastWriteTimeUtc(path);
+
+            Assert.Equal(0, TrustedMastersFile.KeepOnly(path, "BBBB"));
+            Assert.Equal("[\"bbbb\"]", File.ReadAllText(path));
+            Assert.Equal(written, File.GetLastWriteTimeUtc(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void KeepOnly_AListThatCantBeRead_IsLeftAlone()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "isto não é json");
+
+            Assert.Throws<InvalidDataException>(() => TrustedMastersFile.KeepOnly(path, "CCCC"));
+            Assert.Equal("isto não é json", File.ReadAllText(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // TrustStore reads the file again when it changes, so the teachers a
+    // machine forgot are no longer trusted by the Agent nor the Session.
+    [Fact]
+    public void KeepOnly_IsSeenByATrustStoreReadingTheFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            TrustedMastersFile.Add(path, "AAAA");
+            TrustedMastersFile.Add(path, "BBBB");
+            var store = TrustStore.FromFile(path);
+            Assert.True(store.IsTrusted("AAAA"));
+
+            TrustedMastersFile.KeepOnly(path, "BBBB");
+
+            Assert.False(store.IsTrusted("AAAA"));
+            Assert.True(store.IsTrusted("BBBB"));
+            Assert.Equal(1, store.Count);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

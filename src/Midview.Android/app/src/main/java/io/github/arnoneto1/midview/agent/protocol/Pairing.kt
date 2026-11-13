@@ -10,7 +10,9 @@ import java.util.Locale
 //   Agent  -> PairCommit   SHA-256 of the agent's random nonce, or PairRefused
 //   Master -> PairNonce    the Master's random nonce
 //   Agent  -> PairReveal   the agent's nonce; the code is on the screen now
-//   Master -> PairConfirm or PairCancel, once the teacher compared the codes
+//   Master -> PairConfirm or PairCancel, once the teacher compared the codes;
+//             PairConfirm carries NewTeacherInvite's proof when the teacher
+//             typed the code of "Permitir novo professor", else nothing
 //   Agent  -> PairDone     the device, for the classroom list, or PairRefused
 // Both ends compute the same 6-digit code from both certificates and both
 // nonces; a computer in the middle makes the two screens differ.

@@ -17,6 +17,11 @@ public static class FoundMachineText
             _ => "Com outro professor",
         };
 
+    // A machine of another teacher that takes one more now: pairing with it
+    // needs the code of that teacher's "Permitir novo professor".
+    public static bool NeedsNewTeacherCode(FoundMachine found, IReadOnlyCollection<KnownMachine> roster) =>
+        !IsInRoster(found, roster) && found.Teachers == TeacherStatus.Others && found.NewTeacherOpen;
+
     public static bool CheckedByDefault(FoundMachine found, IReadOnlyCollection<KnownMachine> roster) =>
         found.Teachers == TeacherStatus.None && !IsInRoster(found, roster);
 
@@ -34,19 +39,6 @@ public static class FoundMachineText
             1 => $"{text} 1 endereço atualizado na lista da sala.",
             _ => $"{text} {refreshed} endereços atualizados na lista da sala.",
         };
-    }
-
-    public static string AllowNewTeacherSummary(IReadOnlyList<(string Name, bool Opened, string Detail)> results)
-    {
-        if (results.Count == 0)
-        {
-            return "A lista da sala está vazia.";
-        }
-
-        var opened = results.Count(result => result.Opened);
-        var text = $"{opened} de {results.Count} máquinas liberadas por 10 minutos.";
-        var leftOut = results.Where(result => !result.Opened).Select(result => $"{result.Name} ({result.Detail})").ToList();
-        return leftOut.Count == 0 ? text : $"{text} Não liberadas: {string.Join("; ", leftOut)}.";
     }
 
     private static bool IsInRoster(FoundMachine found, IReadOnlyCollection<KnownMachine> roster) =>

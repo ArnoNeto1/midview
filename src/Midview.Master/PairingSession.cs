@@ -13,7 +13,10 @@ public sealed class PairingRefusedException(string message) : Exception(message)
 // The teacher's side of pairing with one machine (see Pairing): Start runs
 // the exchange up to the code; the teacher compares it with the one on the
 // student's screen, then Confirm or Cancel. The connection stays open in
-// between, for up to Pairing.ConfirmTimeout.
+// between, for up to Pairing.ConfirmTimeout. With the code of a colleague's
+// "Permitir novo professor" (newTeacherCode), Confirm proves it
+// (NewTeacherInvite): only then, once the teacher saw the codes match, so a
+// computer in the middle never gets the proof.
 public sealed class PairingSession : IDisposable
 {
     public const string InvalidAnswer = "A máquina respondeu de um jeito inválido ao pareamento. Tente de novo.";
@@ -25,12 +28,15 @@ public sealed class PairingSession : IDisposable
     private readonly TcpClient _tcpClient;
     private readonly SecureChannel _channel;
 
-    private PairingSession(TcpClient tcpClient, SecureChannel channel, string address, int code)
+    private readonly byte[] _proof;
+
+    private PairingSession(TcpClient tcpClient, SecureChannel channel, string address, int code, byte[] proof)
     {
         _tcpClient = tcpClient;
         _channel = channel;
         Address = address;
         Code = code;
+        _proof = proof;
     }
 
     public string Address { get; }
@@ -41,7 +47,9 @@ public sealed class PairingSession : IDisposable
 
     public string CodeText => Pairing.Format(Code);
 
-    public static PairingSession Start(string address, X509Certificate2 masterCertificate, string teacherName, int port = ConnectionClient.AgentPort)
+    public static PairingSession Start(
+        string address, X509Certificate2 masterCertificate, string teacherName, int port = ConnectionClient.AgentPort,
+        string? newTeacherCode = null)
     {
         var tcpClient = TcpConnect.WithTimeout(address, port, ConnectTimeout);
         SecureChannel? channel = null;
@@ -62,7 +70,12 @@ public sealed class PairingSession : IDisposable
             }
 
             var code = Pairing.Code(masterCertificate.Thumbprint, channel.RemoteThumbprint, agentNonce, masterNonce);
-            return new PairingSession(tcpClient, channel, address, code);
+            var proof = newTeacherCode is null
+                ? Array.Empty<byte>()
+                : NewTeacherInvite.Proof(
+                    NewTeacherInvite.Key(newTeacherCode, channel.RemoteThumbprint),
+                    masterCertificate.Thumbprint, channel.RemoteThumbprint, agentNonce, masterNonce);
+            return new PairingSession(tcpClient, channel, address, code, proof);
         }
         catch
         {
@@ -75,7 +88,7 @@ public sealed class PairingSession : IDisposable
     // The teacher saw the same code on both screens.
     public KnownMachine Confirm()
     {
-        _channel.Send(new Message(MessageType.PairConfirm, Array.Empty<byte>()));
+        _channel.Send(new Message(MessageType.PairConfirm, _proof));
         var result = PairingResult.Decode(Expect(_channel.Receive(), MessageType.PairDone))
             ?? throw new PairingRefusedException(InvalidAnswer);
         return new KnownMachine(

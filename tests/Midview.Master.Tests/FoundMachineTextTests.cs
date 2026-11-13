@@ -46,20 +46,16 @@ public class FoundMachineTextTests
         Assert.Equal(expected, FoundMachineText.SearchSummary(found, refreshed));
     }
 
+    // Only another teacher's machine taking one more asks for the code.
     [Fact]
-    public void AllowNewTeacherSummary_CountsAndNamesTheOnesLeftOut()
+    public void NeedsNewTeacherCode_OnlyForAnotherTeachersOpenMachine()
     {
-        Assert.Equal("A lista da sala está vazia.", FoundMachineText.AllowNewTeacherSummary(Array.Empty<(string, bool, string)>()));
-        Assert.Equal(
-            "2 de 2 máquinas liberadas por 10 minutos.",
-            FoundMachineText.AllowNewTeacherSummary(new[] { ("Aluno-1", true, "liberada até 14:32"), ("Aluno-2", true, "liberada até 14:32") }));
-        Assert.Equal(
-            "1 de 3 máquinas liberadas por 10 minutos. Não liberadas: Aluno-2 (Sem resposta); Aluno-3 (Midview antigo: atualize-a).",
-            FoundMachineText.AllowNewTeacherSummary(new[]
-            {
-                ("Aluno-1", true, "liberada até 14:32"),
-                ("Aluno-2", false, "Sem resposta"),
-                ("Aluno-3", false, "Midview antigo: atualize-a"),
-            }));
+        var none = Array.Empty<KnownMachine>();
+        Assert.True(FoundMachineText.NeedsNewTeacherCode(Found(TeacherStatus.Others, true), none));
+        Assert.False(FoundMachineText.NeedsNewTeacherCode(Found(TeacherStatus.Others), none));
+        Assert.False(FoundMachineText.NeedsNewTeacherCode(Found(TeacherStatus.None, true), none));
+        Assert.False(FoundMachineText.NeedsNewTeacherCode(Found(TeacherStatus.You, true), none));
+        var roster = new[] { new KnownMachine("Aluno-2", "10.0.0.2", new string('5', 40), X) };
+        Assert.False(FoundMachineText.NeedsNewTeacherCode(Found(TeacherStatus.Others, true), roster));
     }
 }

@@ -54,7 +54,7 @@ class DiscoveryResponderTest {
 
     @Test fun theOpenWindowIsTold() {
         trusted.add(teacher)
-        pairing.allowNewTeacher()
+        pairing.allowNewTeacher("K7PQ2M94".toByteArray(Charsets.US_ASCII))
         assertTrue(answer(other).getBoolean("newTeacherOpen"))
     }
 

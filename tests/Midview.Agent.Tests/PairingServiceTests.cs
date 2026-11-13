@@ -3,7 +3,7 @@ using Midview.Agent;
 using Midview.Protocol;
 using Xunit;
 
-public class PairingServiceTests : IDisposable
+public partial class PairingServiceTests : IDisposable
 {
     private static readonly string TeacherA = new('A', 40);
     private static readonly string TeacherB = new('B', 40);
@@ -62,43 +62,6 @@ public class PairingServiceTests : IDisposable
         Assert.Contains("já tem professor", Pairing.RefusalText(exchange.Sent[0].Payload));
         Assert.Empty(_display.Shown);
         Assert.Equal(new[] { TeacherA }, TrustedMastersFile.Load(_path));
-    }
-
-    [Fact]
-    public void InsideTheNewTeacherWindow_OneMoreTeacherPairs_AndTheWindowCloses()
-    {
-        Trust(TeacherA);
-        var service = NewService();
-
-        var (succeeded, detail) = service.AllowNewTeacher();
-        Assert.True(succeeded);
-        Assert.Equal("liberada até 14:32", detail);
-        Assert.True(service.NewTeacherOpen);
-
-        var second = Confirming();
-        Pair(service, TeacherB, second);
-        Assert.Equal(MessageType.PairDone, second.Sent.Last().Type);
-        Assert.Equal(new[] { TeacherA, TeacherB }, TrustedMastersFile.Load(_path));
-        Assert.False(service.NewTeacherOpen);
-
-        var third = Confirming();
-        Pair(service, TeacherC, third);
-        Assert.Equal(new[] { MessageType.PairRefused }, third.SentTypes);
-    }
-
-    [Fact]
-    public void TheNewTeacherWindow_Expires()
-    {
-        Trust(TeacherA);
-        var service = NewService();
-        service.AllowNewTeacher();
-
-        _now += Pairing.NewTeacherWindow + TimeSpan.FromSeconds(1);
-
-        Assert.False(service.NewTeacherOpen);
-        var exchange = Confirming();
-        Pair(service, TeacherB, exchange);
-        Assert.Equal(new[] { MessageType.PairRefused }, exchange.SentTypes);
     }
 
     [Fact]

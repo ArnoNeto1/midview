@@ -12,7 +12,9 @@ namespace Midview.Protocol;
 //   Agent  -> PairCommit   SHA-256 of the Agent's random nonce, or PairRefused (why, in Portuguese)
 //   Master -> PairNonce    the Master's random nonce
 //   Agent  -> PairReveal   the Agent's nonce; the code is on the student's screen now (or PairRefused)
-//   Master -> PairConfirm or PairCancel, once the teacher compared the codes
+//   Master -> PairConfirm or PairCancel, once the teacher compared the codes;
+//             PairConfirm carries NewTeacherInvite.Proof when the teacher typed
+//             the code of "Permitir novo professor", else nothing
 //   Agent  -> PairDone     the machine, for the classroom list (PairingResult), or PairRefused
 // Both ends compute the same 6-digit code from both certificates and both
 // nonces. A computer in the middle holds two TLS sessions with different

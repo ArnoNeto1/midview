@@ -100,7 +100,8 @@ Use `/TIPO=professor` no computador do professor. Sem `/TIPO`, a instalação si
 Em **Máquinas da sala** > **Outro professor**:
 
 - **Dar acesso a um colega...** mostra um código de 9 caracteres, válido por 10 minutos. O colega digita o código em **Entrar na sala de um colega...** e passa a ver as mesmas máquinas.
-- **Permitir novo professor (10 minutos)** deixa as máquinas aceitarem o pareamento de outro professor por 10 minutos.
+- **Permitir novo professor (10 minutos)** mostra um código de 8 caracteres. Por 10 minutos, as máquinas aceitam o pareamento do professor que digitar esse código em **Procurar e parear**, uma vez em cada máquina.
+- **Esquecer os outros professores...** faz as máquinas da sala aceitarem só você.
 
 ## Celulares
 

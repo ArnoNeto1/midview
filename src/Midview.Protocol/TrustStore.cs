@@ -60,7 +60,8 @@ public sealed class TrustStore
     // costs one look at the file, not a read of it. Two writes of the same
     // size within one tick of the file clock (0.5 to about 16 ms, depending
     // on the PC) look like no change; nothing writes it that way, since the
-    // Agent only adds teachers, which always makes it longer.
+    // Agent only adds teachers, which always makes it longer, or keeps one of
+    // several, which always makes it shorter.
     private void RefreshIfChanged()
     {
         if (_path is null)

@@ -138,7 +138,11 @@ public enum MessageType : byte
 
     // An Agent command, from a trusted teacher only: for
     // Pairing.NewTeacherWindow, let one more teacher pair ("Permitir novo
-    // professor"). Answered with one CommandAck carrying a CommandResult.
+    // professor"), the one who has the code in the payload (see
+    // NewTeacherInvite). Answered with one CommandAck carrying a
+    // CommandResult. An Agent from before the code ignores the payload and
+    // lets anyone pair; its answer lacks NewTeacherInvite.WithCodeSuffix.
+    // One from after it refuses an empty payload (a Master from before it).
     AllowNewTeacher = 45,
 
     // Master -> Session: open a website (a WebsiteAddress, as TextMessage)
@@ -407,6 +411,14 @@ public enum MessageType : byte
     // answers CommandAck with a refusal, which the Master shows as a phone that
     // cannot be erased from here yet.
     WipePhone = 101,
+
+    // An Agent command (PC and phone), from a trusted teacher only, no
+    // payload: "Esquecer os outros professores". The machine keeps trusting
+    // the sender alone, and closes a "Permitir novo professor" window.
+    // Answered with one CommandAck carrying a CommandResult. An Agent from
+    // before this answers CommandAck [0], a phone's "Ainda não funciona em
+    // celular.".
+    ForgetOtherTeachers = 102,
 }
 
 public enum CloseAppsMode : byte

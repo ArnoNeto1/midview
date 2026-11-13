@@ -132,7 +132,7 @@ class CommandHandler(
                 if (message.type == MessageType.COLLECT_FILES) files.collect(channel) else files.receive(channel, message)
                 return
             }
-            channel.send(answer(message))
+            channel.send(answer(message, channel.remoteThumbprint))
             // After the ack is on the wire, and off this thread: the wipe
             // kills the connection and the process with it.
             if (message.type == MessageType.WIPE_PHONE && gateway.isDeviceOwner()) {
@@ -156,10 +156,16 @@ class CommandHandler(
                 pairing.run(channel, message)
                 return
             }
+            // A teacher another one made this phone forget ("Esquecer os
+            // outros professores") gets nothing more on a connection it
+            // opened before.
+            if (!trusted.isTrusted(channel.remoteThumbprint)) {
+                return
+            }
         }
     }
 
-    private fun answer(message: Message): Message = when (message.type) {
+    private fun answer(message: Message, sender: String): Message = when (message.type) {
         MessageType.HEARTBEAT -> Message(MessageType.HEARTBEAT, ByteArray(0))
         MessageType.SET_CLASS_LESSON -> {
             val (taken, detail) = classLesson?.handle(message.payload) ?: (false to CommandResult.NOT_ON_PHONE)
@@ -169,8 +175,12 @@ class CommandHandler(
             classLesson?.let { Message(MessageType.CLASS_LESSON_STATUS, it.current.encode()) }
                 ?: Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
         MessageType.ALLOW_NEW_TEACHER -> {
-            val (allowed, detail) = pairing.allowNewTeacher()
+            val (allowed, detail) = pairing.allowNewTeacher(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(allowed, detail))
+        }
+        MessageType.FORGET_OTHER_TEACHERS -> {
+            val (kept, detail) = pairing.forgetOtherTeachers(sender)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(kept, detail))
         }
         MessageType.REQUEST_SCREEN_CONSENT -> {
             val (shown, detail) = askForScreen()

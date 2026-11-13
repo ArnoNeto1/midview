@@ -73,4 +73,29 @@ class TrustedMastersTest {
         assertFalse(masters.isTrusted(a))
         assertEquals(0, masters.count())
     }
+
+    // "Esquecer os outros professores", seen at once by every instance.
+    @Test fun keepOnlyLeavesThatTeacherAlone() {
+        val file = file()
+        val reader = TrustedMasters(file)
+        TrustedMasters(file).apply { add(a); add(b) }
+        assertTrue(reader.isTrusted(a))
+
+        assertEquals(1, TrustedMasters(file).keepOnly(" ${b.lowercase()}"))
+
+        assertFalse(reader.isTrusted(a))
+        assertTrue(reader.isTrusted(b))
+        assertEquals(listOf(b), file.readLines().filter { it.isNotBlank() })
+        assertEquals(1, TrustedMasters(file).count())
+    }
+
+    @Test fun keepOnlyWithNoOtherTeacherChangesNothing() {
+        val file = file()
+        TrustedMasters(file).add(a)
+        val stamp = file.lastModified()
+        file.setLastModified(stamp - 10_000)
+
+        assertEquals(0, TrustedMasters(file).keepOnly(a))
+        assertEquals(stamp - 10_000, file.lastModified())
+    }
 }

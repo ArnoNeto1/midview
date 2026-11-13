@@ -93,7 +93,9 @@ object MessageType {
     const val PAIR_REFUSED = 44
 
     // From a trusted teacher only: let one more teacher pair for
-    // Pairing.NEW_TEACHER_WINDOW_MILLIS ("Permitir novo professor").
+    // Pairing.NEW_TEACHER_WINDOW_MILLIS ("Permitir novo professor"), the one
+    // with the code in the payload (NewTeacherInvite); an empty payload (a
+    // Master from before the code) opens nothing.
     const val ALLOW_NEW_TEACHER = 45
 
     // "Abrir site" and "Abrir programa", as a PC's Session takes them (a
@@ -190,4 +192,10 @@ object MessageType {
     // phone ("Apagar e preparar de novo", no payload). Answered with a
     // COMMAND_ACK before the erasing starts. Number 101 as the C# WipePhone (100 is SetPhoneScreenPassword).
     const val WIPE_PHONE = 101
+
+    // Master -> agent, trusted teacher only, no payload: "Esquecer os outros
+    // professores". The device keeps trusting the sender alone and closes a
+    // "Permitir novo professor" window; answered with a COMMAND_ACK
+    // (CommandResult). Number 102 as the C# ForgetOtherTeachers.
+    const val FORGET_OTHER_TEACHERS = 102
 }
