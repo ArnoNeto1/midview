@@ -6,8 +6,10 @@ namespace Midview.Master;
 
 // "Otimizar" on one phone, on its agent's port 28900: OptimizePhone (nothing
 // in it) answered with the phone's PhoneOptimizeReport. The phone hides the
-// ad apps and tries the ad-free DNS, which can take ~40 s on a slow network
-// (its own checks are capped), so the answer is awaited for ReadTimeout.
+// ad apps, tries the ad-free DNS, which can take ~40 s on a slow network
+// (its own checks are capped), and uninstalls the apps the school does not
+// use until 60 s after the question (the rest right after, in the
+// background), so the answer is awaited for ReadTimeout.
 public static class PhoneOptimizeClient
 {
     public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(90);

@@ -27,14 +27,17 @@ object PhoneDnsStates {
 
 // Payload of PHONE_OPTIMIZE_REPORT (UTF-8 JSON), the same text as the .NET
 // PhoneOptimizeReport: when the phone was last optimized (null if never),
-// the packages hidden and those that could not be, the DNS state and the
-// DNS server's host name.
+// the packages hidden and those neither hidden nor uninstalled, the DNS state,
+// the DNS server's host name and the packages uninstalled ("uninstalled",
+// written last, since 0.0.74: a report without it, or with null, has none;
+// older Masters ignore it).
 data class PhoneOptimizeReport(
     val optimizedAt: Instant?,
     val hidden: List<String>,
     val failed: List<String>,
     val dns: String,
     val dnsHost: String,
+    val uninstalled: List<String> = emptyList(),
 ) {
     // Refuses (IllegalArgumentException) a DNS state the protocol does not have.
     fun encode(): ByteArray {
@@ -45,6 +48,7 @@ data class PhoneOptimizeReport(
             "failed" to failed.joinToString(",", "[", "]") { JsonText.string(it) },
             "dns" to JsonText.string(dns),
             "dnsHost" to JsonText.string(dnsHost),
+            "uninstalled" to uninstalled.joinToString(",", "[", "]") { JsonText.string(it) },
         ).toByteArray(Charsets.UTF_8)
     }
 
@@ -66,7 +70,8 @@ data class PhoneOptimizeReport(
             if (!PhoneDnsStates.isKnown(dns)) {
                 return null
             }
-            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost)
+            val uninstalled = if (json.isNull("uninstalled")) emptyList() else strings(json, "uninstalled") ?: return null
+            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost, uninstalled)
         }
 
         private fun strings(json: JSONObject, name: String): List<String>? {

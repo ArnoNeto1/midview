@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Browser
 import io.github.arnoneto1.midview.agent.apps.AppOrigin
+import io.github.arnoneto1.midview.agent.optimize.AppRemover
 import io.github.arnoneto1.midview.agent.update.ApkCheck
 import io.github.arnoneto1.midview.agent.update.ApkFacts
 import io.github.arnoneto1.midview.agent.update.ApkReader
@@ -38,6 +39,7 @@ class AndroidPackages(
     private val pm = app.packageManager
     private val installer = pm.packageInstaller
     private val origin = AppOrigin(pm, app.packageName)
+    private val uninstaller = SilentUninstaller(app)
 
     override fun state(pkg: String): AppState {
         val info = try {
@@ -133,26 +135,15 @@ class AndroidPackages(
             if (!committed) runCatching { installer.abandonSession(id) }
             throw e
         }
-        val (status, message) = PackageResults.await(token, result, INSTALL_WAIT_MINUTES)
+        val (status, message) = PackageResults.await(token, result, TimeUnit.MINUTES.toMillis(INSTALL_WAIT_MINUTES))
             ?: return "o Android não respondeu sobre a instalação"
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) runCatching { installer.abandonSession(id) }
         return InstallStatus.failure(status, message)
     }
 
-    // REQUEST_DELETE_PACKAGES is not declared on purpose: the Device
-    // Owner's silent uninstall needs no permission (checked on the Redmi
-    // 10C, Android 13), and the agent never asks the student to confirm one.
-    @SuppressLint("MissingPermission")
     override fun uninstall(pkg: String): String? {
-        val (token, result) = PackageResults.expect()
-        try {
-            installer.uninstall(pkg, PackageResults.sender(app, token))
-        } catch (e: Exception) {
-            PackageResults.forget(token)
-            throw e
-        }
-        val (status, message) = PackageResults.await(token, result, UNINSTALL_WAIT_MINUTES)
-            ?: return "o Android não respondeu sobre a desinstalação"
+        val (status, message) = uninstaller.answer(pkg, TimeUnit.MINUTES.toMillis(UNINSTALL_WAIT_MINUTES))
+            ?: return AppRemover.NO_ANSWER
         return UninstallStatus.failure(status, message)
     }
 
@@ -161,6 +152,37 @@ class AndroidPackages(
         const val BUFFER = 64 * 1024
         const val INSTALL_WAIT_MINUTES = 5L
         const val UNINSTALL_WAIT_MINUTES = 2L
+    }
+}
+
+// The Device Owner's silent uninstall (a PackageInstaller request, which
+// Android carries out without asking anyone), for the teacher's "Desinstalar
+// programa" (AndroidPackages) and the apps "Otimizar" uninstalls (Optimizer,
+// UnusedApps).
+class SilentUninstaller(context: Context) : AppRemover {
+    private val app = context.applicationContext
+    private val installer = app.packageManager.packageInstaller
+
+    // REQUEST_DELETE_PACKAGES is not declared on purpose: the Device
+    // Owner's silent uninstall needs no permission (checked on the Redmi
+    // 10C, Android 13), and the agent never asks the student to confirm one.
+    // Android's status and message, or null when it said nothing within
+    // waitMillis.
+    @SuppressLint("MissingPermission")
+    fun answer(pkg: String, waitMillis: Long): Pair<Int, String?>? {
+        val (token, result) = PackageResults.expect()
+        try {
+            installer.uninstall(pkg, PackageResults.sender(app, token))
+        } catch (e: Exception) {
+            PackageResults.forget(token)
+            throw e
+        }
+        return PackageResults.await(token, result, waitMillis)
+    }
+
+    override fun uninstall(pkg: String, waitMillis: Long): String? {
+        val (status, message) = answer(pkg, waitMillis) ?: return AppRemover.NO_ANSWER
+        return UninstallStatus.failure(status, message)
     }
 }
 
@@ -199,9 +221,9 @@ object PackageResults {
     }
 
     // Null when Android said nothing in time.
-    fun await(token: Int, result: CompletableFuture<Pair<Int, String?>>, minutes: Long): Pair<Int, String?>? =
+    fun await(token: Int, result: CompletableFuture<Pair<Int, String?>>, waitMillis: Long): Pair<Int, String?>? =
         try {
-            result.get(minutes, TimeUnit.MINUTES)
+            result.get(waitMillis, TimeUnit.MILLISECONDS)
         } catch (_: TimeoutException) {
             null
         } finally {

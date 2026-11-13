@@ -10,33 +10,44 @@ public static class PhoneOptimizeText
 
     public const string Working = "otimizando… (pode levar até um minuto)";
 
-    // One line per phone; null report: an older agent.
+    // One line per phone; null report: an older agent. One that sends no
+    // uninstalled apps (before 0.0.74) only hides.
     public static string Line(PhoneOptimizeReport? report) =>
-        report is null ? OldAgent : $"{Apps(report.Hidden.Count, report.Failed.Count)} · {Dns(report.Dns)}";
+        report is null
+            ? OldAgent
+            : $"{Apps(report.Uninstalled.Count, report.Hidden.Count, report.Failed.Count)} · {Dns(report.Dns)}";
 
-    // Fully optimized: every ad app hidden and the ad-free DNS on. With the
+    // Fully optimized: every listed app uninstalled or hidden and the ad-free
+    // DNS on (apps still being uninstalled in the background are not failed). With the
     // internet blocked the phone checks the DNS again by itself when it is
     // released, so that counts as done too; and so does a DNS the teacher
     // turned off in the lab panel.
     public static bool IsDone(PhoneOptimizeReport? report) =>
         report is { Failed.Count: 0, Dns: PhoneDnsStates.On or PhoneDnsStates.OffInternetBlocked or PhoneDnsStates.OffByTeacher };
 
-    public static string Apps(int hidden, int failed)
+    // "28 apps desinstalados · 6 escondidos", and those Android refused
+    // both ways (failed).
+    public static string Apps(int uninstalled, int hidden, int failed)
     {
-        var apps = (hidden, failed) switch
+        var apps = (uninstalled, hidden, failed) switch
         {
-            (0, 0) => "nenhum app de anúncios neste celular",
-            (0, _) => "nenhum app de anúncios escondido",
-            (1, _) => "1 app de anúncios escondido",
-            _ => $"{hidden} apps de anúncios escondidos",
+            (0, 0, 0) => "nenhum app desnecessário neste celular",
+            (0, 0, _) => "nenhum app desinstalado nem escondido",
+            (0, 1, _) => "1 app escondido",
+            (0, _, _) => $"{hidden} apps escondidos",
+            (_, 0, _) => Uninstalled(uninstalled),
+            (_, 1, _) => $"{Uninstalled(uninstalled)} · 1 escondido",
+            _ => $"{Uninstalled(uninstalled)} · {hidden} escondidos",
         };
         return failed switch
         {
             0 => apps,
-            1 => $"{apps} (1 não pôde ser escondido)",
-            _ => $"{apps} ({failed} não puderam ser escondidos)",
+            1 => $"{apps} (1 não pôde ser removido)",
+            _ => $"{apps} ({failed} não puderam ser removidos)",
         };
     }
+
+    private static string Uninstalled(int count) => count == 1 ? "1 app desinstalado" : $"{count} apps desinstalados";
 
     public static string Dns(string state) => state switch
     {

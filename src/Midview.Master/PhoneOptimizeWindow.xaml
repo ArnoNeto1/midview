@@ -12,7 +12,7 @@
             </local:DialogHeader>
             <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                 <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                           Text="Esconde os apps de propaganda que vêm de fábrica no celular (eles não são apagados) e liga o DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps. Se a rede não deixar o DNS sem anúncios funcionar, o celular continua com a internet de sempre. Cada celular leva de alguns segundos a um minuto." />
+                           Text="Desinstala os apps que a escola não usa e que vêm no celular (jogos, redes sociais e vídeos curtos, compras e streaming, extras da Xiaomi e do Google); os que são do sistema e o Android não deixa desinstalar ficam escondidos, como os apps de propaganda. Liga também o DNS sem anúncios, que tira a maior parte dos anúncios dos sites e dos apps. Se a rede não deixar o DNS sem anúncios funcionar, o celular continua com a internet de sempre. Cada celular leva de alguns segundos a um minuto." />
             </Border>
             <DockPanel Margin="0,14,0,10">
                 <Button x:Name="RunButton" DockPanel.Dock="Left" Content="Otimizar de novo" Click="OnRunClicked" Padding="14,6" Margin="0,0,12,0" IsEnabled="False" />

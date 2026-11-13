@@ -27,7 +27,8 @@ import java.util.Locale
 // The phone's apps as the PackageManager sees them: what the student can open
 // (with its label and icon, for the teacher's list), what is never suspended
 // and what is suspended now; its browsers (OtherBrowsers); and, for
-// "Otimizar", which listed apps it has and what is never hidden (Optimizer).
+// "Otimizar", which listed apps it has, which came with the phone and what
+// is never hidden (Optimizer).
 class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog {
     private val app = context.applicationContext
     private val pm = app.packageManager
@@ -98,6 +99,16 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
         }
 
     override fun neverHide(): Set<String> = BloatList.neverHide(protected(), cameras())
+
+    // A system app or an update of one (hidden ones too); true when Android
+    // does not know the package, so it is never uninstalled.
+    override fun cameWithPhone(pkg: String): Boolean =
+        try {
+            val flags = pm.getApplicationInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES).flags
+            (flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0
+        } catch (_: PackageManager.NameNotFoundException) {
+            true
+        }
 
     // The phone's own cameras: the system apps that take a picture for
     // another app or open as the camera.

@@ -12,15 +12,21 @@ class PhoneOptimizeReportTest {
     // Same literals as PhoneOptimizeReportTests.cs (the .NET side).
     private val fullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
-            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"}"
+            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}"
     private val emptyJson =
-        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\"}"
+        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\",\"uninstalled\":[]}"
+
+    // What an agent before 0.0.74 sends: no "uninstalled".
+    private val olderJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
+            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"}"
 
     private val at = Instant.parse("2026-11-12T15:30:45Z")
 
     private val full = PhoneOptimizeReport(
         at, listOf("com.miui.msa.global", "com.miui.analytics"), listOf("com.xiaomi.mipicks"),
-        PhoneDnsStates.ON, "dns.adguard-dns.com",
+        PhoneDnsStates.ON, "dns.adguard-dns.com", listOf("com.king.candycrushsaga", "com.zhiliaoapp.musically"),
     )
     private val empty = PhoneOptimizeReport(null, emptyList(), emptyList(), PhoneDnsStates.OFF_INTERNET_BLOCKED, "")
 
@@ -37,6 +43,13 @@ class PhoneOptimizeReportTest {
     }
 
     @Test
+    fun decode_readsAReportWithoutUninstalledAsNone() {
+        assertEquals(full.copy(uninstalled = emptyList()), PhoneOptimizeReport.decode(olderJson.toByteArray()))
+        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null}"
+        assertEquals(full.copy(uninstalled = emptyList()), PhoneOptimizeReport.decode(withNull.toByteArray()))
+    }
+
+    @Test
     fun decode_refusesBadJson() {
         val bad = listOf(
             "not json",
@@ -48,6 +61,8 @@ class PhoneOptimizeReportTest {
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dnsHost\":\"\"}",
             "{\"optimizedAt\":\"yesterday\",\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\"}",
             "{\"optimizedAt\":null,\"hidden\":[1],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\"}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[1]}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":\"x\"}",
         )
         for (json in bad) {
             assertNull(json, PhoneOptimizeReport.decode(json.toByteArray()))

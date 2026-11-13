@@ -54,6 +54,13 @@ class OptimizeStoreTest {
         )
     }
 
+    @Test fun theUninstalledAppsAreKept() {
+        val withUninstalled = state.copy(report = state.report.copy(uninstalled = listOf("com.king.candycrushsaga", "com.booking")))
+        OptimizeStore(file).save(withUninstalled)
+        assertTrue(file.readText(Charsets.UTF_8).contains("failed=com.facebook.system\nuninstalled=com.king.candycrushsaga\nuninstalled=com.booking\n"))
+        assertEquals(withUninstalled, OptimizeStore(file).current)
+    }
+
     // What 0.0.70 and before wrote is read too.
     @Test fun theOldFormatIsReadToo() {
         file.writeBytes("lastDnsAttempt=2026-11-12T13:00:25+00:00\n".toByteArray() + state.report.encode())

@@ -30,12 +30,35 @@ class FakeDnsNetwork(
     }
 }
 
-// The phone's apps for the optimizer: those on the phone (hidden or not)
-// and those never hidden.
+// The phone's apps for the optimizer: those on the phone (hidden or not),
+// those never hidden and those that came with the phone's system.
 class FakeBloatCatalog(
     var present: Set<String>,
     var neverHide: Set<String> = BloatList.NEVER_HIDE,
+    var system: Set<String> = emptySet(),
 ) : BloatCatalog {
     override fun isPresent(pkg: String) = pkg in present
     override fun neverHide() = neverHide
+    override fun cameWithPhone(pkg: String) = pkg in system
+}
+
+// The Device Owner's uninstall: an app uninstalled leaves the catalog; one
+// in refuse is refused with its reason, one in noAnswer gets no answer in
+// time, one in throwing throws. before runs ahead of each (a clock moved).
+class FakeRemover(private val catalog: FakeBloatCatalog) : AppRemover {
+    val calls = mutableListOf<Pair<String, Long>>()
+    var refuse = emptyMap<String, String>()
+    var noAnswer = emptySet<String>()
+    var throwing = emptySet<String>()
+    var before: (String) -> Unit = {}
+
+    override fun uninstall(pkg: String, waitMillis: Long): String? {
+        calls += pkg to waitMillis
+        before(pkg)
+        if (pkg in throwing) throw SecurityException("no")
+        if (pkg in noAnswer) return AppRemover.NO_ANSWER
+        refuse[pkg]?.let { return it }
+        catalog.present -= pkg
+        return null
+    }
 }

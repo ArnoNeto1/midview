@@ -11,7 +11,7 @@ import java.time.Duration
 import java.time.Instant
 
 // The phone's optimization as last done: the report the teacher gets (what
-// the optimizer hid, what Android refused, how the DNS stands) and when the
+// the optimizer uninstalled and hid, what Android refused, how the DNS stands) and when the
 // DNS was last tried, for the retry at most every 30 minutes.
 data class OptimizeState(val report: PhoneOptimizeReport, val lastDnsAttempt: Instant?)
 
@@ -60,7 +60,8 @@ class OptimizeStore(
 
         // The phone's own format (StoredText "optimize"), not the report's
         // network form: lastDnsAttempt and optimizedAt (ISO-8601, empty for
-        // none), a "hidden=" and "failed=" per app, dns and dnsHost.
+        // none), a "hidden=", "failed=" and "uninstalled=" per app, dns and
+        // dnsHost. A file from before 0.0.74 has no "uninstalled=": none.
         fun encode(state: OptimizeState): ByteArray {
             val report = state.report
             return StoredText.encode(
@@ -69,6 +70,7 @@ class OptimizeStore(
                     "lastDnsAttempt" to (state.lastDnsAttempt?.let { IsoTime.format(it) } ?: ""),
                     "optimizedAt" to (report.optimizedAt?.let { IsoTime.format(it) } ?: ""),
                 ) + report.hidden.map { "hidden" to it } + report.failed.map { "failed" to it } +
+                    report.uninstalled.map { "uninstalled" to it } +
                     listOf("dns" to report.dns, "dnsHost" to report.dnsHost),
             )
         }
@@ -82,6 +84,7 @@ class OptimizeStore(
             val dns = stored.first("dns")?.takeIf { PhoneDnsStates.isKnown(it) } ?: PhoneDnsStates.OFF_ERROR
             val report = PhoneOptimizeReport(
                 time("optimizedAt"), stored.all("hidden"), stored.all("failed"), dns, stored.first("dnsHost") ?: AdblockDns.HOST,
+                stored.all("uninstalled"),
             )
             return OptimizeState(report, time("lastDnsAttempt"))
         }

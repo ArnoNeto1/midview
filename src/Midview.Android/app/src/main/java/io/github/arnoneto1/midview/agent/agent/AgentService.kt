@@ -57,6 +57,7 @@ import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 import io.github.arnoneto1.midview.agent.power.AndroidPhonePower
 import io.github.arnoneto1.midview.agent.power.PowerCountdown
+import io.github.arnoneto1.midview.agent.programs.SilentUninstaller
 import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Discovery
@@ -223,7 +224,8 @@ class AgentService : Service() {
         val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
         val suspender = AppSuspender(installedApps, AndroidDevicePolicyGateway(this), log)
         val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
-        // "Otimizar": the ad apps hidden and the ad-free DNS, run by itself at
+        // "Otimizar": the ad apps hidden, the apps the school does not use
+        // uninstalled (or hidden) and the ad-free DNS, run by itself at
         // the first command of a trusted teacher and repeated by "Otimizar";
         // the DNS is tried again when the internet block is freed, and goes
         // back to automatic if the network stops validating it (DnsWatcher).
@@ -249,6 +251,7 @@ class AgentService : Service() {
             AdblockDns(policyGateway, AndroidDnsNetwork(this), internetBlocked, log),
             OptimizeStore(File(filesDir, OPTIMIZE_FILE), log),
             internetBlocked, adblockWanted = { lab.adblock }, log = log,
+            remover = SilentUninstaller(this),
         )
         // The site block: Chrome's policy and the internet block, kept the
         // same way and applied again now. Other browsers are hidden, checked

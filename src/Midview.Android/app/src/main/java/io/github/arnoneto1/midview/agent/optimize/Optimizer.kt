@@ -5,6 +5,7 @@ import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
 import io.github.arnoneto1.midview.agent.protocol.PhoneOptimizeReport
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
@@ -28,12 +29,36 @@ interface BloatCatalog {
 
     // Never hidden on this phone (BloatList.neverHide).
     fun neverHide(): Set<String>
+
+    // A system app or an update of one, which a Device Owner cannot
+    // uninstall (only hide); true when it cannot be told.
+    fun cameWithPhone(pkg: String): Boolean
+}
+
+// The Device Owner's silent uninstall (SilentUninstaller), for UnusedApps.
+fun interface AppRemover {
+    // Waits at most waitMillis for Android: null once uninstalled, NO_ANSWER
+    // when Android said nothing in time, otherwise why not.
+    fun uninstall(pkg: String, waitMillis: Long): String?
+
+    companion object {
+        const val NO_ANSWER = "o Android não respondeu sobre a desinstalação"
+    }
 }
 
 // "Otimizar" on the school phone: hides the ad and bloat apps it has
 // (BloatList; hidden apps are gone from the home screen and do not run, and
-// stay so after a restart) and turns the ad-free DNS on (AdblockDns), keeping
-// the report for the teacher (OptimizeStore). It runs by itself at the first
+// stay so after a restart), turns the ad-free DNS on (AdblockDns) and
+// uninstalls the apps the school does not use (UnusedApps: those of the
+// system, which a Device Owner cannot uninstall, are hidden instead, and so
+// is one Android refuses to uninstall), keeping the report for the teacher
+// (OptimizeStore), which counts every app it ever uninstalled that is still
+// gone. Uninstalling is slow (a second or more each), so the teacher waits
+// for it at most until UNINSTALL_WITHIN after asking (the Master waits 90 s):
+// the apps left then are uninstalled right after, in the background, one at
+// a time (each waits at most APP_WAIT for Android, so a teacher's
+// "Otimizar" never waits long behind it), and the next report counts them.
+// A failure on one app never stops the others. It runs by itself at the first
 // command of a trusted teacher (after pairing) and again whenever the teacher
 // asks, changing nothing the second time. A DNS left off for no internet or a
 // network that blocks it is tried again at a trusted teacher's command, at
@@ -58,13 +83,17 @@ class Optimizer(
     private val clock: () -> Instant = Instant::now,
     private val background: (Runnable) -> Unit = { Thread(it, "Midview optimize").apply { isDaemon = true }.start() },
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val remover: AppRemover = AppRemover { _, _ -> "não há como desinstalar" },
+    private val ticker: () -> Long = System::nanoTime,
 ) : PhoneOptimizer {
     private val lock = ReentrantLock()
     private val busy = AtomicBoolean(false)
+    private val removing = AtomicBoolean(false)
     private val runs = AtomicLong()
     private val dnsSteps = AtomicLong()
 
     override fun run(): PhoneOptimizeReport {
+        val asked = ticker()
         val askedRuns = runs.get()
         val askedDns = dnsSteps.get()
         lock.withLock {
@@ -73,7 +102,7 @@ class Optimizer(
             if (runs.get() != askedRuns) return store.current.report
             // A DNS try ended while this waited: the apps are seen to again,
             // the DNS's answer is reused.
-            return optimize(reuseDns = dnsSteps.get() != askedDns).also { runs.incrementAndGet() }
+            return optimize(reuseDns = dnsSteps.get() != askedDns, asked).also { runs.incrementAndGet() }
         }
     }
 
@@ -192,49 +221,181 @@ class Optimizer(
         return PhoneDnsStates.OFF_BY_TEACHER
     }
 
-    private fun optimize(reuseDns: Boolean): PhoneOptimizeReport {
+    private fun optimize(reuseDns: Boolean, asked: Long): PhoneOptimizeReport {
         val now = clock()
         val held = store.current
+        var left = emptyList<String>()
         val next = if (gw.isDeviceOwner()) {
-            val (hidden, failed) = hideApps()
+            val plan = plan()
+            val (hidden, failed) = hideApps(plan.hide)
             val (dnsState, attempt) = if (reuseDns) held.report.dns to held.lastDnsAttempt else dnsStep() to clock()
-            OptimizeState(PhoneOptimizeReport(now, hidden, failed, dnsState, AdblockDns.HOST), lastDnsAttempt = attempt)
+            val removed = removeApps(plan.uninstall, until = asked + UNINSTALL_WITHIN_NANOS)
+            left = removed.left
+            val uninstalled = (held.report.uninstalled.filter(::isGone) + removed.uninstalled).distinct()
+            OptimizeState(
+                PhoneOptimizeReport(now, (hidden + removed.hidden).distinct(), failed + removed.failed, dnsState, AdblockDns.HOST, uninstalled),
+                lastDnsAttempt = attempt,
+            )
         } else {
-            // Not the school's phone: nothing can be hidden nor set.
-            val failed = runCatching { toHide() }.getOrDefault(emptyList())
+            // Not the school's phone: nothing can be hidden, uninstalled nor set.
+            val failed = runCatching { toPlan().let { it.hide + it.uninstall } }.getOrDefault(emptyList())
             OptimizeState(PhoneOptimizeReport(now, emptyList(), failed, PhoneDnsStates.OFF_ERROR, AdblockDns.HOST), held.lastDnsAttempt)
         }
         store.save(next)
-        log("Optimized: ${next.report.hidden.size} app(s) hidden ${next.report.hidden}, refused ${next.report.failed}, DNS ${next.report.dns}.", null)
-        return next.report
+        val report = next.report
+        log(
+            "Optimized: ${report.uninstalled.size} app(s) uninstalled ${report.uninstalled}, ${report.hidden.size} hidden " +
+                "${report.hidden}, refused ${report.failed}, ${left.size} left for later $left, DNS ${report.dns}.",
+            null,
+        )
+        if (left.isNotEmpty()) removeLater()
+        return report
     }
 
-    // The listed apps the phone has, hidden (or already hidden), and those
-    // Android would not hide. Android answers false for an app already
-    // hidden, so that is asked first.
-    private fun hideApps(): Pair<List<String>, List<String>> {
-        val target = try {
-            toHide()
+    // What "Otimizar" does to the phone's apps: those to hide (BloatList's,
+    // and UnusedApps' of the system) and those to uninstall.
+    private class Plan(val hide: List<String>, val uninstall: List<String>)
+
+    private fun plan(): Plan =
+        try {
+            toPlan()
         } catch (e: Exception) {
             log("The phone's apps could not be read", e)
-            return emptyList<String>() to emptyList()
+            Plan(emptyList(), emptyList())
         }
+
+    private fun toPlan(): Plan {
+        val never = catalog.neverHide()
+        val bloat = BloatList.toHide(BloatList.PACKAGES.filter(catalog::isPresent).toSet(), never).toList()
+        val (system, other) = UnusedApps.toRemove(UnusedApps.PACKAGES.filter(catalog::isPresent).toSet(), never)
+            .partition(::cameWithPhone)
+        return Plan(bloat + system, other)
+    }
+
+    private fun cameWithPhone(pkg: String): Boolean =
+        try {
+            catalog.cameWithPhone(pkg)
+        } catch (e: Exception) {
+            true
+        }
+
+    // No longer on the phone (false when it cannot be told).
+    private fun isGone(pkg: String): Boolean =
+        try {
+            !catalog.isPresent(pkg)
+        } catch (e: Exception) {
+            false
+        }
+
+    // The apps hidden (or already hidden), and those Android would not hide.
+    // Android answers false for an app already hidden, so that is asked first.
+    private fun hideApps(target: List<String>): Pair<List<String>, List<String>> {
         val hidden = mutableListOf<String>()
         val failed = mutableListOf<String>()
         for (pkg in target) {
-            val done = try {
-                gw.isApplicationHidden(pkg) || gw.setApplicationHidden(pkg, true)
-            } catch (e: RuntimeException) {
-                log("Android would not hide $pkg", e)
-                false
-            }
-            if (done) hidden += pkg else failed += pkg
+            if (hide(pkg)) hidden += pkg else failed += pkg
         }
         return hidden to failed
     }
 
-    private fun toHide(): List<String> =
-        BloatList.toHide(BloatList.PACKAGES.filter(catalog::isPresent).toSet(), catalog.neverHide()).toList()
+    private fun hide(pkg: String): Boolean =
+        try {
+            gw.isApplicationHidden(pkg) || gw.setApplicationHidden(pkg, true)
+        } catch (e: RuntimeException) {
+            log("Android would not hide $pkg", e)
+            false
+        }
+
+    private class Removal {
+        val uninstalled = mutableListOf<String>()
+        val hidden = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+        val left = mutableListOf<String>()
+    }
+
+    // Uninstalled one by one, each waiting at most APP_WAIT for Android; one
+    // Android refuses is hidden instead (or failed, if that is refused too).
+    // until (ticker time): the apps not started by then, or Android did not
+    // answer for in time, are left for later; null, none is.
+    private fun removeApps(target: List<String>, until: Long?): Removal {
+        val removal = Removal()
+        for (pkg in target) {
+            val wait = if (until == null) {
+                APP_WAIT_MILLIS
+            } else {
+                val remaining = TimeUnit.NANOSECONDS.toMillis(until - ticker())
+                if (remaining < MIN_WAIT_MILLIS) {
+                    removal.left += pkg
+                    continue
+                }
+                minOf(APP_WAIT_MILLIS, remaining)
+            }
+            val why = try {
+                remover.uninstall(pkg, wait)
+            } catch (e: Exception) {
+                log("Android did not start the uninstall of $pkg", e)
+                e.message ?: e.javaClass.simpleName
+            }
+            when {
+                why == null || isGone(pkg) -> removal.uninstalled += pkg
+                why == AppRemover.NO_ANSWER && until != null -> removal.left += pkg
+                hide(pkg) -> {
+                    log("Android would not uninstall $pkg ($why): hidden instead", null)
+                    removal.hidden += pkg
+                }
+                else -> {
+                    log("Android would neither uninstall ($why) nor hide $pkg", null)
+                    removal.failed += pkg
+                }
+            }
+        }
+        return removal
+    }
+
+    // The apps a "Otimizar" left uninstalled in the background, one at a
+    // time, each added to the report kept (the next "Otimizar" sends it).
+    // The lock is held for one app at a time, so a teacher's "Otimizar"
+    // waits for one uninstall at most (APP_WAIT).
+    private fun removeLater() {
+        if (!removing.compareAndSet(false, true)) return
+        try {
+            background(
+                Runnable {
+                    try {
+                        val target = lock.withLock { if (gw.isDeviceOwner()) plan().uninstall else emptyList() }
+                        for (pkg in target) {
+                            lock.withLock {
+                                if (!isGone(pkg)) keep(removeApps(listOf(pkg), until = null))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        log("The apps left could not be uninstalled", e)
+                    } finally {
+                        removing.set(false)
+                    }
+                },
+            )
+        } catch (e: Exception) {
+            removing.set(false)
+            log("The apps left could not be uninstalled", e)
+        }
+    }
+
+    private fun keep(removal: Removal) {
+        val held = store.current
+        val report = held.report
+        val done = (removal.uninstalled + removal.hidden).toSet()
+        store.save(
+            held.copy(
+                report = report.copy(
+                    uninstalled = (report.uninstalled + removal.uninstalled).distinct(),
+                    hidden = (report.hidden + removal.hidden).distinct(),
+                    failed = (report.failed.filter { it !in done } + removal.failed).distinct(),
+                ),
+            ),
+        )
+        log("Uninstalled later: ${removal.uninstalled}, hidden ${removal.hidden}, refused ${removal.failed}.", null)
+    }
 
     // At most one run waiting or running in the background.
     private fun inBackground(work: () -> Unit) {
@@ -260,5 +421,13 @@ class Optimizer(
     private companion object {
         // The DNS states tried again at a teacher's command (every 30 min).
         val RETRIED = setOf(PhoneDnsStates.OFF_NO_INTERNET, PhoneDnsStates.OFF_NETWORK_BLOCKS)
+
+        // Uninstalls start at most until 60 s after the teacher asked, each
+        // waiting at most 15 s for Android (and never past that), so the
+        // answer is sent well within the Master's 90 s; an app with under
+        // 2 s left is left for later.
+        val UNINSTALL_WITHIN_NANOS = TimeUnit.SECONDS.toNanos(60)
+        const val APP_WAIT_MILLIS = 15_000L
+        const val MIN_WAIT_MILLIS = 2_000L
     }
 }

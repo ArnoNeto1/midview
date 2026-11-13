@@ -7,10 +7,16 @@ public class PhoneOptimizeReportTests
     // Same literals as PhoneOptimizeReportTest.kt and NetworkUpdateCodecTest.kt (the Android agent).
     private const string FullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
-        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"}";
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"]}";
 
     private const string EmptyJson =
-        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\"}";
+        "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\",\"uninstalled\":[]}";
+
+    // What an agent before 0.0.74 sends: no "uninstalled".
+    private const string OlderJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"}";
 
     private const string OfferHex =
         "000102030405060708090a0b0c0d0e0f"
@@ -31,7 +37,10 @@ public class PhoneOptimizeReportTests
 
     private static PhoneOptimizeReport Full() => new(
         At, new[] { "com.miui.msa.global", "com.miui.analytics" }, new[] { "com.xiaomi.mipicks" },
-        PhoneDnsStates.On, "dns.adguard-dns.com");
+        PhoneDnsStates.On, "dns.adguard-dns.com")
+    {
+        Uninstalled = new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" },
+    };
 
     [Fact]
     public void Encode_MatchesTheGoldenJson()
@@ -50,13 +59,44 @@ public class PhoneOptimizeReportTests
         Assert.Equal(new[] { "com.xiaomi.mipicks" }, full.Failed);
         Assert.Equal("on", full.Dns);
         Assert.Equal("dns.adguard-dns.com", full.DnsHost);
+        Assert.Equal(new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" }, full.Uninstalled);
 
         Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(EmptyJson), out var empty));
         Assert.Null(empty.OptimizedAt);
         Assert.Empty(empty.Hidden);
         Assert.Empty(empty.Failed);
         Assert.Equal("offInternetBlocked", empty.Dns);
+        Assert.Empty(empty.Uninstalled);
     }
+
+    [Theory]
+    [InlineData(OlderJson)]
+    [InlineData("{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\",\"uninstalled\":null}")]
+    public void TryDecode_AReportWithoutUninstalled_HasNone(string json)
+    {
+        Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out var report));
+        Assert.Empty(report.Uninstalled);
+        Assert.Equal(new[] { "com.miui.msa.global", "com.miui.analytics" }, report.Hidden);
+    }
+
+    // A Master before 0.0.74 reads a new report as its own record (without
+    // Uninstalled): System.Text.Json skips the property it does not know.
+    [Fact]
+    public void ANewReport_IsReadByAnOlderMaster()
+    {
+        var old = System.Text.Json.JsonSerializer.Deserialize<OldReport>(FullJson);
+        Assert.NotNull(old);
+        Assert.Equal(new[] { "com.miui.msa.global", "com.miui.analytics" }, old!.Hidden);
+        Assert.Equal("on", old.Dns);
+    }
+
+    private sealed record OldReport(
+        [property: System.Text.Json.Serialization.JsonPropertyName("optimizedAt")] DateTimeOffset? OptimizedAt,
+        [property: System.Text.Json.Serialization.JsonPropertyName("hidden")] IReadOnlyList<string> Hidden,
+        [property: System.Text.Json.Serialization.JsonPropertyName("failed")] IReadOnlyList<string> Failed,
+        [property: System.Text.Json.Serialization.JsonPropertyName("dns")] string Dns,
+        [property: System.Text.Json.Serialization.JsonPropertyName("dnsHost")] string DnsHost);
 
     [Theory]
     [InlineData("not json")]
@@ -66,6 +106,9 @@ public class PhoneOptimizeReportTests
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"maybe\",\"dnsHost\":\"\"}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dnsHost\":\"\"}")]
     [InlineData("null")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[1]}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[null]}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":\"x\"}")]
     public void TryDecode_RefusesBadJson(string json) =>
         Assert.False(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out _));
 
