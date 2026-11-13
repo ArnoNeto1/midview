@@ -232,6 +232,7 @@ class Optimizer(
         val held = store.current
         var left = emptyList<String>()
         val next = if (gw.isDeviceOwner()) {
+            showAgain(held.report.hidden)
             val plan = plan()
             val (hidden, failed) = hideApps(plan.hide)
             val (dnsState, attempt) = if (reuseDns) held.report.dns to held.lastDnsAttempt else dnsStep() to clock()
@@ -308,6 +309,24 @@ class Optimizer(
             if (hide(pkg)) hidden += pkg else failed += pkg
         }
         return hidden to failed
+    }
+
+    // An app an earlier run hid that the phone now never hides (its only
+    // gallery, BloatList.onlyGallery) is shown again; nothing it did not hide.
+    private fun showAgain(hiddenBefore: List<String>) {
+        if (hiddenBefore.isEmpty()) return
+        val never = try {
+            catalog.neverHide()
+        } catch (e: Exception) {
+            return
+        }
+        for (pkg in hiddenBefore.filter { it in never }) {
+            try {
+                if (gw.isApplicationHidden(pkg) && gw.setApplicationHidden(pkg, false)) log("Shown again: $pkg.", null)
+            } catch (e: RuntimeException) {
+                log("Android would not show $pkg again", e)
+            }
+        }
     }
 
     private fun hide(pkg: String): Boolean =

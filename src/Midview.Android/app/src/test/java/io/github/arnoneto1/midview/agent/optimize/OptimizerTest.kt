@@ -92,6 +92,27 @@ class OptimizerTest {
         assertTrue(gw.hiddenCalls.none { it.first == "com.xiaomi.glgm" || it.first == "com.android.chrome" })
     }
 
+    // The Multilaser M10: an earlier "Otimizar" hid Google Photos, its only
+    // gallery; now never hidden, the next run shows it again.
+    @Test fun anAppHiddenBeforeThatIsNowNeverHiddenComesBack() {
+        optimizer.run()
+        assertTrue("com.xiaomi.glgm" in gw.hidden)
+        catalog.neverHide = BloatList.NEVER_HIDE + "com.xiaomi.glgm"
+
+        val report = optimizer.run()
+
+        assertTrue("com.xiaomi.glgm" !in gw.hidden)
+        assertEquals(listOf("com.miui.msa.global", "com.facebook.system"), report.hidden)
+        assertTrue("com.miui.msa.global" in gw.hidden)
+    }
+
+    // Only what the optimizer itself hid: an app hidden by someone else stays.
+    @Test fun anAppTheOptimizerNeverHidStaysAsItIs() {
+        gw.hidden += "com.android.chrome"
+        optimizer.run()
+        assertTrue("com.android.chrome" in gw.hidden)
+    }
+
     @Test fun runningAgainChangesNothing() {
         val first = optimizer.run()
         gw.hiddenCalls.clear()
