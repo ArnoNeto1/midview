@@ -84,6 +84,21 @@ class BloatListTest {
         assertEquals(13, hidden.size)
     }
 
+    // The Multilaser M10 tablet: Google Photos is its only gallery and stays.
+    @Test fun theOnlyGalleryIsNeverHidden() {
+        val never = BloatList.neverHide(emptySet(), emptySet(), galleries = setOf("com.google.android.apps.photos"))
+        assertTrue("com.google.android.apps.photos" in never)
+    }
+
+    // A Xiaomi: MIUI's Galeria beside Google Photos, which the list may hide.
+    @Test fun aSecondGalleryKeepsNeither() {
+        val never = BloatList.neverHide(
+            emptySet(), emptySet(), galleries = setOf("com.miui.gallery", "com.google.android.apps.photos"),
+        )
+        assertFalse("com.google.android.apps.photos" in never)
+        assertFalse("com.miui.gallery" in never)
+    }
+
     @Test fun theListHidesNothingThatIsNeverHidden() {
         assertTrue(BloatList.PACKAGES.none { it in BloatList.NEVER_HIDE })
     }

@@ -98,7 +98,7 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
             false
         }
 
-    override fun neverHide(): Set<String> = BloatList.neverHide(protected(), cameras())
+    override fun neverHide(): Set<String> = BloatList.neverHide(protected(), cameras(), galleries())
 
     // A system app or an update of one (hidden ones too); true when Android
     // does not know the package, so it is never uninstalled.
@@ -119,6 +119,14 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
             .filter { it.system }
             .map { it.pkg }
             .toSet()
+
+    // The gallery apps the student can open, hidden ones too, so one hidden
+    // before still counts and a second "Otimizar" decides the same.
+    private fun galleries(): Set<String> =
+        pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_GALLERY),
+            PackageManager.MATCH_UNINSTALLED_PACKAGES,
+        ).map { it.activityInfo.packageName }.toSet()
 
     private fun candidate(info: ApplicationInfo) = ProtectedApps.Candidate(
         info.packageName,

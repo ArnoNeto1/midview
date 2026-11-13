@@ -48,6 +48,15 @@ object BloatList {
 
     // Never hidden on this phone: NEVER_HIDE, the app block's protected apps
     // (the home screen, the WebView and the keyboard in use, the agent, the
-    // system's dialer, settings and installer) and the phone's own cameras.
-    fun neverHide(protected: Set<String>, cameras: Set<String>): Set<String> = NEVER_HIDE + protected + cameras
+    // system's dialer, settings and installer), the phone's own cameras and
+    // its only gallery (onlyGallery).
+    fun neverHide(protected: Set<String>, cameras: Set<String>, galleries: Set<String> = emptySet()): Set<String> =
+        NEVER_HIDE + protected + cameras + onlyGallery(galleries)
+
+    // The gallery apps (MAIN with APP_GALLERY) the device has: when there is
+    // only one, it stays, so the photos the class takes can still be seen. A
+    // Xiaomi has its own Galeria beside Google Photos, which the school's list
+    // hides (UnusedApps); the school's Multilaser M10 tablet has only Google
+    // Photos (its AOSP gallery has no icon).
+    fun onlyGallery(galleries: Set<String>): Set<String> = if (galleries.size == 1) galleries else emptySet()
 }
