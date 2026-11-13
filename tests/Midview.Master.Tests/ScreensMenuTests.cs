@@ -16,7 +16,7 @@ public class ScreensMenuTests
         {
             var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets..." }, Headers(menu));
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets...", "-", "Tirar o Midview dos celulares e tablets..." }, Headers(menu));
             var items = menu.Items.OfType<MenuItem>().ToList();
             Assert.Equal(new[] { false, false, true, false }, items.Take(4).Select(item => item.IsChecked));
             Assert.All(items, item => Assert.True(item.IsEnabled));
@@ -205,9 +205,30 @@ public class ScreensMenuTests
             Assert.False(items[5].IsEnabled);
             Assert.False(items[6].IsEnabled);
             Assert.False(items[7].IsEnabled);
+            Assert.False(Item(menu, "Tirar o Midview dos celulares e tablets...").IsEnabled);
             Assert.StartsWith("Nenhum celular ou tablet selecionado ou na grade", (string)items[4].ToolTip);
             Assert.True(ToolTipService.GetShowOnDisabled(items[5]));
             Assert.All(items.Take(3), item => Assert.True(item.IsEnabled));
+        });
+    }
+
+    // The panic button: apart at the end, it opens its own window.
+    [Fact]
+    public void Tirar_o_midview_opens_its_window()
+    {
+        InSta(() =>
+        {
+            var opened = 0;
+            var menu = MainWindow.ScreensMenu(
+                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { }, phoneRemove: () => opened++);
+            var item = Item(menu, "Tirar o Midview dos celulares e tablets...");
+
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+            Assert.Equal(1, opened);
+            Assert.True(item.IsEnabled);
+            Assert.IsType<Separator>(menu.Items[menu.Items.IndexOf(item) - 1]);
+            Assert.Same(item, menu.Items[menu.Items.Count - 1]);
         });
     }
 

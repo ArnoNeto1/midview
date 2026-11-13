@@ -1,0 +1,40 @@
+<local:MidviewWindow x:Class="Midview.Master.PhoneRemoveWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Tirar o Midview dos celulares e tablets" Height="760" Width="680" MinHeight="520" MinWidth="560"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="24,22,24,20">
+        <StackPanel DockPanel.Dock="Top">
+            <local:DialogHeader x:Name="DialogHeading" Icon="&#xE74D;" Heading="Tirar o Midview dos celulares e tablets" Accent="{StaticResource CelularesBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                <StackPanel>
+                    <RadioButton x:Name="UndoRadioButton" GroupName="Choice" IsChecked="True" Checked="OnChoiceChanged">
+                        <TextBlock x:Name="UndoTitleTextBlock" FontWeight="SemiBold" />
+                    </RadioButton>
+                    <TextBlock x:Name="UndoTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="22,4,0,0" />
+                    <RadioButton x:Name="ResetRadioButton" GroupName="Choice" Margin="0,14,0,0" Checked="OnChoiceChanged">
+                        <TextBlock x:Name="ResetTitleTextBlock" FontWeight="SemiBold" />
+                    </RadioButton>
+                    <TextBlock x:Name="ResetTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="22,4,0,0" />
+                    <TextBlock x:Name="OnThePhoneTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,14,0,0" />
+                    <TextBlock x:Name="PromptTextBlock" FontWeight="SemiBold" Margin="0,16,0,6" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox x:Name="WordTextBox" Width="170" FontSize="16" Padding="10,5" MaxLength="20"
+                                 AutomationProperties.Name="Palavra de confirmação" TextChanged="OnWordChanged" />
+                        <Button x:Name="GoButton" Click="OnGoClicked" Style="{StaticResource DangerButton}"
+                                Padding="14,6" Margin="10,0,0,0" IsEnabled="False" />
+                    </StackPanel>
+                    <TextBlock x:Name="LeavesTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,14,0,10" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="PhonesList" ItemTemplate="{StaticResource PhoneRowTemplate}" />
+        </ScrollViewer>
+    </DockPanel>
+</local:MidviewWindow>

@@ -1,4 +1,6 @@
+using System.IO;
 using System.Windows;
+using Midview.Protocol;
 
 namespace Midview.Master;
 
@@ -86,6 +88,42 @@ public partial class MainWindow
             return;
         }
         ShowOnce("papel-de-parede-celulares", phones, () => new PhoneWallpaperWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
+    }
+
+    // "Tirar o Midview dos celulares e tablets...": the same devices as the
+    // PIN; each one the Midview left goes out of the room's list.
+    private void OpenPhoneRemoveWindow(IReadOnlyList<KnownMachine> phones)
+    {
+        if (phones.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhum celular ou tablet na lista da sala para tirar o Midview.";
+            return;
+        }
+        ShowOnce("tirar-midview-celulares", phones,
+            () => new PhoneRemoveWindow(phones, IsEveryPhone(phones), _masterCertificate, RemoveFromRoom) { Owner = this });
+    }
+
+    // A device the Midview left (or that is being erased) leaves the room's
+    // list, as "Remover da sala" does.
+    private void RemoveFromRoom(KnownMachine machine)
+    {
+        var index = _tiles.ToList().FindIndex(tile => tile.Machine.IsSameEntryAs(machine)
+            || (tile.Machine.IsPhone && machine.AgentThumbprint is { Length: > 0 } agent
+                && string.Equals(tile.Machine.AgentThumbprint, agent, StringComparison.OrdinalIgnoreCase)));
+        if (index < 0)
+        {
+            return;
+        }
+        RemoveTileAt(index);
+        UpdateEmptyHint();
+        try
+        {
+            SaveRoster();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowWarning($"Removido da grade, mas a lista não pôde ser gravada em disco: {ErrorText.Describe(ex)}");
+        }
     }
 
     // The APK of this Master's version, from GitHub, kept in

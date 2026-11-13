@@ -7,8 +7,9 @@ namespace Midview.Master;
 // "Telas" (group Configurar): a menu with which screens the grid shows
 // (DeviceFilter: Todos, Computadores, Celulares, Tablets) and
 // "Otimizar celulares e tablets...", "Senha dos celulares e tablets...",
-// "Liberar Wi-Fi e modo avião..." and "Papel de parede dos celulares e tablets..."
-// (the selected Android devices, or every one the grid shows, by the rule
+// "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets..."
+// and, apart at the end, "Tirar o Midview dos celulares e tablets..." (the
+// selected Android devices, or every one the grid shows, by the rule
 // of every toolbar button: DeviceSupport.ToolbarReach). Celulares is
 // greyed in a room with no phone, and Tablets in one with no tablet (unless
 // the "Preparar celulares" assistant is out: its button, "Preparar
@@ -32,7 +33,8 @@ public partial class MainWindow
             () => OpenPhonePinWindow(ToolbarReach(ToolbarAction.PhonePin)), PhoneProvisioning.Setup,
             reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0,
             phoneNetwork: () => OpenPhoneNetworkWindow(ToolbarReach(ToolbarAction.PhonePin)),
-            phoneWallpaper: () => OpenPhoneWallpaperWindow(ToolbarReach(ToolbarAction.PhonePin)));
+            phoneWallpaper: () => OpenPhoneWallpaperWindow(ToolbarReach(ToolbarAction.PhonePin)),
+            phoneRemove: () => OpenPhoneRemoveWindow(ToolbarReach(ToolbarAction.PhonePin)));
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -59,7 +61,7 @@ public partial class MainWindow
     internal static ContextMenu ScreensMenu(
         DeviceFilter shown, bool hasPhones, bool hasTablets, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
         PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true, Action? phoneNetwork = null,
-        Action? phoneWallpaper = null)
+        Action? phoneWallpaper = null, Action? phoneRemove = null)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -120,6 +122,16 @@ public partial class MainWindow
             wallpaperItem.Click += (_, _) => phoneWallpaper?.Invoke();
             menu.Items.Add(wallpaperItem);
             Unreached(wallpaperItem);
+            // The panic button, apart from the everyday items.
+            menu.Items.Add(new Separator());
+            var removeItem = new MenuItem
+            {
+                Header = "Tirar o Midview dos celulares e tablets...",
+                ToolTip = "Desfaz tudo o que o Midview fez nos celulares e tablets e o desinstala (fotos e arquivos ficam), ou os restaura de fábrica (apaga tudo). Pede confirmação. Com alguns selecionados, só neles.",
+            };
+            removeItem.Click += (_, _) => phoneRemove?.Invoke();
+            menu.Items.Add(removeItem);
+            Unreached(removeItem);
         }
         return menu;
 
