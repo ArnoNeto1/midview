@@ -36,4 +36,9 @@ public static class PhoneNumber
     // a phone. The only tablet marker there is.
     public static AndroidDeviceKind KindOf(string name) =>
         name.StartsWith("Tablet ", StringComparison.Ordinal) ? AndroidDeviceKind.Tablet : AndroidDeviceKind.Phone;
+
+    // How many Android devices of that kind there are among the machines
+    // (the class), for the assistant's ready page: PCs never count.
+    public static int CountOf(IEnumerable<KnownMachine> machines, AndroidDeviceKind kind) =>
+        machines.Count(machine => machine.IsPhone && KindOf(machine.Name) == kind);
 }

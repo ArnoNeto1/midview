@@ -40,6 +40,22 @@ public class PhoneTotalFileTests : IDisposable
         Assert.Null(PhoneTotalFile.Load(_folder));
     }
 
+    // Tablets have their own total, in their own file: one never answers for the other.
+    [Fact]
+    public void Tablets_have_a_total_of_their_own()
+    {
+        PhoneTotalFile.Save(11, _folder);
+        Assert.False(PhoneTotalFile.Asked(_folder, AndroidDeviceKind.Tablet));
+        Assert.Null(PhoneTotalFile.Load(_folder, AndroidDeviceKind.Tablet));
+
+        PhoneTotalFile.Save(30, _folder, AndroidDeviceKind.Tablet);
+
+        Assert.True(PhoneTotalFile.Asked(_folder, AndroidDeviceKind.Tablet));
+        Assert.Equal(30, PhoneTotalFile.Load(_folder, AndroidDeviceKind.Tablet));
+        Assert.Equal(11, PhoneTotalFile.Load(_folder));
+        Assert.Equal("30", File.ReadAllText(Path.Combine(_folder, "tablet-total.txt")).Trim());
+    }
+
     [Theory]
     [InlineData("11", 11)]
     [InlineData(" 3 ", 3)]

@@ -114,7 +114,7 @@
                                          MaxLength="3" Margin="0,3,0,8" />
                                 <TextBlock x:Name="NumberErrorText" Style="{StaticResource ErrorText}" Margin="0,0,0,8" />
                                 <StackPanel x:Name="TotalInputs" Margin="0,6,0,0">
-                                    <TextBlock Style="{StaticResource Hint}"
+                                    <TextBlock x:Name="TotalLabel" Style="{StaticResource Hint}"
                                                Text="Quantos celulares a escola tem para preparar? (Pode deixar em branco. Só é perguntado agora.)" />
                                     <TextBox x:Name="TotalInput" Width="110" HorizontalAlignment="Left" Padding="6,4" MaxLength="3" Margin="0,3,0,0" />
                                 </StackPanel>

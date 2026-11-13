@@ -50,4 +50,25 @@ public class PhoneNumberTests
     [InlineData(AndroidDeviceKind.Tablet)]
     public void KindOf_reads_back_NameOf(AndroidDeviceKind kind) =>
         Assert.Equal(kind, PhoneNumber.KindOf(PhoneNumber.NameOf("07", kind)));
+
+    // The assistant's ready page counts only the kind it prepares; PCs never count.
+    [Fact]
+    public void CountOf_counts_one_kind_of_android_device()
+    {
+        var android = Midview.Protocol.DeviceKind.Android;
+        var machines = new[]
+        {
+            new KnownMachine("Celular 01", "192.0.2.1", "ANY", null, Kind: android),
+            new KnownMachine("Celular 549C", "192.0.2.2", "ANY", null, Kind: android),
+            new KnownMachine("Tablet 01", "192.0.2.3", "ANY", null, Kind: android),
+            new KnownMachine("Tablet 02", "192.0.2.4", "ANY", null, Kind: android),
+            new KnownMachine("Tablet 03", "192.0.2.5", "ANY", null, Kind: android),
+            new KnownMachine("LAB-01", "192.0.2.6", "ANY", null),
+            new KnownMachine("Tablet 09", "192.0.2.7", "ANY", null),
+        };
+
+        Assert.Equal(2, PhoneNumber.CountOf(machines, AndroidDeviceKind.Phone));
+        Assert.Equal(3, PhoneNumber.CountOf(machines, AndroidDeviceKind.Tablet));
+        Assert.Equal(0, PhoneNumber.CountOf(Array.Empty<KnownMachine>(), AndroidDeviceKind.Tablet));
+    }
 }

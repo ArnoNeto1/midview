@@ -371,12 +371,14 @@ internal sealed class PhoneSetupProgress
         ShowStep(NumberStep);
     }
 
-    // "Celular 07 pronto ✓ (3 de 11)", or "(3 celulares na turma)" with no total.
-    public string ReadyText(int phonesInClass, int? total)
+    // "Celular 07 pronto ✓ (3 de 11)", or "(3 celulares na turma)" with no
+    // total; "Tablet 07 pronto ✓ (3 tablets na turma)" for a tablet.
+    // inClass and total: of this Kind only.
+    public string ReadyText(int inClass, int? total)
     {
         var count = total is { } of
-            ? $"{phonesInClass} de {of}"
-            : phonesInClass == 1 ? "1 celular na turma" : $"{phonesInClass} celulares na turma";
+            ? $"{inClass} de {of}"
+            : inClass == 1 ? $"1 {DeviceSetupText.Word(Kind)} na turma" : $"{inClass} {DeviceSetupText.Words(Kind)} na turma";
         return $"{Name} pronto ✓ ({count})";
     }
 

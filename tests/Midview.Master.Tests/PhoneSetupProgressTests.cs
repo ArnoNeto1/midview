@@ -455,7 +455,7 @@ public class PhoneSetupProgressTests
     {
         var progress = ReadyFor07();
 
-        Assert.Equal("Celular 07 pronto ✓ (3 de 11)", progress.ReadyText(phonesInClass: 3, total: 11));
+        Assert.Equal("Celular 07 pronto ✓ (3 de 11)", progress.ReadyText(inClass: 3, total: 11));
     }
 
     [Fact]
@@ -463,8 +463,19 @@ public class PhoneSetupProgressTests
     {
         var progress = ReadyFor07();
 
-        Assert.Equal("Celular 07 pronto ✓ (3 celulares na turma)", progress.ReadyText(phonesInClass: 3, total: null));
-        Assert.Equal("Celular 07 pronto ✓ (1 celular na turma)", progress.ReadyText(phonesInClass: 1, total: null));
+        Assert.Equal("Celular 07 pronto ✓ (3 celulares na turma)", progress.ReadyText(inClass: 3, total: null));
+        Assert.Equal("Celular 07 pronto ✓ (1 celular na turma)", progress.ReadyText(inClass: 1, total: null));
+    }
+
+    [Fact]
+    public void Ready_text_for_a_tablet_counts_tablets()
+    {
+        var progress = new PhoneSetupProgress { Kind = AndroidDeviceKind.Tablet };
+        progress.StartAt("07");
+
+        Assert.Equal("Tablet 07 pronto ✓ (3 de 11)", progress.ReadyText(inClass: 3, total: 11));
+        Assert.Equal("Tablet 07 pronto ✓ (3 tablets na turma)", progress.ReadyText(inClass: 3, total: null));
+        Assert.Equal("Tablet 07 pronto ✓ (1 tablet na turma)", progress.ReadyText(inClass: 1, total: null));
     }
 
     [Fact]
@@ -636,6 +647,20 @@ public class PhoneSetupProgressTests
         Assert.Equal("ligar", progress.StepId);
         Assert.Equal(WipeState.Done, progress.Wipe);
         Assert.Equal("Celular 07", progress.Name);
+    }
+
+    // A tablet wiped from its menu is prepared again as that tablet.
+    [Fact]
+    public void Starting_at_a_tablet_wiped_from_its_menu_keeps_it_a_tablet()
+    {
+        var progress = new PhoneSetupProgress { Kind = AndroidDeviceKind.Tablet };
+        progress.Start(hasWifi: true, gathered: true);
+
+        progress.StartAt("07", wiped: true);
+
+        Assert.Equal("ligar", progress.StepId);
+        Assert.Equal(WipeState.Done, progress.Wipe);
+        Assert.Equal("Tablet 07", progress.Name);
     }
 
     // The kind only changes the name the device gets.

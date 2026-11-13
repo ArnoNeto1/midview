@@ -47,7 +47,7 @@ public partial class MainWindow
         }
 
         var window = new PreparePhonesWindow(new PreparePhonesHost(
-            () => _tiles.Count(tile => tile.Machine.IsPhone),
+            kind => PhoneNumber.CountOf(_tiles.Select(tile => tile.Machine), kind),
             PhoneOnline,
             () => new AdbProcess(),
             GetPhoneAppAsync,
@@ -177,8 +177,8 @@ public partial class MainWindow
             : null;
 
     // The tile menu's "Apagar e preparar de novo...": only for one school
-    // phone (named from a number; not one paired earlier by code), and only
-    // once the phone setup is ready; active when the phone answers now.
+    // phone or tablet (named from a number; not one paired earlier by code),
+    // and only once the phone setup is ready; active when it answers now.
     private static void ShowWipePhoneItem(ItemCollection items, IReadOnlyList<MachineTile> targets)
     {
         var item = items.OfType<MenuItem>().FirstOrDefault(item => DeviceActions.Of(item) == ToolbarAction.WipePhone);
@@ -195,7 +195,7 @@ public partial class MainWindow
     {
         if (((FrameworkElement)sender).DataContext is not MachineTile tile
             || !PhoneWipe.CanWipe(tile.Machine, tile.Presence == TilePresence.Online)
-            || PhoneWipe.NumberOf(tile.Machine.Name) is not { } number
+            || PhoneWipe.TargetOf(tile.Machine.Name) is not { } target
             || !PhoneWipe.Confirm(this, tile.Machine.Name))
         {
             return;
@@ -208,15 +208,16 @@ public partial class MainWindow
             return;
         }
         StatusTextBlock.Text = string.Empty;
-        OpenPreparePhonesWindow().StartAt(number, wiped: true);
+        // A tablet is prepared again as a tablet ("Tablet 07"), a phone as a phone.
+        OpenPreparePhonesWindow().StartAt(target.Number, target.Kind, wiped: true);
     }
 
-    // The assistant's "Apagar e preparar de novo": the phone of the class by name.
+    // The assistant's "Apagar e preparar de novo": the phone (or tablet) of the class by name.
     private Task<(bool Ok, string Detail)> WipePhoneNamed(string name) =>
         _tiles.FirstOrDefault(tile => tile.Machine.IsPhone && string.Equals(tile.Machine.Name, name, StringComparison.OrdinalIgnoreCase))
             is { } tile
             ? WipePhone(tile.Machine)
-            : Task.FromResult((false, "o celular não está mais na turma"));
+            : Task.FromResult((false, $"o {DeviceSetupText.Word(PhoneNumber.KindOf(name))} não está mais na turma"));
 
     private Task<(bool Ok, string Detail)> WipePhone(KnownMachine phone) =>
         Task.Run(() => PhoneWipe.Send(phone, _masterCertificate));

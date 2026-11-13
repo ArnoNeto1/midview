@@ -65,7 +65,7 @@ public partial class PreparePhonesWindow
                     other: stepNumber is null ? $"Preparar outro {DeviceWord}" : null, backText: $"Voltar ao passo {stepNumber}");
                 break;
             case SetupPage.Ready:
-                ReadyTitle.Text = _progress.ReadyText(_phonesInClass(), PhoneTotalFile.Load());
+                ReadyTitle.Text = _progress.ReadyText(_devicesInClass(_progress.Kind), PhoneTotalFile.Load(kind: _progress.Kind));
                 ReadyHint.Text = $"No {DeviceWord} aparece \"Pronto. Este é o {name} da escola.\" Ele aparece no filtro Celulares quando entrar no Wi-Fi.";
                 ShowReadyStatus();
                 Footer(back: false, next: "Preparar o próximo", other: "Terminei");

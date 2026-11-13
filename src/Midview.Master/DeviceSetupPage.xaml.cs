@@ -10,6 +10,8 @@ internal static class DeviceSetupText
 {
     public static string Word(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet ? "tablet" : "celular";
 
+    public static string Words(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet ? "tablets" : "celulares";
+
     private static string Capital(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet ? "Tablet" : "Celular";
 
     public static string Heading(AndroidDeviceKind kind) => "Configurar " + Word(kind);

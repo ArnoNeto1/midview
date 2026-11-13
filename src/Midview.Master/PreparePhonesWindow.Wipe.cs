@@ -34,11 +34,11 @@ public partial class PreparePhonesWindow
         StepBody.Visibility = Shown(!failed);
         WipeText.Text = state switch
         {
-            WipeState.Offered => $"O {name} ainda está ligado e na turma. O Midview apaga o celular daqui e ele volta ao \"Bem-vindo\" sozinho.",
+            WipeState.Offered => $"O {name} ainda está ligado e na turma. O Midview apaga o {DeviceWord} daqui e ele volta ao \"Bem-vindo\" sozinho.",
             WipeState.Wiping => $"Apagando o {name}...",
             WipeState.Done => $"O {name} está sendo apagado e volta sozinho ao \"Bem-vindo\" em alguns minutos. Então siga a ajuda \"Apareceu Bem-vindo\", aberta abaixo.",
             WipeState.Failed => $"Não deu para apagar o {name} daqui: {_progress.WipeFailure?.TrimEnd('.', ' ')}. " +
-                                "Um celular que já foi da escola não deixa restaurar pelo menu das Configurações. " +
+                                $"Um {DeviceWord} que já foi da escola não deixa restaurar pelo menu das Configurações. " +
                                 "Restaure-o pelo modo de recuperação (\"Celular travado com PIN\") e depois toque em \"Já restaurei\".",
             _ => "",
         };
@@ -100,7 +100,8 @@ public partial class PreparePhonesWindow
     // How often the phone told to wipe is looked at (its tile's presence).
     private static readonly TimeSpan WipeCheckEvery = TimeSpan.FromSeconds(3);
 
-    public const string NotWipedText = "o celular não se apagou";
+    // "o celular não se apagou", or "o tablet".
+    private string NotWipedText => $"o {DeviceWord} não se apagou";
 
     private DispatcherTimer? _wipeTimer;
     private PhoneWipeWatch? _wipeWatch;

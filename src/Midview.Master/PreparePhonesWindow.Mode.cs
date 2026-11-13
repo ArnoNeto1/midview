@@ -50,5 +50,7 @@ public partial class PreparePhonesWindow
         NumberNameHint.Text =
             $"O número vira o nome do {DeviceWord} no Midview: o 7 aparece como \"{PhoneNumber.NameOf("07", _progress.Kind)}\".";
         NumberLabel.Text = $"Número do {DeviceWord}";
+        // Phones and tablets each have their own total (PhoneTotalFile).
+        TotalLabel.Text = $"Quantos {DeviceSetupText.Words(_progress.Kind)} a escola tem para preparar? (Pode deixar em branco. Só é perguntado agora.)";
     }
 }

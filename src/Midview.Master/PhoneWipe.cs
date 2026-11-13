@@ -4,11 +4,11 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// "Apagar e preparar de novo": the Master asks a school phone's Agent to erase
-// the phone (back to factory settings), and the assistant then goes on at
-// turning it on ("ligar"), with the same number, to prepare it again over the
-// cable. The words and the sending live here, apart from the windows that use
-// them.
+// "Apagar e preparar de novo": the Master asks a school phone's (or tablet's)
+// Agent to erase the device (back to factory settings), and the assistant
+// then goes on at turning it on ("ligar"), with the same kind and number, to
+// prepare it again over the cable. The words and the sending live here, apart
+// from the windows that use them.
 public static class PhoneWipe
 {
     // What a phone with an Agent from before this command answers: an empty
@@ -16,6 +16,9 @@ public static class PhoneWipe
     private const string NotOnPhone = "Ainda não funciona em celular.";
 
     public const string OldAgent = "este celular ainda não aceita o pedido de apagar";
+
+    public static string OldAgentOf(AndroidDeviceKind kind) =>
+        $"este {DeviceSetupText.Word(kind)} ainda não aceita o pedido de apagar";
 
     public static string ConfirmText(string name) =>
         $"O {name} vai ser apagado e voltar de fábrica. Os alunos perdem o que estiver nele. Para prepará-lo de novo, vai precisar outra vez do chip e da conta Mi.";
@@ -27,20 +30,29 @@ public static class PhoneWipe
             "Apagar e preparar de novo", "Sim, apagar", "Cancelar", Body: ConfirmText(name), NoIsDefault: true,
             Buttons: QuestionButtons.YesFirstDanger));
 
-    // "07" for "Celular 07"; null for a name that is not a school phone's.
-    public static string? NumberOf(string name)
+    // What the assistant prepares again after the wipe: (Phone, "07") for
+    // "Celular 07", (Tablet, "07") for "Tablet 07"; null for a name that is
+    // not a school device's. "Tablet" is matched in the exact case
+    // PhoneNumber.KindOf reads, so the kind never disagrees with the rest of
+    // the Master; "Celular" in any case, as before tablets.
+    public static (AndroidDeviceKind Kind, string Number)? TargetOf(string name)
     {
-        var match = Regex.Match(name ?? "", @"^Celular (\d{1,3})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success ? match.Groups[1].Value : null;
+        var match = Regex.Match(name ?? "", @"^(?:(?i:Celular)|Tablet) (\d{1,3})$", RegexOptions.CultureInvariant);
+        return match.Success ? (PhoneNumber.KindOf(name!), match.Groups[1].Value) : null;
     }
 
-    // The menu item works on a school phone (named from a number) that
-    // answers now.
+    // "07" for "Celular 07" or "Tablet 07"; null for a name that is not a
+    // school device's.
+    public static string? NumberOf(string name) => TargetOf(name)?.Number;
+
+    // The menu item works on a school phone or tablet (named from a number)
+    // that answers now.
     public static bool CanWipe(KnownMachine machine, bool online) =>
         machine.IsPhone && online && NumberOf(machine.Name) is not null;
 
-    // The menu item is shown only for a school phone (named from a number):
-    // a phone paired earlier by code ("Celular 549C") could never use it.
+    // The menu item is shown only for a school phone or tablet (named from a
+    // number): a phone paired earlier by code ("Celular 549C") could never
+    // use it.
     public static bool ShowsItem(KnownMachine machine) =>
         machine.IsPhone && NumberOf(machine.Name) is not null;
 
@@ -52,9 +64,10 @@ public static class PhoneWipe
     // send: given the phone's Agent thumbprint, the result of the command.
     internal static (bool Ok, string Detail) SendWith(KnownMachine phone, Func<string, (bool Succeeded, string Detail)> send)
     {
+        var kind = PhoneNumber.KindOf(phone.Name);
         if (phone.AgentThumbprint is not { } thumbprint)
         {
-            return (false, "sem a identificação do celular");
+            return (false, $"sem a identificação do {DeviceSetupText.Word(kind)}");
         }
 
         try
@@ -64,7 +77,7 @@ public static class PhoneWipe
             {
                 return (true, "");
             }
-            return (false, detail.Length == 0 || detail == NotOnPhone ? OldAgent : detail);
+            return (false, detail.Length == 0 || detail == NotOnPhone ? OldAgentOf(kind) : detail);
         }
         catch (Exception ex)
         {

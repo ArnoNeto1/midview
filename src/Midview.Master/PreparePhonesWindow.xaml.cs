@@ -8,9 +8,9 @@ using System.Windows.Threading;
 
 namespace Midview.Master;
 
-// What the assistant needs from the main window. PhonesInClass: phones in
-// the class now. PhoneOnline: for a name, null when the class has no phone
-// with it, else whether it answers now. Adb: the cable tool, made when the
+// What the assistant needs from the main window. DevicesInClass: phones (or
+// tablets) in the class now. PhoneOnline: for a name, null when the class
+// has no phone with it, else whether it answers now. Adb: the cable tool, made when the
 // cable step first needs it. GetApp: the phone app, downloaded and checked.
 // AddPhone: puts a phone prepared over the cable in the class (and saves),
 // and the main window searches the network for it for 5 minutes, open
@@ -19,7 +19,7 @@ namespace Midview.Master;
 // "Apagar e preparar de novo" for a phone of the class by name; without it,
 // a number already taken is prepared again by the normal steps.
 internal sealed record PreparePhonesHost(
-    Func<int> PhonesInClass,
+    Func<AndroidDeviceKind, int> DevicesInClass,
     Func<string, bool?> PhoneOnline,
     Func<IAdb> Adb,
     Func<CancellationToken, Task<(AgentApkResult Result, string ApkPath)>> GetApp,
@@ -40,7 +40,7 @@ public partial class PreparePhonesWindow : MidviewWindow
 
     private readonly PhoneSetupProgress _progress = new();
     private readonly PreparePhonesHost _host;
-    private readonly Func<int> _phonesInClass;
+    private readonly Func<AndroidDeviceKind, int> _devicesInClass;
     private readonly Func<string, bool?> _phoneOnline;
     private readonly Func<string, Task<(bool Ok, string Detail)>>? _wipe;
 
@@ -56,23 +56,27 @@ public partial class PreparePhonesWindow : MidviewWindow
         _optimize = optimize;
         ShowMode();
         _host = host;
-        _phonesInClass = host.PhonesInClass;
+        _devicesInClass = host.DevicesInClass;
         _phoneOnline = host.PhoneOnline;
         _wipe = host.Wipe;
-        // "Antes de começar, separe:" only before the first phone of the class.
-        _progress.Start(_wifi is not null, gathered: _phonesInClass() > 0 || PhoneTotalFile.Asked());
+        // "Antes de começar, separe:" only before the first phone or tablet
+        // of the class: the same things are needed for both.
+        _progress.Start(_wifi is not null, gathered:
+            _devicesInClass(AndroidDeviceKind.Phone) + _devicesInClass(AndroidDeviceKind.Tablet) > 0
+            || PhoneTotalFile.Asked() || PhoneTotalFile.Asked(kind: AndroidDeviceKind.Tablet));
         InitializeCable();
         ShowPage();
     }
 
     // For a phone just wiped: straight to turning it on, "Apareceu Bem-vindo"
     // open (the Wi-Fi first if none is saved yet). wiped: the page says it is
-    // being wiped, as the Master already did it from the phone's menu. Only
-    // a "Celular 07" is wiped and prepared again this way, so the window
-    // turns to phones whatever it was on.
-    public void StartAt(string number, bool wiped = false)
+    // being wiped, as the Master already did it from the phone's menu. kind:
+    // the device wiped ("Celular 07" or "Tablet 07"), so the window turns to
+    // it whatever it was on; "Midview otimizado" stays what the window had
+    // (on for a window opened for this).
+    public void StartAt(string number, AndroidDeviceKind kind = AndroidDeviceKind.Phone, bool wiped = false)
     {
-        _progress.Kind = AndroidDeviceKind.Phone;
+        _progress.Kind = kind;
         ShowMode();
         _progress.StartAt(number, wiped);
         if (_wifi is null)
@@ -189,18 +193,18 @@ public partial class PreparePhonesWindow : MidviewWindow
             return false;
         }
         NumberError("");
-        if (!PhoneTotalFile.Asked())
+        if (!PhoneTotalFile.Asked(kind: _progress.Kind))
         {
             var typed = TotalInput.Text.Trim();
             var total = PhoneTotalFile.Parse(typed);
             if (typed.Length > 0 && total is null)
             {
-                NumberError("No total, digite quantos celulares (de 1 a 999) ou deixe em branco.");
+                NumberError($"No total, digite quantos {DeviceSetupText.Words(_progress.Kind)} (de 1 a 999) ou deixe em branco.");
                 return false;
             }
             try
             {
-                PhoneTotalFile.Save(total);
+                PhoneTotalFile.Save(total, kind: _progress.Kind);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -271,8 +275,8 @@ public partial class PreparePhonesWindow : MidviewWindow
                 ConfirmRedoTitle.Text = _progress.ConfirmRedoText;
                 ConfirmRedoHint.Text = _phoneOnline(_progress.Name!) == true && _wipe is not null
                     ? $"O {_progress.Name} está ligado agora: no próximo passo, o Midview pode apagá-lo daqui, sem mexer nos menus do celular."
-                    : $"Siga os passos com o celular na mão. O {_progress.Name} antigo é trocado por este quando este ficar pronto. " +
-                      $"Se for o mesmo celular, ele já é da escola e precisa ser apagado antes; como não está ligado agora, " +
+                    : $"Siga os passos com o {DeviceWord} na mão. O {_progress.Name} antigo é trocado por este quando este ficar pronto. " +
+                      $"Se for o mesmo {DeviceWord}, ele já é da escola e precisa ser apagado antes; como não está ligado agora, " +
                       "apague-o pelo modo de recuperação (veja \"Celular travado com PIN\" em \"Deu errado?\").";
                 Footer(back: true, next: $"Sim, preparar de novo o {_progress.Number}", backText: "Não, trocar o número");
                 break;
@@ -318,7 +322,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         {
             NumberInput.Text = _progress.Number ?? "";
             NumberError("");
-            TotalInputs.Visibility = Shown(!PhoneTotalFile.Asked());
+            TotalInputs.Visibility = Shown(!PhoneTotalFile.Asked(kind: _progress.Kind));
             Dispatcher.BeginInvoke(() => NumberInput.Focus(), DispatcherPriority.Input);
         }
         CableWaitCard.Visibility = Shown(step.Id == "cabo");
