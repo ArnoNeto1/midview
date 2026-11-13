@@ -152,8 +152,9 @@ public sealed class PhoneCable
 
     // Apps that come with the phone, are heavy and that a class does not need
     // running unseen. Never Midview, the launcher, the keyboard, the dialer,
-    // Google Play services, the Play Store, Chrome or Settings. Undone on the
-    // phone with "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
+    // Messages (SMS codes would come late), Google Play services, the Play
+    // Store, Chrome or Settings. Undone on the phone with
+    // "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
     internal static readonly IReadOnlyList<string> HeavyApps = new[]
     {
         "cn.wps.moffice_eng",
@@ -162,7 +163,6 @@ public sealed class PhoneCable
         "com.miui.player",
         "com.miui.videoplayer",
         "com.mi.globalminusscreen",
-        "com.google.android.apps.messaging",
     };
 
     // A lighter phone: no animations, and the heavy apps above kept from

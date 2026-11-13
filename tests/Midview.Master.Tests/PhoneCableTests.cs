@@ -516,7 +516,6 @@ public sealed class PhoneCableTests
         {
             S + "shell cmd appops set cn.wps.moffice_eng RUN_ANY_IN_BACKGROUND ignore",
             S + "shell cmd appops set com.mi.globalminusscreen RUN_ANY_IN_BACKGROUND ignore",
-            S + "shell cmd appops set com.google.android.apps.messaging RUN_ANY_IN_BACKGROUND ignore",
         }, background);
         var owner = adb.Calls.IndexOf(SetDeviceOwner);
         Assert.All(background, c => Assert.True(adb.Calls.IndexOf(c) < owner));
@@ -527,14 +526,14 @@ public sealed class PhoneCableTests
     {
         foreach (var app in new[]
                  {
-                     Package, "com.miui.home", "com.google.android.inputmethod.latin", "com.google.android.dialer",
+                     Package, "com.miui.home", "com.google.android.inputmethod.latin", "com.google.android.dialer", "com.google.android.apps.messaging",
                      "com.android.phone", "com.google.android.gms", "com.android.vending", "com.android.chrome",
                      "com.android.settings",
                  })
         {
             Assert.DoesNotContain(app, PhoneCable.HeavyApps);
         }
-        Assert.Equal(7, PhoneCable.HeavyApps.Count);
+        Assert.Equal(6, PhoneCable.HeavyApps.Count);
     }
 
     [Fact]
