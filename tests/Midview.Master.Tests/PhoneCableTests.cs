@@ -575,18 +575,18 @@ public sealed class PhoneCableTests
         foreach (var app in new[]
                  {
                      Package, "com.miui.home", "com.google.android.inputmethod.latin", "com.google.android.dialer",
-                     "com.google.android.apps.messaging", "com.android.phone", "com.google.android.gms", "com.google.android.gsf",
+                     "com.android.phone", "com.google.android.gms", "com.google.android.gsf", "com.xiaomi.finddevice",
                      "com.android.vending", "com.android.chrome", "com.google.android.webview", "com.android.settings",
                      "com.android.camera", "com.miui.gallery", "com.miui.calculator", "com.mi.android.globalFileexplorer",
                      "com.google.android.documentsui", "com.miui.screenrecorder", "com.miui.securitycenter",
                      "com.miui.global.packageinstaller", "com.google.android.packageinstaller", "com.android.managedprovisioning",
                      "com.android.vpndialogs", "com.android.providers.media", "com.android.externalstorage",
-                     "com.google.android.setupwizard", "com.android.shell", "cn.wps.moffice_eng", "cn.wps.xiaomi.abroad.lite",
+                     "com.android.shell", "cn.wps.moffice_eng", "cn.wps.xiaomi.abroad.lite",
                  })
         {
             Assert.DoesNotContain(app, PhoneCable.RemovedApps);
         }
-        Assert.Equal(67, PhoneCable.RemovedApps.Count);
+        Assert.Equal(70, PhoneCable.RemovedApps.Count);
         Assert.Equal(PhoneCable.RemovedApps.Count, PhoneCable.RemovedApps.Distinct().Count());
     }
 

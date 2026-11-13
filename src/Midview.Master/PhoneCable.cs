@@ -174,8 +174,7 @@ public sealed partial class PhoneCable
 
     // Apps that come with the phone, are heavy and that a class does not need
     // running unseen. Never Midview, the launcher, the keyboard, the dialer,
-    // Messages (SMS codes would come late), Google Play services, the Play
-    // Store, Chrome or Settings. Undone on the phone with
+    // Google Play services, the Play Store, Chrome or Settings. Undone on the phone with
     // "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
     internal static readonly IReadOnlyList<string> HeavyApps = new[]
     {
@@ -192,12 +191,17 @@ public sealed partial class PhoneCable
     // or "Advanced" and of no use to a class) and tried on the school's
     // Redmi 10C on 2026-11-13: factory tests, Xiaomi and Google telemetry and
     // ads, cloud backup, Chinese payments, "Ok Google", the Google app (about
-    // 285 MB of a 2.7 GB phone's memory). Never Midview, the launcher, the
-    // keyboard, the dialer, Messages, the camera, the gallery, the
+    // 285 MB of a 2.7 GB phone's memory). Also what kept running unseen on a
+    // school phone with no SIM (the school's choice, 2026-11-13): Messages
+    // and its chat process (about 71 MB), Android System Intelligence and the
+    // setup wizard's "finish setting up" reminder. Never Midview, the
+    // launcher, the keyboard, the dialer, the camera, the gallery, the
     // calculator, the file manager, the screen recorder, Chrome, Google Play
     // services, the Play Store, the installers, the VPN screens (the internet
-    // block) or what the Device Owner step needs. A system app comes back
-    // with "cmd package install-existing <app>" or a factory reset.
+    // block), what the Device Owner step needs, or Xiaomi's Find device (Mi
+    // Cloud's service crashes at every start without its provider). A
+    // system app comes back with "cmd package install-existing <app>" or a
+    // factory reset.
     internal static readonly IReadOnlyList<string> RemovedApps = new[]
     {
         "android.autoinstalls.config.Xiaomi.model",
@@ -218,13 +222,16 @@ public sealed partial class PhoneCable
         "com.fido.asm",
         "com.fingerprints.sensortesttool",
         "com.google.android.adservices.api",
+        "com.google.android.apps.messaging",
         "com.google.android.apps.restore",
+        "com.google.android.as",
         "com.google.android.federatedcompute",
         "com.google.android.feedback",
         "com.google.android.gms.location.history",
         "com.google.android.gms.supervision",
         "com.google.android.googlequicksearchbox",
         "com.google.android.ondevicepersonalization.services",
+        "com.google.android.setupwizard",
         "com.google.android.onetimeinitializer",
         "com.google.android.printservice.recommendation",
         "com.google.mainline.adservices",
