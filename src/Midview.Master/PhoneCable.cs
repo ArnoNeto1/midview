@@ -15,8 +15,9 @@ public enum CableProblem
     MiSignOutFailed,
 }
 
-// MiSignOut: only for a phone still in the school's Mi account (MiSignOut).
-public enum CableStage { Checking, MiSignOut, Installing, Wifi, Pairing, Owner }
+// MiSignOut: only for a phone still in the school's Mi account (MiSignOut),
+// last before the Owner step.
+public enum CableStage { Checking, Installing, Wifi, Pairing, MiSignOut, Owner }
 
 // Phone is set when the phone is ready; Problem when it is not. OwnerUnconfirmed:
 // the cable dropped while the last command ran, so whether the phone became the
@@ -48,8 +49,11 @@ public sealed class PhoneCable
     // the one changed, nor makes adb refuse the command.
     private string? _serial;
 
-    // What "dumpsys account" said at the last Check.
-    private string _accounts = "";
+    // The last Check let Mi accounts through (see Check(bool)).
+    private bool MiAccountsLeft { get; set; }
+
+    private static bool AnyAccount(string dumpsys) =>
+        AccountsLine.Matches(dumpsys).Any(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > 0);
 
     // How the Mi sign-out gets its clock: a fake one in the tests.
     internal Func<Func<string[], AdbOutput>, MiSignOut> MakeSignOut { get; init; } = MiSignOut.WithRealClock;
@@ -109,8 +113,14 @@ public sealed class PhoneCable
     // phone plugged in beside it changes nothing.
     private bool Present() => Listed().Any(d => d.Serial == _serial && d.State == "device");
 
-    public CableProblem? Check()
+    public CableProblem? Check() => Check(allowMiAccounts: false);
+
+    // allowMiAccounts: with the school's Mi password saved, Mi accounts (and
+    // only those) do not stop the check; MiAccountsLeft says they are there,
+    // for Prepare to sign out at the end.
+    private CableProblem? Check(bool allowMiAccounts)
     {
+        MiAccountsLeft = false;
         var (problem, serial) = Devices();
         _serial = serial;
         if (problem is not null)
@@ -139,10 +149,14 @@ public sealed class PhoneCable
             }
         }
 
-        var accounts = _accounts = Shell(Short, "dumpsys", "account").Text;
-        if (AccountsLine.Matches(accounts).Any(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > 0))
+        var accounts = Shell(Short, "dumpsys", "account").Text;
+        if (AnyAccount(accounts))
         {
-            return CableProblem.HasAccounts;
+            if (!allowMiAccounts || !MiSignOut.OnlyXiaomi(accounts))
+            {
+                return CableProblem.HasAccounts;
+            }
+            MiAccountsLeft = true;
         }
 
         var users = Shell(Short, "pm", "list", "users").Text;
@@ -294,8 +308,11 @@ public sealed class PhoneCable
     // Midview" leaves the rest of it as it came. kind names the device
     // ("Tablet 07") here and on the device itself (the package's "kind").
     // miPassword: the school's Mi account password, saved on this PC; with
-    // it, a phone whose only accounts are Mi accounts is signed out here
-    // (MiSignOut), before anything else, instead of sent back to the step.
+    // it, a phone whose only accounts are Mi accounts is prepared all the
+    // same and signed out (MiSignOut) last, right before the Owner step,
+    // instead of sent back to the step: MIUI may turn "Instalar via USB"
+    // and "Depuração USB (configurações de segurança)" off once the account
+    // leaves, and by then nothing else needs them.
     public CableResult Prepare(
         string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage,
         bool optimize = true, AndroidDeviceKind kind = AndroidDeviceKind.Phone, string? miPassword = null)
@@ -303,20 +320,11 @@ public sealed class PhoneCable
         static CableResult Fail(CableProblem problem) => new(null, problem, false);
 
         stage(CableStage.Checking);
-        var checkedProblem = Check();
-        if (checkedProblem == CableProblem.HasAccounts && miPassword is not null && MiSignOut.OnlyXiaomi(_accounts))
-        {
-            stage(CableStage.MiSignOut);
-            // Checked again in full: the sign-out must leave no account at all,
-            // and the switches on.
-            checkedProblem = MakeSignOut(command => Shell(Short, command)).Run(miPassword)
-                ? Check()
-                : CableProblem.MiSignOutFailed;
-        }
-        if (checkedProblem is { } problem)
+        if (Check(allowMiAccounts: miPassword is not null) is { } problem)
         {
             return Fail(problem);
         }
+        var signOut = MiAccountsLeft;
 
         stage(CableStage.Installing);
         var package = PhoneProvisioning.AgentPackage;
@@ -393,6 +401,19 @@ public sealed class PhoneCable
         stage(CableStage.Pairing);
         var phone = new KnownMachine(
             PhoneNumber.NameOf(number, kind), "0.0.0.0", thumbprint, thumbprint, null, DeviceKind.Android);
+
+        if (signOut)
+        {
+            stage(CableStage.MiSignOut);
+            // Only the accounts are looked at after it: the switches are no
+            // longer needed. A failure leaves the app installed and the
+            // phone not the school's; "Tentar de novo" starts over.
+            if (!MakeSignOut(command => Shell(Short, command)).Run(miPassword!)
+                || AnyAccount(Shell(Short, "dumpsys", "account").Text))
+            {
+                return Fail(Present() ? CableProblem.MiSignOutFailed : CableProblem.Lost);
+            }
+        }
 
         if (!Present())
         {

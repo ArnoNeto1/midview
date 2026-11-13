@@ -93,11 +93,11 @@ public class PhoneSetupProgressMiTests
     {
         var progress = AtStep("cabo", asks: false);
         progress.CableSeen();
-        progress.CableStageReached(CableStage.Checking);
+        progress.CableStageReached(CableStage.Pairing);
         Assert.False(progress.MiSignOutShown);
 
         progress.CableStageReached(CableStage.MiSignOut);
-        progress.CableStageReached(CableStage.Installing);
+        progress.CableStageReached(CableStage.Owner);
         Assert.True(progress.MiSignOutShown);
     }
 

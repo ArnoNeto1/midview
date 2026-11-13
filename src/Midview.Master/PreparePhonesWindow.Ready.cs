@@ -19,10 +19,10 @@ public partial class PreparePhonesWindow
     private static readonly (CableStage Stage, string Text, string? Hint)[] CableItems =
     {
         (CableStage.Checking, "Conferindo o celular", null),
-        (CableStage.MiSignOut, "Saindo da conta Mi da escola", "Não mexa no celular: o Midview toca na tela dele sozinho, por até 1 minuto."),
         (CableStage.Installing, "Instalando o Midview no celular", "Olhe o celular. Se perguntar \"Enviar o app para uma verificação de segurança?\", toque em Não enviar. Quando aparecer \"Instalar via USB\", toque em Instalar (não em Recusar): ele recusa sozinho em 10 segundos."),
         (CableStage.Wifi, "Entregando o Wi-Fi do laboratório", null),
         (CableStage.Pairing, "Dando o número e pareando com este computador", null),
+        (CableStage.MiSignOut, "Saindo da conta Mi da escola", "Não mexa no celular: o Midview toca na tela dele sozinho, por até 1 minuto."),
         (CableStage.Owner, "Transformando em celular da escola", null),
     };
 
