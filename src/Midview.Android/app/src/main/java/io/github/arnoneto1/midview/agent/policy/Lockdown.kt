@@ -80,7 +80,9 @@ interface DevicePolicyGateway {
 // may be turned on, so no app the student installs can tap for them;
 // Android keeps the phone's own (TalkBack and the like) anyway. Only a Device Owner
 // can set these; on any other phone it does nothing. Every call sets a
-// state, so applying again changes nothing.
+// state, so applying again changes nothing. The Wi-Fi and airplane mode are
+// locked too (networkRestrictions), unless the teacher or the admin
+// password freed them for a while: network decides (NetworkFree.unlessFree).
 //
 // A debug build keeps adb and factory reset, so a test phone or emulator
 // made Device Owner can still be reached and reset. The APK published for
@@ -88,6 +90,8 @@ interface DevicePolicyGateway {
 class Lockdown(
     private val gw: DevicePolicyGateway,
     private val packageName: String = PACKAGE,
+    // Runs the network locks unless they are freed for now (NetworkFree).
+    private val network: (lockNetwork: () -> Unit) -> Unit = { it() },
 ) {
     // True when the locks were applied (the app is the Device Owner). A step
     // the system refuses does not stop the others; the first refusal is
@@ -106,6 +110,7 @@ class Lockdown(
         RESTRICTIONS
             .filterNot { gw.debuggable && it in KEPT_ON_DEBUG_BUILDS }
             .forEach { r -> step { gw.addUserRestriction(r) } }
+        step { network { networkRestrictions(gw.sdkInt).forEach { r -> step { gw.addUserRestriction(r) } } } }
         step { gw.setUninstallBlocked(packageName, true) }
         if (gw.sdkInt >= ANDROID_11) {
             step { gw.setUserControlDisabled(listOf(packageName)) }
@@ -166,6 +171,17 @@ class Lockdown(
             "no_config_date_time",
             "no_create_windows",
         )
+
+        // UserManager.DISALLOW_CONFIG_WIFI, DISALLOW_AIRPLANE_MODE (Android 9
+        // and newer) and, from Android 13, DISALLOW_CHANGE_WIFI_STATE: the
+        // student can neither change nor forget the school's network, join
+        // another, go into airplane mode nor turn the Wi-Fi off (and so out
+        // of the teacher's reach). Networks the Device Owner adds are still
+        // added (the cable setup's school Wi-Fi), and the agent's VPN and
+        // private DNS are untouched by them. Freed for a while by "Liberar
+        // Wi-Fi e modo avião" (NetworkFree).
+        fun networkRestrictions(sdkInt: Int): List<String> =
+            listOf("no_config_wifi", "no_airplane_mode") + if (sdkInt >= ANDROID_13) listOf("no_change_wifi_state") else emptyList()
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,
         // left off on debug builds.

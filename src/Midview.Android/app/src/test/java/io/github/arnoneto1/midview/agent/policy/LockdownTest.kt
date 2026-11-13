@@ -86,7 +86,7 @@ class LockdownTest {
     }
 
     private val pkg = "io.github.arnoneto1.midview.agent"
-    private val all = setOf(
+    private val base = setOf(
         "no_factory_reset",
         "no_debugging_features",
         "no_safe_boot",
@@ -100,6 +100,10 @@ class LockdownTest {
         "no_config_date_time",
         "no_create_windows",
     )
+
+    // The Wi-Fi and airplane mode, and from Android 13 turning the Wi-Fi off.
+    private fun all(sdk: Int) =
+        base + setOf("no_config_wifi", "no_airplane_mode") + if (sdk >= 33) setOf("no_change_wifi_state") else emptySet()
 
     // The date and time stay out of the student's reach on every build: the
     // new teacher's window and the lock screen's checks count time.
@@ -115,7 +119,7 @@ class LockdownTest {
 
         assertTrue(Lockdown(gw).apply())
 
-        assertEquals(all, gw.restrictions)
+        assertEquals(all(34), gw.restrictions)
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
     }
@@ -136,11 +140,11 @@ class LockdownTest {
     @Test fun closesAppsControlOnlyOnAndroid10() {
         val android10 = FakeGateway(sdkInt = 29)
         Lockdown(android10).apply()
-        assertEquals(all + "no_control_apps", android10.restrictions)
+        assertEquals(all(29) + "no_control_apps", android10.restrictions)
 
         val android11 = FakeGateway(sdkInt = 30)
         Lockdown(android11).apply()
-        assertEquals(all, android11.restrictions)
+        assertEquals(all(30), android11.restrictions)
         assertEquals(listOf(pkg), android11.controlDisabledPackages)
     }
 
@@ -151,7 +155,7 @@ class LockdownTest {
 
         assertTrue(Lockdown(gw).apply())
 
-        assertEquals(all - "no_debugging_features" - "no_factory_reset", gw.restrictions)
+        assertEquals(all(34) - "no_debugging_features" - "no_factory_reset", gw.restrictions)
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
@@ -162,7 +166,7 @@ class LockdownTest {
 
         Lockdown(gw).apply()
 
-        assertEquals(all - "no_debugging_features" - "no_factory_reset" + "no_control_apps", gw.restrictions)
+        assertEquals(all(29) - "no_debugging_features" - "no_factory_reset" + "no_control_apps", gw.restrictions)
     }
 
     @Test fun releaseBuildKeepsEveryLock() {
@@ -171,7 +175,7 @@ class LockdownTest {
         Lockdown(gw).apply()
 
         assertTrue(gw.restrictions.containsAll(setOf("no_debugging_features", "no_factory_reset")))
-        assertEquals(all, gw.restrictions)
+        assertEquals(all(34), gw.restrictions)
     }
 
     // The pairing code goes in a notification; from Android 13 the app
@@ -216,7 +220,7 @@ class LockdownTest {
         assertTrue(lockdown.apply())
         assertTrue(lockdown.apply())
 
-        assertEquals(all, gw.restrictions)
+        assertEquals(all(34), gw.restrictions)
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
@@ -233,7 +237,7 @@ class LockdownTest {
             assertEquals("refused no_safe_boot", e.message)
         }
 
-        assertEquals(all - "no_safe_boot", gw.restrictions)
+        assertEquals(all(34) - "no_safe_boot", gw.restrictions)
         assertEquals(mapOf(pkg to true), gw.uninstallBlocked)
         assertEquals(listOf(pkg), gw.controlDisabledPackages)
         assertEquals(setOf(pkg to "android.permission.POST_NOTIFICATIONS"), gw.granted)
@@ -270,5 +274,25 @@ class LockdownTest {
 
             assertEquals(listOf(pkg), gw.accessibilityPermitted)
         }
+    }
+
+    // The Wi-Fi and airplane mode are locked on every build, and left alone
+    // while "Liberar Wi-Fi e modo avião" runs (NetworkFree says so).
+    @Test fun theNetworkIsLockedUnlessFreed() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 33, debuggable = debuggable)
+            assertTrue(Lockdown(gw).apply())
+            assertTrue(gw.restrictions.containsAll(setOf("no_config_wifi", "no_airplane_mode", "no_change_wifi_state")))
+        }
+
+        val free = FakeGateway(sdkInt = 34)
+        assertTrue(Lockdown(free, network = { /* freed: not run */ }).apply())
+        assertEquals(base, free.restrictions)
+    }
+
+    // Turning the Wi-Fi off is its own lock only from Android 13.
+    @Test fun turningTheWifiOffIsLockedFromAndroid13() {
+        assertEquals(listOf("no_config_wifi", "no_airplane_mode"), Lockdown.networkRestrictions(32))
+        assertEquals(listOf("no_config_wifi", "no_airplane_mode", "no_change_wifi_state"), Lockdown.networkRestrictions(33))
     }
 }

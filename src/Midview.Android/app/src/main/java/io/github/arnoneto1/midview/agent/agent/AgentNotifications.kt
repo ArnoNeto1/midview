@@ -6,8 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
+import io.github.arnoneto1.midview.agent.ui.SchoolSettingsActivity
 
 // The agent's notifications: its fixed one (the foreground service's) and
 // the pairing code's.
@@ -53,12 +55,22 @@ internal fun AgentService.hideCode() {
     notifications().cancel(PAIRING_NOTIFICATION)
 }
 
+// With "Ajustes da escola": the admin password frees the Wi-Fi and airplane
+// mode for a while (SchoolSettingsActivity).
 internal fun AgentService.goForeground(text: String) {
+    val settings = PendingIntent.getActivity(
+        this, 0, SchoolSettingsActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
     val notification = Notification.Builder(this, STATUS_CHANNEL)
         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
         .setContentTitle(text)
         .setStyle(Notification.BigTextStyle().bigText(text))
         .setOngoing(true)
+        .addAction(
+            Notification.Action.Builder(
+                Icon.createWithResource(this, android.R.drawable.ic_lock_idle_lock), SchoolSettingsActivity.TITLE, settings,
+            ).build(),
+        )
         .build()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         startForeground(STATUS_NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)

@@ -38,6 +38,7 @@ import io.github.arnoneto1.midview.agent.optimize.Optimizer
 import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 import io.github.arnoneto1.midview.agent.programs.SilentUninstaller
 import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
@@ -303,6 +304,7 @@ class AgentService : Service() {
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
+            freeNetwork = SchoolNetwork.network(this)::handle, adminPassword = SchoolNetwork.admin(this)::setPassword,
             powerSchedule = powerSchedule::handle,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },

@@ -67,6 +67,9 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
     override fun addUserRestriction(r: String) = dpm.addUserRestriction(admin, r)
 
+    // Only NetworkFree lifts a lock, for "Liberar Wi-Fi e modo avião".
+    fun clearUserRestriction(r: String) = dpm.clearUserRestriction(admin, r)
+
     override fun setUninstallBlocked(pkg: String, blocked: Boolean) = dpm.setUninstallBlocked(admin, pkg, blocked)
 
     override fun setUserControlDisabled(pkgs: List<String>) {
@@ -159,10 +162,12 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         private const val PRIVATE_DNS_MODE_HOSTNAME = "hostname"
 
         // Applies the locks and never fails its caller: a refused lock is
-        // logged, and the next start of the agent tries again.
+        // logged, and the next start of the agent tries again. The Wi-Fi and
+        // airplane mode stay free while their time runs (SchoolNetwork).
         fun lockDown(context: Context) {
             try {
-                if (Lockdown(AndroidDevicePolicyGateway(context)).apply()) {
+                val network = SchoolNetwork.network(context)
+                if (Lockdown(AndroidDevicePolicyGateway(context), network = network::unlessFree).apply()) {
                     Log.i(TAG, "School phone locks applied.")
                 }
             } catch (e: RuntimeException) {

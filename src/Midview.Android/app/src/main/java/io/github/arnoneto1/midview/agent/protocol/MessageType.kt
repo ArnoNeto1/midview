@@ -198,4 +198,13 @@ object MessageType {
     // "Permitir novo professor" window; answered with a COMMAND_ACK
     // (CommandResult). Number 102 as the C# ForgetOtherTeachers.
     const val FORGET_OTHER_TEACHERS = 102
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Liberar
+    // Wi-Fi e modo avião" (a PhoneNetworkFree payload: the minutes, 1 to 60,
+    // or 0 to lock them again now), and the phones' admin password (a
+    // PhoneAdminPassword payload: its salted hash, or empty to remove it).
+    // Each answered with a CommandAck (CommandResult). Numbers 103 and 104 as
+    // the C# FreePhoneNetwork and SetPhoneAdminPassword.
+    const val FREE_PHONE_NETWORK = 103
+    const val SET_PHONE_ADMIN_PASSWORD = 104
 }

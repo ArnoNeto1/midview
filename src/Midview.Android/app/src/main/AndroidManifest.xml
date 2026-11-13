@@ -156,6 +156,18 @@
             android:theme="@android:style/Theme.Material.NoActionBar"
             android:windowSoftInputMode="adjustResize|stateHidden" />
 
+        <!-- "Ajustes da escola", from the agent's notification: the phones'
+             admin password frees the Wi-Fi and airplane mode for a while. -->
+        <activity
+            android:name=".ui.SchoolSettingsActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="Ajustes da escola"
+            android:launchMode="singleTask"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.settings"
+            android:theme="@android:style/Theme.Material.NoActionBar"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
+
         <receiver
             android:name=".agent.AgentService$StartAtBoot"
             android:exported="true">

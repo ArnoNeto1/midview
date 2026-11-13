@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 
 // The watchdog: an alarm every few seconds (WatchdogAlarm) that starts the
 // agent again if it is not running, and arms itself again. Android keeps the
@@ -24,6 +25,8 @@ class AgentWatchdog : BroadcastReceiver() {
         // The lock screen too: the teacher's PIN put back if Android's
         // "password changed" never came.
         LockScreenKeeper.check(context)
+        // The Wi-Fi and airplane mode locked again once their free time is up.
+        SchoolNetwork.check(context)
         arm(context)
     }
 

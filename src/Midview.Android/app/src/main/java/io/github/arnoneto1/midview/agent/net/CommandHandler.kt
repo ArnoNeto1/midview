@@ -66,6 +66,10 @@ class CommandHandler(
     // The teacher's lock screen PIN (LockScreenKeeper): the payload in, the
     // CommandAck's result out.
     private val screenPin: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Liberar Wi-Fi e modo avião" (NetworkFree) and the phones' admin
+    // password (AdminUnlock): the payload in, the CommandAck's result out.
+    private val freeNetwork: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    private val adminPassword: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Fechar programas" (CloseCountdown): the warning's time in seconds in,
     // the CommandAck's result out.
     private val closeApps: (delaySeconds: Int) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -209,6 +213,14 @@ class CommandHandler(
         }
         MessageType.SET_PHONE_SCREEN_PASSWORD -> {
             val (done, detail) = screenPin(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        MessageType.FREE_PHONE_NETWORK -> {
+            val (done, detail) = freeNetwork(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        MessageType.SET_PHONE_ADMIN_PASSWORD -> {
+            val (done, detail) = adminPassword(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
         // The PC's payload: the student is warned for the time in it, then
