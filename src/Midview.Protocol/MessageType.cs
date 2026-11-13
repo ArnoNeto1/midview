@@ -444,6 +444,17 @@ public enum MessageType : byte
     // (CommandResult); an agent from before this answers "Ainda não funciona
     // em celular.".
     SetPhoneWallpaper = 105,
+
+    // Master -> Android agent, from a trusted teacher only: "Desfazer e tirar
+    // o Midview" (Telas, "Tirar o Midview dos celulares e tablets..."). The
+    // payload is the word the teacher typed to confirm (PhoneLeave: "REMOVER",
+    // UTF-8); any other payload is refused. The agent lifts every school lock
+    // and setting it applied, keeping the student's files, and answers with
+    // one CommandAck (CommandResult) saying what it undid; then it forgets the
+    // teachers, stops being the Device Owner and asks Android to uninstall it.
+    // "Restaurar de fábrica" is WipePhone. An agent from before this answers
+    // "Ainda não funciona em celular.".
+    RemoveMidviewFromPhone = 106,
 }
 
 public enum CloseAppsMode : byte
