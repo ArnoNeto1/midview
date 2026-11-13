@@ -89,6 +89,34 @@ class TrustedMastersTest {
         assertEquals(1, TrustedMasters(file).count())
     }
 
+    // Forgotten a moment before by another teacher: it must not come back
+    // as the only one.
+    @Test fun keepOnlyForATeacherNoLongerOnTheListChangesNothing() {
+        val file = file()
+        TrustedMasters(file).add(a)
+
+        assertEquals(null, TrustedMasters(file).keepOnly(b))
+        assertEquals(listOf(a), file.readLines().filter { it.isNotBlank() })
+        assertEquals(null, TrustedMasters(file()).keepOnly(b))
+    }
+
+    // A rewrite of the same size goes through the memory every instance
+    // shares, whatever the file clock says.
+    @Test fun aSameSizeRewriteIsSeenByAnotherInstance() {
+        val c = "FEDCBA9876543210FEDCBA9876543210FEDCBA98"
+        val file = file()
+        TrustedMasters(file).apply { add(a); add(b) }
+        val reader = TrustedMasters(file)
+        assertTrue(reader.isTrusted(b))
+        val stamp = file.lastModified()
+
+        TrustedMasters(file).apply { keepOnly(a); add(c) }
+        file.setLastModified(stamp)
+
+        assertFalse(reader.isTrusted(b))
+        assertTrue(reader.isTrusted(c))
+    }
+
     @Test fun keepOnlyWithNoOtherTeacherChangesNothing() {
         val file = file()
         TrustedMasters(file).add(a)

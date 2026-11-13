@@ -100,19 +100,21 @@ public sealed class PairingService
 
     // ForgetOtherTeachers, from a trusted teacher (AgentServer checks that):
     // the sender becomes the only teacher, and an open window closes.
+    // Under the same lock as a pairing's last check (StillAllowed), so a
+    // pairing under way can't add back a teacher forgotten here.
     public (bool Succeeded, string Detail) ForgetOtherTeachers(string senderThumbprint)
     {
-        lock (_gate)
-        {
-            CloseWindow();
-        }
-
-        int dropped;
+        int? dropped;
         try
         {
-            lock (_writeGate)
+            lock (_gate)
             {
-                dropped = TrustedMastersFile.KeepOnly(_trustedMastersPath, senderThumbprint);
+                CloseWindow();
+                lock (_writeGate)
+                {
+                    dropped = TrustedMastersFile.KeepOnly(_trustedMastersPath, senderThumbprint);
+                    _trust.Reload();
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -120,8 +122,13 @@ public sealed class PairingService
             return (false, $"não foi possível gravar a lista de professores: {ErrorText.Describe(ex)}");
         }
 
-        AgentLog.Warn($"Teacher {senderThumbprint} made this machine forget {dropped} other teacher(s).");
-        return (true, OtherTeachers.ForgottenText(dropped));
+        if (dropped is not { } count)
+        {
+            AgentLog.Warn($"Teacher {senderThumbprint}, forgotten already, asked to forget the others: nothing changed.");
+            return (false, OtherTeachers.NotOnList);
+        }
+        AgentLog.Warn($"Teacher {senderThumbprint} made this machine forget {count} other teacher(s).");
+        return (true, OtherTeachers.ForgottenText(count));
     }
 
     // TrustTeacher, from a trusted teacher (AgentServer checks that): trust
@@ -140,6 +147,7 @@ public sealed class PairingService
             lock (_writeGate)
             {
                 TrustedMastersFile.Add(_trustedMastersPath, grant.Thumbprint);
+                _trust.Reload();
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -154,10 +162,13 @@ public sealed class PairingService
     // Everything after a PairRequest, over that connection (receive and send
     // are its own). macAddress is the card the connection came in on. A
     // dropped connection surfaces as the receive's exception, after the
-    // code has been taken down.
+    // code has been taken down. waitLong is called once the teacher's nonce
+    // is in, for the connection to wait as long as a teacher may take to
+    // compare the codes; until then it keeps its short timeout, so nobody
+    // holds the one pairing for minutes without showing a code.
     public void Handle(
         string masterThumbprint, string agentThumbprint, byte[] requestPayload,
-        Func<Message> receive, Action<Message> send, string? macAddress)
+        Func<Message> receive, Action<Message> send, string? macAddress, Action? waitLong = null)
     {
         var teacherName = Pairing.CleanTeacherName(Encoding.UTF8.GetString(requestPayload));
         Window? window;
@@ -176,7 +187,7 @@ public sealed class PairingService
         var paired = false;
         try
         {
-            paired = Exchange(masterThumbprint, agentThumbprint, teacherName, receive, send, macAddress, window);
+            paired = Exchange(masterThumbprint, agentThumbprint, teacherName, receive, send, macAddress, window, waitLong);
         }
         finally
         {
@@ -236,10 +247,22 @@ public sealed class PairingService
 
     private bool WindowOpen() => _newTeacherUntil is { } until && _now() < until;
 
+    public const string NoLongerAllowed =
+        "Esta máquina mudou de professores durante o pareamento. Peça \"Permitir novo professor\" de novo e tente outra vez.";
+
+    // Right before trusting (under _gate): what let the pairing in still
+    // holds. By the window: that same window, still open (not closed, used
+    // up or drawn again since). Otherwise: still no teacher, or this one
+    // still trusted (not forgotten meanwhile).
+    private bool StillAllowed(string masterThumbprint, Window? window) =>
+        window is not null
+            ? WindowOpen() && window.Generation == _windowGeneration
+            : _trust.Count == 0 || _trust.IsTrusted(masterThumbprint);
+
     // Whether the teacher is now trusted.
     private bool Exchange(
         string masterThumbprint, string agentThumbprint, string teacherName,
-        Func<Message> receive, Action<Message> send, string? macAddress, Window? window)
+        Func<Message> receive, Action<Message> send, string? macAddress, Window? window, Action? waitLong)
     {
         var agentNonce = Pairing.NewNonce();
         send(new Message(MessageType.PairCommit, Pairing.Commit(agentNonce)));
@@ -250,6 +273,7 @@ public sealed class PairingService
             AgentLog.Warn($"Pairing with {masterThumbprint}: expected the teacher's nonce, got {nonce.Type}.");
             return false;
         }
+        waitLong?.Invoke();
 
         // On the screen before the reveal: once the teacher has the code,
         // the student must be able to see it too.
@@ -299,9 +323,23 @@ public sealed class PairingService
 
         try
         {
-            lock (_writeGate)
+            lock (_gate)
             {
-                TrustedMastersFile.Add(_trustedMastersPath, masterThumbprint);
+                if (!StillAllowed(masterThumbprint, window))
+                {
+                    AgentLog.Warn($"Pairing with {masterThumbprint} ({teacherName}) refused: what let it in changed meanwhile.");
+                    send(Pairing.Refused(NoLongerAllowed));
+                    return false;
+                }
+                lock (_writeGate)
+                {
+                    TrustedMastersFile.Add(_trustedMastersPath, masterThumbprint);
+                    _trust.Reload();
+                }
+                if (window is not null)
+                {
+                    CloseWindow(); // the code is used up
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)

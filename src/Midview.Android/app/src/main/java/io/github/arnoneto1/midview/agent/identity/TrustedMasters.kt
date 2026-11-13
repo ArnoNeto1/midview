@@ -30,30 +30,34 @@ class TrustedMasters(private val file: File) {
         synchronized(lock) {
             val current = load()
             if (current.add(added)) {
-                file.parentFile?.mkdirs()
-                writeAtomically(file, current.joinToString(separator = "\n", postfix = "\n").toByteArray(Charsets.US_ASCII))
+                write(current)
             }
         }
     }
 
     // "Esquecer os outros professores": the list becomes this teacher alone.
     // Returns how many others were dropped; with none the file is left as it
-    // is. The memory every instance shares is updated with the file, so no
-    // instance trusts a forgotten teacher a moment longer.
-    fun keepOnly(thumb: String): Int {
+    // is. Null, and the file left alone, when this teacher is no longer on
+    // the list (another one made the phone forget it a moment ago): it must
+    // not come back as the only one.
+    fun keepOnly(thumb: String): Int? {
         val kept = normalize(thumb)
-        require(kept.isNotEmpty()) { "keepOnly needs a teacher" }
-
         synchronized(lock) {
             val current = load()
+            if (kept.isEmpty() || kept !in current) return null
             val dropped = current.count { it != kept }
-            if (dropped > 0) {
-                file.parentFile?.mkdirs()
-                writeAtomically(file, "$kept\n".toByteArray(Charsets.US_ASCII))
-                cache[file.absolutePath] = Cached(Stamp(file.lastModified(), file.length()), setOf(kept))
-            }
+            if (dropped > 0) write(linkedSetOf(kept))
             return dropped
         }
+    }
+
+    // Writes the list and puts it in the memory every instance shares, so a
+    // rewrite of the same size in the same tick of the file clock is never
+    // missed (every write goes through here: the file is the app's own).
+    private fun write(teachers: Set<String>) {
+        file.parentFile?.mkdirs()
+        writeAtomically(file, teachers.joinToString(separator = "\n", postfix = "\n").toByteArray(Charsets.US_ASCII))
+        cache[file.absolutePath] = Cached(Stamp(file.lastModified(), file.length()), LinkedHashSet(teachers))
     }
 
     // How many teachers are trusted (none: nobody paired yet).

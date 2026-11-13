@@ -105,6 +105,11 @@ In **Máquinas da sala** > **Outro professor**:
 - **Permitir novo professor (10 minutos)** (allow a new teacher) shows an 8-character code. For 10 minutes, the machines accept the pairing of the teacher who types that code in **Procurar e parear** (search and pair), once on each machine.
 - **Esquecer os outros professores...** (forget the other teachers) makes the room's machines accept only you.
 
+Limits:
+
+- A compromised machine in the room can reveal the **Permitir novo professor** code while it is valid (10 minutes).
+- Any trusted teacher can forget all the others, including whoever set up the room.
+
 ## Phones
 
 Coming soon: the phone app hasn't been published yet.

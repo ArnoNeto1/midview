@@ -7,26 +7,48 @@ namespace Midview.Protocol;
 // certificate chain). Either a fixed list, or trusted-masters.json itself
 // (FromFile): read again whenever the file changes, so a teacher the Agent
 // pairs with is trusted at once -- by the Agent, and by the Session in its
-// own process -- without a restart.
+// own process -- without a restart. The Agent, which writes the file, also
+// says so (Reload); anyone else reads it again at least every MaxAge.
 public sealed class TrustStore
 {
     private readonly object _gate = new();
     private readonly string? _path;
     private HashSet<string> _trustedThumbprints;
+    private readonly Func<long> _clockMs;
     private (DateTime WriteTimeUtc, long Length)? _loadedVersion;
+    private long _loadedAtMs;
+    private bool _stale = true;
+
+    // How long a list read from the file is taken as current while the
+    // file's time and size don't change.
+    public static readonly TimeSpan MaxAge = TimeSpan.FromSeconds(1);
 
     public TrustStore(IEnumerable<string> trustedThumbprints)
     {
         _trustedThumbprints = Normalize(trustedThumbprints);
+        _clockMs = () => Environment.TickCount64;
     }
 
-    private TrustStore(string path)
+    private TrustStore(string path, Func<long> clockMs)
     {
         _path = path;
+        _clockMs = clockMs;
         _trustedThumbprints = new HashSet<string>();
     }
 
-    public static TrustStore FromFile(string path) => new(path);
+    // clockMs is for tests: a monotonic clock in milliseconds.
+    public static TrustStore FromFile(string path, Func<long>? clockMs = null) =>
+        new(path, clockMs ?? (() => Environment.TickCount64));
+
+    // The file was just written here: the next check reads it, whatever its
+    // time and size say.
+    public void Reload()
+    {
+        lock (_gate)
+        {
+            _stale = true;
+        }
+    }
 
     // How many thumbprints are trusted right now (none: nobody paired yet).
     public int Count
@@ -59,9 +81,8 @@ public sealed class TrustStore
     // The file's write time and size say whether it changed, so a check
     // costs one look at the file, not a read of it. Two writes of the same
     // size within one tick of the file clock (0.5 to about 16 ms, depending
-    // on the PC) look like no change; nothing writes it that way, since the
-    // Agent only adds teachers, which always makes it longer, or keeps one of
-    // several, which always makes it shorter.
+    // on the PC) look like no change: the list is read again anyway after
+    // Reload, and once it is MaxAge old.
     private void RefreshIfChanged()
     {
         if (_path is null)
@@ -71,7 +92,8 @@ public sealed class TrustStore
 
         var file = new FileInfo(_path);
         (DateTime, long)? version = file.Exists ? (file.LastWriteTimeUtc, file.Length) : null;
-        if (Nullable.Equals(version, _loadedVersion))
+        var now = _clockMs();
+        if (!_stale && Nullable.Equals(version, _loadedVersion) && now - _loadedAtMs < (long)MaxAge.TotalMilliseconds)
         {
             return;
         }
@@ -80,6 +102,8 @@ public sealed class TrustStore
         {
             _trustedThumbprints = version is null ? new HashSet<string>() : Normalize(TrustedMastersFile.Load(_path));
             _loadedVersion = version;
+            _loadedAtMs = now;
+            _stale = false;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {

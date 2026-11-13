@@ -123,10 +123,11 @@ public sealed class AgentServer
                 channel.Send(Pairing.Refused("Esta máquina não aceita pareamento."));
                 return;
             }
-            client.ReceiveTimeout = PairingTimeoutMs;
+            // The short timeout until the teacher's nonce is in; then as long
+            // as comparing the codes may take.
             _pairing.Handle(
                 channel.RemoteThumbprint, _serverCertificate.Thumbprint, message.Payload,
-                channel.Receive, channel.Send, WakeAddressText(client));
+                channel.Receive, channel.Send, WakeAddressText(client), () => client.ReceiveTimeout = PairingTimeoutMs);
             return;
         }
 

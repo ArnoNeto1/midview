@@ -7,6 +7,10 @@ public static class OtherTeachers
 {
     public const string NoneForgotten = "nenhum outro professor";
 
+    // The sender was forgotten itself a moment before (another teacher's
+    // "Esquecer"): nothing changed.
+    public const string NotOnList = "você não está mais na lista desta máquina: nada mudou";
+
     public static string ForgottenText(int dropped) => dropped switch
     {
         0 => NoneForgotten,

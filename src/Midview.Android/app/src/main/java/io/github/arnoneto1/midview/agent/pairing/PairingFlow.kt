@@ -78,14 +78,18 @@ class PairingFlow(
 
     // ForgetOtherTeachers, from a trusted teacher (CommandHandler checks
     // that): the sender becomes the only teacher, and an open window closes.
+    // Under the same lock as a pairing's last check (stillAllowed), so a
+    // pairing under way can't add back a teacher forgotten here.
     fun forgetOtherTeachers(sender: String): Pair<Boolean, String> {
-        synchronized(lock) { closeWindow() }
         val dropped = try {
-            trusted.keepOnly(sender)
+            synchronized(lock) {
+                closeWindow()
+                trusted.keepOnly(sender)
+            }
         } catch (e: IOException) {
             return false to "não foi possível gravar a lista de professores neste celular"
         }
-        return true to forgottenText(dropped)
+        return if (dropped == null) false to NOT_ON_LIST else true to forgottenText(dropped)
     }
 
     // Everything after a PairRequest (read here unless the caller already
@@ -110,8 +114,6 @@ class PairingFlow(
             window = if (newTeacher) Window(inviteCode!!, windowGeneration) else null
             busy = true
         }
-        // From here the connection lives as long as a pairing does.
-        channel.pairingStarted()
 
         var paired = false
         try {
@@ -136,17 +138,21 @@ class PairingFlow(
 
     // Whether the teacher is now trusted.
     private fun exchange(channel: Channel, master: String, teacherName: String, window: Window?): Boolean {
-        // The teacher has CONFIRM_TIMEOUT_MILLIS to compare the codes; a
-        // little more, so the phone's own deadline is what ends it.
-        channel.setTimeout((Pairing.CONFIRM_TIMEOUT_MILLIS + 30_000L).toInt())
-
         val agentNonce = newNonce()
         channel.send(Message(MessageType.PAIR_COMMIT, Pairing.commit(agentNonce)))
 
+        // Until the teacher's nonce is in, the connection keeps its short
+        // timeout and a stranger's deadline: holding the one pairing for
+        // minutes costs a code on the screen.
         val nonce = channel.receive(SHORT_MESSAGE_LENGTH)
         if (nonce.type != MessageType.PAIR_NONCE || nonce.payload.size != Pairing.NONCE_LENGTH) {
             return false
         }
+        // From here the connection lives as long as a pairing does: the
+        // teacher has CONFIRM_TIMEOUT_MILLIS to compare the codes, and a
+        // little more, so the phone's own deadline is what ends it.
+        channel.pairingStarted()
+        channel.setTimeout((Pairing.CONFIRM_TIMEOUT_MILLIS + 30_000L).toInt())
 
         val code = Pairing.code(master, identity.thumbprint, agentNonce, nonce.payload)
         try {
@@ -182,10 +188,23 @@ class PairingFlow(
                 }
             }
 
-            try {
-                trusted.add(master)
-            } catch (e: IOException) {
-                channel.send(Pairing.refused("Não foi possível gravar o professor neste celular. Tente de novo."))
+            // Right before trusting, under the lock "Esquecer" and a new
+            // code take too: what let the pairing in must still hold.
+            val failure = synchronized(lock) {
+                if (!stillAllowed(master, window)) {
+                    NO_LONGER_ALLOWED
+                } else {
+                    try {
+                        trusted.add(master)
+                        if (window != null) closeWindow() // the code is used up
+                        null
+                    } catch (e: IOException) {
+                        "Não foi possível gravar o professor neste celular. Tente de novo."
+                    }
+                }
+            }
+            if (failure != null) {
+                channel.send(Pairing.refused(failure))
                 return false
             }
 
@@ -199,6 +218,16 @@ class PairingFlow(
     }
 
     private fun windowOpen() = newTeacherUntil?.let { elapsed() < it } ?: false
+
+    // Under lock: by the window, that same window still open (not closed,
+    // used up or drawn again since); otherwise still no teacher, or this one
+    // still trusted (not forgotten meanwhile).
+    private fun stillAllowed(master: String, window: Window?): Boolean =
+        if (window != null) {
+            windowOpen() && window.generation == windowGeneration
+        } else {
+            trusted.count() == 0 || trusted.isTrusted(master)
+        }
 
     private fun closeWindow() {
         newTeacherUntil = null
@@ -224,6 +253,9 @@ class PairingFlow(
 
         // ForgetOtherTeachers' answer, as src/Midview.Protocol/OtherTeachers.cs.
         const val NONE_FORGOTTEN = "nenhum outro professor"
+        const val NOT_ON_LIST = "você não está mais na lista deste celular: nada mudou"
+        const val NO_LONGER_ALLOWED =
+            "Este celular mudou de professores durante o pareamento. Peça \"Permitir novo professor\" de novo e tente outra vez."
 
         fun forgottenText(dropped: Int): String = when (dropped) {
             0 -> NONE_FORGOTTEN

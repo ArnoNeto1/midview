@@ -103,6 +103,11 @@ Em **Máquinas da sala** > **Outro professor**:
 - **Permitir novo professor (10 minutos)** mostra um código de 8 caracteres. Por 10 minutos, as máquinas aceitam o pareamento do professor que digitar esse código em **Procurar e parear**, uma vez em cada máquina.
 - **Esquecer os outros professores...** faz as máquinas da sala aceitarem só você.
 
+Limites:
+
+- Uma máquina da sala que esteja comprometida pode revelar o código de **Permitir novo professor** enquanto ele vale (10 minutos).
+- Qualquer professor confiável pode esquecer todos os outros, inclusive quem montou a sala.
+
 ## Celulares
 
 Em breve: o aplicativo do celular ainda não foi publicado.

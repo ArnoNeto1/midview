@@ -48,7 +48,7 @@ public class TrustStoreTests : IDisposable
     public void FromFile_ReadsTheFileAgainOnlyWhenItChanges()
     {
         File.WriteAllText(_path, $"[\"{A}\"]");
-        var store = TrustStore.FromFile(_path);
+        var store = TrustStore.FromFile(_path, () => 0);
         Assert.True(store.IsTrusted(A));
 
         // Same size, same time: taken as unchanged, so not read again.
@@ -59,6 +59,42 @@ public class TrustStoreTests : IDisposable
         Assert.False(store.IsTrusted(B));
 
         File.SetLastWriteTimeUtc(_path, stamp.AddSeconds(1));
+        Assert.True(store.IsTrusted(B));
+        Assert.False(store.IsTrusted(A));
+    }
+
+    // A rewrite of the same size in the same tick of the file clock: the
+    // writer says so (Reload), and anyone else sees it within MaxAge.
+    [Fact]
+    public void FromFile_ASameSizeRewrite_IsSeenAfterReload()
+    {
+        File.WriteAllText(_path, $"[\"{A}\"]");
+        var store = TrustStore.FromFile(_path, () => 0);
+        Assert.True(store.IsTrusted(A));
+        var stamp = File.GetLastWriteTimeUtc(_path);
+        File.WriteAllText(_path, $"[\"{B}\"]");
+        File.SetLastWriteTimeUtc(_path, stamp);
+
+        store.Reload();
+
+        Assert.True(store.IsTrusted(B));
+        Assert.False(store.IsTrusted(A));
+    }
+
+    [Fact]
+    public void FromFile_ASameSizeRewrite_IsSeenWithinMaxAge()
+    {
+        long clock = 0;
+        File.WriteAllText(_path, $"[\"{A}\"]");
+        var store = TrustStore.FromFile(_path, () => clock);
+        Assert.True(store.IsTrusted(A));
+        var stamp = File.GetLastWriteTimeUtc(_path);
+        File.WriteAllText(_path, $"[\"{B}\"]");
+        File.SetLastWriteTimeUtc(_path, stamp);
+
+        clock += (long)TrustStore.MaxAge.TotalMilliseconds - 1;
+        Assert.True(store.IsTrusted(A));
+        clock += 1;
         Assert.True(store.IsTrusted(B));
         Assert.False(store.IsTrusted(A));
     }

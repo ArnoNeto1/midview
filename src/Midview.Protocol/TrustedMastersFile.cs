@@ -40,8 +40,10 @@ public static class TrustedMastersFile
 
     // "Esquecer os outros professores": the list becomes this teacher alone.
     // Returns how many others were dropped; with none the file is left as it
-    // is. Always shorter when it changes, so TrustStore sees the change.
-    public static int KeepOnly(string path, string thumbprint)
+    // is. Null, and the file left alone, when this teacher is no longer on
+    // the list (another one made the machine forget it a moment ago): it
+    // must not come back as the only one.
+    public static int? KeepOnly(string path, string thumbprint)
     {
         var kept = thumbprint.Trim().ToUpperInvariant();
         var current = LoadForChange(path)
@@ -49,6 +51,10 @@ public static class TrustedMastersFile
             .Select(item => item.Trim().ToUpperInvariant())
             .Distinct()
             .ToList();
+        if (!current.Contains(kept))
+        {
+            return null;
+        }
         var dropped = current.Count(item => item != kept);
         if (dropped > 0)
         {

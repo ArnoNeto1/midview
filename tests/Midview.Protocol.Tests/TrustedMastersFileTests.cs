@@ -119,6 +119,27 @@ public class TrustedMastersFileTests
         }
     }
 
+    // Forgotten a moment before by another teacher: it must not come back
+    // as the only one.
+    [Fact]
+    public void KeepOnly_ATeacherNoLongerOnTheList_ChangesNothing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"midview-trusted-{Guid.NewGuid()}.json");
+        try
+        {
+            File.WriteAllText(path, "[\"AAAA\"]");
+
+            Assert.Null(TrustedMastersFile.KeepOnly(path, "BBBB"));
+            Assert.Equal("[\"AAAA\"]", File.ReadAllText(path));
+            Assert.Null(TrustedMastersFile.KeepOnly(path + ".none", "BBBB"));
+            Assert.False(File.Exists(path + ".none"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void KeepOnly_AListThatCantBeRead_IsLeftAlone()
     {
