@@ -77,6 +77,17 @@ public partial class MainWindow
         ShowOnce("rede-celulares", phones, () => new PhoneNetworkWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
     }
 
+    // "Papel de parede dos celulares e tablets...": the same devices as the PIN.
+    private void OpenPhoneWallpaperWindow(IReadOnlyList<KnownMachine> phones)
+    {
+        if (phones.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhum celular ou tablet na lista da sala para trocar o papel de parede.";
+            return;
+        }
+        ShowOnce("papel-de-parede-celulares", phones, () => new PhoneWallpaperWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
+    }
+
     // The APK of this Master's version, from GitHub, kept in
     // PhoneAgentApk.DefaultFolder; the client goes with the window. kind
     // words the window (PhoneUpdateText.KindOf for a menu's devices); phones

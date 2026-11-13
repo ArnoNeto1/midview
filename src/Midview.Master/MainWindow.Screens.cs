@@ -6,7 +6,8 @@ namespace Midview.Master;
 
 // "Telas" (group Configurar): a menu with which screens the grid shows
 // (DeviceFilter: Todos, Computadores, Celulares, Tablets) and
-// "Otimizar celulares e tablets..." and "Senha dos celulares e tablets..."
+// "Otimizar celulares e tablets...", "Senha dos celulares e tablets...",
+// "Liberar Wi-Fi e modo avião..." and "Papel de parede dos celulares e tablets..."
 // (the selected Android devices, or every one the grid shows, by the rule
 // of every toolbar button: DeviceSupport.ToolbarReach). Celulares is
 // greyed in a room with no phone, and Tablets in one with no tablet (unless
@@ -30,7 +31,8 @@ public partial class MainWindow
             ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)),
             () => OpenPhonePinWindow(ToolbarReach(ToolbarAction.PhonePin)), PhoneProvisioning.Setup,
             reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0,
-            phoneNetwork: () => OpenPhoneNetworkWindow(ToolbarReach(ToolbarAction.PhonePin)));
+            phoneNetwork: () => OpenPhoneNetworkWindow(ToolbarReach(ToolbarAction.PhonePin)),
+            phoneWallpaper: () => OpenPhoneWallpaperWindow(ToolbarReach(ToolbarAction.PhonePin)));
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -56,7 +58,8 @@ public partial class MainWindow
     // would reach any device.
     internal static ContextMenu ScreensMenu(
         DeviceFilter shown, bool hasPhones, bool hasTablets, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
-        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true, Action? phoneNetwork = null)
+        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true, Action? phoneNetwork = null,
+        Action? phoneWallpaper = null)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -109,6 +112,14 @@ public partial class MainWindow
             networkItem.Click += (_, _) => phoneNetwork?.Invoke();
             menu.Items.Add(networkItem);
             Unreached(networkItem);
+            var wallpaperItem = new MenuItem
+            {
+                Header = "Papel de parede dos celulares e tablets...",
+                ToolTip = "Põe uma imagem como papel de parede da tela inicial e da de bloqueio dos celulares e tablets, sem o app Temas; o aluno não consegue trocá-la. Com alguns selecionados, só neles.",
+            };
+            wallpaperItem.Click += (_, _) => phoneWallpaper?.Invoke();
+            menu.Items.Add(wallpaperItem);
+            Unreached(wallpaperItem);
         }
         return menu;
 

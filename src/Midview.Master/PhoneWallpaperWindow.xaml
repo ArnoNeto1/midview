@@ -1,0 +1,54 @@
+<local:MidviewWindow x:Class="Midview.Master.PhoneWallpaperWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Papel de parede dos celulares e tablets" Height="720" Width="660" MinHeight="520" MinWidth="560"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="24,22,24,20">
+        <StackPanel DockPanel.Dock="Top">
+            <local:DialogHeader x:Name="DialogHeading" Icon="&#xE8B9;" Heading="Papel de parede dos celulares e tablets" Accent="{StaticResource CelularesBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <!-- The picture as a phone shows it: filling the screen, its edges cropped. -->
+                    <Border Width="132" Height="276" CornerRadius="20" Background="#05080F" BorderBrush="#3A4659" BorderThickness="5"
+                            VerticalAlignment="Top" Margin="0,0,20,0">
+                        <Grid>
+                            <TextBlock x:Name="PreviewEmptyTextBlock" Text="Sem imagem" Style="{StaticResource Hint}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="PreviewScreen" CornerRadius="15" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                                   Text="A imagem vai direto para os celulares e tablets, sem o app Temas. Depois o aluno não consegue trocar o papel de parede." />
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button x:Name="ChooseButton" Content="Escolher imagem..." Click="OnChooseClicked" Padding="14,6" />
+                        </StackPanel>
+                        <TextBlock x:Name="PictureTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                        <TextBlock Text="Onde" FontWeight="SemiBold" Margin="0,14,0,6" />
+                        <RadioButton x:Name="BothRadioButton" GroupName="Screens" IsChecked="True" Margin="0,0,0,6" />
+                        <RadioButton x:Name="HomeRadioButton" GroupName="Screens" Margin="0,0,0,6" />
+                        <RadioButton x:Name="LockRadioButton" GroupName="Screens" />
+                        <WrapPanel Margin="0,14,0,0">
+                            <Button x:Name="ApplyButton" Content="Aplicar" Click="OnApplyClicked"
+                                    Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,8,8" IsDefault="True" IsEnabled="False" />
+                            <Button x:Name="RestoreButton" Content="Voltar ao padrão do celular" Click="OnRestoreClicked" Padding="14,6" Margin="0,0,0,8"
+                                    ToolTip="Põe de volta o papel de parede do próprio aparelho, na tela inicial e na de bloqueio." />
+                        </WrapPanel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,14,0,10" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="PhonesList" ItemTemplate="{StaticResource PhoneRowTemplate}" />
+        </ScrollViewer>
+    </DockPanel>
+</local:MidviewWindow>
