@@ -33,10 +33,10 @@ class SitePolicyTest {
         assertEquals(listOf("start"), vpn)
     }
 
-    @Test fun nothingBlockedClearsChromesPolicy() {
+    @Test fun nothingBlockedClearsChromesBlock() {
         policy.apply(SiteBlockState(setOf("youtube.com"), true))
         assertTrue(policy.apply(SiteBlockState.EMPTY))
-        assertEquals(emptyMap<String, Any>(), gw.restrictions["com.android.chrome"])
+        assertEquals(mapOf<String, Any>("TosDialogBehavior" to 2), gw.restrictions["com.android.chrome"])
         assertEquals(null, gw.alwaysOn)
     }
 
@@ -61,10 +61,10 @@ class SitePolicyTest {
         assertArrayEquals(arrayOf("www.youtube.com", "youtube.com"), gw.restrictions["com.android.chrome"]!!["URLBlocklist"] as Array<*>)
 
         assertTrue(chrome.setDownloadsBlocked(false))
-        assertEquals(setOf("URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
+        assertEquals(setOf("TosDialogBehavior", "URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
 
         assertTrue(chrome.setSites(SiteBlockState.EMPTY))
-        assertEquals(emptyMap<String, Any>(), gw.restrictions["com.android.chrome"])
+        assertEquals(mapOf<String, Any>("TosDialogBehavior" to 2), gw.restrictions["com.android.chrome"])
     }
 
     @Test fun aRefusedChangeIsNotKept() {
@@ -74,7 +74,7 @@ class SitePolicyTest {
         assertFalse(chrome.setDownloadsBlocked(true))
         gw.owner = true
         assertTrue(chrome.setSites(SiteBlockState(setOf("youtube.com"), false)))
-        assertEquals(setOf("URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
+        assertEquals(setOf("TosDialogBehavior", "URLBlocklist"), gw.restrictions["com.android.chrome"]!!.keys)
     }
 
     // The agent starting: the site block's write was refused. A later

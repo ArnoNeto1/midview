@@ -7,12 +7,17 @@ package io.github.arnoneto1.midview.agent.sites
 // internet is blocked. Chrome shows its own "blocked" page for them. With
 // "Travar downloads" of the lab panel on, also DownloadRestrictions 3 ("block
 // all downloads"), which Chrome on Android follows from version 131 on (an
-// older one keeps it and ignores it). With nothing set Chrome is left with
-// no policy at all.
+// older one keeps it and ignores it). Always TosDialogBehavior 2, so the
+// student's first Chrome opens without its Terms of Service screen; with
+// nothing blocked that is the only policy Chrome gets.
 object ChromePolicy {
     const val PACKAGE = "com.android.chrome"
     const val URL_BLOCKLIST = "URLBlocklist"
     const val DOWNLOAD_RESTRICTIONS = "DownloadRestrictions"
+    const val TOS_DIALOG_BEHAVIOR = "TosDialogBehavior"
+
+    // TosDialogBehavior's "Skip the Terms of Service dialog on first run".
+    const val SKIP_TOS_DIALOG = 2
 
     // DownloadRestrictions' "Block all downloads".
     const val BLOCK_ALL_DOWNLOADS = 3
@@ -45,7 +50,7 @@ object ChromePolicy {
     // phone (Chrome's first run there is still to be done).
     fun restrictions(state: SiteBlockState, blockDownloads: Boolean = false): Map<String, Any> {
         val blocklist = urlBlocklist(state)
-        val policies = mutableMapOf<String, Any>()
+        val policies = mutableMapOf<String, Any>(TOS_DIALOG_BEHAVIOR to SKIP_TOS_DIALOG)
         if (blocklist.isNotEmpty()) policies[URL_BLOCKLIST] = blocklist.toTypedArray()
         if (blockDownloads) policies[DOWNLOAD_RESTRICTIONS] = BLOCK_ALL_DOWNLOADS
         return policies

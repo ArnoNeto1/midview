@@ -8,8 +8,16 @@ import org.junit.Test
 class ChromePolicyTest {
     private fun state(vararg domains: String, internet: Boolean = false) = SiteBlockState(domains.toSet(), internet)
 
-    @Test fun nothingBlockedLeavesChromeWithoutPolicies() {
-        assertTrue(ChromePolicy.restrictions(SiteBlockState.EMPTY).isEmpty())
+    // Nothing blocked: Chrome only skips its Terms of Service screen on first run.
+    @Test fun nothingBlockedLeavesChromeOnlySkippingItsTerms() {
+        assertEquals(mapOf<String, Any>("TosDialogBehavior" to 2), ChromePolicy.restrictions(SiteBlockState.EMPTY))
+    }
+
+    // The student's first Chrome opens without the Terms of Service dialog,
+    // whatever else is blocked.
+    @Test fun theTermsDialogIsAlwaysSkipped() {
+        assertEquals(2, ChromePolicy.restrictions(SiteBlockState.EMPTY)["TosDialogBehavior"])
+        assertEquals(2, ChromePolicy.restrictions(state("youtube.com", internet = true), blockDownloads = true)["TosDialogBehavior"])
     }
 
     @Test fun eachDomainIsBlockedWithItsWwwForm() {
@@ -49,7 +57,7 @@ class ChromePolicyTest {
 
     @Test fun theBlocklistGoesAsAListOfTexts() {
         val restrictions = ChromePolicy.restrictions(state("youtube.com"))
-        assertEquals(setOf("URLBlocklist"), restrictions.keys)
+        assertEquals(setOf("TosDialogBehavior", "URLBlocklist"), restrictions.keys)
         assertArrayEquals(arrayOf("www.youtube.com", "youtube.com"), restrictions["URLBlocklist"] as Array<*>)
     }
 
@@ -60,9 +68,12 @@ class ChromePolicyTest {
 
     // "Travar downloads" of the lab panel: Chrome's "Block all downloads".
     @Test fun blockedDownloadsGoAsDownloadRestrictions3() {
-        assertEquals(mapOf<String, Any>("DownloadRestrictions" to 3), ChromePolicy.restrictions(SiteBlockState.EMPTY, blockDownloads = true))
+        assertEquals(
+            mapOf<String, Any>("TosDialogBehavior" to 2, "DownloadRestrictions" to 3),
+            ChromePolicy.restrictions(SiteBlockState.EMPTY, blockDownloads = true),
+        )
         val both = ChromePolicy.restrictions(state("youtube.com"), blockDownloads = true)
-        assertEquals(setOf("URLBlocklist", "DownloadRestrictions"), both.keys)
+        assertEquals(setOf("TosDialogBehavior", "URLBlocklist", "DownloadRestrictions"), both.keys)
         assertEquals(3, both["DownloadRestrictions"])
     }
 }
