@@ -1563,7 +1563,7 @@ public partial class MainWindow : MidviewWindow
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddressesAsync,
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
-                () => OpenPhoneUpdateWindow(RoomPhones()), () => OpenPreparePhonesWindow()) { Owner = this };
+                () => OpenPhoneUpdateWindow(RoomPhones()), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize))) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);

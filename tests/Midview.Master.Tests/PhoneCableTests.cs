@@ -589,6 +589,49 @@ public sealed class PhoneCableTests
         Assert.Equal(PhoneCable.RemovedApps.Count, PhoneCable.RemovedApps.Distinct().Count());
     }
 
+    // "Só o Midview": the phone is prepared as before, but none of Lighten's
+    // commands touch it (animations, home gestures, removed apps, background).
+    [Fact]
+    public void Without_optimize_nothing_is_lightened_yet_the_phone_is_ready()
+    {
+        var adb = ReadyToPrepare()
+            .Set(S + "shell pm list packages", "package:com.miui.daemon\npackage:cn.wps.moffice_eng\n")
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n");
+
+        var result = new PhoneCable(adb).Prepare(Apk, "07", Thumb, "Lab", "pw", _ => { }, optimize: false);
+
+        Assert.Null(result.Problem);
+        Assert.Equal(new KnownMachine("Celular 07", "0.0.0.0", Thumb, Thumb, null, DeviceKind.Android), result.Phone);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("animation_scale", StringComparison.Ordinal)
+                                              || c.Contains("animator_duration_scale", StringComparison.Ordinal));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("QSB_SCROLL_ENTRANCE_STATUS", StringComparison.Ordinal));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("open_personal_assistant", StringComparison.Ordinal));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("pm uninstall --user 0", StringComparison.Ordinal));
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("RUN_ANY_IN_BACKGROUND", StringComparison.Ordinal));
+        Assert.DoesNotContain(S + "shell pm list packages", adb.Calls);
+        // Everything else runs as with the optimized setup.
+        Assert.Contains(S + "install -r " + Apk, adb.Calls);
+        Assert.Contains(S + "shell settings put secure accessibility_enabled 1", adb.Calls);
+        Assert.Contains(ContentCall(), adb.Calls);
+        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+    }
+
+    // A tablet: named "Tablet 07" here, and told so in the package.
+    [Fact]
+    public void A_tablet_is_named_tablet_and_its_package_says_so()
+    {
+        var call = S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+                   + CableSetupPayload.Encode("07", Thumb, "Lab", "pw", AndroidDeviceKind.Tablet);
+        var adb = ReadyToPrepare().Set(call, "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Tablet 07}]\n");
+
+        var result = new PhoneCable(adb).Prepare(Apk, "07", Thumb, "Lab", "pw", _ => { }, kind: AndroidDeviceKind.Tablet);
+
+        Assert.Null(result.Problem);
+        Assert.Equal("Tablet 07", result.Phone!.Name);
+        Assert.Contains(call, adb.Calls);
+        Assert.DoesNotContain(ContentCall(), adb.Calls);
+    }
+
     [Fact]
     public void Door_refusal_is_refused()
     {

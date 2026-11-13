@@ -13,11 +13,13 @@ import java.io.File
 // without an Android ID, the model.
 object DeviceName {
     // number: the one the Master gave while preparing the phone over the
-    // cable; it names the phone for good ("Celular 07").
-    fun choose(number: String?, androidId: String?, model: String?): String {
+    // cable; it names the phone for good ("Celular 07"). tablet: the Master
+    // prepared it as a tablet, so the number makes "Tablet 07"; without a
+    // number it changes nothing, as only the cable gives both.
+    fun choose(number: String?, androidId: String?, model: String?, tablet: Boolean = false): String {
         val given = number?.trim().orEmpty()
         if (given.isNotEmpty()) {
-            return "Celular $given"
+            return if (tablet) "Tablet $given" else "Celular $given"
         }
         val id = androidId?.trim().orEmpty()
         if (id.length >= 4) {
@@ -27,9 +29,13 @@ object DeviceName {
         return if (phoneModel.isNotEmpty()) "Celular $phoneModel" else "Celular"
     }
 
-    fun read(context: Context): String = choose(
-        CableSetup(File(context.filesDir, CableSetup.FILE_NAME)).number(),
-        Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID),
-        Build.MODEL,
-    )
+    fun read(context: Context): String {
+        val setup = CableSetup(File(context.filesDir, CableSetup.FILE_NAME))
+        return choose(
+            setup.number(),
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID),
+            Build.MODEL,
+            setup.isTablet(),
+        )
+    }
 }

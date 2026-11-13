@@ -1,5 +1,15 @@
 namespace Midview.Master;
 
+// What the "Preparar celulares" assistant prepares: a phone or a tablet. Both
+// run the same phone app; the kind only names the device ("Tablet 07") and
+// the assistant's titles. Not Protocol's DeviceKind, which tells a PC from
+// an Android device.
+public enum AndroidDeviceKind
+{
+    Phone,
+    Tablet,
+}
+
 // The number the teacher types for a school phone ("7" becomes "07") and the
 // name the phone gets from it.
 public static class PhoneNumber
@@ -16,5 +26,8 @@ public static class PhoneNumber
         return int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture).ToString("D2", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    public static string NameOf(string number) => "Celular " + number;
+    public static string NameOf(string number) => NameOf(number, AndroidDeviceKind.Phone);
+
+    public static string NameOf(string number, AndroidDeviceKind kind) =>
+        (kind == AndroidDeviceKind.Tablet ? "Tablet " : "Celular ") + number;
 }

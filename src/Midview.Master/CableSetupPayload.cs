@@ -8,10 +8,13 @@ namespace Midview.Master;
 
 // What the Master hands the phone through the cable: the number, the Master's
 // certificate thumbprint and the Wi-Fi. One string, Base64 URL without "=", of
-// the UTF-8 JSON {"number","master","ssid","password"} in that key order.
+// the UTF-8 JSON {"number","master","ssid","password"} in that key order, and
+// "kind":"tablet" after them only for a tablet: a phone's package stays what
+// it was before tablets, so a phone app from before them reads it the same.
 public static class CableSetupPayload
 {
-    public static string Json(string number, string masterThumbprint, string ssid, string password)
+    public static string Json(
+        string number, string masterThumbprint, string ssid, string password, AndroidDeviceKind kind = AndroidDeviceKind.Phone)
     {
         using var stream = new MemoryStream();
         // Relaxed escaping keeps letters like "é" and ' as they are; only quotes,
@@ -24,12 +27,17 @@ public static class CableSetupPayload
             writer.WriteString("master", masterThumbprint.ToUpperInvariant());
             writer.WriteString("ssid", ssid);
             writer.WriteString("password", password);
+            if (kind == AndroidDeviceKind.Tablet)
+            {
+                writer.WriteString("kind", "tablet");
+            }
             writer.WriteEndObject();
         }
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    public static string Encode(string number, string masterThumbprint, string ssid, string password) =>
-        Convert.ToBase64String(Encoding.UTF8.GetBytes(Json(number, masterThumbprint, ssid, password)))
+    public static string Encode(
+        string number, string masterThumbprint, string ssid, string password, AndroidDeviceKind kind = AndroidDeviceKind.Phone) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(Json(number, masterThumbprint, ssid, password, kind)))
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }

@@ -23,6 +23,10 @@
             <StackPanel Margin="6,16,6,10">
                 <RadioButton x:Name="SearchNav" Style="{StaticResource NavRadioButton}" Tag="&#xE721;" Content="Procurar e parear"
                              Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="PhoneSetupNav" Style="{StaticResource NavRadioButton}" Tag="&#xE8EA;" Content="Configurar celular"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
+                <RadioButton x:Name="TabletSetupNav" Style="{StaticResource NavRadioButton}" Tag="&#xE70A;" Content="Configurar tablet"
+                             Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
                 <RadioButton x:Name="UpdatesNav" Style="{StaticResource NavRadioButton}" Tag="&#xE895;" Content="Atualizações"
                              Checked="OnNavChecked" Padding="8,9" Margin="0,0,0,2" />
                 <RadioButton x:Name="OtherTeacherNav" Style="{StaticResource NavRadioButton}" Tag="&#xE716;" Content="Outro professor"
@@ -127,6 +131,14 @@
                         <Hyperlink Click="OnPreparePhoneClicked">Preparar celular...</Hyperlink>
                     </Span>
                 </TextBlock>
+            </Grid>
+
+            <!-- Configurar celular / Configurar tablet (DeviceSetupPage) -->
+            <Grid x:Name="PhoneSetupPanel" Style="{StaticResource PagePanel}">
+                <local:DeviceSetupPage x:Name="PhoneSetupPage" />
+            </Grid>
+            <Grid x:Name="TabletSetupPanel" Style="{StaticResource PagePanel}">
+                <local:DeviceSetupPage x:Name="TabletSetupPage" />
             </Grid>
 
             <!-- Atualizações -->

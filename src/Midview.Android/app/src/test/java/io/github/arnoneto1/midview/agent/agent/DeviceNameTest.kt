@@ -28,4 +28,12 @@ class DeviceNameTest {
         assertEquals("Celular 07", DeviceName.choose("07", null, null))
         assertEquals("Celular 549C", DeviceName.choose(" ", "9774d56d682e549c", "Redmi 10C"))
     }
+
+    // Prepared from "Configurar tablet": the same number, named as a tablet.
+    @Test fun aTabletIsNamedTablet() {
+        assertEquals("Tablet 07", DeviceName.choose("07", "9774d56d682e549c", "Redmi Pad", tablet = true))
+        assertEquals("Celular 07", DeviceName.choose("07", "9774d56d682e549c", "Redmi Pad", tablet = false))
+        // Only the cable gives the kind, and always with a number.
+        assertEquals("Celular 549C", DeviceName.choose(null, "9774d56d682e549c", "Redmi Pad", tablet = true))
+    }
 }

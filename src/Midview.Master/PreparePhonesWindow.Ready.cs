@@ -62,11 +62,11 @@ public partial class PreparePhonesWindow
                     : _progress.Problem == CableProblem.TooOld ? "Separe este celular e prepare outro." : "";
                 FailedHint.Visibility = Shown(FailedHint.Text.Length > 0);
                 Footer(back: stepNumber is not null, next: "Tentar de novo",
-                    other: stepNumber is null ? "Preparar outro celular" : null, backText: $"Voltar ao passo {stepNumber}");
+                    other: stepNumber is null ? $"Preparar outro {DeviceWord}" : null, backText: $"Voltar ao passo {stepNumber}");
                 break;
             case SetupPage.Ready:
                 ReadyTitle.Text = _progress.ReadyText(_phonesInClass(), PhoneTotalFile.Load());
-                ReadyHint.Text = $"No celular aparece \"Pronto. Este é o {name} da escola.\" Ele aparece no filtro Celulares quando entrar no Wi-Fi.";
+                ReadyHint.Text = $"No {DeviceWord} aparece \"Pronto. Este é o {name} da escola.\" Ele aparece no filtro Celulares quando entrar no Wi-Fi.";
                 ShowReadyStatus();
                 Footer(back: false, next: "Preparar o próximo", other: "Terminei");
                 break;

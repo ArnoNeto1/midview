@@ -38,7 +38,7 @@ public class MachinesPhoneSetupTests
         });
     }
 
-    // The XAML's link opens the "Preparar celulares" assistant.
+    // The XAML's link opens the "Configurar celular" page.
     [Fact]
     public void Wizard_keeps_the_preparar_celular_link()
     {
@@ -96,5 +96,47 @@ public class MachinesPhoneSetupTests
         {
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
+    }
+
+    // The side menu: the two "Configurar" pages right after "Procurar e parear".
+    [Fact]
+    public void Pages_are_in_the_side_menu_order()
+    {
+        Assert.Equal(
+            new[]
+            {
+                MachinesPage.Search, MachinesPage.PhoneSetup, MachinesPage.TabletSetup, MachinesPage.Updates,
+                MachinesPage.OtherTeacher, MachinesPage.AdminPassword, MachinesPage.Advanced,
+            },
+            Enum.GetValues<MachinesPage>());
+        Assert.Equal(1, (int)MachinesPage.PhoneSetup);
+    }
+
+    // The count of apps said on the page is the cable's own list.
+    [Fact]
+    public void Optimized_text_counts_the_removed_apps()
+    {
+        Assert.Contains($"tira {PhoneCable.RemovedApps.Count} apps", DeviceSetupText.Optimized(AndroidDeviceKind.Phone));
+        Assert.StartsWith("Instala o Midview e deixa o tablet mais leve", DeviceSetupText.Optimized(AndroidDeviceKind.Tablet));
+    }
+
+    [Theory]
+    [InlineData(AndroidDeviceKind.Phone, "Configurar celular", "1. Celular restaurado de fábrica, sem conta Google.")]
+    [InlineData(AndroidDeviceKind.Tablet, "Configurar tablet", "1. Tablet restaurado de fábrica, sem conta Google.")]
+    public void Each_page_names_its_kind(AndroidDeviceKind kind, string heading, string firstLine)
+    {
+        Assert.Equal(heading, DeviceSetupText.Heading(kind));
+        Assert.Equal(firstLine, DeviceSetupText.BeforeStarting(kind)[0]);
+        Assert.Contains(kind == AndroidDeviceKind.Tablet ? "o tablet for restaurado" : "o celular for restaurado", DeviceSetupText.Kept(kind));
+    }
+
+    // The buttons work only with the assistant out; otherwise the page says why.
+    [Fact]
+    public void Gate_explains_the_buttons_off_until_the_assistant_is_out()
+    {
+        Assert.Equal("O app do celular ainda não foi publicado: os botões funcionam a partir da próxima versão do Midview.",
+            DeviceSetupText.Gate(AndroidDeviceKind.Tablet, PhoneSetupOffer.Soon));
+        Assert.Contains("README", DeviceSetupText.Gate(AndroidDeviceKind.Phone, PhoneSetupOffer.Cable));
+        Assert.Null(DeviceSetupText.Gate(AndroidDeviceKind.Phone, PhoneSetupOffer.Wizard));
     }
 }

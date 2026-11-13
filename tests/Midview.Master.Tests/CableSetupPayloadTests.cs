@@ -53,4 +53,21 @@ public sealed class CableSetupPayloadTests
         Assert.DoesNotContain('+', text);
         Assert.DoesNotContain('/', text);
     }
+
+    // Only a tablet's package carries a kind; a phone's stays as it was.
+    [Fact]
+    public void Phone_json_has_no_kind()
+    {
+        Assert.Equal(FixedJson, CableSetupPayload.Json("07", "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12", "Lab \"1\"; é", "s'nh@ 1;",
+            AndroidDeviceKind.Phone));
+        Assert.Equal(FixedVector, CableSetupPayload.Encode("07", "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12", "Lab \"1\"; é", "s'nh@ 1;",
+            AndroidDeviceKind.Phone));
+    }
+
+    [Fact]
+    public void Tablet_json_ends_with_kind_tablet()
+    {
+        var json = Decode(CableSetupPayload.Encode("07", "ab", "Lab", "pw", AndroidDeviceKind.Tablet));
+        Assert.Equal("{\"number\":\"07\",\"master\":\"AB\",\"ssid\":\"Lab\",\"password\":\"pw\",\"kind\":\"tablet\"}", json);
+    }
 }

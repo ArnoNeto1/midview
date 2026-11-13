@@ -60,7 +60,11 @@ internal sealed class PhoneSetupProgress
     // "07": set once the teacher typed a valid one.
     public string? Number { get; private set; }
 
-    public string? Name => Number is null ? null : PhoneNumber.NameOf(Number);
+    // A phone or a tablet: only the name changes ("Tablet 07"). Set by the
+    // window before the number is typed (PreparePhonesWindow.SetMode).
+    public AndroidDeviceKind Kind { get; set; }
+
+    public string? Name => Number is null ? null : PhoneNumber.NameOf(Number, Kind);
 
     // The last item of the cable list reached (null before the first).
     public CableStage? Stage { get; private set; }

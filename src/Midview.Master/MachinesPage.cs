@@ -4,6 +4,8 @@ namespace Midview.Master;
 public enum MachinesPage
 {
     Search,
+    PhoneSetup,
+    TabletSetup,
     Updates,
     OtherTeacher,
     AdminPassword,

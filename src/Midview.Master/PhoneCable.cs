@@ -282,8 +282,12 @@ public sealed class PhoneCable
         }
     }
 
+    // optimize: "Midview otimizado" lightens the phone (Lighten); "Só o
+    // Midview" leaves the rest of it as it came. kind names the device
+    // ("Tablet 07") here and on the device itself (the package's "kind").
     public CableResult Prepare(
-        string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage)
+        string apkPath, string number, string masterThumbprint, string ssid, string password, Action<CableStage> stage,
+        bool optimize = true, AndroidDeviceKind kind = AndroidDeviceKind.Phone)
     {
         static CableResult Fail(CableProblem problem) => new(null, problem, false);
 
@@ -344,10 +348,13 @@ public sealed class PhoneCable
         // Device Owner step; a failure does not stop the setup either.
         Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
-        Lighten();
+        if (optimize)
+        {
+            Lighten();
+        }
 
         stage(CableStage.Wifi);
-        var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password);
+        var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password, kind);
         var call = Shell(
             Short, "content", "call", "--uri", Authority, "--method", "prepare", "--extra", "setup:s:" + payload);
         var bundle = ParseBundle(call.Text);
@@ -364,7 +371,7 @@ public sealed class PhoneCable
 
         stage(CableStage.Pairing);
         var phone = new KnownMachine(
-            PhoneNumber.NameOf(number), "0.0.0.0", thumbprint, thumbprint, null, DeviceKind.Android);
+            PhoneNumber.NameOf(number, kind), "0.0.0.0", thumbprint, thumbprint, null, DeviceKind.Android);
 
         if (!Present())
         {

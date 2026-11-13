@@ -9,7 +9,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // "Preparar celulares" (PreparePhonesWindow): opened by the big button of the
-// empty "Celulares" filter and by the link in "Máquinas da sala".
+// empty "Celulares" filter and by the "Configurar celular" and "Configurar
+// tablet" pages of "Máquinas da sala".
 public partial class MainWindow
 {
     // The phone app is a few MB: a slow school connection still gets it.
@@ -23,15 +24,25 @@ public partial class MainWindow
     private DispatcherTimer? _phoneJoinTimer;
     private bool _phoneJoinSearching;
 
-    private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) => OpenPreparePhonesWindow();
+    private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) =>
+        OpenPreparePhonesWindow((AndroidDeviceKind.Phone, true));
 
     // One at a time: asking again brings the open one back. The window is
-    // returned so a caller can start it at a number (StartAt).
-    internal PreparePhonesWindow OpenPreparePhonesWindow()
+    // returned so a caller can start it at a number (StartAt). mode: phone or
+    // tablet, and "Midview otimizado" or not ("Máquinas da sala"); null keeps
+    // the open window's (StartAt sets its own). An open window asked for
+    // another mode switches only when no device is named or on the cable in
+    // it; otherwise it says so and goes on, rather than renaming or
+    // preparing differently a device the teacher is in the middle of.
+    internal PreparePhonesWindow OpenPreparePhonesWindow((AndroidDeviceKind Kind, bool Optimize)? mode = null)
     {
         if (_preparePhonesWindow is { } open)
         {
             BringBack(open);
+            if (mode is { } asked && !open.SetMode(asked.Kind, asked.Optimize))
+            {
+                MidviewMessage.Show(open, open.ModeBusyText, open.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
             return open;
         }
 
@@ -44,7 +55,9 @@ public partial class MainWindow
             AddPreparedPhone,
             IsPreparedPhoneOnline,
             WatchPreparedPhone,
-            WipePhoneNamed))
+            WipePhoneNamed),
+            mode?.Kind ?? AndroidDeviceKind.Phone,
+            mode?.Optimize ?? true)
         {
             Owner = this,
         };

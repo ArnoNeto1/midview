@@ -637,4 +637,15 @@ public class PhoneSetupProgressTests
         Assert.Equal(WipeState.Done, progress.Wipe);
         Assert.Equal("Celular 07", progress.Name);
     }
+
+    // The kind only changes the name the device gets.
+    [Fact]
+    public void A_tablet_is_named_tablet()
+    {
+        var progress = new PhoneSetupProgress { Kind = AndroidDeviceKind.Tablet };
+        progress.Start(hasWifi: true, gathered: true);
+        Assert.True(progress.SetNumber("7"));
+        Assert.Equal("Tablet 07", progress.Name);
+        Assert.Equal("Já existe um Tablet 07. Vai preparar de novo o 07?", progress.ConfirmRedoText);
+    }
 }

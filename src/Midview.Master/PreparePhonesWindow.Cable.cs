@@ -157,12 +157,14 @@ public partial class PreparePhonesWindow
         UpdateCableWatch();
         var cable = Cable();
         var thumbprint = _host.MasterThumbprint;
+        var optimize = _optimize;
+        var kind = _progress.Kind;
         CableResult result;
         try
         {
             result = await Task.Run(() => cable.Prepare(
                 apk, number, thumbprint, wifi.Ssid, wifi.Password,
-                stage => Dispatcher.BeginInvoke(() => OnCableStage(stage))));
+                stage => Dispatcher.BeginInvoke(() => OnCableStage(stage)), optimize, kind));
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or Win32Exception or UnauthorizedAccessException)
         {

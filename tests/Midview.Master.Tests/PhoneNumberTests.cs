@@ -25,4 +25,10 @@ public class PhoneNumberTests
     [Fact]
     public void NameOf_prefixes_celular() =>
         Assert.Equal("Celular 07", PhoneNumber.NameOf("07"));
+
+    [Theory]
+    [InlineData(AndroidDeviceKind.Phone, "Celular 07")]
+    [InlineData(AndroidDeviceKind.Tablet, "Tablet 07")]
+    public void NameOf_follows_the_kind(AndroidDeviceKind kind, string expected) =>
+        Assert.Equal(expected, PhoneNumber.NameOf("07", kind));
 }

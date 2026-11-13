@@ -65,7 +65,7 @@ public static class PhoneProvisioning
     public static string NoPhoneYet(PhoneSetupOffer setup) => setup switch
     {
         PhoneSetupOffer.Wizard => "Nenhum celular nesta sala ainda. Para colocar o primeiro, escolha \"Celulares\" e use \"Preparar celulares\".",
-        PhoneSetupOffer.Cable => "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+        PhoneSetupOffer.Cable => "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Configurar celular\".",
         _ => "Nenhum celular nesta sala ainda.",
     };
 }

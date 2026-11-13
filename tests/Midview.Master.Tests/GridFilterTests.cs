@@ -101,7 +101,7 @@ public class GridFilterTests
     public void Empty_notice_when_filter_leaves_no_phones_points_to_the_cable_once_the_phone_app_is_out()
     {
         var onlyComputers = new[] { Tile(TilePresence.Online) };
-        Assert.Equal("Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".",
+        Assert.Equal("Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Configurar celular\".",
                      GridFilter.EmptyNotice(onlyComputers, onlineOnly: false, DeviceFilter.Phones, PhoneSetupOffer.Cable));
     }
 

@@ -73,7 +73,7 @@ public class ScreensMenuTests
     // steps; with the assistant out, "Preparar celulares".
     [Theory]
     [InlineData(PhoneSetupOffer.Soon, "Nenhum celular nesta sala ainda.")]
-    [InlineData(PhoneSetupOffer.Cable, "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Procurar e parear\".")]
+    [InlineData(PhoneSetupOffer.Cable, "Nenhum celular nesta sala ainda. O celular é preparado pelo cabo USB: veja como em \"Máquinas da sala\" > \"Configurar celular\".")]
     [InlineData(PhoneSetupOffer.Wizard, "Nenhum celular nesta sala ainda. Para colocar o primeiro, escolha \"Celulares\" e use \"Preparar celulares\".")]
     public void Greyed_phones_hint_follows_the_phone_setup(PhoneSetupOffer setup, string toolTip)
     {

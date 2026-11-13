@@ -48,9 +48,13 @@ public partial class PreparePhonesWindow : MidviewWindow
     // even when it could not be saved.
     private (string Ssid, string Password)? _wifi = PhoneWifiFile.Load();
 
-    internal PreparePhonesWindow(PreparePhonesHost host)
+    internal PreparePhonesWindow(
+        PreparePhonesHost host, AndroidDeviceKind kind = AndroidDeviceKind.Phone, bool optimize = true)
     {
         InitializeComponent();
+        _progress.Kind = kind;
+        _optimize = optimize;
+        ShowMode();
         _host = host;
         _phonesInClass = host.PhonesInClass;
         _phoneOnline = host.PhoneOnline;
@@ -63,9 +67,13 @@ public partial class PreparePhonesWindow : MidviewWindow
 
     // For a phone just wiped: straight to turning it on, "Apareceu Bem-vindo"
     // open (the Wi-Fi first if none is saved yet). wiped: the page says it is
-    // being wiped, as the Master already did it from the phone's menu.
+    // being wiped, as the Master already did it from the phone's menu. Only
+    // a "Celular 07" is wiped and prepared again this way, so the window
+    // turns to phones whatever it was on.
     public void StartAt(string number, bool wiped = false)
     {
+        _progress.Kind = AndroidDeviceKind.Phone;
+        ShowMode();
         _progress.StartAt(number, wiped);
         if (_wifi is null)
         {

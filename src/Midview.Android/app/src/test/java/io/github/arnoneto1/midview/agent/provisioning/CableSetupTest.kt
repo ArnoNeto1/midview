@@ -100,4 +100,40 @@ class CableSetupTest {
         assertEquals("08", setup.number())
         assertTrue(setup.markReadyShown())
     }
+
+    // The Master adds "kind":"tablet" only for a tablet; a phone's package
+    // is the same as before the kind existed.
+    @Test fun theKindTabletMakesATablet() {
+        val json = "{\"number\":\"07\",\"master\":\"" + "AB".repeat(20) + "\",\"ssid\":\"x\",\"password\":\"y\",\"kind\":\"tablet\"}"
+        assertTrue(CableSetupPayload.decode(encode(json))!!.tablet)
+    }
+
+    @Test fun noKindOrAnUnknownKindIsAPhone() {
+        assertFalse(CableSetupPayload.decode(vector)!!.tablet)
+        assertFalse(CableSetupPayload.decode(encode(setupJson()))!!.tablet)
+        val other = "{\"number\":\"07\",\"master\":\"" + "AB".repeat(20) + "\",\"ssid\":\"x\",\"kind\":\"watch\"}"
+        assertFalse(CableSetupPayload.decode(encode(other))!!.tablet)
+    }
+
+    // The kind is kept with the number, so the name survives a restart and
+    // the Wi-Fi being taken.
+    @Test fun theKindIsKeptWithTheNumber() {
+        val file = File(folder.root, "cable-setup.json")
+        val setup = CableSetup(file)
+        setup.save(CableSetupData("07", "AB".repeat(20), "x", "p", tablet = true))
+        setup.takeWifi()
+        setup.markReadyShown()
+        assertTrue(CableSetup(file).isTablet())
+        assertEquals("07", CableSetup(file).number())
+        setup.save(CableSetupData("08", "AB".repeat(20), "x", null))
+        assertFalse(CableSetup(file).isTablet())
+    }
+
+    // A file saved before the kind existed names a phone.
+    @Test fun anOlderFileWithoutKindIsAPhone() {
+        val file = File(folder.root, "cable-setup.json")
+        file.writeText("{\"number\":\"07\",\"ssid\":\"x\",\"password\":null,\"readyShown\":true}")
+        assertFalse(CableSetup(file).isTablet())
+        assertFalse(CableSetup(File(folder.root, "none.json")).isTablet())
+    }
 }
