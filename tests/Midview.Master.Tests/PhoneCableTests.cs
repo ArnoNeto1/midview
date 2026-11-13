@@ -305,13 +305,14 @@ public sealed class PhoneCableTests
             S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
+            ContentCall(),
+            // Lighten: last before the Owner step (after a Mi sign-out, when there is one).
             S + "shell settings put global window_animation_scale 0",
             S + "shell settings put global transition_animation_scale 0",
             S + "shell settings put global animator_duration_scale 0",
             S + "shell settings put system QSB_SCROLL_ENTRANCE_STATUS 0",
             S + "shell settings put system open_personal_assistant 0",
             S + "shell pm list packages",
-            ContentCall(),
             "devices",
             SetDeviceOwner,
         }, afterCheck);

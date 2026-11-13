@@ -108,6 +108,9 @@ public sealed class PhoneCableMiTests
         // Signed out last: after the setup is handed over, right before the Owner step.
         var signOut = adb.Calls.IndexOf("-s " + Serial + " shell input tap 360 1340");
         Assert.True(signOut > adb.Calls.FindIndex(c => c.Contains("content call", StringComparison.Ordinal)));
+        // The optimized cleanup (it removes Xiaomi cloud apps) only after the sign-out.
+        Assert.True(signOut < adb.Calls.IndexOf("-s " + Serial + " shell settings put global window_animation_scale 0"));
+        Assert.True(signOut < adb.Calls.IndexOf("-s " + Serial + " shell pm list packages"));
         Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls[^1]);
     }
 

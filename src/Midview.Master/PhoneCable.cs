@@ -272,8 +272,8 @@ public sealed class PhoneCable
     // A lighter phone: no animations, the apps above removed, the heavy apps
     // still on it kept from running in the background, and the home screen's
     // gestures that open the removed Google app (a blank white screen) off.
-    // Only from the cable, so before the Device Owner step; a failure does
-    // not stop the setup.
+    // Only from the cable, so right before the Device Owner step; a failure
+    // does not stop the setup.
     private void Lighten()
     {
         foreach (var scale in new[] { "window_animation_scale", "transition_animation_scale", "animator_duration_scale" })
@@ -377,10 +377,6 @@ public sealed class PhoneCable
         // Device Owner step; a failure does not stop the setup either.
         Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
-        if (optimize)
-        {
-            Lighten();
-        }
 
         stage(CableStage.Wifi);
         var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password, kind);
@@ -415,12 +411,21 @@ public sealed class PhoneCable
             }
         }
 
+        stage(CableStage.Owner);
+        // Last before the Owner step, after the Mi sign-out: it removes Xiaomi
+        // cloud apps (com.miui.micloudsync, com.miui.cloudbackup) the
+        // sign-out may still need. None of it depends on MIUI's security
+        // switches (pm uninstall --user 0, settings put, cmd appops).
+        if (optimize)
+        {
+            Lighten();
+        }
+
         if (!Present())
         {
             return Fail(CableProblem.Lost);
         }
 
-        stage(CableStage.Owner);
         var owner = Shell(Short, "dpm", "set-device-owner", PhoneProvisioning.AdminComponent);
         // From here on nothing else touches the cable.
         if (owner.Text.Contains("Success", StringComparison.Ordinal))
