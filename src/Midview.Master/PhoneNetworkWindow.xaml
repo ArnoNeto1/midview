@@ -1,0 +1,61 @@
+<local:MidviewWindow x:Class="Midview.Master.PhoneNetworkWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Midview.Master"
+        Title="Wi-Fi e modo avião dos celulares e tablets" Height="720" Width="660" MinHeight="500" MinWidth="540"
+        MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="24,22,24,20">
+        <StackPanel DockPanel.Dock="Top">
+            <local:DialogHeader x:Name="DialogHeading" Icon="&#xE701;" Heading="Wi-Fi e modo avião dos celulares e tablets" Accent="{StaticResource CelularesBrush}">
+                <TextBlock x:Name="TargetsTextBlock" Style="{StaticResource Hint}" />
+            </local:DialogHeader>
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
+                               Text="O Wi-Fi e o modo avião ficam travados nos celulares e tablets da escola: o aluno não troca de rede nem liga o modo avião (e, do Android 13 em diante, não desliga o Wi-Fi). Para trocar a rede de um aparelho, libere por alguns minutos; depois eles travam de novo sozinhos." />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="Liberar por" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,0" />
+                        <RadioButton x:Name="TenMinutesRadioButton" GroupName="Minutes" Content="10 minutos" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0" />
+                        <RadioButton x:Name="ThirtyMinutesRadioButton" GroupName="Minutes" Content="30 minutos" VerticalAlignment="Center" Margin="0,0,14,0" />
+                        <RadioButton x:Name="SixtyMinutesRadioButton" GroupName="Minutes" Content="60 minutos" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button x:Name="FreeButton" Content="Liberar" Click="OnFreeClicked"
+                                Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,8,0" IsDefault="True" />
+                        <Button x:Name="LockButton" Content="Travar agora" Click="OnLockClicked" Padding="14,6" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource CardTitle}" Text="Senha de administrador dos celulares" />
+                    <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Text="Com ela, alguém da escola libera o Wi-Fi e o modo avião por 10 minutos no próprio aparelho: na notificação do Midview, toque em &quot;Ajustes da escola&quot;. De 6 a 12 letras ou números, diferente do PIN da tela. A senha não fica guardada neste computador e não vai para os aparelhos (só uma impressão dela): anote-a." />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Text="Senha" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" />
+                        <Grid Width="170">
+                            <PasswordBox x:Name="PasswordBox" MaxLength="12" FontSize="16" Padding="10,5"
+                                         AutomationProperties.Name="Senha de administrador"
+                                         PasswordChanged="OnPasswordChanged" PreviewTextInput="OnPasswordPreviewTextInput" PreviewKeyDown="OnPasswordPreviewKeyDown" />
+                            <TextBox x:Name="PasswordTextBox" MaxLength="12" FontSize="16" Padding="10,5" Visibility="Collapsed"
+                                     AutomationProperties.Name="Senha de administrador"
+                                     TextChanged="OnPasswordTextChanged" PreviewTextInput="OnPasswordPreviewTextInput" PreviewKeyDown="OnPasswordPreviewKeyDown" />
+                        </Grid>
+                        <CheckBox x:Name="ShowPasswordCheckBox" Content="Mostrar" VerticalAlignment="Center" Margin="14,0,0,0"
+                                  Checked="OnShowPasswordChanged" Unchecked="OnShowPasswordChanged" />
+                        <TextBlock x:Name="PasswordHintTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button x:Name="SetPasswordButton" Content="Pôr a senha" Click="OnSetPasswordClicked" Padding="14,6" Margin="0,0,8,0" IsEnabled="False" />
+                        <Button x:Name="RemovePasswordButton" Content="Tirar a senha" Click="OnRemovePasswordClicked" Padding="14,6" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <TextBlock x:Name="ProgressTextBlock" Margin="0,14,0,10" TextWrapping="Wrap" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="PhonesList" ItemTemplate="{StaticResource PhoneRowTemplate}" />
+        </ScrollViewer>
+    </DockPanel>
+</local:MidviewWindow>

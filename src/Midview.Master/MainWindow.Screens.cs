@@ -29,7 +29,8 @@ public partial class MainWindow
             DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Tablet), DeviceSupport.HasAndroid(room),
             ShowDevices, () => OpenOptimizeWindow(ToolbarReach(ToolbarAction.Optimize)),
             () => OpenPhonePinWindow(ToolbarReach(ToolbarAction.PhonePin)), PhoneProvisioning.Setup,
-            reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0);
+            reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0,
+            phoneNetwork: () => OpenPhoneNetworkWindow(ToolbarReach(ToolbarAction.PhonePin)));
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -55,7 +56,7 @@ public partial class MainWindow
     // would reach any device.
     internal static ContextMenu ScreensMenu(
         DeviceFilter shown, bool hasPhones, bool hasTablets, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
-        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true)
+        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true, Action? phoneNetwork = null)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -100,6 +101,14 @@ public partial class MainWindow
             pinItem.Click += (_, _) => phonePin();
             menu.Items.Add(pinItem);
             Unreached(pinItem);
+            var networkItem = new MenuItem
+            {
+                Header = "Liberar Wi-Fi e modo avião...",
+                ToolTip = "Libera por alguns minutos o Wi-Fi e o modo avião, que ficam travados nos celulares e tablets, ou trava de novo; também a senha de administrador dos celulares. Com alguns selecionados, só neles.",
+            };
+            networkItem.Click += (_, _) => phoneNetwork?.Invoke();
+            menu.Items.Add(networkItem);
+            Unreached(networkItem);
         }
         return menu;
 

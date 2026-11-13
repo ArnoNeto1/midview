@@ -66,6 +66,17 @@ public partial class MainWindow
         ShowOnce("pin-celulares", phones, () => new PhonePinWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
     }
 
+    // "Liberar Wi-Fi e modo avião...": the same devices as the PIN.
+    private void OpenPhoneNetworkWindow(IReadOnlyList<KnownMachine> phones)
+    {
+        if (phones.Count == 0)
+        {
+            StatusTextBlock.Text = "Nenhum celular ou tablet na lista da sala para liberar o Wi-Fi.";
+            return;
+        }
+        ShowOnce("rede-celulares", phones, () => new PhoneNetworkWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
+    }
+
     // The APK of this Master's version, from GitHub, kept in
     // PhoneAgentApk.DefaultFolder; the client goes with the window. kind
     // words the window (PhoneUpdateText.KindOf for a menu's devices); phones

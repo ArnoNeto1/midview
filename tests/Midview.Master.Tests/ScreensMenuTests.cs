@@ -5,7 +5,7 @@ using Midview.Master;
 using Xunit;
 
 // "Telas" (group Configurar): which screens the grid shows, "Otimizar celulares e tablets..."
-// and "Senha dos celulares e tablets...".
+// "Senha dos celulares e tablets..." and "Liberar Wi-Fi e modo avião...".
 public class ScreensMenuTests
 {
     [Fact]
@@ -15,7 +15,7 @@ public class ScreensMenuTests
         {
             var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets..." }, Headers(menu));
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião..." }, Headers(menu));
             var items = menu.Items.OfType<MenuItem>().ToList();
             Assert.Equal(new[] { false, false, true, false }, items.Take(4).Select(item => item.IsChecked));
             Assert.All(items, item => Assert.True(item.IsEnabled));
@@ -47,6 +47,22 @@ public class ScreensMenuTests
             items[5].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Equal(1, optimized);
             Assert.Equal(1, pinned);
+        });
+    }
+
+    [Fact]
+    public void Liberar_wifi_opens_its_window()
+    {
+        InSta(() =>
+        {
+            var opened = 0;
+            var menu = MainWindow.ScreensMenu(
+                DeviceFilter.All, hasPhones: true, hasTablets: false, hasAndroid: true, _ => { }, () => { }, () => { }, phoneNetwork: () => opened++);
+            var item = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Liberar Wi-Fi e modo avião..."));
+
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+            Assert.Equal(1, opened);
         });
     }
 
@@ -169,6 +185,7 @@ public class ScreensMenuTests
             var items = menu.Items.OfType<MenuItem>().ToList();
             Assert.False(items[4].IsEnabled);
             Assert.False(items[5].IsEnabled);
+            Assert.False(items[6].IsEnabled);
             Assert.StartsWith("Nenhum celular ou tablet selecionado ou na grade", (string)items[4].ToolTip);
             Assert.True(ToolTipService.GetShowOnDisabled(items[5]));
             Assert.All(items.Take(3), item => Assert.True(item.IsEnabled));
