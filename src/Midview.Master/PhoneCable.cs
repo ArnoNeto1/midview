@@ -286,6 +286,11 @@ public sealed partial class PhoneCable
         Shell(Short, "cmd", "appops", "set", "--uid", package, "MANAGE_EXTERNAL_STORAGE", "allow");
         Shell(Short, "pm", "grant", package, "android.permission.READ_EXTERNAL_STORAGE");
         Shell(Short, "pm", "grant", package, "android.permission.WRITE_EXTERNAL_STORAGE");
+        // Android 10 takes no screenshot through accessibility: the agent
+        // captures the screen as a "screen recorder", and with this the
+        // system starts it without asking "Iniciar agora" (seen on the
+        // school's Multilaser M10). A failure does not stop the setup.
+        Shell(Short, "cmd", "appops", "set", package, "PROJECT_MEDIA", "allow");
         // The screen reader the agent shows the screen with (Android 11 or
         // newer): without it the phone asks "Iniciar agora" before the
         // teacher sees its screen. Only from the cable, so before the

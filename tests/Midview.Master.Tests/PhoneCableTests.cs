@@ -308,6 +308,7 @@ public sealed class PhoneCableTests
             S + "shell cmd appops set --uid " + Package + " MANAGE_EXTERNAL_STORAGE allow",
             S + "shell pm grant " + Package + " android.permission.READ_EXTERNAL_STORAGE",
             S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE",
+            S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
             ContentCall(),
@@ -508,6 +509,7 @@ public sealed class PhoneCableTests
             .Set(S + "shell cmd appops set --uid " + Package + " MANAGE_EXTERNAL_STORAGE allow", "Error: Unknown operation string", 255)
             .Set(S + "shell pm grant " + Package + " android.permission.READ_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
             .Set(S + "shell pm grant " + Package + " android.permission.WRITE_EXTERNAL_STORAGE", "Exception occurred while executing 'grant'", 255)
+            .Set(S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow", "Error: Unknown operation string", 255)
             .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
             .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255)
             .Set(S + "shell settings put global window_animation_scale 0", "Error", 255)

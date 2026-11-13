@@ -1,0 +1,28 @@
+package io.github.arnoneto1.midview.agent.screen
+
+// Android 10's "Iniciar agora": a school device prepared over the cable has
+// PROJECT_MEDIA allowed (PhoneCable), so the system never asks. Should it ask
+// all the same, the agent's own accessibility service presses "Iniciar
+// agora" (ConsentTapper), but only on the system's request for this app
+// (shown by SystemUI and naming the Midview) and only for a few seconds after
+// the agent itself asked (ConsentActivity): never another app's request,
+// never one the agent did not make. No Android classes (JVM tests).
+internal object ConsentTap {
+    const val SYSTEM_UI = "com.android.systemui"
+    const val APP_NAME = "Midview"
+    const val WITHIN_MILLIS = 5_000L
+    const val POSITIVE_BUTTON = "android:id/button1"
+    val START_TEXTS = setOf("iniciar agora", "start now", "começar agora")
+
+    // The agent asked a moment ago (requestedAt, from the same clock as now).
+    fun due(requestedAt: Long?, now: Long): Boolean = requestedAt != null && now - requestedAt in 0..WITHIN_MILLIS
+
+    // A window of SystemUI's whose texts name the Midview: its capture request.
+    fun isOwnRequest(windowPackage: CharSequence?, texts: List<CharSequence?>): Boolean =
+        windowPackage?.toString() == SYSTEM_UI && texts.any { it?.contains(APP_NAME) == true }
+
+    // The button that starts the capture: the dialog's positive one, or one
+    // saying "Iniciar agora".
+    fun isStartButton(viewId: String?, text: CharSequence?): Boolean =
+        viewId == POSITIVE_BUTTON || text?.toString()?.trim()?.lowercase() in START_TEXTS
+}

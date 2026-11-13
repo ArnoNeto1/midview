@@ -83,6 +83,8 @@ class ConsentActivity : Activity() {
         }
         try {
             startActivityForResult(request, REQUEST)
+            // Should the system ask (PROJECT_MEDIA not allowed by the cable), the agent answers.
+            ConsentTapper.asked()
         } catch (e: ActivityNotFoundException) {
             answered(Activity.RESULT_CANCELED, null)
         }
