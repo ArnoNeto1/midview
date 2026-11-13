@@ -113,7 +113,13 @@ O celular Android (Android 10 ou mais novo) aparece na grade e é pareado com o 
 
 Os bloqueios de apps e de sites continuam valendo se o celular reiniciar.
 
-A **Pasta da turma** vale para a sala toda, celulares também. No celular ela fica em Download/Midview/Pasta da turma – <turma>, no app Arquivos, e o que o aluno salva ou move para ela aparece em todos os computadores e celulares, como nos PCs. O Chrome do celular continua baixando em Download (no Android não há como mandar os downloads para outra pasta): para dividir um download com a turma, o aluno o move para essa pasta no app Arquivos. Ela precisa do acesso a todos os arquivos, que a preparação pelo cabo liga. **Recolher arquivos** e o seu **Apagar as pastas dos alunos** não mexem nela.
+O Midview também trava, sempre, duas coisas no celular: o aluno não muda a data, a hora nem o fuso horário (o celular continua acertando tudo sozinho pela rede), e os outros apps não abrem janelas por cima da tela (as janelas flutuantes da MIUI, os balões de conversa), nem por cima do cadeado do professor. Os avisos do próprio Midview continuam aparecendo.
+
+A **Pasta da turma** vale para a sala toda, celulares também. No celular ela fica em Download/Midview/Pasta da turma – <turma>, no app Arquivos, e o que o aluno salva ou move para ela aparece em todos os computadores e celulares, como nos PCs. O Chrome do celular continua baixando em Download (no Android não há como mandar os downloads para outra pasta): para dividir um download com a turma, o aluno o move para essa pasta no app Arquivos. Ela precisa do acesso a todos os arquivos, que a preparação pelo cabo liga. **Recolher arquivos** e o seu **Apagar as pastas dos alunos** não mexem nela. Quando a aula acaba, os arquivos saem da pasta e ficam guardados numa área escondida, Download/Midview/.midview-turmas, até o Midview do professor buscá-los na aula seguinte (o que ele já tem, ou o que foi apagado com **Apagar tudo**, só é apagado do celular). O que ninguém buscar sai sozinho depois de 30 dias, ou antes, se a área passar de 2 GB.
+
+Para receber arquivos (**Enviar arquivo**, **Pasta da turma**, **Instalar programa** e a atualização do aplicativo), o celular precisa continuar com pelo menos 100 MB livres depois de receber; um app ou uma atualização precisa de duas vezes o seu tamanho, mais esses 100 MB. Sem esse espaço, o professor lê "sem espaço no celular".
+
+Num celular com Android 14 ou mais novo, com a tela apagada, o Midview pode demorar um pouco mais para responder ao professor: a partir do Android 14, o Wi-Fi entra em economia de energia com a tela apagada, e o Midview não consegue impedir.
 
 Valem para os celulares selecionados ou, sem seleção, para todos os celulares da sala:
 

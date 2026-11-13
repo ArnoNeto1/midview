@@ -115,7 +115,13 @@ An Android phone (Android 10 or newer) shows up in the grid and is paired with t
 
 The app and website blocks stay in effect if the phone restarts.
 
-The **Class folder** (Pasta da turma) is for the whole room, phones included. On a phone it is Download/Midview/Pasta da turma – <class>, in the Files app, and whatever the student saves or moves there shows up on every computer and phone, as on the PCs. The phone's Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it to that folder in the Files app. It needs the all-files access that the cable setup turns on. **Collect files** and its **Apagar as pastas dos alunos** (empty the students' folders) leave it alone.
+Midview also always locks two things on the phone: the student can't change the date, the time or the time zone (the phone keeps setting them by itself from the network), and other apps can't open windows over the screen (MIUI's floating windows, chat bubbles), not even over the teacher's padlock. Midview's own notices still show.
+
+The **Class folder** (Pasta da turma) is for the whole room, phones included. On a phone it is Download/Midview/Pasta da turma – <class>, in the Files app, and whatever the student saves or moves there shows up on every computer and phone, as on the PCs. The phone's Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it to that folder in the Files app. It needs the all-files access that the cable setup turns on. **Collect files** and its **Apagar as pastas dos alunos** (empty the students' folders) leave it alone. When the lesson ends, its files leave the folder and are kept in a hidden area, Download/Midview/.midview-turmas, until the teacher's Midview picks them up at the next lesson (what it already has, or what was deleted with **Apagar tudo** (delete everything), is only deleted from the phone). Whatever nobody picks up goes by itself after 30 days, or sooner if the area grows past 2 GB.
+
+To receive files (**Enviar arquivo**, the **Class folder**, **Instalar programa** and the app's update), the phone must still have at least 100 MB free after receiving them; an app or an update needs twice its size plus those 100 MB. Without that room, the teacher reads "sem espaço no celular" (no room on the phone).
+
+On a phone with Android 14 or newer, with the screen off, Midview may take a little longer to answer the teacher: from Android 14 on, the Wi-Fi goes into power saving with the screen off, and Midview can't prevent it.
 
 These act on the selected phones or, with nothing selected, on every phone in the room:
 
