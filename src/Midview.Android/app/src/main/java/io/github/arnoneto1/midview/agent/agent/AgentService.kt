@@ -301,6 +301,16 @@ class AgentService : Service() {
         // "Agendar": the screen off at the teacher's shutdown time, by the same countdown.
         val powerSchedule = scheduledScreenOff(power, log, ::own)
         val classFolder = AgentClassFolder(this, log, ::own)
+        // The Wi-Fi locked again right when its free time ends (the watchdog
+        // is the fallback, also for a phone asleep then).
+        val relock = Runnable { SchoolNetwork.check(this) }
+        own(
+            SchoolNetwork.network(this).follow { end ->
+                main.removeCallbacks(relock)
+                if (end != null) main.postDelayed(relock, (end - System.currentTimeMillis()).coerceAtLeast(0) + RELOCK_MARGIN_MILLIS)
+            },
+        )
+        own { main.removeCallbacks(relock) }
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
@@ -390,6 +400,7 @@ class AgentService : Service() {
         private const val TAG = "Midview"
         private const val RETRY_MILLIS = 30_000L
         private const val LOCK_AGAIN_MILLIS = 3_000L
+        private const val RELOCK_MARGIN_MILLIS = 250L
 
         private const val APP_BLOCK_FILE = "app-block.bin"
         private const val SITE_BLOCK_FILE = "site-block.txt"

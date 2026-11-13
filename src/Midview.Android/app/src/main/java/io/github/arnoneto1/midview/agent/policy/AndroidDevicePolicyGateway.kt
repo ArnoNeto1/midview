@@ -167,6 +167,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         fun lockDown(context: Context) {
             try {
                 val network = SchoolNetwork.network(context)
+                // Once the Device Owner: the school's network out of the user's hands.
+                if (AndroidDevicePolicyGateway(context).isDeviceOwner()) SchoolNetwork.wifi(context).lockOwnersNetworks()
                 if (Lockdown(AndroidDevicePolicyGateway(context), network = network::unlessFree).apply()) {
                     Log.i(TAG, "School phone locks applied.")
                 }

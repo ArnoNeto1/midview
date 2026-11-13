@@ -45,6 +45,8 @@ object CableSetupPayload {
     }
 }
 
+data class SchoolWifiName(val ssid: String, val open: Boolean)
+
 // The setup file (filesDir/cable-setup.json): the number and the kind, which
 // name the phone for good, and the Wi-Fi, whose password is erased once used.
 class CableSetup(private val file: File) {
@@ -54,6 +56,7 @@ class CableSetup(private val file: File) {
             .put("kind", if (data.tablet) CableSetupPayload.KIND_TABLET else KIND_PHONE)
             .put("ssid", data.ssid)
             .put("password", data.password ?: JSONObject.NULL)
+            .put("open", data.password == null)
             .put("readyShown", false)
             .toString()
         synchronized(lock) {
@@ -83,6 +86,16 @@ class CableSetup(private val file: File) {
         obj.put("wifiTaken", true)
         store(obj)
         ssid to password
+    }
+
+    // The school's Wi-Fi as the cable setup gave it, for NetworkFree to join
+    // it again: its name, and whether it is open. A file from before "open"
+    // was kept says secured, so an open network is never made up under the
+    // school's name. Null without a setup.
+    fun schoolWifi(): SchoolWifiName? = synchronized(lock) {
+        val obj = load() ?: return null
+        val ssid = obj.optString("ssid", "").ifEmpty { return null }
+        SchoolWifiName(ssid, obj.optBoolean("open", false))
     }
 
     // True only the first time, so the "Pronto" screen shows once.

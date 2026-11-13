@@ -75,6 +75,28 @@ class CableSetupTest {
         assertNull(setup.takeWifi())
     }
 
+    // NetworkFree joins the school's Wi-Fi again by its name; whether it is
+    // open is kept, the password is not.
+    @Test fun theSchoolsWifiKeepsItsNameAndWhetherItIsOpen() {
+        val secured = CableSetup(File(folder.root, "secured.json"))
+        secured.save(CableSetupData("07", "AB".repeat(20), "Lab", "senha123"))
+        secured.takeWifi()
+        assertEquals(SchoolWifiName("Lab", open = false), secured.schoolWifi())
+
+        val open = CableSetup(File(folder.root, "open.json"))
+        open.save(CableSetupData("07", "AB".repeat(20), "Aberta", null))
+        assertEquals(SchoolWifiName("Aberta", open = true), open.schoolWifi())
+    }
+
+    // A file from before "open" was kept: secured, never an open network
+    // made up under the school's name.
+    @Test fun anOlderFileIsASecuredNetwork() {
+        val file = File(folder.root, "cable-setup.json")
+        file.writeText("""{"number":"99","ssid":"Hermann","password":null,"readyShown":true,"wifiTaken":true}""")
+        assertEquals(SchoolWifiName("Hermann", open = false), CableSetup(file).schoolWifi())
+        assertNull(CableSetup(File(folder.root, "none.json")).schoolWifi())
+    }
+
     @Test fun withoutAFileThereIsNothing() {
         val setup = CableSetup(File(folder.root, "none.json"))
         assertNull(setup.number())

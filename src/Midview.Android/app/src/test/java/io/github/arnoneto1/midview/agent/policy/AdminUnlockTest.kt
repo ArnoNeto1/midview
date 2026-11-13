@@ -148,4 +148,16 @@ class AdminUnlockTest {
         admin.setPassword(payload)
         assertEquals(AdminUnlock.Attempt.Refused(NetworkFree.NOT_PREPARED), admin.tryPassword("abc123"))
     }
+
+    // The fifth wrong try was counted, then the phone restarted before its
+    // check ended: the wait starts at the next start, it is not forgotten.
+    @Test fun aRestartDuringTheFifthTryStillLocksOut() {
+        admin().setPassword(payload)
+        attemptsFile.writeText("midview-admin-attempts 2\nfailures=5\nlockedUntil=\n")
+
+        val end = clock + AdminUnlock.LOCKOUT_MILLIS
+        assertEquals(AdminUnlock.State.LockedOut(end), admin().state())
+        assertEquals(AdminUnlock.Attempt.LockedOut(end), admin().tryPassword("abc123"))
+        assertTrue(freed.isEmpty())
+    }
 }

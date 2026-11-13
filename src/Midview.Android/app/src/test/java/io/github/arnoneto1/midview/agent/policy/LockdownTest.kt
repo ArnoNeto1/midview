@@ -99,6 +99,7 @@ class LockdownTest {
         "no_modify_accounts",
         "no_config_date_time",
         "no_create_windows",
+        "no_config_tethering",
     )
 
     // The Wi-Fi and airplane mode, and from Android 13 turning the Wi-Fi off.

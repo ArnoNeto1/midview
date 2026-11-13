@@ -157,6 +157,8 @@ class Lockdown(
         // also over the teacher's lock screen; the agent's own notices are
         // accessibility windows, which it leaves alone (checked on the
         // Redmi 10C: the "Controlar" strip and the countdown still show).
+        // DISALLOW_CONFIG_TETHERING keeps the hotspot off (turning it on can
+        // drop the school's Wi-Fi), also while the Wi-Fi is freed.
         val RESTRICTIONS = listOf(
             "no_factory_reset",
             "no_debugging_features",
@@ -170,6 +172,7 @@ class Lockdown(
             "no_modify_accounts",
             "no_config_date_time",
             "no_create_windows",
+            "no_config_tethering",
         )
 
         // UserManager.DISALLOW_CONFIG_WIFI, DISALLOW_AIRPLANE_MODE (Android 9

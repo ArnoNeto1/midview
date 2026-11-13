@@ -152,8 +152,15 @@ class AdminUnlock(
             lockedUntil = now() + LOCKOUT_MILLIS
             return
         }
-        failures = stored.first("failures")?.toIntOrNull()?.coerceIn(0, MAX_TRIES - 1) ?: 0
+        failures = stored.first("failures")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         lockedUntil = stored.first("lockedUntil")?.toLongOrNull()
+        // The fifth wrong try was counted but the app ended before its check
+        // did (a restart in the middle): the wait starts now.
+        if (failures >= MAX_TRIES) {
+            failures = 0
+            if ((lockedUntil ?: 0L) <= now()) lockedUntil = now() + LOCKOUT_MILLIS
+            saveAttempts()
+        }
     }
 
     companion object {

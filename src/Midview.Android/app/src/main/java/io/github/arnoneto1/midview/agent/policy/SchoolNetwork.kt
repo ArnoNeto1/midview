@@ -3,6 +3,7 @@ package io.github.arnoneto1.midview.agent.policy
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import io.github.arnoneto1.midview.agent.provisioning.CableSetup
 import java.io.File
 
 // The process's one NetworkFree and AdminUnlock, on the app's storage and
@@ -16,6 +17,7 @@ object SchoolNetwork {
     private const val ADMIN_ATTEMPTS_FILE = "admin-attempts.txt"
 
     @Volatile private var network: NetworkFree? = null
+    @Volatile private var wifi: SchoolWifi? = null
     @Volatile private var admin: AdminUnlock? = null
 
     private val log: (String, Throwable?) -> Unit = { text, e -> if (e == null) Log.i(TAG, text) else Log.w(TAG, text, e) }
@@ -31,8 +33,19 @@ object SchoolNetwork {
                     addRestriction = gw::addUserRestriction,
                     clearRestriction = gw::clearUserRestriction,
                     log = log,
+                    keepWifiOn = { wifi(app).keepOn() },
+                    rejoinWifi = { wifi(app).rejoin() },
                 )
             }.also { network = it }
+        }
+
+    // The school's Wi-Fi: the one the cable setup added.
+    fun wifi(context: Context): SchoolWifi =
+        wifi ?: synchronized(this) {
+            wifi ?: run {
+                val app = context.applicationContext
+                SchoolWifi(AndroidWifiControl(app), { CableSetup(File(app.filesDir, CableSetup.FILE_NAME)).schoolWifi() }, log)
+            }.also { wifi = it }
         }
 
     fun admin(context: Context): AdminUnlock =

@@ -18,6 +18,7 @@ class NetworkFreeTest {
     private var owner = true
     private var refuseClear = false
     private val file by lazy { File(folder.root, "network-free.txt") }
+    private val wifi = mutableListOf<String>()
 
     private fun network() = NetworkFree(
         file, locks,
@@ -28,6 +29,8 @@ class NetworkFreeTest {
             restrictions -= it
         },
         now = { clock },
+        keepWifiOn = { wifi += "on" },
+        rejoinWifi = { wifi += "rejoin" },
     )
 
     private val minute = NetworkFree.MINUTE_MILLIS
@@ -184,5 +187,68 @@ class NetworkFreeTest {
         var locked = 0
         network().unlessFree { locked++ }
         assertEquals(1, locked)
+    }
+
+    // While free the student may turn the Wi-Fi off or join another network:
+    // locking again brings the phone back to the school's, before the locks.
+    @Test fun lockingAgainRejoinsTheSchoolsWifi() {
+        val network = network()
+        network.free(10)
+        clock += 10 * minute
+
+        assertTrue(network.check())
+
+        assertEquals(listOf("rejoin"), wifi)
+    }
+
+    @Test fun lockNowAfterAFreeTimeRejoinsToo() {
+        val network = network()
+        network.free(10)
+        network.lockNow()
+        assertEquals(listOf("rejoin"), wifi)
+    }
+
+    // Locked: every check keeps the Wi-Fi on (Android 10 to 12 let the
+    // student turn it off), and nothing is rejoined.
+    @Test fun whileLockedEachCheckKeepsTheWifiOn() {
+        val network = network()
+        network.check()
+        network.check()
+        network.lockNow()
+        assertEquals(listOf("on", "on", "on"), wifi)
+    }
+
+    @Test fun whileFreeTheWifiIsLeftAlone() {
+        val network = network()
+        network.free(10)
+        network.check()
+        assertTrue(wifi.isEmpty())
+    }
+
+    @Test fun aPhoneThatIsNotTheSchoolsLeavesTheWifiAlone() {
+        owner = false
+        network().check()
+        assertTrue(wifi.isEmpty())
+    }
+
+    // The agent follows the end to lock again right on time.
+    @Test fun theFollowerIsToldEachEnd() {
+        val network = network()
+        val ends = mutableListOf<Long?>()
+        val stop = network.follow { ends += it }
+
+        network.free(10)
+        network.lockNow()
+        stop()
+        network.free(5)
+
+        assertEquals(listOf(null, clock + 10 * minute, null), ends)
+    }
+
+    @Test fun aFollowerIsToldTheRunningEndAtOnce() {
+        network().free(30)
+        val ends = mutableListOf<Long?>()
+        network().follow { ends += it }
+        assertEquals(listOf<Long?>(clock + 30 * minute), ends)
     }
 }

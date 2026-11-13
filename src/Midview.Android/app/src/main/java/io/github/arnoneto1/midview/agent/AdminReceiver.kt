@@ -11,6 +11,7 @@ import io.github.arnoneto1.midview.agent.ui.ReadyActivity
 import java.io.File
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 
 // The app's device admin: the Master names it over the cable (adb shell dpm
 // set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver), and it
@@ -33,17 +34,20 @@ class AdminReceiver : DeviceAdminReceiver() {
     }
 
     companion object {
+        // The school Wi-Fi added (and the Wi-Fi on) before the locks, which
+        // keep the Wi-Fi's settings out of reach.
         fun lockDownAndStart(context: Context) {
-            AndroidDevicePolicyGateway.lockDown(context)
             // Prepared over the cable: the Wi-Fi and the name come from there.
             val setup = CableSetup(File(context.filesDir, CableSetup.FILE_NAME))
             try {
                 setup.takeWifi()?.let { (ssid, password) ->
+                    SchoolNetwork.wifi(context).keepOn()
                     AndroidDevicePolicyGateway(context).addWifi(ssid, password)
                 }
             } catch (e: RuntimeException) {
                 Log.e("Midview", "The school Wi-Fi was not added", e)
             }
+            AndroidDevicePolicyGateway.lockDown(context)
             AgentService.start(context)
             if (setup.number() != null && setup.markReadyShown()) {
                 ReadyActivity.show(context)

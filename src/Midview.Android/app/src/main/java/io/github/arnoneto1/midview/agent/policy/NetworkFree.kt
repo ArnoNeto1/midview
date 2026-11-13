@@ -15,7 +15,12 @@ import java.io.IOException
 // every few seconds (check). The student cannot move the end: the date and
 // time are locked too (no_config_date_time); a clock that went back anyway
 // (an end further away than the longest time allowed) locks again at once.
-// Anything unreadable counts as locked.
+// Anything unreadable counts as locked. Locking again after a free time
+// brings the phone back to the school's Wi-Fi (rejoinWifi, SchoolWifi): the
+// student may have turned it off or joined another network meanwhile; while
+// locked, every check keeps the Wi-Fi on (keepWifiOn: before Android 13
+// nothing else stops the student from turning it off). The agent follows
+// the end (follow) to lock again right on time; the watchdog is the fallback.
 class NetworkFree(
     private val file: File,
     private val restrictions: List<String>,
@@ -24,8 +29,20 @@ class NetworkFree(
     private val clearRestriction: (String) -> Unit,
     private val now: () -> Long = System::currentTimeMillis,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
+    private val keepWifiOn: () -> Unit = {},
+    private val rejoinWifi: () -> Unit = {},
 ) {
     @Volatile private var until: Long? = load()
+    private var follower: ((Long?) -> Unit)? = null
+
+    // Told the end of each free time, and null when the network locks (at
+    // once with the current end); until what this returns is called.
+    @Synchronized
+    fun follow(changed: (Long?) -> Unit): () -> Unit {
+        follower = changed
+        changed(freeUntil())
+        return { synchronized(this) { if (follower === changed) follower = null } }
+    }
 
     // The end of the time the network is free (wall clock, milliseconds), or
     // null while it is locked.
@@ -45,6 +62,7 @@ class NetworkFree(
         val end = now() + minutes * MINUTE_MILLIS
         until = end
         save(end)
+        follower?.invoke(end)
         try {
             restrictions.forEach(clearRestriction)
         } catch (e: RuntimeException) {
@@ -67,7 +85,11 @@ class NetworkFree(
     // True when it did.
     @Synchronized
     fun check(): Boolean {
-        val end = until ?: return false
+        val end = until
+        if (end == null) {
+            if (isDeviceOwner()) keepWifiOn()
+            return false
+        }
         if (isRunning(end, now())) return false
         log("The Wi-Fi's free time is up: locked again.", null)
         if (isDeviceOwner()) lock() else clearState()
@@ -86,8 +108,12 @@ class NetworkFree(
     private fun isRunning(end: Long, at: Long): Boolean = at < end && end - at <= MAX_MILLIS
 
     // The state cleared first: a refusal still leaves the next start locking.
+    // The Wi-Fi back on and on the school's network before the locks, which
+    // from Android 13 would keep a Wi-Fi the student turned off, off.
     private fun lock(): Boolean {
+        val wasFree = until != null
         clearState()
+        if (wasFree) rejoinWifi() else keepWifiOn()
         return try {
             restrictions.forEach(addRestriction)
             true
@@ -99,6 +125,7 @@ class NetworkFree(
 
     private fun clearState() {
         until = null
+        follower?.invoke(null)
         if (file.exists() && !file.delete()) log("Couldn't delete the Wi-Fi's free time", null)
     }
 
