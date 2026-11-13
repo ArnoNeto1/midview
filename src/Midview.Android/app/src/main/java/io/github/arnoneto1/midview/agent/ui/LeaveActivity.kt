@@ -6,6 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.text.InputFilter
 import android.text.InputType
 import android.util.Log
@@ -18,6 +21,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.github.arnoneto1.midview.agent.leave.LeaveReport
 import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.policy.AdminUnlock
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
@@ -29,21 +33,43 @@ import io.github.arnoneto1.midview.agent.protocol.PhoneAdminPassword
 // wrong ones and the same wait as freeing the Wi-Fi) chooses between
 // "Desfazer e tirar o Midview" (PhoneLeave: the student's files kept) and
 // "Restaurar de fábrica" (the Device Owner's wipe), each confirmed once
-// more. The password holds for this screen only: closed, it is asked again.
+// more. The password holds for this screen only, for at most a minute
+// (AdminSession): the screen going away (the phone locked, another app in
+// front) or the minute running out asks for it again, and closes an open
+// confirmation. A lock the leaving could not lift is said, and the choices
+// stay (the factory reset among them).
 // Kept out of the screenshots, as "Ajustes da escola".
 class LeaveActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var input: EditText
     private lateinit var continueButton: Button
     private lateinit var choices: LinearLayout
-    private var verified = false
+    private val session = AdminSession(SystemClock::elapsedRealtime)
+    private val verified: Boolean get() = session.isOpen
     private var busy = false
+    private var dialog: AlertDialog? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val expire = Runnable { closeSession() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         title = LeaveTexts.TITLE
         setContentView(ScrollView(this).apply { addView(layout()) })
+        render(null)
+    }
+
+    // The phone locked, or anything else in front: the password goes.
+    override fun onStop() {
+        closeSession()
+        super.onStop()
+    }
+
+    private fun closeSession() {
+        main.removeCallbacks(expire)
+        session.end()
+        dialog?.dismiss()
+        dialog = null
         render(null)
     }
 
@@ -76,17 +102,23 @@ class LeaveActivity : Activity() {
             val attempt = admin.checkOnly(typed)
             runOnUiThread {
                 busy = false
-                verified = attempt == AdminUnlock.Attempt.Verified
+                if (attempt == AdminUnlock.Attempt.Verified) {
+                    session.verified()
+                    main.removeCallbacks(expire)
+                    main.postDelayed(expire, session.remainingMillis())
+                }
                 render(LeaveTexts.after(attempt))
             }
         }, "Midview admin password").start()
     }
 
     private fun confirm(text: String, yes: String, action: () -> Unit) {
-        AlertDialog.Builder(this)
+        dialog?.dismiss()
+        dialog = AlertDialog.Builder(this)
             .setTitle(LeaveTexts.TITLE)
             .setMessage(text)
-            .setPositiveButton(yes) { _, _ -> action() }
+            // The minute may have run out while the question was up.
+            .setPositiveButton(yes) { _, _ -> if (verified) action() else render(null) }
             .setNegativeButton(LeaveTexts.CANCEL, null)
             .show()
     }
@@ -99,13 +131,22 @@ class LeaveActivity : Activity() {
         render(LeaveTexts.WORKING)
         Thread({
             val leaving = PhoneLeaving.get(this)
-            val said = try {
-                leaving.start().text()
+            val report = try {
+                leaving.start()
             } catch (e: RuntimeException) {
                 Log.e(TAG, "The Midview could not leave the phone", e)
                 null
             }
-            runOnUiThread { render(said ?: LeaveTexts.WORKING) }
+            // A lock that stayed: said, and the choices come back (while
+            // the minute lasts) for another try or the factory reset.
+            if (report == null || !report.complete) {
+                runOnUiThread {
+                    busy = false
+                    render(report?.text() ?: LeaveReport.STAYS)
+                }
+                return@Thread
+            }
+            runOnUiThread { render(report.text()) }
             try {
                 leaving.finish()
             } catch (e: RuntimeException) {

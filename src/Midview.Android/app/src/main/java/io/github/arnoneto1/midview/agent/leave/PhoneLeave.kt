@@ -114,20 +114,28 @@ data class LeaveReport(
     val restored: Int = 0,
     val notRestored: Int = 0,
 ) {
+    // Every lock lifted: the Midview may leave. Otherwise it stays (still the
+    // Device Owner, still trusting the teachers), so the teacher can try
+    // again or erase the phone ("Restaurar de fábrica"). A system app that
+    // does not come back is counted, never a reason to stay.
+    val complete: Boolean get() = failed.isEmpty()
+
     fun text(): String {
         if (!owner) return NOT_OWNER
+        if (!complete) return "Não deu para desfazer ${failed.joinToString(", ") { it.said }}. $STAYS"
         val done = mutableListOf("travas e ajustes da escola desfeitos")
         if (unsuspended > 0) done += count(unsuspended, "app desbloqueado", "apps desbloqueados")
         if (unhidden > 0) done += count(unhidden, "app mostrado de novo", "apps mostrados de novo")
         if (restored > 0) done += count(restored, "app do sistema de volta", "apps do sistema de volta")
         val lines = mutableListOf("Midview saindo: ${done.joinToString(", ")}.")
         if (notRestored > 0) lines += "${count(notRestored, "app do sistema não voltou", "apps do sistema não voltaram")}."
-        if (failed.isNotEmpty()) lines += "Não deu para desfazer ${failed.joinToString(", ") { it.said }}."
         lines += "O celular pede para confirmar a desinstalação na tela."
         return lines.joinToString(" ")
     }
 
     companion object {
+        const val STAYS = "O Midview continua no celular: tente de novo ou use Restaurar de fábrica."
+
         const val NOT_OWNER =
             "Midview saindo: este aparelho não tinha travas da escola. O celular pede para confirmar a desinstalação na tela."
 
@@ -139,8 +147,11 @@ data class LeaveReport(
 // with the student's photos and files kept. start lifts every lock and
 // setting the agent applied (undo: RESTRICTIONS to RESTORE_APPS, the system
 // apps uninstalled for the user brought back), and the teacher is told what
-// it did; finish then forgets the teachers, stops being the Device Owner and
-// asks Android to uninstall the app (the student taps once). Every step sets
+// it did; finish then stops being the Device Owner (and device admin), and
+// only then forgets the teachers and asks Android to uninstall the app (the
+// student taps once). A lock that could not be lifted stops it before
+// finish: the phone stays the school's, its teachers may try again or erase
+// it, and resume tries once per process, never in a loop. Every step sets
 // a state, so running it again changes nothing, and a step Android refuses
 // never stops the others. The phase is kept (LeaveStore) before anything
 // changes: from then on the agent never locks the phone again, and a process
@@ -154,36 +165,50 @@ class PhoneLeave(
     // A leaving this process runs now (start until finish): resume leaves it alone.
     @Volatile private var running = false
 
+    // A resume of this process found a lock it could not lift: not tried
+    // again until a teacher (or the admin password) asks.
+    @Volatile private var stuck = false
+
     // True from the first ask on: nothing may lock the phone again.
     val isActive: Boolean get() = store.phase != null
 
+    // The Device Owner is given up: the teachers can no longer erase the
+    // phone, and the agent no longer listens.
+    val ownerGivenUp: Boolean get() = store.phase == LeaveStore.Phase.OWNER_CLEARED
+
     // The teacher's command or the phone's own screen: the leaving kept, the
-    // locks undone. finish must follow.
+    // locks undone. finish must follow a complete report, and only one.
     @Synchronized
     fun start(): LeaveReport {
         running = true
+        stuck = false
         if (store.phase == null) store.save(LeaveStore.Phase.STARTED)
         log("The Midview is leaving this phone.", null)
-        return undo()
+        return undo().also { if (!it.complete) running = false }
     }
 
-    // The teachers forgotten, the Device Owner given up, the uninstall asked.
+    // The Device Owner given up first; then the teachers forgotten and the
+    // uninstall asked. Android keeping the Device Owner leaves everything
+    // else as it is: the teachers can still erase the phone or try again.
     @Synchronized
     fun finish() {
         try {
-            quietly("forget the teachers") { gw.forgetTeachers() }
             if (gw.isDeviceOwner()) quietly("stop being the Device Owner") { gw.clearDeviceOwner() }
             if (gw.isDeviceOwner()) {
-                // Android refused: the next start tries again; the phone is already free.
                 log("Android kept the Midview as the Device Owner.", null)
                 return
             }
             store.save(LeaveStore.Phase.OWNER_CLEARED)
-            quietly("stop the agent") { gw.stopAgent() }
-            quietly("ask for the uninstall") { gw.askUninstall() }
+            leaveForGood()
         } finally {
             running = false
         }
+    }
+
+    private fun leaveForGood() {
+        quietly("forget the teachers") { gw.forgetTeachers() }
+        quietly("stop the agent") { gw.stopAgent() }
+        quietly("ask for the uninstall") { gw.askUninstall() }
     }
 
     // At a start of the agent (or a watchdog tick) with the leaving kept
@@ -192,15 +217,19 @@ class PhoneLeave(
     @Synchronized
     fun resume(): Boolean {
         val phase = store.phase ?: return false
-        if (running) return false
+        if (running || stuck) return false
         log("The Midview's leaving goes on from ${phase.word}.", null)
         if (phase == LeaveStore.Phase.OWNER_CLEARED && !gw.isDeviceOwner()) {
-            quietly("stop the agent") { gw.stopAgent() }
-            quietly("ask for the uninstall") { gw.askUninstall() }
+            leaveForGood()
             return true
         }
         running = true
-        undo()
+        if (!undo().complete) {
+            running = false
+            stuck = true
+            log("A lock could not be lifted: the Midview stays until a teacher asks again.", null)
+            return false
+        }
         finish()
         return true
     }

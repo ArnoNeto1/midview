@@ -126,11 +126,11 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
 
     // The app's private storage holds nothing of the student's: every file
     // there goes (the teachers, the identity, the passwords, the blocks).
-    // The device-protected one keeps only the leaving's own record.
+    // The device-protected one keeps only the leaving's own record (and its copy).
     override fun forgetTeachers() {
         app.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         app.createDeviceProtectedStorageContext().filesDir.listFiles()
-            ?.filter { it.absoluteFile != keep.absoluteFile }
+            ?.filter { it.absoluteFile != keep.absoluteFile && it.absolutePath != keep.absolutePath + LeaveStore.COPY_SUFFIX }
             ?.forEach { it.deleteRecursively() }
     }
 

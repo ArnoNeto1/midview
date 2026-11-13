@@ -100,11 +100,14 @@ class CommandHandler(
     private val lab: LabConfigStore? = null,
     private val classLesson: ClassLessonStore? = null,
     // "Desfazer e tirar o Midview" (PhoneLeave): whether the phone is leaving
-    // (nobody pairs and no command is taken then), the payload in and the
+    // (nobody pairs then, and a trusted teacher's only commands taken are
+    // "Apagar" and the leaving itself, to try again, and only while the
+    // phone is still the Device Owner: ownerGivenUp), the payload in and the
     // CommandAck's result out (the locks undone), and the rest once the
     // answer is on its way (the teachers forgotten, the Device Owner given
     // up, the uninstall asked).
     private val isLeaving: () -> Boolean = { false },
+    private val ownerGivenUp: () -> Boolean = { false },
     private val leave: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val finishLeaving: () -> Unit = {},
     private val listApps: () -> List<PhoneApp>,
@@ -112,10 +115,7 @@ class CommandHandler(
     fun handle(channel: Channel) {
         val isTrusted = trusted.isTrusted(channel.remoteThumbprint)
         var message = channel.receive(if (isTrusted) Int.MAX_VALUE else UNTRUSTED_MAX_LENGTH)
-        if (isLeaving()) {
-            if (isTrusted && message.type != MessageType.PAIR_REQUEST) {
-                channel.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, LEAVING)))
-            }
+        if (isLeaving() && message.type == MessageType.PAIR_REQUEST) {
             return
         }
         if (message.type == MessageType.PAIR_REQUEST) {
@@ -128,7 +128,14 @@ class CommandHandler(
 
         channel.setTimeout(IDLE_TIMEOUT_MILLIS)
         while (true) {
-            if (message.type != MessageType.OPTIMIZE_PHONE) optimizer.teacherSeen()
+            if (isLeaving()) {
+                if (message.type !in TAKEN_WHILE_LEAVING || ownerGivenUp()) {
+                    channel.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, LEAVING)))
+                    return
+                }
+            } else if (message.type != MessageType.OPTIMIZE_PHONE) {
+                optimizer.teacherSeen()
+            }
             // More than one message each way (the offer, the APK in chunks),
             // all answered by the updater; the connection ends with it, as
             // on a PC.
@@ -343,6 +350,10 @@ class CommandHandler(
         const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."
         const val INVALID_REQUEST = "pedido inválido"
         const val LEAVING = "o Midview está saindo deste celular"
+
+        // What a trusted teacher may still ask of a phone that is leaving but
+        // still the Device Owner: erase it, or try the leaving again.
+        private val TAKEN_WHILE_LEAVING = setOf(MessageType.WIPE_PHONE, MessageType.REMOVE_MIDVIEW_FROM_PHONE)
 
         private val FILE_TRANSFERS = setOf(MessageType.SEND_FILE, MessageType.SEND_FILE_WITH_OPTIONS, MessageType.COLLECT_FILES)
 

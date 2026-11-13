@@ -88,6 +88,12 @@ public static class PhoneRemoveText
         { } said => said.Detail,
     };
 
+    // After "Desfazer e tirar o Midview", for the devices where it did not
+    // go: a phone that kept a lock is still the school's and can be erased.
+    public static string OfferReset(int failed) => failed == 1
+        ? "No aparelho em que não deu certo, o Midview continua: tente de novo ou escolha Restaurar de fábrica (vale só para ele)."
+        : $"Nos {failed} aparelhos em que não deu certo, o Midview continua: tente de novo ou escolha Restaurar de fábrica (vale só para eles).";
+
     // Above the list, once every device answered (or didn't).
     public static string Summary(PhoneRemoveChoice choice, int done, int total)
     {

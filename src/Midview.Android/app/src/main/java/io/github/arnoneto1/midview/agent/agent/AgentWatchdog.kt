@@ -22,9 +22,15 @@ import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 // while it is off (WatchdogAlarm).
 class AgentWatchdog : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // The Midview is leaving the phone: finished, nothing started or locked again.
+        // The Midview is leaving the phone: finished, nothing locked again.
+        // Still the Device Owner (a lock it could not lift), the agent is
+        // kept running so the teachers can erase the phone or try again.
         if (PhoneLeaving.isActive(context)) {
             PhoneLeaving.resumeInBackground(context)
+            if (!PhoneLeaving.ownerGivenUp(context)) {
+                AgentService.ensureRunning(context, "watchdog, leaving")
+                arm(context)
+            }
             return
         }
         AgentService.ensureRunning(context, "watchdog")

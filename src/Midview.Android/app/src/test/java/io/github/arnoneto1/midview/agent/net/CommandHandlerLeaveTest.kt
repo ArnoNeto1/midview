@@ -33,6 +33,8 @@ class CommandHandlerLeaveTest {
     private val stranger = "B".repeat(40)
     private val events = mutableListOf<String>()
     private var leaving = false
+    private var ownerGivenUp = false
+    private var deviceOwner = true
     private val later = mutableListOf<Pair<Long, () -> Unit>>()
 
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
@@ -51,9 +53,10 @@ class CommandHandlerLeaveTest {
         val sites = SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { true })
         val consent = ScreenConsent(clock = { 0L }) {}
         return CommandHandler(
-            trusted, pairing, consent, appBlock, sites, optimizer, updater, FakeSiteGateway(),
+            trusted, pairing, consent, appBlock, sites, optimizer, updater, FakeSiteGateway(owner = deviceOwner),
             runLater = { delay, task -> later += delay to task },
             isLeaving = { leaving },
+            ownerGivenUp = { ownerGivenUp },
             leave = { payload ->
                 events += "leave"
                 if (PhoneLeaveRequest.isConfirmed(payload)) {
@@ -116,6 +119,70 @@ class CommandHandlerLeaveTest {
         handler().handle(channel)
 
         assertEquals(false to CommandHandler.LEAVING, CommandResult.decode(channel.sent.single().payload))
+    }
+
+    // A lock the leaving could not lift: the teacher can still erase the phone.
+    @Test fun whileLeavingAndStillTheOwnerTheWipeIsTaken() {
+        trusted.add(teacher)
+        leaving = true
+        val channel = FakeChannel(teacher, Message(MessageType.WIPE_PHONE, ByteArray(0)))
+
+        handler().handle(channel)
+
+        assertEquals(true to CommandHandler.WIPING, CommandResult.decode(channel.sent.single().payload))
+        assertEquals(CommandHandler.WIPE_DELAY_MILLIS, later.single().first)
+    }
+
+    @Test fun whileLeavingAndStillTheOwnerTheLeavingIsTriedAgain() {
+        trusted.add(teacher)
+        leaving = true
+        val channel = FakeChannel(teacher, Message(MessageType.REMOVE_MIDVIEW_FROM_PHONE, PhoneLeaveRequest.encode()))
+
+        handler().handle(channel)
+
+        assertEquals(true to "Midview saindo", CommandResult.decode(channel.sent.single().payload))
+        assertEquals(listOf("leave"), events)
+    }
+
+    // An undo that left a lock: no finish follows, the phone stays the school's.
+    @Test fun anIncompleteUndoIsNotFinished() {
+        trusted.add(teacher)
+        val handler = CommandHandler(
+            trusted, PairingFlow(identity, trusted, { _, _ -> true }, {}, deviceName = { "Cel 01" }, elapsed = { 1_000L }),
+            ScreenConsent(clock = { 0L }) {}, AppBlockStore(File(folder.newFolder(), "app-block.bin"), apply = { null }),
+            SiteBlockStore(File(folder.newFolder(), "site-block.txt"), apply = { true }),
+            object : PhoneOptimizer {
+                override fun run() = throw UnsupportedOperationException()
+                override fun teacherSeen() = Unit
+            },
+            object : PhoneUpdater {
+                override fun offer(payload: ByteArray, channel: Channel) = throw UnsupportedOperationException()
+                override fun status() = throw UnsupportedOperationException()
+            },
+            FakeSiteGateway(),
+            runLater = { delay, task -> later += delay to task },
+            leave = { false to "Não deu para desfazer o PIN da tela." },
+            finishLeaving = { events += "finish" },
+        ) { emptyList() }
+        val channel = FakeChannel(teacher, Message(MessageType.REMOVE_MIDVIEW_FROM_PHONE, PhoneLeaveRequest.encode()))
+
+        handler.handle(channel)
+
+        assertEquals(false to "Não deu para desfazer o PIN da tela.", CommandResult.decode(channel.sent.single().payload))
+        assertTrue(later.isEmpty())
+    }
+
+    // Once the owner is given up, nothing more: the uninstall is all that is left.
+    @Test fun onceTheOwnerIsGivenUpNotEvenTheWipe() {
+        trusted.add(teacher)
+        leaving = true
+        ownerGivenUp = true
+        val channel = FakeChannel(teacher, Message(MessageType.WIPE_PHONE, ByteArray(0)))
+
+        handler().handle(channel)
+
+        assertEquals(false to CommandHandler.LEAVING, CommandResult.decode(channel.sent.single().payload))
+        assertTrue(later.isEmpty())
     }
 
     @Test fun whileLeavingNobodyPairs() {

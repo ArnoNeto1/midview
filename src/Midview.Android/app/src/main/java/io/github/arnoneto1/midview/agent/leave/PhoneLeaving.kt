@@ -36,13 +36,17 @@ object PhoneLeaving {
     // True from the first ask on, for good (the app is uninstalled next).
     fun isActive(context: Context): Boolean = store(context).phase != null
 
+    // The Device Owner already given up (the uninstall is all that is left).
+    fun ownerGivenUp(context: Context): Boolean = store(context).phase == LeaveStore.Phase.OWNER_CLEARED
+
     // The teacher's REMOVE_MIDVIEW_FROM_PHONE payload in, the CommandAck's
     // result out: the locks undone now (on the connection's thread: up to a
     // minute with many system apps to bring back). finish follows once the
-    // answer is on its way.
+    // answer is on its way, only when every lock was lifted.
     fun teacherAsked(context: Context, payload: ByteArray): Pair<Boolean, String> {
         if (!PhoneLeaveRequest.isConfirmed(payload)) return false to INVALID_REQUEST
-        return true to get(context).start().text()
+        val report = get(context).start()
+        return report.complete to report.text()
     }
 
     // A start of the agent (or a watchdog tick) with the leaving kept from

@@ -11,7 +11,10 @@ namespace Midview.Master;
 // "Restaurar de fábrica" (everything erased), each explained, types the word
 // that confirms it (REMOVER or APAGAR) and every device is asked at once.
 // Each device's line says how it went; one that did it leaves the room's
-// list (removeFromRoom), as "Remover da sala" does.
+// list (removeFromRoom), as "Remover da sala" does. A later run asks only
+// the devices where it did not go; after an undo that failed somewhere,
+// "Restaurar de fábrica" is chosen for them (a phone that kept a lock is
+// still the school's, and still takes the wipe).
 public partial class PhoneRemoveWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
@@ -63,9 +66,12 @@ public partial class PhoneRemoveWindow : MidviewWindow
         }
         PromptTextBlock.Text = PhoneRemoveText.Prompt(Choice);
         GoButton.Content = PhoneRemoveText.Button(Choice);
-        GoButton.IsEnabled = !_running && _rows.Count > 0 && PhoneRemoveText.IsConfirmed(Choice, WordTextBox.Text);
+        GoButton.IsEnabled = !_running && Pending.Count > 0 && PhoneRemoveText.IsConfirmed(Choice, WordTextBox.Text);
         UndoRadioButton.IsEnabled = ResetRadioButton.IsEnabled = WordTextBox.IsEnabled = !_running;
     }
+
+    // The devices still to ask: every one but those where it went.
+    private IReadOnlyList<PhoneRow> Pending => _rows.Where(row => row.State != PhoneRowState.Done).ToList();
 
     private async void OnGoClicked(object sender, RoutedEventArgs e) => await RunAsync();
 
@@ -77,27 +83,42 @@ public partial class PhoneRemoveWindow : MidviewWindow
             return;
         }
 
+        var rows = Pending;
+        if (rows.Count == 0)
+        {
+            return;
+        }
         _running = true;
         WordTextBox.Text = string.Empty;
         ShowState();
-        ProgressTextBlock.Text = PhoneRemoveText.Progress(choice, _rows.Count);
-        foreach (var row in _rows)
+        ProgressTextBlock.Text = PhoneRemoveText.Progress(choice, rows.Count);
+        foreach (var row in rows)
         {
             row.Show(PhoneRowState.Working, PhoneRemoveText.Working(choice));
         }
 
+        var failed = 0;
         try
         {
-            var done = await Task.WhenAll(_rows.Select(row => Task.Run(() => SendOne(row, choice))));
-            foreach (var row in _rows.Where((_, i) => done[i]))
+            var done = await Task.WhenAll(rows.Select(row => Task.Run(() => SendOne(row, choice))));
+            foreach (var row in rows.Where((_, i) => done[i]))
             {
                 _removeFromRoom(row.Phone);
             }
-            ProgressTextBlock.Text = PhoneRemoveText.Summary(choice, done.Count(ok => ok), _rows.Count);
+            failed = done.Count(ok => !ok);
+            ProgressTextBlock.Text = PhoneRemoveText.Summary(choice, rows.Count - failed, rows.Count);
+            if (choice == PhoneRemoveChoice.Undo && failed > 0)
+            {
+                ProgressTextBlock.Text += " " + PhoneRemoveText.OfferReset(failed);
+            }
         }
         finally
         {
             _running = false;
+            if (choice == PhoneRemoveChoice.Undo && failed > 0)
+            {
+                ResetRadioButton.IsChecked = true;
+            }
             ShowState();
         }
     }

@@ -74,6 +74,17 @@ public class PhoneRemoveTextTests
             PhoneRemoveText.Line(PhoneRemoveChoice.FactoryReset, (false, "Este celular não foi preparado pelo Midview.")));
     }
 
+    // An undo that failed somewhere: the factory reset is offered for those devices.
+    [Fact]
+    public void A_failed_undo_offers_the_factory_reset_for_those_devices()
+    {
+        Assert.Equal(
+            "No aparelho em que não deu certo, o Midview continua: tente de novo ou escolha Restaurar de fábrica (vale só para ele).",
+            PhoneRemoveText.OfferReset(1));
+        Assert.StartsWith("Nos 2 aparelhos em que não deu certo", PhoneRemoveText.OfferReset(2));
+        Assert.Contains("Restaurar de fábrica", PhoneRemoveText.OfferReset(2));
+    }
+
     [Theory]
     [InlineData(PhoneRemoveChoice.Undo, 1, "Tirando o Midview do aparelho...")]
     [InlineData(PhoneRemoveChoice.Undo, 4, "Tirando o Midview dos 4 aparelhos...")]

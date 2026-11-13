@@ -101,9 +101,11 @@ class AgentService : Service() {
         ScreenCaptureService.init(this)
         goForeground(STATUS_TEXT)
         keeper(this).created()
-        // The Midview is leaving this phone (PhoneLeaving): no agent, no
-        // watchdog; onStartCommand finishes the leaving.
-        if (PhoneLeaving.isActive(this)) return
+        // The Midview gave up the Device Owner (PhoneLeaving): no agent, no
+        // watchdog; onStartCommand finishes the leaving. Still the Device
+        // Owner, the agent listens: the teachers may erase the phone or try
+        // the leaving again (and nothing locks it meanwhile).
+        if (PhoneLeaving.ownerGivenUp(this)) return
         AgentWatchdog.arm(this)
         stopWatchingScreen = AgentWatchdog.watchScreen(this)
         wifi.hold()
@@ -125,7 +127,9 @@ class AgentService : Service() {
         // confirmed): finished, never locked again.
         if (PhoneLeaving.isActive(this)) {
             PhoneLeaving.resumeInBackground(this)
-            return START_NOT_STICKY
+            if (PhoneLeaving.ownerGivenUp(this)) return START_NOT_STICKY
+            AgentWatchdog.arm(this)
+            return START_STICKY
         }
         AgentWatchdog.arm(this)
         AndroidDevicePolicyGateway.lockDown(this)
@@ -330,6 +334,7 @@ class AgentService : Service() {
             powerSchedule = powerSchedule::handle,
             // "Desfazer e tirar o Midview" (PhoneLeave).
             isLeaving = { PhoneLeaving.isActive(this) },
+            ownerGivenUp = { PhoneLeaving.ownerGivenUp(this) },
             leave = { PhoneLeaving.teacherAsked(this, it) },
             finishLeaving = { PhoneLeaving.get(this).finish() },
             wallpaper = TeacherWallpaper(

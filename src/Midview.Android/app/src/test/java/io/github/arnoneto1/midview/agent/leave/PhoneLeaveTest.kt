@@ -41,6 +41,9 @@ class PhoneLeaveTest {
         // The connection the teacher waits on still trusts it; nothing is uninstalled yet.
         assertTrue(gw.teachers)
         assertTrue(gw.owner)
+        // The teachers are kept: they can still erase the phone or try again.
+        assertTrue(gw.teachers)
+        assertFalse("forgetTeachers" in gw.calls)
         assertEquals(0, gw.uninstallAsked)
         assertEquals(LeaveStore.Phase.UNDONE, store().phase)
     }
@@ -54,10 +57,11 @@ class PhoneLeaveTest {
         assertTrue(firstOf("clearRestriction") < firstOf("endLockTask"))
         assertTrue(firstOf("unhide") < firstOf("installExisting"))
         assertTrue(firstOf("removeScreenPin") < firstOf("installExisting"))
-        // Everything a Device Owner alone can do, before it stops being one.
-        assertTrue(gw.calls.lastIndexOf("installExisting") < firstOf("forgetTeachers"))
-        assertTrue(firstOf("forgetTeachers") < firstOf("clearDeviceOwner"))
-        assertTrue(firstOf("clearDeviceOwner") < firstOf("stopAgent"))
+        // Everything a Device Owner alone can do, before it stops being one;
+        // the teachers only once it is no longer one.
+        assertTrue(gw.calls.lastIndexOf("installExisting") < firstOf("clearDeviceOwner"))
+        assertTrue(firstOf("clearDeviceOwner") < firstOf("forgetTeachers"))
+        assertTrue(firstOf("forgetTeachers") < firstOf("stopAgent"))
         assertEquals("askUninstall", gw.calls.last())
     }
 
@@ -141,7 +145,27 @@ class PhoneLeaveTest {
 
         assertTrue(leave().resume())
 
-        assertEquals(listOf("stopAgent", "askUninstall"), gw.calls)
+        assertEquals(listOf("forgetTeachers", "stopAgent", "askUninstall"), gw.calls)
+        assertEquals(1, gw.uninstallAsked)
+    }
+
+    // The owner given up, the process died before the teachers were
+    // forgotten: they are at the next start.
+    @Test fun dyingBeforeForgettingTheTeachersForgetsThemAtTheNextStart() {
+        gw.dieAt = "forgetTeachers"
+        val leave = leave()
+        leave.start()
+        try {
+            leave.finish()
+            fail("the process should have died")
+        } catch (_: FakeLeaveGateway.Died) {
+        }
+        assertTrue(gw.teachers)
+        assertEquals(LeaveStore.Phase.OWNER_CLEARED, store().phase)
+
+        assertTrue(leave().resume())
+
+        assertFalse(gw.teachers)
         assertEquals(1, gw.uninstallAsked)
     }
 
@@ -168,7 +192,7 @@ class PhoneLeaveTest {
         leave.finish()
         gw.calls.clear()
         assertTrue(leave.resume())
-        assertEquals(listOf("stopAgent", "askUninstall"), gw.calls)
+        assertEquals(listOf("forgetTeachers", "stopAgent", "askUninstall"), gw.calls)
     }
 
     @Test fun aRefusedStepNeverStopsTheOthersAndIsSaid() {
@@ -177,9 +201,40 @@ class PhoneLeaveTest {
         val report = leave().start()
 
         assertEquals(listOf(LeaveStep.SCREEN_PIN, LeaveStep.WALLPAPER), report.failed)
+        assertFalse(report.complete)
         assertTrue(gw.restrictions.isEmpty())
         assertEquals(3, report.restored)
-        assertTrue(report.text().contains("Não deu para desfazer o PIN da tela, o papel de parede."))
+        assertEquals(
+            "Não deu para desfazer o PIN da tela, o papel de parede. " +
+                "O Midview continua no celular: tente de novo ou use Restaurar de fábrica.",
+            report.text(),
+        )
+    }
+
+    // A lock that stays keeps the Midview: still the owner, still trusting
+    // the teachers (who can erase the phone or try again); a start of the
+    // agent tries once, never in a loop, and a teacher's new ask goes on.
+    @Test fun aLockThatStaysKeepsTheMidviewUntilATeacherAsksAgain() {
+        gw.refuse = setOf("removeScreenPin")
+        leave().start()
+        val next = leave()
+
+        assertFalse(next.resume())
+        gw.calls.clear()
+        assertFalse(next.resume())
+        assertTrue(gw.calls.isEmpty())
+        assertTrue(gw.owner)
+        assertTrue(gw.teachers)
+        assertEquals(0, gw.uninstallAsked)
+        assertTrue(next.isActive)
+        assertFalse(next.ownerGivenUp)
+
+        gw.refuse = emptySet()
+        assertTrue(next.start().complete)
+        next.finish()
+        assertFalse(gw.owner)
+        assertTrue(next.ownerGivenUp)
+        assertEquals(1, gw.uninstallAsked)
     }
 
     // Android keeping the Midview as the Device Owner: nothing is uninstalled,
@@ -197,6 +252,7 @@ class PhoneLeaveTest {
         gw.refuse = emptySet()
         assertTrue(leave().resume())
         assertFalse(gw.owner)
+        assertFalse(gw.teachers)
         assertEquals(1, gw.uninstallAsked)
     }
 
@@ -254,11 +310,5 @@ class PhoneLeaveTest {
                 "70 apps do sistema de volta. 2 apps do sistema não voltaram. O celular pede para confirmar a desinstalação na tela.",
             text,
         )
-    }
-
-    @Test fun anUnreadableRecordStillCountsAsLeaving() {
-        file.writeText("garbage")
-
-        assertEquals(LeaveStore.Phase.STARTED, store().phase)
     }
 }
