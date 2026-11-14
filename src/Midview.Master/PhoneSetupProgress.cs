@@ -91,8 +91,11 @@ internal sealed partial class PhoneSetupProgress
     public bool OwnerUnconfirmed { get; private set; }
 
     // The cable could not arrange the phone's home screen: the ready page
-    // says how to do it by hand (PhoneSetupGuide.HomeScreenByHand).
+    // says how to do it by hand (PhoneSetupGuide.HomeScreenByHandFor).
     public bool HomeByHand { get; private set; }
+
+    // That home screen is Launcher3's (a tablet's), not a Xiaomi's.
+    public bool HomeOnLauncher3 { get; private set; }
 
     // The cable list shows "Arrumando a tela inicial": the cable reached it.
     public bool HomeScreenShown { get; private set; }
@@ -330,8 +333,10 @@ internal sealed partial class PhoneSetupProgress
     }
 
     // The phone is the school's own: "Pronto. Pode tirar o cabo."
-    // ownerUnconfirmed and homeByHand: as far as the Midview knows (see CableResult).
-    public void CablePrepared(DateTimeOffset at, bool ownerUnconfirmed = false, bool homeByHand = false)
+    // ownerUnconfirmed, homeByHand and homeOnLauncher3: as far as the
+    // Midview knows (see CableResult).
+    public void CablePrepared(
+        DateTimeOffset at, bool ownerUnconfirmed = false, bool homeByHand = false, bool homeOnLauncher3 = false)
     {
         if (Page != SetupPage.Cable)
         {
@@ -341,6 +346,7 @@ internal sealed partial class PhoneSetupProgress
         HasAppeared = false;
         OwnerUnconfirmed = ownerUnconfirmed;
         HomeByHand = homeByHand;
+        HomeOnLauncher3 = homeOnLauncher3;
         Page = SetupPage.Ready;
     }
 
@@ -441,6 +447,7 @@ internal sealed partial class PhoneSetupProgress
         HasAppeared = false;
         OwnerUnconfirmed = false;
         HomeByHand = false;
+        HomeOnLauncher3 = false;
         OpensWelcomeHelp = false;
         SignOutByHand = false;
         MiSignOutShown = false;

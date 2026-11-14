@@ -15,7 +15,8 @@ public enum CableProblem
     MiSignOutFailed, ScreenLocked,
 }
 
-// HomeScreen: only for a Xiaomi phone in "Midview otimizado" (PhoneHomeScreen).
+// HomeScreen: only in "Midview otimizado", for a Xiaomi phone (PhoneHomeScreen)
+// or a device whose home is Launcher3 (PhoneLauncher3Home).
 // MiSignOut: only for a phone still in the school's Mi account (MiSignOut),
 // last before the Owner step.
 public enum CableStage { Checking, Installing, Wifi, Pairing, HomeScreen, MiSignOut, Owner }
@@ -24,8 +25,10 @@ public enum CableStage { Checking, Installing, Wifi, Pairing, HomeScreen, MiSign
 // the cable dropped while the last command ran, so whether the phone became the
 // school's own is not known yet (the phone shows it on its screen).
 // HomeByHand: the cable could not arrange the phone's home screen; the
-// teacher does it on the phone (PhoneSetupGuide.HomeScreenByHand).
-public sealed record CableResult(KnownMachine? Phone, CableProblem? Problem, bool OwnerUnconfirmed, bool HomeByHand = false);
+// teacher does it on the phone (PhoneSetupGuide.HomeScreenByHand), on
+// Launcher3's home when HomeOnLauncher3 (PhoneSetupGuide.Launcher3HomeByHand).
+public sealed record CableResult(
+    KnownMachine? Phone, CableProblem? Problem, bool OwnerUnconfirmed, bool HomeByHand = false, bool HomeOnLauncher3 = false);
 
 // Prepares one school phone over USB, driving adb in a fixed order:
 // check, install, allow past the phone's cleaner, hand over the setup, make it
@@ -227,9 +230,9 @@ public sealed partial class PhoneCable
             @"Device Owner:\s*\n\s*admin=ComponentInfo\{" + Regex.Escape(PhoneProvisioning.AgentPackage) + "/");
     }
 
-    // optimize: "Midview otimizado" arranges a Xiaomi's home screen
-    // (ArrangeHome) and lightens the phone (Lighten); "Só o Midview" leaves
-    // the rest of it as it came. kind names the device
+    // optimize: "Midview otimizado" arranges a Xiaomi's or a Launcher3
+    // home screen (ArrangedHome) and lightens the phone (Lighten); "Só o
+    // Midview" leaves the rest of it as it came. kind names the device
     // ("Tablet 07") here and on the device itself (the package's "kind").
     // miPassword: the school's Mi account password, saved on this PC; with
     // it, a phone whose only accounts are Mi accounts is prepared all the
@@ -341,12 +344,8 @@ public sealed partial class PhoneCable
 
         // Before the Mi sign-out: the taps need "Depuração USB (configurações
         // de segurança)", which MIUI may turn off once the account leaves.
-        var homeByHand = false;
-        if (optimize && Miui)
-        {
-            stage(CableStage.HomeScreen);
-            homeByHand = !ArrangeHome();
-        }
+        var homeByHand = ArrangedHome(optimize, stage) == false;
+        var onLauncher3 = homeByHand && !Miui;
 
         if (signOut)
         {
@@ -381,7 +380,7 @@ public sealed partial class PhoneCable
         // From here on nothing else touches the cable.
         if (owner.Text.Contains("Success", StringComparison.Ordinal))
         {
-            return new CableResult(phone, null, false, homeByHand);
+            return new CableResult(phone, null, false, homeByHand, onLauncher3);
         }
         if (owner.Text.Contains("MANAGE_DEVICE_ADMINS", StringComparison.Ordinal))
         {
@@ -397,7 +396,7 @@ public sealed partial class PhoneCable
         }
         if (owner.TimedOut || owner.Text.Trim().Length == 0 || GoneText.IsMatch(owner.Text))
         {
-            return new CableResult(phone, null, true, homeByHand);
+            return new CableResult(phone, null, true, homeByHand, onLauncher3);
         }
         return Fail(CableProblem.Refused);
     }

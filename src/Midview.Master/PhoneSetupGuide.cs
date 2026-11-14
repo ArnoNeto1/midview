@@ -381,6 +381,20 @@ internal static class PhoneSetupGuide
         "Bloquear layout da Tela inicial (Configurações > Tela inicial).";
 
     /// <summary>
+    /// The same note for a device whose home is Launcher3 (the school's Multilaser M10):
+    /// no drawer mode nor lock there, but two settings to turn off.
+    /// </summary>
+    public const string Launcher3HomeByHand =
+        "Arrume a tela inicial à mão: 1) tire da tela inicial todos os ícones, pastas e widgets " +
+        "(toque, segure e arraste até Remover, no alto da tela; nunca até Desinstalar); " +
+        "2) ponha embaixo Chrome, Câmera, Fotos, Files e Calculadora, arrastando da lista de apps " +
+        "(deslize para cima na tela inicial); 3) toque e segure num espaço vazio, Configurações da " +
+        "tela inicial, e desligue Adicionar ícone à tela inicial e Mostrar Google App.";
+
+    /// <summary>The ready page's note for the home screen left by hand. onLauncher3: see Launcher3HomeByHand.</summary>
+    public static string HomeScreenByHandFor(bool onLauncher3) => onLauncher3 ? Launcher3HomeByHand : HomeScreenByHand;
+
+    /// <summary>
     /// The ready page's warning for a phone whose "chrome" step was skipped (null: none). A school
     /// phone takes no account any more, so the Play Store cannot update it later.
     /// </summary>
