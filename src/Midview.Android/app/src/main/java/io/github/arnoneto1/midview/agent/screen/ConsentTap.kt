@@ -12,17 +12,19 @@ internal object ConsentTap {
     const val APP_NAME = "Midview"
     const val WITHIN_MILLIS = 5_000L
     const val POSITIVE_BUTTON = "android:id/button1"
-    val START_TEXTS = setOf("iniciar agora", "start now", "começar agora")
+
+    // The app's own label as a word of the request ("O Midview iniciará a
+    // captura..."), not inside another app's name.
+    private val OWN_LABEL = Regex("(^|\\s)" + APP_NAME + "(\\s|$)")
 
     // The agent asked a moment ago (requestedAt, from the same clock as now).
     fun due(requestedAt: Long?, now: Long): Boolean = requestedAt != null && now - requestedAt in 0..WITHIN_MILLIS
 
-    // A window of SystemUI's whose texts name the Midview: its capture request.
+    // A window of SystemUI's (its MediaProjectionPermissionActivity's dialog)
+    // whose texts name the Midview by its label: its capture request.
     fun isOwnRequest(windowPackage: CharSequence?, texts: List<CharSequence?>): Boolean =
-        windowPackage?.toString() == SYSTEM_UI && texts.any { it?.contains(APP_NAME) == true }
+        windowPackage?.toString() == SYSTEM_UI && texts.any { it != null && OWN_LABEL.containsMatchIn(it) }
 
-    // The button that starts the capture: the dialog's positive one, or one
-    // saying "Iniciar agora".
-    fun isStartButton(viewId: String?, text: CharSequence?): Boolean =
-        viewId == POSITIVE_BUTTON || text?.toString()?.trim()?.lowercase() in START_TEXTS
+    // The button that starts the capture: the dialog's positive one only.
+    fun isStartButton(viewId: String?): Boolean = viewId == POSITIVE_BUTTON
 }

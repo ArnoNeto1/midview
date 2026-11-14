@@ -98,6 +98,21 @@ class TeacherWallpaperTest {
         assertEquals(listOf("com.android.thememanager"), TeacherWallpaper.PICKERS)
     }
 
+    // The lock screen's own back while the home screen keeps the teacher's
+    // picture: "Temas" stays hidden until neither screen has it.
+    @Test fun thePickerComesBackOnlyWhenNeitherScreenHasTheTeachersPicture() {
+        val shown = mutableListOf<Boolean>()
+        val screens = TeacherWallpaper.TeacherScreens.InMemory()
+        val wallpaper = TeacherWallpaper(FakeTarget(), { true }, showPickers = { shown += it }, teacherScreens = screens)
+        wallpaper.handle(PhoneWallpaper.encode(3, jpeg))
+        wallpaper.handle(PhoneWallpaper.encode(2, ByteArray(0)))
+        assertEquals(listOf(false), shown)
+        assertEquals(1, screens.read())
+        wallpaper.handle(PhoneWallpaper.encode(1, ByteArray(0)))
+        assertEquals(listOf(false, true), shown)
+        assertEquals(0, screens.read())
+    }
+
     @Test fun aRefusedOrInvalidWallpaperLeavesThePickerAlone() {
         val shown = mutableListOf<Boolean>()
         TeacherWallpaper(FakeTarget(accepts = false), { true }, showPickers = { shown += it }).handle(PhoneWallpaper.encode(3, jpeg))

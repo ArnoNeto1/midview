@@ -35,14 +35,32 @@ interface WallpaperTarget {
 // Settings and the gallery) does not: it hands the picture to MIUI's
 // wallpaper service directly (checked on the Redmi 10C), so it is hidden
 // (showPickers false, PICKERS) while the teacher's wallpaper is on, and
-// shown again when the phone's own comes back.
+// shown again only when neither screen carries the teacher's picture any
+// more (teacherScreens, kept across restarts: the screens the teacher's
+// picture is on, PhoneWallpaper's bits).
 class TeacherWallpaper(
     private val target: WallpaperTarget,
     private val isDeviceOwner: () -> Boolean,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
     // Hides (false) or shows again (true) the phone makers' own pickers.
     private val showPickers: (Boolean) -> Unit = {},
+    private val teacherScreens: TeacherScreens = TeacherScreens.InMemory(),
 ) {
+    // The screens carrying the teacher's picture (1 home, 2 lock).
+    interface TeacherScreens {
+        fun read(): Int
+
+        fun write(screens: Int)
+
+        class InMemory : TeacherScreens {
+            private var screens = 0
+            override fun read() = screens
+            override fun write(screens: Int) {
+                this.screens = screens
+            }
+        }
+    }
+
     // The teacher's SET_PHONE_WALLPAPER payload in, the CommandAck's result out.
     fun handle(payload: ByteArray): Pair<Boolean, String> {
         val request = PhoneWallpaper.decode(payload) ?: return false to INVALID_REQUEST
@@ -52,6 +70,7 @@ class TeacherWallpaper(
         return try {
             if (target.set(request.image, request.screens)) {
                 log("Wallpaper set by the teacher (screens ${request.screens}).", null)
+                teacherScreens.write(teacherScreens.read() or request.screens)
                 pickers(show = false)
                 true to setText(request.screens)
             } else {
@@ -70,7 +89,10 @@ class TeacherWallpaper(
         try {
             target.clear(screens)
             log("The phone's own wallpaper is back (screens $screens).", null)
-            pickers(show = true)
+            val left = teacherScreens.read() and screens.inv()
+            teacherScreens.write(left)
+            // The picker comes back only with no teacher's picture left anywhere.
+            if (left == 0) pickers(show = true)
             true to restoredText(screens)
         } catch (e: IOException) {
             log("Android did not put the phone's wallpaper back", e)

@@ -35,8 +35,11 @@ class FindRingerTest {
         override fun stopVibration() {
             vibrating = false
         }
+        var ringingWhenShown: (() -> Boolean)? = null
+        var shownWhileRinging: Boolean? = null
         override fun showScreen() {
             screen = true
+            shownWhileRinging = ringingWhenShown?.invoke()
         }
         override fun hideScreen() {
             screen = false
@@ -54,9 +57,37 @@ class FindRingerTest {
         fun fire() = pending.toList().forEach { it.second() }
     }
 
+    private class FakeSaved : SavedVolume {
+        var level: Int? = null
+        override fun read() = level
+        override fun write(level: Int?) {
+            this.level = level
+        }
+    }
+
     private val output = FakeOutput()
     private val timer = FakeTimer()
-    private val ringer = FindRinger(output, timer)
+    private val saved = FakeSaved()
+    private val ringer = FindRinger(output, timer, saved)
+
+    // The volume from before is kept while it rings, and forgotten once given back.
+    @Test fun theVolumeFromBeforeIsKeptWhileItRings() {
+        ringer.start(60)
+        assertEquals(3, saved.level)
+        ringer.stop(FindRinger.Stop.TEACHER)
+        assertEquals(null, saved.level)
+    }
+
+    // The agent's process killed while ringing: the next start gives the volume back.
+    @Test fun aRingCutShortGivesTheVolumeBackOnTheNextStart() {
+        ringer.start(60)
+        val next = FindRinger(output, FakeTimer(), saved)
+        next.recover()
+        assertEquals(3, output.volume)
+        assertEquals(null, saved.level)
+        next.recover()
+        assertEquals(listOf(15, 3), output.volumes)
+    }
 
     @Test fun startRingsLoudAndShowsTheScreen() {
         assertEquals(true to "tocando por 1 min", ringer.handle(PhoneFind.encode(60)))
@@ -64,6 +95,13 @@ class FindRingerTest {
         assertEquals(15, output.volume)
         assertTrue(output.sound && output.vibrating && output.screen)
         assertEquals(60_000L, timer.pending.single().first)
+    }
+
+    // The screen checks that it rings as it comes up (FindActivity.onResume).
+    @Test fun itRingsBeforeTheScreenComesUp() {
+        output.ringingWhenShown = { ringer.isRinging }
+        ringer.start(60)
+        assertEquals(true, output.shownWhileRinging)
     }
 
     @Test fun theStudentsPararStopsItAndGivesTheVolumeBack() {

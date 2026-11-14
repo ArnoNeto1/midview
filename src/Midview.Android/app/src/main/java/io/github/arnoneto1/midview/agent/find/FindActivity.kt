@@ -101,8 +101,10 @@ class FindActivity : Activity() {
             Intent(context, FindActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
-        // Main thread: the ringing stopped.
+        // Main thread: the ringing stopped. A ring started again meanwhile
+        // keeps its screen (a close queued from before must not take it).
         fun close() {
+            if (Finder.ringer?.isRinging == true) return
             current?.finishAndRemoveTask()
         }
     }

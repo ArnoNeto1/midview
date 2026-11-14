@@ -70,6 +70,7 @@ import io.github.arnoneto1.midview.agent.update.PackageApkReader
 import io.github.arnoneto1.midview.agent.update.SelfInstaller
 import io.github.arnoneto1.midview.agent.wallpaper.AndroidWallpaper
 import io.github.arnoneto1.midview.agent.wallpaper.TeacherWallpaper
+import io.github.arnoneto1.midview.agent.wallpaper.TeacherWallpaperScreens
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -99,7 +100,11 @@ class AgentService : Service() {
 
     // "Tocar para encontrar": one for the device, its "Parar" screen too.
     private val finder by lazy {
-        FindRinger(AndroidRingOutput(this), AndroidRingOutput.timer(), log = { Log.i(TAG, it) }).also { Finder.ringer = it }
+        FindRinger(AndroidRingOutput(this), AndroidRingOutput.timer(), AndroidRingOutput.savedVolume(this), log = { Log.i(TAG, it) })
+            .also {
+                Finder.ringer = it
+                it.recover()
+            }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -354,6 +359,7 @@ class AgentService : Service() {
             wallpaper = TeacherWallpaper(
                 AndroidWallpaper(this), policyGateway::isDeviceOwner, log,
                 showPickers = { show -> TeacherWallpaper.PICKERS.forEach { policyGateway.setApplicationHidden(it, !show) } },
+                teacherScreens = TeacherWallpaperScreens(File(filesDir, TEACHER_WALLPAPER_FILE)),
             )::handle,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
             findPhone = finder::handle,
@@ -447,6 +453,7 @@ class AgentService : Service() {
         const val INTERNET_BLOCK_FILE = "internet-block.txt"
         private const val HIDDEN_BROWSERS_FILE = "hidden-browsers.txt"
         private const val OPTIMIZE_FILE = "optimize.txt"
+        private const val TEACHER_WALLPAPER_FILE = "teacher-wallpaper.txt"
         private const val LAB_CONFIG_FILE = "lab-config.bin"
 
         fun start(context: Context) {

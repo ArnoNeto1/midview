@@ -93,7 +93,10 @@ class ConsentActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST) answered(resultCode, data)
+        if (requestCode == REQUEST) {
+            ConsentTapper.answered()
+            answered(resultCode, data)
+        }
     }
 
     override fun onResume() {

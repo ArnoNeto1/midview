@@ -40,6 +40,14 @@ internal object ConsentTapper {
         }
     }
 
+    // Android answered the request (ConsentActivity.onActivityResult): nothing to press any more.
+    fun answered() {
+        main.post {
+            requestedAt = null
+            main.removeCallbacks(look)
+        }
+    }
+
     private fun pressed(): Boolean {
         val service = AccessibilityCapture.instance ?: return false
         val windows = try {
@@ -51,7 +59,7 @@ internal object ConsentTapper {
             val root = window.root ?: continue
             val nodes = nodes(root)
             if (!ConsentTap.isOwnRequest(root.packageName, nodes.flatMap { listOf(it.text, it.contentDescription) })) continue
-            val button = nodes.firstOrNull { ConsentTap.isStartButton(it.viewIdResourceName, it.text) } ?: continue
+            val button = nodes.firstOrNull { ConsentTap.isStartButton(it.viewIdResourceName) } ?: continue
             val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
             Log.i(TAG, "The system asked to capture the screen: \"Iniciar agora\" pressed by the agent ($clicked).")
             return clicked

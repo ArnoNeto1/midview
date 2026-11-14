@@ -37,13 +37,18 @@ class ConsentTapTest {
         assertFalse(ConsentTap.isOwnRequest(null, dialog))
     }
 
+    // Only the dialog's positive button, never a text that looks like it.
     @Test fun theStartButton() {
-        assertTrue(ConsentTap.isStartButton("android:id/button1", "Iniciar agora"))
-        assertTrue(ConsentTap.isStartButton("android:id/button1", null))
-        assertTrue(ConsentTap.isStartButton(null, " Start now "))
-        assertTrue(ConsentTap.isStartButton(null, "INICIAR AGORA"))
-        assertFalse(ConsentTap.isStartButton("android:id/button2", "Cancelar"))
-        assertFalse(ConsentTap.isStartButton(null, "Não mostrar novamente"))
-        assertFalse(ConsentTap.isStartButton(null, null))
+        assertTrue(ConsentTap.isStartButton("android:id/button1"))
+        assertFalse(ConsentTap.isStartButton("android:id/button2"))
+        assertFalse(ConsentTap.isStartButton(null))
+        assertFalse(ConsentTap.isStartButton("com.other:id/button1"))
+    }
+
+    // The label as a word: an app called "Midview Pro" or "XMidview" is not us.
+    @Test fun theLabelMustBeOursAsAWord() {
+        assertTrue(ConsentTap.isOwnRequest("com.android.systemui", listOf("Midview iniciará a captura")))
+        assertFalse(ConsentTap.isOwnRequest("com.android.systemui", listOf("O XMidview iniciará a captura")))
+        assertFalse(ConsentTap.isOwnRequest("com.android.systemui", listOf("O Midviewer iniciará a captura")))
     }
 }

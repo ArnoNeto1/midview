@@ -26,6 +26,16 @@ interface RingOutput {
     fun hideScreen()
 }
 
+// Where the alarm volume from before the ring is kept on the device while it
+// rings (a file; a test's fake): a ring cut short by the agent's process
+// being killed still gives it back on the next start (FindRinger.recover).
+interface SavedVolume {
+    fun read(): Int?
+
+    // null: nothing to give back.
+    fun write(level: Int?)
+}
+
 // Runs task after delayMillis; the answer cancels it.
 fun interface RingTimer {
     fun after(delayMillis: Long, task: () -> Unit): () -> Unit
@@ -42,6 +52,7 @@ fun interface RingTimer {
 class FindRinger(
     private val output: RingOutput,
     private val timer: RingTimer,
+    private val saved: SavedVolume? = null,
     private val log: (String) -> Unit = {},
 ) {
     private val lock = Any()
@@ -62,15 +73,19 @@ class FindRinger(
         if (!ringing) {
             val before = output.alarmVolume()
             savedVolume = before
+            saved?.write(before)
             output.setAlarmVolume(output.maxAlarmVolume())
             if (!output.startSound()) {
                 output.setAlarmVolume(before)
                 savedVolume = null
+                saved?.write(null)
                 return false to NO_SOUND
             }
             output.startVibration()
-            output.showScreen()
+            // Ringing before the screen comes up: FindActivity closes itself
+            // when it finds nothing ringing.
             ringing = true
+            output.showScreen()
             log("Ringing to be found ($seconds s); the alarm volume was $before.")
         }
         cancelTimeout?.invoke()
@@ -91,9 +106,20 @@ class FindRinger(
         } finally {
             savedVolume?.let { output.setAlarmVolume(it) }
             savedVolume = null
+            saved?.write(null)
         }
         log("Stopped ringing (${why.name.lowercase()}).")
         true
+    }
+
+    // The agent starts: a ring the process was killed in the middle of
+    // leaves the alarm volume at the top; it goes back to what it was.
+    fun recover() = synchronized(lock) {
+        if (ringing) return
+        val level = saved?.read() ?: return
+        output.setAlarmVolume(level)
+        saved.write(null)
+        log("The alarm volume of a ring cut short went back to $level.")
     }
 
     enum class Stop { STUDENT, TEACHER, TIME_UP, AGENT }

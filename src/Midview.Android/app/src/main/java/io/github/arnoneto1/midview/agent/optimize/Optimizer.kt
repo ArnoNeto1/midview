@@ -312,7 +312,7 @@ class Optimizer(
     }
 
     // An app an earlier run hid that the phone now never hides (its only
-    // gallery, BloatList.onlyGallery) is shown again; nothing it did not hide.
+    // gallery, BloatList.keptGallery) is shown again; nothing it did not hide.
     private fun showAgain(hiddenBefore: List<String>) {
         if (hiddenBefore.isEmpty()) return
         val never = try {

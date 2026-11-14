@@ -49,14 +49,20 @@ object BloatList {
     // Never hidden on this phone: NEVER_HIDE, the app block's protected apps
     // (the home screen, the WebView and the keyboard in use, the agent, the
     // system's dialer, settings and installer), the phone's own cameras and
-    // its only gallery (onlyGallery).
+    // a gallery to keep (keptGallery).
     fun neverHide(protected: Set<String>, cameras: Set<String>, galleries: Set<String> = emptySet()): Set<String> =
-        NEVER_HIDE + protected + cameras + onlyGallery(galleries)
+        NEVER_HIDE + protected + cameras + keptGallery(galleries)
 
-    // The gallery apps (MAIN with APP_GALLERY) the device has: when there is
-    // only one, it stays, so the photos the class takes can still be seen. A
-    // Xiaomi has its own Galeria beside Google Photos, which the school's list
-    // hides (UnusedApps); the school's Multilaser M10 tablet has only Google
-    // Photos (its AOSP gallery has no icon).
-    fun onlyGallery(galleries: Set<String>): Set<String> = if (galleries.size == 1) galleries else emptySet()
+    // The gallery apps (MAIN with APP_GALLERY) the device has for its user:
+    // when the school's lists would hide every one of them, one stays (Google
+    // Photos if it is among them), so the photos the class takes can still
+    // be seen. A Xiaomi has its own Galeria beside Google Photos, which the
+    // lists hide (UnusedApps); the school's Multilaser M10 tablet has only
+    // Google Photos (its AOSP gallery has no icon).
+    fun keptGallery(galleries: Set<String>, wouldHide: Set<String> = PACKAGES.toSet() + UnusedApps.PACKAGES): Set<String> {
+        if (galleries.isEmpty() || !galleries.all { it in wouldHide }) return emptySet()
+        return setOf(galleries.firstOrNull { it == GOOGLE_PHOTOS } ?: galleries.minOf { it })
+    }
+
+    private const val GOOGLE_PHOTOS = "com.google.android.apps.photos"
 }

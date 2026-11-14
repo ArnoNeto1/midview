@@ -58,25 +58,27 @@ class AndroidRingOutput(context: Context) : RingOutput {
         }
     }
 
-    private fun play(uri: Uri): Boolean = try {
-        player = MediaPlayer().apply {
-            setAudioAttributes(
+    // Built in a local first: one that fails halfway is released, never kept.
+    private fun play(uri: Uri): Boolean {
+        val built = MediaPlayer()
+        return try {
+            built.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build(),
             )
-            setDataSource(app, uri)
-            isLooping = true
-            prepare()
-            start()
+            built.setDataSource(app, uri)
+            built.isLooping = true
+            built.prepare()
+            built.start()
+            player = built
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "The sound $uri did not play", e)
+            built.release()
+            false
         }
-        true
-    } catch (e: Exception) {
-        Log.w(TAG, "The sound $uri did not play", e)
-        player?.release()
-        player = null
-        false
     }
 
     override fun stopSound() {
@@ -127,6 +129,26 @@ class AndroidRingOutput(context: Context) : RingOutput {
 
     companion object {
         private const val TAG = "Midview"
+
+        // The alarm volume from before the ring, in the app's private storage.
+        fun savedVolume(context: Context): SavedVolume {
+            val file = java.io.File(context.filesDir, "find-volume.txt")
+            return object : SavedVolume {
+                override fun read(): Int? = try {
+                    if (file.isFile) file.readText().trim().toIntOrNull() else null
+                } catch (e: java.io.IOException) {
+                    null
+                }
+
+                override fun write(level: Int?) {
+                    try {
+                        if (level == null) file.delete() else file.writeText(level.toString())
+                    } catch (e: java.io.IOException) {
+                        Log.w(TAG, "The alarm volume from before the ring was not kept", e)
+                    }
+                }
+            }
+        }
 
         // The timer FindRinger needs, on the main thread.
         fun timer(): RingTimer {

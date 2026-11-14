@@ -122,11 +122,14 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
 
     // The gallery apps the student can open, hidden ones too, so one hidden
     // before still counts and a second "Otimizar" decides the same.
+    // Not one uninstalled for this user (no FLAG_INSTALLED): it is no gallery
+    // the student has.
     private fun galleries(): Set<String> =
         pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_GALLERY),
             PackageManager.MATCH_UNINSTALLED_PACKAGES,
-        ).map { it.activityInfo.packageName }.toSet()
+        ).filter { (it.activityInfo.applicationInfo.flags and ApplicationInfo.FLAG_INSTALLED) != 0 }
+            .map { it.activityInfo.packageName }.toSet()
 
     private fun candidate(info: ApplicationInfo) = ProtectedApps.Candidate(
         info.packageName,

@@ -99,6 +99,14 @@ class BloatListTest {
         assertFalse("com.miui.gallery" in never)
     }
 
+    // Every gallery the device has is on the school's lists: one stays, Google Photos first.
+    @Test fun whenEveryGalleryWouldGoOneStays() {
+        val galleries = setOf("com.google.android.apps.photos", "com.xiaomi.glgm")
+        assertEquals(setOf("com.google.android.apps.photos"), BloatList.keptGallery(galleries))
+        assertEquals(setOf("a.gallery"), BloatList.keptGallery(setOf("b.gallery", "a.gallery"), wouldHide = setOf("a.gallery", "b.gallery")))
+        assertEquals(emptySet<String>(), BloatList.keptGallery(emptySet()))
+    }
+
     @Test fun theListHidesNothingThatIsNeverHidden() {
         assertTrue(BloatList.PACKAGES.none { it in BloatList.NEVER_HIDE })
     }
