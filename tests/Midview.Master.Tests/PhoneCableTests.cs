@@ -311,6 +311,7 @@ public sealed class PhoneCableTests
             S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
+            S + "shell settings put global force_fsg_nav_bar 0",
             ContentCall(),
             // The home screen (PhoneHomeScreen), on a Xiaomi: its settings do
             // not open here, so it stops there and the phone goes on.
@@ -512,6 +513,7 @@ public sealed class PhoneCableTests
             .Set(S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow", "Error: Unknown operation string", 255)
             .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
             .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255)
+            .Set(S + "shell settings put global force_fsg_nav_bar 0", "Error", 255)
             .Set(S + "shell settings put global window_animation_scale 0", "Error", 255)
             .Set(S + "shell settings put global transition_animation_scale 0", "Error", 255)
             .Set(S + "shell settings put global animator_duration_scale 0", "Error", 255)
@@ -635,7 +637,24 @@ public sealed class PhoneCableTests
         // Everything else runs as with the optimized setup.
         Assert.Contains(S + "install -r " + Apk, adb.Calls);
         Assert.Contains(S + "shell settings put secure accessibility_enabled 1", adb.Calls);
+        Assert.Contains(S + "shell settings put global force_fsg_nav_bar 0", adb.Calls);
         Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+    }
+
+    [Fact]
+    public void A_phone_without_miui_gets_the_three_buttons_through_the_overlay()
+    {
+        var adb = ReadyToPrepare()
+            .Set(S + "shell getprop ro.miui.ui.version.name", "\n")
+            .Set(S + "shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton",
+                "Error: no overlay", 255);
+
+        var result = Prepare(adb);
+
+        Assert.Null(result.Problem);
+        Assert.Contains(
+            S + "shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton", adb.Calls);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("force_fsg_nav_bar", StringComparison.Ordinal));
     }
 
     // A tablet: named "Tablet 07" here, and told so in the package.

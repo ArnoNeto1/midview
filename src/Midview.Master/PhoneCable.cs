@@ -45,6 +45,7 @@ public sealed partial class PhoneCable
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private const string Authority = "content://io.github.arnoneto1.midview.agent.setup";
+    private const string ThreeButtonNavigation = "com.android.internal.systemui.navbar.threebutton";
     private const string AccessibilityService =
         PhoneProvisioning.AgentPackage + "/" + PhoneProvisioning.AgentPackage + ".screen.AccessibilityCapture";
 
@@ -305,6 +306,18 @@ public sealed partial class PhoneCable
         // Device Owner step; a failure does not stop the setup either.
         Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
+        // "Travar o toque do aluno" during Controlar covers the system bar's
+        // three buttons, but not gesture navigation's swipes: with gestures
+        // the student still goes home or back. So the three buttons, in both
+        // modes (MIUI keeps its own switch). A failure does not stop the setup.
+        if (Miui)
+        {
+            Shell(Short, "settings", "put", "global", "force_fsg_nav_bar", "0");
+        }
+        else
+        {
+            Shell(Short, "cmd", "overlay", "enable-exclusive", "--category", ThreeButtonNavigation);
+        }
 
         stage(CableStage.Wifi);
         var payload = CableSetupPayload.Encode(number, masterThumbprint, ssid, password, kind, optimize);
