@@ -565,7 +565,7 @@ public partial class ViewControlWindow : MidviewWindow
         ModeTextBlock.Content = _controlling
             ? _isPhone ? PhoneControl.Controlling(TouchLocked) : "Controlando: o teclado e o mouse do aluno estão travados."
             : _isPhone
-                ? "Só vendo: o aluno continua usando o celular normalmente."
+                ? $"Só vendo: o aluno continua usando o {DeviceSetupText.Word(PhoneNumber.KindOf(_machineName))} normalmente."
                 : "Só vendo: o aluno continua usando o computador normalmente.";
         // The chip is accent-colored while controlling, muted while only viewing.
         ModeTextBlock.Background = (Brush)FindResource(_controlling ? "AccentSoftBrush" : "CardBrush");
