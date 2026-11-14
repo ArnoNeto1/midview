@@ -173,6 +173,20 @@ public sealed partial class PhoneCable
         "com.unisoc.storageclearmanager",
         "com.zediel.pcbtest",
         "penseavanti.com.br.app2shop_multilaser",
+        // The school's choice on 2026-11-14: the FM radio and the Google apps
+        // Midview hides anyway (Gmail, Calendar, Maps, YouTube, YouTube Music,
+        // Google TV, Meet, the Assistant, Android Auto). Removed here, before
+        // the agent hides them: a hidden app can no longer be removed by cable.
+        "com.android.fmradio",
+        "com.google.android.apps.googleassistant",
+        "com.google.android.apps.maps",
+        "com.google.android.apps.tachyon",
+        "com.google.android.apps.youtube.music",
+        "com.google.android.calendar",
+        "com.google.android.gm",
+        "com.google.android.projection.gearhead",
+        "com.google.android.videos",
+        "com.google.android.youtube",
     };
 
     // On a tablet the Play Store and Google's voice also stop running unseen

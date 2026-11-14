@@ -728,7 +728,7 @@ public sealed class PhoneCableTests
         {
             Assert.DoesNotContain(app, PhoneCable.TabletRemovedApps);
         }
-        Assert.Equal(51, PhoneCable.TabletRemovedApps.Count);
+        Assert.Equal(61, PhoneCable.TabletRemovedApps.Count);
         Assert.Empty(PhoneCable.TabletRemovedApps.Intersect(PhoneCable.RemovedApps));
         Assert.Equal(PhoneCable.TabletRemovedApps.Count, PhoneCable.TabletRemovedApps.Distinct().Count());
     }
