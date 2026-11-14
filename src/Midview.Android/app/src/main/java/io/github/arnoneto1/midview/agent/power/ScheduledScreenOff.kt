@@ -65,6 +65,9 @@ class ScheduledScreenOff(
     private val arm: (Instant?) -> Unit,
     private val screenOff: (delaySeconds: Int) -> Pair<Boolean, String>,
     private val screenOn: () -> Boolean,
+    // Calls off the warning screenOff started (PowerCountdown.cancelScheduled);
+    // true when one was counting down.
+    private val cancelScreenOff: () -> Boolean = { false },
     private val now: () -> Instant = Instant::now,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
@@ -74,6 +77,17 @@ class ScheduledScreenOff(
     // The scheduled time last acted on: an alarm that rings twice for it
     // (a start of the agent catching a ring up) acts once.
     private var lastDone: Instant? = null
+
+    // The teacher sent a schedule: the screen off it started for a time no
+    // longer in it (cleared, or another time) is called off, the student's
+    // warning with it; then the alarm follows the new schedule.
+    fun changed() {
+        val running = synchronized(gate) { lastDone }
+        if (running != null && ScreenOffTimes.dueAt(store.current, now(), zone()) != running && cancelScreenOff()) {
+            log("The schedule changed: its screen off for $running was called off.", null)
+        }
+        rearm()
+    }
 
     // The alarm at the next time, or none.
     fun rearm() {

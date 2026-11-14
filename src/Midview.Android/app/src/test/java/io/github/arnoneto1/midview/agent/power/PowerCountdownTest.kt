@@ -2,6 +2,7 @@ package io.github.arnoneto1.midview.agent.power
 
 import io.github.arnoneto1.midview.agent.apps.CloseNotice
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,6 +56,33 @@ class PowerCountdownTest {
         }
     }
     private val countdown = PowerCountdown(power, notice, schedule = { delay, task -> tasks += (clock + delay) to task }, now = { clock })
+
+    // "Agendar" cleared during its warning: the screen stays on, the warning goes.
+    @Test fun theSchedulesOwnWarningIsCalledOff() {
+        countdown.requestScheduled(300)
+        assertTrue(countdown.cancelScheduled())
+        assertEquals("hide", seen.last())
+        advance(301_000)
+        assertTrue(done.isEmpty())
+        assertFalse(countdown.cancelScheduled())
+    }
+
+    // The teacher's own "Desligar" is never called off by the schedule.
+    @Test fun theTeachersDesligarIsNotCalledOffByTheSchedule() {
+        countdown.request(PowerCountdown.SHUTDOWN, 60)
+        assertFalse(countdown.cancelScheduled())
+        advance(60_000)
+        assertEquals(listOf("screen off"), done)
+    }
+
+    // The teacher's "Desligar" over the schedule's warning takes it over.
+    @Test fun theTeachersDesligarTakesTheSchedulesOver() {
+        countdown.requestScheduled(300)
+        countdown.request(PowerCountdown.SHUTDOWN, 60)
+        assertFalse(countdown.cancelScheduled())
+        advance(60_000)
+        assertEquals(listOf("screen off"), done)
+    }
 
     @Test fun aRestartWithAMinuteWarnsTheStudentThenRestarts() {
         val answer = countdown.request(PowerCountdown.RESTART, 60)

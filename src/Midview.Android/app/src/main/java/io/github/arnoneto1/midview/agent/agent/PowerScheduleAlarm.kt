@@ -83,12 +83,13 @@ internal fun AgentService.scheduledScreenOff(
     own: (() -> Unit) -> Unit,
 ): PowerScheduleStore {
     lateinit var scheduled: ScheduledScreenOff
-    val store = PowerScheduleStore(File(filesDir, POWER_SCHEDULE_FILE), changed = { scheduled.rearm() }, log = log)
+    val store = PowerScheduleStore(File(filesDir, POWER_SCHEDULE_FILE), changed = { scheduled.changed() }, log = log)
     scheduled = ScheduledScreenOff(
         store,
         arm = { PowerScheduleAlarm.arm(this, it) },
-        screenOff = { power.request(PowerCountdown.SHUTDOWN, it) },
+        screenOff = { power.requestScheduled(it) },
         screenOn = { getSystemService(PowerManager::class.java)?.isInteractive ?: true },
+        cancelScreenOff = power::cancelScheduled,
         log = log,
     )
     own(PowerScheduleAlarm.follow(scheduled))

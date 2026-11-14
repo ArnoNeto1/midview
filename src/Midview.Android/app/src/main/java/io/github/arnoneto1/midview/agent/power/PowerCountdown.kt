@@ -60,12 +60,33 @@ class PowerCountdown(
     // The countdown's first notice alerts; the following ones only change the time.
     private var alerted = 0
 
+    // The screen off counting down now was started by "Agendar"
+    // (requestScheduled), not by the teacher's "Desligar".
+    private var fromSchedule = false
+
     // The CommandAck's result. action: the PC's PowerAction (0 shut down,
     // 1 restart, 2 cancel).
     fun request(action: Int, delaySeconds: Int): Pair<Boolean, String> = when (action) {
         CANCEL -> cancel()
         RESTART -> start(restart = true, delaySeconds)
         else -> start(restart = false, delaySeconds)
+    }
+
+    // "Agendar"'s screen off (ScheduledScreenOff): as the teacher's, but the
+    // schedule may call it off again (cancelScheduled).
+    fun requestScheduled(delaySeconds: Int): Pair<Boolean, String> = start(restart = false, delaySeconds, scheduled = true)
+
+    // The schedule changed and its screen off is no longer due: the warning
+    // it started goes. One the teacher started (or replaced it with) stays.
+    // True when one was called off.
+    fun cancelScheduled(): Boolean {
+        synchronized(gate) {
+            if (pending != false || !fromSchedule) return false
+            generation++
+            pending = null
+        }
+        notice.hide()
+        return true
     }
 
     private fun cancel(): Pair<Boolean, String> {
@@ -78,10 +99,11 @@ class PowerCountdown(
         return true to if (was) RESTART_CANCELLED else SCREEN_OFF_CANCELLED
     }
 
-    private fun start(restart: Boolean, delaySeconds: Int): Pair<Boolean, String> {
+    private fun start(restart: Boolean, delaySeconds: Int, scheduled: Boolean = false): Pair<Boolean, String> {
         if (!power.canRestart()) return false to NOT_DEVICE_OWNER
         if (!restart && !power.canTurnScreenOff()) return false to RESTART_FIRST
         val gen = synchronized(gate) {
+            fromSchedule = scheduled
             deadline = now() + delaySeconds * 1000L
             // A restart "Agora" can still be called off for its moment.
             pending = if (delaySeconds > 0 || restart) restart else null

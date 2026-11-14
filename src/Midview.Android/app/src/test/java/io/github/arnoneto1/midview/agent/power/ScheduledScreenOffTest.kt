@@ -98,13 +98,16 @@ class ScheduledScreenOffTest {
     private val armed = mutableListOf<Instant?>()
     private val offs = mutableListOf<Int>()
     private val logged = mutableListOf<String>()
-    private val store by lazy { PowerScheduleStore(File(folder.root, "power-schedule.txt"), changed = { follower.rearm() }) }
+    private val store by lazy { PowerScheduleStore(File(folder.root, "power-schedule.txt"), changed = { follower.changed() }) }
+    private var counting = false
+    private var calledOff = 0
     private val follower: ScheduledScreenOff by lazy {
         ScheduledScreenOff(
             store,
             arm = { armed += it },
-            screenOff = { offs += it; true to "ok" },
+            screenOff = { offs += it; counting = it > 0; true to "ok" },
             screenOn = { screenIsOn },
+            cancelScreenOff = { counting.also { if (it) calledOff++; counting = false } },
             now = { clock },
             zone = { saoPaulo },
             log = { text, _ -> logged += text },
@@ -152,6 +155,35 @@ class ScheduledScreenOffTest {
         follower.rang()
         assertTrue(offs.isEmpty())
         assertEquals(sp("2026-11-16T18:00:00"), armed.last())
+    }
+
+    // The warning is on (the student sees "A tela apaga em..."), and the
+    // teacher clears the schedule: the warning goes.
+    @Test fun clearingTheScheduleCallsOffItsWarning() {
+        store.handle(weekdays18h.encode())
+        clock = sp("2026-11-13T18:00:02")
+        follower.rang()
+        clock = sp("2026-11-13T18:01:00")
+        store.handle(PowerSchedule(2000, PowerSchedule.WEEKDAYS, null, null).encode())
+        assertEquals(1, calledOff)
+        assertEquals(null, armed.last())
+    }
+
+    @Test fun anotherTimeCallsItOffToo() {
+        store.handle(weekdays18h.encode())
+        clock = sp("2026-11-13T18:00:02")
+        follower.rang()
+        store.handle(PowerSchedule(2000, PowerSchedule.WEEKDAYS, null, 19 * 60).encode())
+        assertEquals(1, calledOff)
+    }
+
+    // The same time sent again (another day added, say): it is still due, the warning goes on.
+    @Test fun theSameTimeStillDueKeepsIt() {
+        store.handle(weekdays18h.encode())
+        clock = sp("2026-11-13T18:00:02")
+        follower.rang()
+        store.handle(PowerSchedule(2000, PowerSchedule.EVERY_DAY, 7 * 60, 18 * 60).encode())
+        assertEquals(0, calledOff)
     }
 
     @Test fun aRefusedAlarmIsLogged() {
