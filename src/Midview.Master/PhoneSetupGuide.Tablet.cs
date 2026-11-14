@@ -9,11 +9,18 @@ namespace Midview.Master;
 // keys on them), in a tablet's words; the Xiaomi-only ones become a plain
 // Android tablet's: the chip and the Mi account become "no screen lock", the
 // three developer switches become USB debugging alone, and signing out of
-// the Mi account becomes checking no account is left. No prints: they show
-// the Redmi's MIUI.
+// the Mi account becomes checking no account is left. Its prints are the
+// M10's own (2026-11-14, freshly reset; the IMEI, IP and MAC covered).
 internal static partial class PhoneSetupGuide
 {
     private static IReadOnlyList<GuideStep>? _tabletSteps;
+
+    private const string TabletFolder = "Assets/PrepararTablet/";
+    private const string TabletSettingsPrint = TabletFolder + "configuracoes.png";
+    private const string TabletAboutPrint = TabletFolder + "sobre.png";
+    private const string TabletSecurityPrint = TabletFolder + "seguranca.png";
+    private const string TabletDeveloperPrint = TabletFolder + "desenvolvedor.png";
+    private const string TabletAccountsPrint = TabletFolder + "contas.png";
 
     /// <summary>The steps for this kind of device, in its words.</summary>
     public static IReadOnlyList<GuideStep> StepsFor(AndroidDeviceKind kind) =>
@@ -156,7 +163,7 @@ internal static partial class PhoneSetupGuide
                 "Toque 7 vezes seguidas em \"Número da versão\" (no fim da tela).",
                 "Pare quando aparecer \"Você agora é um desenvolvedor\".",
             },
-            null, null,
+            TabletAboutPrint, new Rect(0.05, 0.905, 0.9, 0.055),
             "Leva menos de 1 minuto.",
             "Apareceu \"Você agora é um desenvolvedor\", próximo passo",
             new GuideHelp[]
@@ -172,10 +179,10 @@ internal static partial class PhoneSetupGuide
             {
                 "Abra as Configurações e toque em \"Segurança\".",
                 "Toque em \"Bloqueio de tela\".",
-                "Se não estiver em \"Nenhum\", escolha \"Nenhum\" (o tablet pede a senha atual).",
+                "Se estiver em PIN, Padrão ou Senha, escolha \"Nenhum\" ou \"Deslizar\" (o tablet pede a senha atual).",
                 "Se o tablet já teve senha de tela e a escola vai usar o PIN do professor nele, restaure-o de fábrica antes: um tablet que já teve senha de tela não aceita esse PIN.",
             },
-            null, null,
+            TabletSecurityPrint, new Rect(0.03, 0.315, 0.94, 0.05),
             "Leva menos de 1 minuto.",
             "Está sem senha de tela, próximo passo",
             new GuideHelp[]
@@ -194,7 +201,7 @@ internal static partial class PhoneSetupGuide
                 "Desça a tela e ligue \"Depuração USB\".",
                 "No aviso, toque em \"OK\".",
             },
-            null, null,
+            TabletDeveloperPrint, new Rect(0.05, 0.318, 0.92, 0.052),
             "Leva menos de 1 minuto.",
             "A Depuração USB está ligada, próximo passo",
             new GuideHelp[]
@@ -214,7 +221,7 @@ internal static partial class PhoneSetupGuide
                 "Se entrou numa conta Google na Play Store, no passo anterior, é ela que sai agora.",
                 "Com uma conta Google no tablet, o Midview não consegue terminar a preparação.",
             },
-            null, null,
+            TabletSettingsPrint, new Rect(0.03, 0.68, 0.94, 0.05),
             "Leva 1 minuto.",
             "Já tirei, próximo passo",
             new GuideHelp[]
@@ -235,7 +242,7 @@ internal static partial class PhoneSetupGuide
                 "A conta do próprio tablet para os contatos (\"Phone\" ou \"Telefone\") pode ficar: o Midview cuida dela.",
                 "Com qualquer outra conta no tablet, o Midview não consegue terminar.",
             },
-            null, null,
+            TabletAccountsPrint, new Rect(0.03, 0.085, 0.94, 0.07),
             "Leva menos de 1 minuto.",
             "Não sobrou conta, próximo passo",
             new GuideHelp[]

@@ -15,6 +15,7 @@
     <Resource Include="..\..\assets\midview.ico" Link="midview.ico" />
     <!-- The phone screens of the "Preparar celulares" guide (PhoneSetupGuide). -->
     <Resource Include="Assets\PrepararCelular\*.png" />
+    <Resource Include="Assets\PrepararTablet\*.png" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Midview.Protocol\Midview.Protocol.csproj" />

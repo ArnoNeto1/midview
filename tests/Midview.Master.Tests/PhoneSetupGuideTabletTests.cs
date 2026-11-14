@@ -26,14 +26,14 @@ public class PhoneSetupGuideTabletTests
     }
 
     // Nothing about a phone, a Xiaomi or its chip shows to a teacher preparing a tablet,
-    // and no print of the Redmi's MIUI.
+    // and no print of the Redmi's MIUI (only the tablet's own).
     [Fact]
     public void A_tablets_steps_never_speak_of_a_phone_a_xiaomi_or_a_chip()
     {
         var phoneWords = new Regex(@"\b(celular|celulares|MIUI|Xiaomi|chip|Conta Mi|conta Mi)\b", RegexOptions.IgnoreCase);
         foreach (var step in PhoneSetupGuide.StepsFor(AndroidDeviceKind.Tablet))
         {
-            Assert.Null(step.Image);
+            Assert.True(step.Image is null || step.Image.StartsWith("Assets/PrepararTablet/", StringComparison.Ordinal), step.Id);
             foreach (var text in Texts(step))
             {
                 Assert.False(phoneWords.IsMatch(text), $"{step.Id}: {text}");
