@@ -7,9 +7,11 @@ namespace Midview.Master;
 
 // The "chrome" step: every few seconds, while the step waits, Chrome's and
 // WebView's versions are read over the cable (on a worker thread, as on the
-// cable step); an old one gets its Play Store page opened on the phone, and
-// the step moves on by itself once both are up to date. Where it stands is
-// PhoneSetupProgress.Chrome.
+// cable step); an old one is first installed from the copy kept on this
+// computer (ChromeCopy), then, if still old, gets its Play Store page opened
+// on the phone, and the step moves on by itself once both are up to date,
+// after copying them to this computer for the next devices. Where it stands
+// is PhoneSetupProgress.Chrome.
 public partial class PreparePhonesWindow
 {
     private static readonly TimeSpan ChromePollEvery = TimeSpan.FromSeconds(3);
@@ -94,6 +96,16 @@ public partial class PreparePhonesWindow
             return;
         }
 
+        if (problem is null && (_progress.WantsCopy(versions) || _progress.WantsSave(versions)))
+        {
+            (problem, versions) = await CopyChrome(versions!);
+            if (_closed)
+            {
+                StopCableTool();
+                return;
+            }
+        }
+
         var open = _progress.ChromeLooked(problem, versions, DateTimeOffset.Now);
         if (open is not null)
         {
@@ -114,6 +126,70 @@ public partial class PreparePhonesWindow
             ShowPage();
         }
     }
+
+    // The copy kept on this computer (ChromeCopy): installed on a device
+    // whose apps are old, before any Play Store page, or saved from one
+    // whose apps are up to date. The card says so while it runs. Returns
+    // the versions to go on with (read again after an install).
+    private async Task<(CableProblem? Problem, ChromeVersions? Versions)> CopyChrome(ChromeVersions versions)
+    {
+        _chromeChecking = true;
+        var installing = _progress.WantsCopy(versions);
+        try
+        {
+            var cable = Cable();
+            var store = new ChromeCopy();
+            if (installing)
+            {
+                var result = await Task.Run(() => cable.InstallChromeCopy(store, versions, () => Started(_progress.CopyStarting)));
+                _progress.CopyEnded(result);
+                installing = false;
+                if (result.Installed.Count == 0)
+                {
+                    return (null, versions);
+                }
+                var (problem, after) = await Task.Run(cable.LookAtChrome);
+                if (problem is not null || after is null)
+                {
+                    return (problem, after);
+                }
+                versions = after;
+            }
+            if (_progress.WantsSave(versions))
+            {
+                await Task.Run(() => cable.SaveChromeCopy(store, () => Started(_progress.SaveStarting)));
+                _progress.SaveEnded();
+            }
+            return (null, versions);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or Win32Exception or UnauthorizedAccessException)
+        {
+            // The copy never fails the step: on as if there were none.
+            if (installing)
+            {
+                _progress.CopyEnded(new ChromeCopyResult(Array.Empty<string>(), null));
+            }
+            else
+            {
+                _progress.SaveEnded();
+            }
+            return (null, versions);
+        }
+        finally
+        {
+            _chromeChecking = false;
+        }
+    }
+
+    // From the worker, right before the long part: the card says what runs.
+    private void Started(Action mark) => Dispatcher.BeginInvoke(() =>
+    {
+        if (!_closed)
+        {
+            mark();
+            ShowChrome();
+        }
+    });
 
     private async Task OpenStore(string package)
     {
@@ -174,7 +250,7 @@ public partial class PreparePhonesWindow
             : null;
         ChromeDetailText.Text = detail;
         ChromeDetailText.Visibility = Shown(detail.Length > 0);
-        ChromeSkipLine.Visibility = Shown(_progress.Chrome != ChromeStage.Done);
+        ChromeSkipLine.Visibility = Shown(_progress.Chrome != ChromeStage.Done && _progress.Work == ChromeWork.None);
         Footer(back: true, next: _progress.Chrome switch
         {
             ChromeStage.Done => ShownStep!.NextText,
@@ -197,6 +273,15 @@ public partial class PreparePhonesWindow
             null => null,
             _ => WaitingText,
         };
+        switch (_progress.Work)
+        {
+            case ChromeWork.Installing:
+                return ("Instalando o Chrome guardado neste computador...",
+                    "Leva cerca de 1 minuto. Se o celular perguntar, toque em Instalar.");
+            case ChromeWork.Saving:
+                return ("Guardando uma cópia do Chrome neste computador, para os próximos celulares...",
+                    "São cerca de 400 MB: leva uns 15 segundos. Não solte o cabo.");
+        }
         switch (_progress.Chrome)
         {
             case ChromeStage.Done:
@@ -206,6 +291,7 @@ public partial class PreparePhonesWindow
                         "Confira a Play Store no celular (a conta Google e o Wi-Fi) e toque em \"Conferir de novo\".", "");
             case ChromeStage.Updating:
                 var app = AppName(_progress.ChromeUpdating);
+                var copy = CopyMissText(_progress.CopyMiss) is { } miss ? miss + " " : "";
                 var where = _progress.StoreFailed
                     ? $"O Midview não conseguiu abrir a Play Store no celular. No celular, abra a Play Store, toque na busca, escreva \"{app}\" e toque em Atualizar."
                     : "A Play Store abriu no celular: toque em Atualizar.";
@@ -213,11 +299,21 @@ public partial class PreparePhonesWindow
                 var wait = cable ?? (waited < TimeSpan.FromMinutes(1)
                     ? "Conferindo a cada 3 segundos..."
                     : $"Conferindo a cada 3 segundos... esperando há {(int)waited.TotalMinutes} min.");
-                return (UpdateLine(seen) + " " + where, wait);
+                return (UpdateLine(seen) + " " + copy + where, wait);
             default:
                 return (cable ?? "Conferindo o Chrome do celular...", "");
         }
     }
+
+    // Why the copy kept on this computer did not go: one line before the Play Store's.
+    private static string? CopyMissText(ChromeCopyMiss? miss) => miss switch
+    {
+        ChromeCopyMiss.DoesNotFit => "A cópia do Chrome guardada neste computador não serve neste celular; atualize pela Play Store.",
+        ChromeCopyMiss.Damaged => "A cópia do Chrome guardada neste computador estava danificada e foi apagada; atualize pela Play Store.",
+        ChromeCopyMiss.NoSpace => "A cópia guardada não coube neste celular (falta espaço); libere espaço ou atualize pela Play Store.",
+        ChromeCopyMiss.Refused => "A cópia guardada não serviu neste celular; atualize pela Play Store.",
+        _ => null,
+    };
 
     private static string AppName(string? package) =>
         package == PhoneCable.WebViewPackage ? "Android System WebView" : "Chrome";

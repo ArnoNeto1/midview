@@ -194,4 +194,40 @@ public class PhoneSetupProgressChromeTests
         Assert.Null(progress.ChromeSeen);
         Assert.False(progress.ChromeSkipped);
     }
+
+    [Fact]
+    public void The_saved_copy_is_tried_once_per_device_before_any_store_page()
+    {
+        var progress = AtChrome();
+
+        Assert.True(progress.WantsCopy(Old));
+        Assert.False(progress.WantsCopy(Updated));
+        Assert.False(progress.WantsCopy(null));
+        progress.CopyStarting();
+        Assert.Equal(ChromeWork.Installing, progress.Work);
+        progress.CopyEnded(new ChromeCopyResult(Array.Empty<string>(), ChromeCopyMiss.DoesNotFit));
+        Assert.Equal(ChromeWork.None, progress.Work);
+        Assert.Equal(ChromeCopyMiss.DoesNotFit, progress.CopyMiss);
+        Assert.False(progress.WantsCopy(Old));
+        Assert.Equal(PhoneCable.ChromePackage, progress.ChromeLooked(null, Old, T0));
+
+        Assert.True(progress.WantsSave(Updated));
+        progress.SaveStarting();
+        Assert.Equal(ChromeWork.Saving, progress.Work);
+        progress.SaveEnded();
+        Assert.False(progress.WantsSave(Updated));
+        progress.ChromeLooked(null, Updated, T0.AddSeconds(3));
+
+        // The next device starts over.
+        progress.Again();
+        progress.SetNumber("8");
+        for (var i = 0; i < 20 && progress.StepId != "chrome"; i++)
+        {
+            progress.Next();
+        }
+        Assert.Equal("chrome", progress.StepId);
+        Assert.True(progress.WantsCopy(Old));
+        Assert.True(progress.WantsSave(Updated));
+        Assert.Null(progress.CopyMiss);
+    }
 }

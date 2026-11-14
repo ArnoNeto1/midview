@@ -72,7 +72,7 @@ internal static partial class PhoneSetupGuide
             "Um chip qualquer (pode ser o do seu celular). Ele é usado só por alguns minutos em cada celular e depois você tira.",
             "A agulha da gaveta do chip (ou um clipe de papel aberto).",
             "A conta Mi da escola (e-mail e senha), a mesma em todos os celulares. O Midview pede uma vez e guarda só neste computador.",
-            "Uma conta Google (pode ser a da escola), para atualizar o Chrome pela Play Store quando ele estiver velho. Ela sai do celular antes do fim.",
+            "Uma conta Google (pode ser a da escola), para atualizar o Chrome pela Play Store no primeiro celular, se ele estiver velho. Nos próximos, o Midview instala sozinho o Chrome que guardou. Ela sai do celular antes do fim.",
         });
 
     public static GuideHelp UnknownAccount { get; } = new(
@@ -249,13 +249,14 @@ internal static partial class PhoneSetupGuide
             {
                 "Ligue o celular neste computador pelo cabo USB.",
                 "No celular aparece \"Permitir depuração USB?\": marque \"Sempre permitir deste computador\" e toque em Permitir.",
-                "O Midview confere o Chrome do celular. Se ele estiver velho, o Midview abre a Play Store no celular: toque em Atualizar.",
+                "O Midview confere o Chrome do celular. Se ele estiver velho e este computador já guardou o Chrome de um celular anterior, o Midview o instala sozinho pelo cabo, sem conta Google.",
+                "No primeiro celular, o Midview abre a Play Store no celular: toque em Atualizar.",
                 "Se a Play Store pedir para entrar, entre na conta Google digitando no celular. Ela sai no próximo passo.",
                 "Depois do Chrome, o Midview abre o Android System WebView: toque em Atualizar de novo.",
-                "Quando os dois estão atualizados, o assistente avança sozinho.",
+                "Quando os dois estão atualizados, o Midview guarda uma cópia deles neste computador, para os próximos celulares, e o assistente avança sozinho.",
             },
             null, null,
-            "Leva de 2 a 10 minutos, conforme o Wi-Fi. Se o Chrome já estiver atualizado, nem para aqui.",
+            "Pela Play Store leva de 2 a 10 minutos, conforme o Wi-Fi; com o Chrome guardado neste computador, cerca de 1 minuto. Se o Chrome já estiver atualizado, quase nem para aqui.",
             "Próximo passo",
             new GuideHelp[]
             {
@@ -266,7 +267,7 @@ internal static partial class PhoneSetupGuide
                 new("A atualização não termina",
                     "Cada app tem cerca de 200 MB. Deixe o celular perto do roteador, com a tela acesa, e espere. No Wi-Fi lento pode passar de 10 minutos."),
                 new("Não tenho conta Google",
-                    "Sem conta Google a Play Store não atualiza nada. Toque em Pular: o celular fica pronto, mas o bloqueio de downloads não funciona nele."),
+                    "Sem conta Google a Play Store não atualiza nada. Prepare antes um celular com conta Google: depois dele, o Midview instala o Chrome guardado nos outros sozinho. Ou toque em Pular: o celular fica pronto, mas o bloqueio de downloads não funciona nele."),
             }),
 
         new("conta-google",

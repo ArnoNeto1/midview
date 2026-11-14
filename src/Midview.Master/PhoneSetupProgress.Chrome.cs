@@ -15,11 +15,19 @@ internal enum ChromeStage
     Done,
 }
 
+// What the window is doing over the cable on the step, for its line: the
+// copy kept on this computer going onto the device, or the device's apps
+// being copied to this computer (ChromeCopy).
+internal enum ChromeWork { None, Installing, Saving }
+
 // The "chrome" step ("Atualize o Chrome"): right after the developer
 // switches, while the phone still has a Google account for the Play Store
 // and the cable is allowed, the window reads Chrome's and WebView's versions
 // every few seconds (PhoneCable.LookAtChrome) and feeds them here. An old app
-// gets its Play Store page opened once (the package ChromeLooked returns),
+// is first installed from the copy kept on this computer (WantsCopy), if one
+// fits; still old, it gets its Play Store page opened once (the package
+// ChromeLooked returns). Both up to date, they are copied to this computer
+// for the next devices (WantsSave),
 // and the step moves on by itself when both are up to date, at once for a
 // phone that already was. "Pular" goes on all the same, and the ready page
 // warns about it for this phone.
@@ -53,6 +61,16 @@ internal sealed partial class PhoneSetupProgress
     public bool ChromeSkipped { get; private set; }
 
     public bool WebViewSkipped { get; private set; }
+
+    public ChromeWork Work { get; private set; }
+
+    // Why the copy kept on this computer did not go on this device (null:
+    // it went, or there was none): the Play Store is used instead.
+    public ChromeCopyMiss? CopyMiss { get; private set; }
+
+    // The copy was tried on this device, or saved from it: once each.
+    private bool _copyTried;
+    private bool _saveTried;
 
     // Whether the window should look at the cable for the step now.
     public bool WatchesChrome => OnChromeStep && Chrome is ChromeStage.Looking or ChromeStage.Updating;
@@ -98,6 +116,45 @@ internal sealed partial class PhoneSetupProgress
         StoreFailed = false;
         _storeOpenedAt = now;
         return needed;
+    }
+
+    // Before any Play Store page: an old app is first installed from the
+    // copy kept on this computer, once per device.
+    public bool WantsCopy(ChromeVersions? versions) =>
+        WatchesChrome && versions is { UpToDate: false } && !_copyTried && ChromeUpdating is null;
+
+    public void CopyStarting()
+    {
+        if (OnChromeStep)
+        {
+            Work = ChromeWork.Installing;
+        }
+    }
+
+    // What the copy did; the next look reads the versions it left.
+    public void CopyEnded(ChromeCopyResult result)
+    {
+        _copyTried = true;
+        Work = ChromeWork.None;
+        CopyMiss = result.Miss;
+    }
+
+    // Once both are up to date, before moving on: they are copied to this
+    // computer (when no copy as new is kept), once per device.
+    public bool WantsSave(ChromeVersions? versions) => WatchesChrome && versions is { UpToDate: true } && !_saveTried;
+
+    public void SaveStarting()
+    {
+        if (OnChromeStep)
+        {
+            Work = ChromeWork.Saving;
+        }
+    }
+
+    public void SaveEnded()
+    {
+        _saveTried = true;
+        Work = ChromeWork.None;
     }
 
     // What the phone said to opening the Play Store page.
@@ -161,5 +218,9 @@ internal sealed partial class PhoneSetupProgress
         ChromeSkipped = false;
         WebViewSkipped = false;
         _storeOpenedAt = null;
+        Work = ChromeWork.None;
+        CopyMiss = null;
+        _copyTried = false;
+        _saveTried = false;
     }
 }

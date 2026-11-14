@@ -31,7 +31,7 @@ internal static partial class PhoneSetupGuide
         ? new GuideGather("Antes de começar, separe:", new[]
         {
             "O cabo USB do tablet (tem de ser um cabo que passa dados, não só carrega).",
-            "Uma conta Google (pode ser a da escola), para atualizar o Chrome pela Play Store quando ele estiver velho. Ela sai do tablet antes do fim.",
+            "Uma conta Google (pode ser a da escola), para atualizar o Chrome pela Play Store no primeiro tablet, se ele estiver velho. Nos próximos, o Midview instala sozinho o Chrome que guardou. Ela sai do tablet antes do fim.",
         })
         : Gather;
 
