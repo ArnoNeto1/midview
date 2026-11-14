@@ -18,6 +18,9 @@ internal static class DeviceSetupText
 
     public static string Icon(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet ? "" : "";
 
+    public static string Subtitle(AndroidDeviceKind kind) =>
+        $"Prepare {Words(kind)} novos e cuide dos {Words(kind)} da sala.";
+
     public static string Intro(AndroidDeviceKind kind) =>
         $"Prepare cada {Word(kind)} da escola pelo cabo USB, um de cada vez. Leva cerca de 1 minuto por {Word(kind)}.";
 
@@ -68,6 +71,8 @@ internal static class DeviceSetupText
 // "Preparar celulares" assistant (Prepare: the kind and whether to lighten
 // the device); they work only with the assistant out (PhoneSetupOffer.Wizard),
 // otherwise the page still explains the two ways and says why they are off.
+// Below, the room's devices of that kind (RoomSection: optimize, PIN, Wi-Fi,
+// wallpaper, ring, take the Midview off), whatever the gate.
 public partial class DeviceSetupPage : UserControl
 {
     // Below this width the two ways stand one under the other.
@@ -91,7 +96,9 @@ public partial class DeviceSetupPage : UserControl
         _kind = kind;
         Header.Icon = DeviceSetupText.Icon(kind);
         Header.Heading = DeviceSetupText.Heading(kind);
-        Header.Content = DeviceSetupText.Intro(kind);
+        Header.Content = DeviceSetupText.Subtitle(kind);
+        NewSectionHeading.Text = DeviceRoomText.NewSection(kind);
+        IntroLine.Text = DeviceSetupText.Intro(kind);
         var before = DeviceSetupText.BeforeStarting(kind);
         ResetLine.Text = before[0];
         SwitchesLine.Text = before[1];

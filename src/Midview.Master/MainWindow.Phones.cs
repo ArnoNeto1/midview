@@ -5,12 +5,11 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // Optimizing and updating the phones: "Otimizar..." and "Atualizar o Midview
-// do celular..." on a phone's tile menu, "Otimizar celulares e tablets..." in
-// the "Telas" menu (MainWindow.Screens.cs; the selected Android devices, or
-// every one of the room when none is selected), "Senha dos celulares e
-// tablets..." next to it (the same devices) and "Atualizar os celulares" /
-// "Atualizar os tablets" in "Máquinas da sala" (every phone, or every tablet,
-// of the room).
+// do celular..." on a phone's tile menu, the cards of "Configurar celular"
+// and "Configurar tablet" in "Máquinas da sala" (ActOnRoomDevices: the
+// selected devices of that kind, or every one of the room when none is
+// selected) and "Atualizar os celulares" / "Atualizar os tablets" there too
+// (every phone, or every tablet, of the room).
 public partial class MainWindow
 {
     private IReadOnlyList<KnownMachine> RoomPhones(AndroidDeviceKind kind) =>
@@ -42,6 +41,33 @@ public partial class MainWindow
             ShowNotice(notice);
         }
         return targets.Where(machine => machine.IsPhone).ToList();
+    }
+
+    // A card of "Configurar celular" ("Configurar tablet"): its window on the
+    // devices DeviceSupport.RoomTargets gave.
+    private void ActOnRoomDevices(DeviceRoomAction action, IReadOnlyList<KnownMachine> devices)
+    {
+        switch (action)
+        {
+            case DeviceRoomAction.Optimize:
+                OpenOptimizeWindow(devices);
+                break;
+            case DeviceRoomAction.Pin:
+                OpenPhonePinWindow(devices);
+                break;
+            case DeviceRoomAction.Network:
+                OpenPhoneNetworkWindow(devices);
+                break;
+            case DeviceRoomAction.Wallpaper:
+                OpenPhoneWallpaperWindow(devices);
+                break;
+            case DeviceRoomAction.Find:
+                FindPhones(devices);
+                break;
+            case DeviceRoomAction.Remove:
+                OpenPhoneRemoveWindow(devices);
+                break;
+        }
     }
 
     private bool IsEveryPhone(IReadOnlyList<KnownMachine> phones) =>

@@ -5,9 +5,20 @@ using System.Windows.Documents;
 
 namespace Midview.Master;
 
+// What "Configurar celular" and "Configurar tablet" do to the room's devices,
+// through the classroom (MainWindow): Selected is the grid's selection, Act
+// opens the action's window on the devices, Ringing says whether all of
+// them still ring.
+public sealed record DeviceRoomCallbacks(
+    Func<IReadOnlyList<KnownMachine>> Selected,
+    Action<DeviceRoomAction, IReadOnlyList<KnownMachine>> Act,
+    Func<IReadOnlyList<KnownMachine>, bool> Ringing);
+
 // The phones and tablets in "Máquinas da sala": the line under the search
 // list and the "Configurar celular" and "Configurar tablet" pages
-// (DeviceSetupPage), whose buttons open the "Preparar celulares" assistant.
+// (DeviceSetupPage), whose upper buttons open the "Preparar celulares"
+// assistant and whose cards act on the room's devices of that kind (the
+// selected ones of that kind, or all: DeviceSupport.RoomTargets).
 public partial class MachinesWindow
 {
     // What the line under the list says about phones (PhoneSetupOffer): "em
@@ -46,6 +57,24 @@ public partial class MachinesWindow
             page.Show(kind, setup);
             page.Prepare += (asked, optimize) => _openPreparePhones(asked, optimize);
             page.CableSteps += OpenCableSteps;
+            page.RoomSection.Act += action => _roomDevices.Act(action, RoomTargets(kind));
+            page.IsVisibleChanged += (_, _) => ShowRoomDevices();
+        }
+        Activated += (_, _) => ShowRoomDevices();
+        ShowRoomDevices();
+    }
+
+    private IReadOnlyList<KnownMachine> RoomTargets(AndroidDeviceKind kind) =>
+        DeviceSupport.RoomTargets(kind, _roomDevices.Selected(), _roster());
+
+    // The count of each kind and "Tocar..." or "Parar o toque". The classroom
+    // calls it again when its list changes and when a ring starts or stops.
+    public void ShowRoomDevices()
+    {
+        var room = _roster();
+        foreach (var (page, kind) in new[] { (PhoneSetupPage, AndroidDeviceKind.Phone), (TabletSetupPage, AndroidDeviceKind.Tablet) })
+        {
+            page.RoomSection.Show(kind, room.Count(machine => DeviceSupport.IsAndroidOf(machine, kind)), _roomDevices.Ringing(RoomTargets(kind)));
         }
     }
 

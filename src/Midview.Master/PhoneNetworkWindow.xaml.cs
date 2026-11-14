@@ -7,7 +7,7 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// "Liberar Wi-Fi e modo avião" (Telas menu): the school's phones keep their
+// "Liberar Wi-Fi e modo avião" (Configurar celular/tablet): the school's phones keep their
 // Wi-Fi and airplane mode locked; the teacher frees them on every device at
 // once for 10, 30 or 60 minutes ("Liberar"), after which they lock again by
 // themselves, or locks them now ("Travar agora"). Below, the phones' admin

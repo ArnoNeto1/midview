@@ -27,10 +27,10 @@ public enum ToolbarAction
     Update,
     // A tile's menu only: erase a school phone so it can be prepared again.
     WipePhone,
-    // Made for phones only: "Otimizar celulares..." in the "Telas" menu and
-    // on a phone's tile menu, and updating the phones' Midview ("Atualizações"
-    // in "Máquinas da sala", and the tile menu), and the lock screen PIN
-    // ("Senha dos celulares e tablets..." in the "Telas" menu).
+    // Made for phones only: "Otimizar" in "Máquinas da sala" > "Configurar
+    // celular" ("Configurar tablet") and on a phone's tile menu, and updating
+    // the phones' Midview ("Atualizações" in "Máquinas da sala", and the tile
+    // menu), and the lock screen PIN ("Senha (PIN)" in "Configurar celular").
     Optimize,
     UpdatePhones,
     PhonePin,
@@ -79,7 +79,7 @@ public static class DeviceSupport
     // are optimized alike. A tablet kind of its own, when there is one, goes here too.
     public static bool IsAndroid(KnownMachine machine) => machine.Kind is DeviceKind.Android;
 
-    // "Otimizar celulares e tablets..." in the "Telas" menu: a room with an Android device.
+    // A room with an Android device (the schedule's hint about them).
     public static bool HasAndroid(IEnumerable<KnownMachine> room) => room.Any(IsAndroid);
 
     // An Android device of that kind (PhoneNumber.KindOf, from its name):
@@ -90,6 +90,16 @@ public static class DeviceSupport
     // "Celulares" and "Tablets" in the "Telas" menu: a room with a device of that kind.
     public static bool HasAndroidOf(IEnumerable<KnownMachine> room, AndroidDeviceKind kind) =>
         room.Any(machine => IsAndroidOf(machine, kind));
+
+    // What the cards of "Configurar celular" ("Configurar tablet") act on:
+    // the devices of that kind selected in the grid or, with none of that
+    // kind selected, every one of the room.
+    public static IReadOnlyList<KnownMachine> RoomTargets(
+        AndroidDeviceKind kind, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room)
+    {
+        var chosen = selected.Where(machine => IsAndroidOf(machine, kind)).ToList();
+        return chosen.Count > 0 ? chosen : room.Where(machine => IsAndroidOf(machine, kind)).ToList();
+    }
 
     // The Android kind a "Telas" filter shows alone (Celulares the phones,
     // Tablets the tablets); null for Todos and Computadores.

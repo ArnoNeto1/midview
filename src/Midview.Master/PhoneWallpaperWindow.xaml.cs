@@ -10,7 +10,7 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// "Papel de parede dos celulares e tablets" (Telas menu): the teacher picks
+// "Papel de parede dos celulares e tablets" (Configurar celular/tablet): the teacher picks
 // a JPG or PNG, sees it in a phone's shape, picks the screens (both, the
 // home screen or the lock screen) and "Aplicar" puts it on every device at
 // once, as the Device Owner (no "Temas" app, whose terms Xiaomi asks the

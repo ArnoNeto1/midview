@@ -115,7 +115,11 @@ public partial class MainWindow : MidviewWindow
         }
         UpdateEmptyHint();
         ShowClassLesson();
-        _tiles.CollectionChanged += (_, _) => _machinesWindow?.ShowPhoneUpdateCard();
+        _tiles.CollectionChanged += (_, _) =>
+        {
+            _machinesWindow?.ShowPhoneUpdateCard();
+            _machinesWindow?.ShowRoomDevices();
+        };
     }
 
     // A click only selects the machine (the right button marks it while its
@@ -1568,7 +1572,10 @@ public partial class MainWindow : MidviewWindow
             window = new MachinesWindow(
                 _masterCertificate, () => _tiles.Select(tile => tile.Machine).ToList(), AddPairedMachine, RefreshAddressesAsync,
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
-                kind => OpenPhoneUpdateWindow(RoomPhones(kind), kind), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize))) { Owner = this };
+                kind => OpenPhoneUpdateWindow(RoomPhones(kind), kind), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize)),
+                new DeviceRoomCallbacks(
+                    () => ToolbarSelection().Select(tile => tile.Machine).ToList(), ActOnRoomDevices,
+                    devices => _ringing.AllRinging(devices, DateTime.Now))) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);

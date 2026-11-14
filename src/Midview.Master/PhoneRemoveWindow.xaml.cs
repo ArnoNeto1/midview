@@ -5,7 +5,7 @@ using System.Windows;
 
 namespace Midview.Master;
 
-// "Tirar o Midview dos celulares e tablets" (Telas menu), the panic button:
+// "Tirar o Midview dos celulares e tablets" (Configurar celular/tablet), the panic button:
 // the teacher picks "Desfazer e tirar o Midview" (the school's locks and
 // settings undone, the student's files kept, the Midview uninstalled) or
 // "Restaurar de fábrica" (everything erased), each explained, types the word

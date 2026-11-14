@@ -5,7 +5,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // "Tocar para encontrar" (PhoneFindText): from a phone's or tablet's tile
-// menu (the machines it acts on) and from Telas (what the toolbar reaches).
+// menu (the machines it acts on) and from "Configurar celular" ("Configurar
+// tablet") in "Máquinas da sala" (DeviceSupport.RoomTargets).
 // It rings every phone and tablet among them for a minute, or, while all of
 // them still ring, stops them ("Parar o toque"); the status bar says how each
 // one answered, an agent from before it included.
@@ -60,5 +61,6 @@ public partial class MainWindow
             _ringing.Stopped(phones);
         }
         StatusTextBlock.Text = WithNotice(string.Join(" ", answers.Select(answer => answer.Line)), DeviceSupport.PhoneOnlyLeftOutNotice(targets));
+        _machinesWindow?.ShowRoomDevices(); // "Tocar..." or "Parar o toque"
     }
 }

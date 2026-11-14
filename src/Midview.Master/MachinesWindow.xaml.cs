@@ -15,7 +15,8 @@ namespace Midview.Master;
 // program installed with this one to the class, give a colleague the class
 // with a code or take a colleague's (GiveAccessWindow, JoinClassWindow), let
 // another teacher with a code pair for 10 minutes or forget the other
-// teachers (MachinesWindow.OtherTeacher), and open the advanced settings
+// teachers (MachinesWindow.OtherTeacher), care for the room's phones and
+// tablets (MachinesWindow.Phones), and open the advanced settings
 // (AddMachineWindow).
 public partial class MachinesWindow : MidviewWindow
 {
@@ -31,6 +32,7 @@ public partial class MachinesWindow : MidviewWindow
     private readonly Action _openJoinClass;
     private readonly Action<AndroidDeviceKind> _openPhoneUpdate;
     private readonly Action<AndroidDeviceKind, bool> _openPreparePhones;
+    private readonly DeviceRoomCallbacks _roomDevices;
     private UpdateWindow? _updateWindow;
     private readonly ObservableCollection<FoundRow> _rows = new();
     private readonly AdminPasswordStore _adminPasswords = new(MasterData.Folder);
@@ -42,9 +44,11 @@ public partial class MachinesWindow : MidviewWindow
         X509Certificate2 masterCertificate, Func<IReadOnlyList<KnownMachine>> roster,
         Action<KnownMachine> addPaired, Func<IReadOnlyList<FoundMachine>, Task<int>> refreshAddresses, Action openAdvanced,
         Action openGiveAccess, Action openJoinClass, Action<AndroidDeviceKind> openPhoneUpdate,
-        Action<AndroidDeviceKind, bool> openPreparePhones)
+        Action<AndroidDeviceKind, bool> openPreparePhones, DeviceRoomCallbacks roomDevices)
     {
         InitializeComponent();
+        _roster = roster;
+        _roomDevices = roomDevices;
         ShowPhoneSetup(PreparePhoneSpan, PhoneProvisioning.Setup, OpenCableSteps);
         ShowDeviceSetupPages(PhoneProvisioning.Setup);
         _openAdvanced = openAdvanced;
@@ -53,7 +57,6 @@ public partial class MachinesWindow : MidviewWindow
         _openPhoneUpdate = openPhoneUpdate;
         _openPreparePhones = openPreparePhones;
         _masterCertificate = masterCertificate;
-        _roster = roster;
         _addPaired = addPaired;
         _refreshAddresses = refreshAddresses;
         FoundItemsControl.ItemsSource = _rows;

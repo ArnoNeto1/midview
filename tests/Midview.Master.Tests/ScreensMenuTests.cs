@@ -4,35 +4,33 @@ using System.Windows.Controls;
 using Midview.Master;
 using Xunit;
 
-// "Telas" (group Configurar): which screens the grid shows, "Otimizar celulares e tablets..."
-// "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião..." and
-// "Papel de parede dos celulares e tablets...".
+// "Telas" (group Configurar): which screens the grid shows, and nothing else
+// (the phones' and tablets' actions are in "Configurar celular" and
+// "Configurar tablet": DeviceRoomSectionTests).
 public class ScreensMenuTests
 {
     [Fact]
-    public void In_a_room_with_phones_and_tablets_it_offers_every_filter_optimizing_and_the_pin()
+    public void In_a_room_with_phones_and_tablets_it_offers_only_the_four_filters()
     {
         InSta(() =>
         {
-            var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { });
+            var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, _ => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets...", "Tocar para encontrar", "-", "Tirar o Midview dos celulares e tablets..." }, Headers(menu));
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets" }, Headers(menu));
             var items = menu.Items.OfType<MenuItem>().ToList();
-            Assert.Equal(new[] { false, false, true, false }, items.Take(4).Select(item => item.IsChecked));
+            Assert.Equal(new[] { false, false, true, false }, items.Select(item => item.IsChecked));
             Assert.All(items, item => Assert.True(item.IsEnabled));
-            Assert.All(items.Take(4), item => Assert.Equal(string.Empty, item.InputGestureText));
+            Assert.All(items, item => Assert.Equal(string.Empty, item.InputGestureText));
         });
     }
 
     [Fact]
-    public void Choosing_a_filter_shows_it_and_optimizing_and_the_pin_open_their_windows()
+    public void Choosing_a_filter_shows_it()
     {
         InSta(() =>
         {
             var shown = new List<DeviceFilter>();
-            var optimized = 0;
-            var pinned = 0;
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, shown.Add, () => optimized++, () => pinned++);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: true, shown.Add);
             var items = menu.Items.OfType<MenuItem>().ToList();
 
             Assert.True(items[0].IsChecked);
@@ -40,79 +38,18 @@ public class ScreensMenuTests
             items[2].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             items[0].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
             items[3].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            items[4].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
             Assert.Equal(new[] { DeviceFilter.Computers, DeviceFilter.Phones, DeviceFilter.All, DeviceFilter.Tablets }, shown);
-            Assert.Equal(1, optimized);
-            Assert.Equal(0, pinned);
-            items[5].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Assert.Equal(1, optimized);
-            Assert.Equal(1, pinned);
         });
     }
 
+    // A room of PCs alone: "Celulares" and "Tablets" greyed (they would show nothing).
     [Fact]
-    public void Liberar_wifi_opens_its_window()
+    public void In_a_room_of_pcs_phones_and_tablets_are_greyed()
     {
         InSta(() =>
         {
-            var opened = 0;
-            var menu = MainWindow.ScreensMenu(
-                DeviceFilter.All, hasPhones: true, hasTablets: false, hasAndroid: true, _ => { }, () => { }, () => { }, phoneNetwork: () => opened++);
-            var item = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Liberar Wi-Fi e modo avião..."));
-
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-
-            Assert.Equal(1, opened);
-        });
-    }
-
-    [Fact]
-    public void Papel_de_parede_opens_its_window()
-    {
-        InSta(() =>
-        {
-            var opened = 0;
-            var menu = MainWindow.ScreensMenu(
-                DeviceFilter.All, hasPhones: true, hasTablets: false, hasAndroid: true, _ => { }, () => { }, () => { }, phoneWallpaper: () => opened++);
-            var item = Item(menu, "Papel de parede dos celulares e tablets...");
-
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-
-            Assert.Equal(1, opened);
-            Assert.True(item.IsEnabled);
-        });
-    }
-
-    // "Tocar para encontrar", or "Parar o toque" while what it reaches rings.
-    [Fact]
-    public void Tocar_para_encontrar_rings_and_says_parar_while_ringing()
-    {
-        InSta(() =>
-        {
-            var rang = 0;
-            var menu = MainWindow.ScreensMenu(
-                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { }, phoneFind: () => rang++);
-            var item = Item(menu, "Tocar para encontrar");
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Assert.Equal(1, rang);
-            Assert.Equal(PhoneFindText.StartToolTip + " Com alguns selecionados, só neles.", item.ToolTip);
-
-            var ringing = MainWindow.ScreensMenu(
-                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { },
-                phoneFindHeader: PhoneFindText.StopMenuItem);
-            Assert.True(Item(ringing, "Parar o toque").IsEnabled);
-        });
-    }
-
-    // A room of PCs alone: "Celulares" and "Tablets" greyed (they would show
-    // nothing) and nothing to optimize or to put a PIN on.
-    [Fact]
-    public void In_a_room_of_pcs_phones_are_greyed_and_there_is_nothing_to_optimize()
-    {
-        InSta(() =>
-        {
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, hasAndroid: false, _ => { }, () => { }, () => { });
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, _ => { });
 
             Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets" }, Headers(menu));
             var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
@@ -130,16 +67,16 @@ public class ScreensMenuTests
     {
         InSta(() =>
         {
-            var phonesOnly = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: false, hasAndroid: true, _ => { }, () => { }, () => { });
+            var phonesOnly = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: false, _ => { });
             Assert.True(Item(phonesOnly, "Celulares").IsEnabled);
             Assert.False(Item(phonesOnly, "Tablets").IsEnabled);
             Assert.Equal("Nenhum tablet nesta sala ainda.", Item(phonesOnly, "Tablets").ToolTip);
 
-            var tabletsOnly = MainWindow.ScreensMenu(DeviceFilter.Tablets, hasPhones: false, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { });
+            var tabletsOnly = MainWindow.ScreensMenu(DeviceFilter.Tablets, hasPhones: false, hasTablets: true, _ => { });
             Assert.False(Item(tabletsOnly, "Celulares").IsEnabled);
             Assert.True(Item(tabletsOnly, "Tablets").IsEnabled);
             Assert.True(Item(tabletsOnly, "Tablets").IsChecked);
-            Assert.True(Item(tabletsOnly, "Otimizar celulares e tablets...").IsEnabled);
+            Assert.Equal(4, tabletsOnly.Items.Count);
         });
     }
 
@@ -151,7 +88,7 @@ public class ScreensMenuTests
     {
         InSta(() =>
         {
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: false, hasAndroid: true, _ => { }, () => { }, () => { }, setup);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: false, _ => { }, setup);
 
             var tablets = Item(menu, "Tablets");
             Assert.Equal(toolTip, tablets.ToolTip);
@@ -170,7 +107,7 @@ public class ScreensMenuTests
     {
         InSta(() =>
         {
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, hasAndroid: false, _ => { }, () => { }, () => { }, setup);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, _ => { }, setup);
 
             var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
             Assert.Equal(toolTip, phones.ToolTip);
@@ -188,7 +125,7 @@ public class ScreensMenuTests
         InSta(() =>
         {
             var shown = new List<DeviceFilter>();
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, hasAndroid: false, shown.Add, () => { }, () => { }, setup);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, shown.Add, setup);
 
             var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
             Assert.Equal(enabled, phones.IsEnabled);
@@ -201,7 +138,7 @@ public class ScreensMenuTests
     {
         InSta(() =>
         {
-            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, hasAndroid: false, _ => { }, () => { }, () => { }, PhoneProvisioning.Setup);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, _ => { }, PhoneProvisioning.Setup);
 
             var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
             Assert.Equal(PhoneProvisioning.WizardReady, ((string)phones.ToolTip).Contains("Preparar celular"));
@@ -209,57 +146,16 @@ public class ScreensMenuTests
         });
     }
 
-    // Optimizing and the PIN reach what every toolbar button reaches: with
-    // Computadores, or a selection of PCs alone, no phone, so they are greyed
-    // and say why.
-    [Fact]
-    public void Optimizing_and_the_pin_are_greyed_while_they_would_reach_no_phone()
-    {
-        InSta(() =>
-        {
-            var menu = MainWindow.ScreensMenu(
-                DeviceFilter.Computers, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { },
-                reachesAndroid: false);
-
-            var items = menu.Items.OfType<MenuItem>().ToList();
-            Assert.False(items[4].IsEnabled);
-            Assert.False(items[5].IsEnabled);
-            Assert.False(items[6].IsEnabled);
-            Assert.False(items[7].IsEnabled);
-            Assert.False(Item(menu, "Tirar o Midview dos celulares e tablets...").IsEnabled);
-            Assert.StartsWith("Nenhum celular ou tablet selecionado ou na grade", (string)items[4].ToolTip);
-            Assert.True(ToolTipService.GetShowOnDisabled(items[5]));
-            Assert.All(items.Take(3), item => Assert.True(item.IsEnabled));
-        });
-    }
-
-    // The panic button: apart at the end, it opens its own window.
-    [Fact]
-    public void Tirar_o_midview_opens_its_window()
-    {
-        InSta(() =>
-        {
-            var opened = 0;
-            var menu = MainWindow.ScreensMenu(
-                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { }, phoneRemove: () => opened++);
-            var item = Item(menu, "Tirar o Midview dos celulares e tablets...");
-
-            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-
-            Assert.Equal(1, opened);
-            Assert.True(item.IsEnabled);
-            Assert.IsType<Separator>(menu.Items[menu.Items.IndexOf(item) - 1]);
-            Assert.Same(item, menu.Items[menu.Items.Count - 1]);
-        });
-    }
-
     [Theory]
-    [InlineData(DeviceFilter.All, "Escolhe as telas")]
+    [InlineData(DeviceFilter.All, "Escolhe as telas que aparecem: todas, só os computadores, só os celulares ou só os tablets.")]
     [InlineData(DeviceFilter.Computers, "Mostrando só os computadores: os botões valem só para eles.")]
     [InlineData(DeviceFilter.Phones, "Mostrando só os celulares: os botões valem só para eles.")]
     [InlineData(DeviceFilter.Tablets, "Mostrando só os tablets: os botões valem só para eles.")]
-    public void The_tool_tip_says_what_the_grid_shows(DeviceFilter shown, string start) =>
+    public void The_tool_tip_says_what_the_grid_shows(DeviceFilter shown, string start)
+    {
         Assert.StartsWith(start, MainWindow.ScreensToolTip(shown));
+        Assert.DoesNotContain("otimiza", MainWindow.ScreensToolTip(shown));
+    }
 
     private static MenuItem Item(ContextMenu menu, string header) =>
         menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, header));

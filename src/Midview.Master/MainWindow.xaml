@@ -155,10 +155,10 @@
                             <local:ToolbarButton Content="Máquinas da sala" Width="54" Icon="&#xE7F8;" Click="OnMachinesClicked" OpensOptions="True"
                                                  ToolTip="Procura e pareia as máquinas, atualiza o programa dos alunos e dos celulares, dá a sala a um colega ou entra na sala dele, permite outro professor e tem os ajustes avançados." />
                             <!-- A menu (MainWindow.Screens.cs): which screens the grid shows
-                                 (DeviceFilter), and "Otimizar celulares e tablets...". The filter's badge
+                                 (DeviceFilter). The filter's badge
                                  shows on the icon while the grid leaves some machines out. -->
                             <local:ToolbarButton x:Name="ScreensButton" Width="54" Content="Telas" Icon="&#xE975;" Click="OnScreensClicked" OpensOptions="True"
-                                                 ToolTip="Escolhe as telas que aparecem: todas, só os computadores, só os celulares ou só os tablets. Também otimiza celulares e tablets." />
+                                                 ToolTip="Escolhe as telas que aparecem: todas, só os computadores, só os celulares ou só os tablets." />
                         </StackPanel>
                         <ContentControl Content="Configurar" Style="{StaticResource ToolbarGroupCaption}" />
                     </StackPanel>

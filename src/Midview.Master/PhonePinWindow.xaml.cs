@@ -6,7 +6,7 @@ using System.Windows.Input;
 
 namespace Midview.Master;
 
-// "Senha dos celulares e tablets" (Telas menu): the teacher types a 4-digit
+// "Senha dos celulares e tablets" (Configurar celular/tablet): the teacher types a 4-digit
 // PIN and puts it on every device at once ("Pôr o PIN"), or takes it off
 // ("Tirar o PIN"); each device's line says how it went (PhonePinText). The
 // PIN lives only in the box while the window is open: nothing saves it.
