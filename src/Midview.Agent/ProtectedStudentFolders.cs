@@ -222,6 +222,13 @@ public static class ProtectedStudentFolders
                 CheckIsIn(folder, path);
                 WriteSecurity(folder, WithWhatItInherits(desktopDescriptor, folder, security),
                     DaclSecurityInformation | UnprotectedDaclSecurityInformation);
+                // A Desktop with nothing to inherit leaves the folder protected
+                // on newer Windows: still the student's, but say so in the log.
+                if (new RawSecurityDescriptor(ReadDescriptor(folder, DaclSecurityInformation), 0)
+                        .ControlFlags.HasFlag(ControlFlags.DiscretionaryAclProtected))
+                {
+                    problems.Add($"{name}: a pasta ficou sem herdar as permissões da Área de Trabalho");
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
