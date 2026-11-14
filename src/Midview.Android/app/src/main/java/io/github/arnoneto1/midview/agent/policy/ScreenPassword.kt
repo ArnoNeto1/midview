@@ -224,7 +224,11 @@ class ScreenPassword(
         const val PIN_REMOVED = "PIN tirado do celular"
         const val NOT_OWNER = "o Midview não é o administrador deste celular"
         const val TOKEN_PENDING = "chave de redefinição ainda não ativa: desbloqueie o celular uma vez"
-        const val TOKEN_REFUSED = "o Android não aceitou a chave de redefinição da senha"
+        // Android 10 turns the token off for good on a device that had a
+        // screen lock before the Midview ("Escrow token is disabled", seen
+        // on the school's Multilaser M10): said so the teacher knows what to do.
+        const val TOKEN_REFUSED = "o Android deste aparelho não aceita o PIN do professor; " +
+            "isso acontece quando ele tinha senha de bloqueio antes do Midview e só volta depois de restaurar de fábrica"
         const val RESET_REFUSED = "o Android recusou o PIN"
         const val NOT_SAVED = "o celular não conseguiu guardar o PIN"
 
