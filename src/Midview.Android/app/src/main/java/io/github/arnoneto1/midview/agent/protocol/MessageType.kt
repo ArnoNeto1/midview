@@ -228,4 +228,9 @@ object MessageType {
     // student's touch while the teacher controls and 0 frees it. An agent
     // from before it ignores it. Number 107 as the C# LockStudentTouch.
     const val LOCK_STUDENT_TOUCH = 107
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Tocar para
+    // encontrar" (PhoneFind: the seconds to ring, or 0 to stop), answered with
+    // one CommandAck (CommandResult). Number 108 as the C# FindPhone.
+    const val FIND_PHONE = 108
 }

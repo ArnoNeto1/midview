@@ -86,6 +86,9 @@ class CommandHandler(
     // "Mensagem" (TeacherMessages): the ShowMessage payload in, the
     // CommandAck's result out.
     private val showMessage: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Tocar para encontrar" (FindRinger): the FindPhone payload in, the
+    // CommandAck's result out.
+    private val findPhone: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Bate-papo" (ChatHandler): the connection, for the whole conversation.
     private val chat: (Channel) -> Unit = {
         it.send(Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE)))
@@ -311,6 +314,10 @@ class CommandHandler(
         MessageType.SHOW_MESSAGE -> {
             val (shown, detail) = showMessage(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(shown, detail))
+        }
+        MessageType.FIND_PHONE -> {
+            val (done, detail) = findPhone(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
         // On this connection's own thread: up to ~30 s checking the network.
         MessageType.OPTIMIZE_PHONE -> Message(MessageType.PHONE_OPTIMIZE_REPORT, optimizer.run().encode())

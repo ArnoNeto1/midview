@@ -16,6 +16,9 @@ import io.github.arnoneto1.midview.agent.apps.InstalledApps
 import io.github.arnoneto1.midview.agent.apps.PackageWatcher
 import io.github.arnoneto1.midview.agent.control.AndroidControlTarget
 import io.github.arnoneto1.midview.agent.files.TeacherFiles
+import io.github.arnoneto1.midview.agent.find.AndroidRingOutput
+import io.github.arnoneto1.midview.agent.find.FindRinger
+import io.github.arnoneto1.midview.agent.find.Finder
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
@@ -94,6 +97,11 @@ class AgentService : Service() {
     private var stopped = false
     private val stopping = CountDownLatch(1)
 
+    // "Tocar para encontrar": one for the device, its "Parar" screen too.
+    private val finder by lazy {
+        FindRinger(AndroidRingOutput(this), AndroidRingOutput.timer(), log = { Log.i(TAG, it) }).also { Finder.ringer = it }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -145,6 +153,9 @@ class AgentService : Service() {
     private val lockAgain = Runnable { AndroidDevicePolicyGateway.lockDown(this) }
 
     override fun onDestroy() {
+        // Never left ringing, and the alarm volume as it was.
+        finder.stop(FindRinger.Stop.AGENT)
+        Finder.ringer = null
         synchronized(lock) {
             stopped = true
             closeListeners()
@@ -345,6 +356,7 @@ class AgentService : Service() {
                 showPickers = { show -> TeacherWallpaper.PICKERS.forEach { policyGateway.setApplicationHidden(it, !show) } },
             )::handle,
             showMessage = { TeacherTalk.messages?.receive(it) ?: (false to CommandResult.NOT_ON_PHONE) },
+            findPhone = finder::handle,
             chat = { channel -> TeacherTalk.chats?.let { ChatHandler(channel, it).run() } },
             // "Enviar arquivo" and "Recolher arquivos": Download/Midview.
             files = TeacherFiles.handler(this, isLocked = { screenLock.locked }),

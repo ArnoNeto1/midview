@@ -462,6 +462,14 @@ public enum MessageType : byte
     // whenever the teacher changes it. Sent to phones and tablets only. An
     // agent from before it ignores it, as it ignores any unknown type there.
     LockStudentTouch = 107,
+
+    // Master -> Android agent (port 28900), from a trusted teacher only:
+    // "Tocar para encontrar" (PhoneFind: the seconds to ring, or 0 to stop).
+    // The device rings at full alarm volume, vibrates and shows a screen with
+    // "Parar" until the student stops it, the teacher does or the time is up;
+    // it answers one CommandAck (CommandResult). An agent from before it
+    // answers "Ainda não funciona em celular.".
+    FindPhone = 108,
 }
 
 public enum CloseAppsMode : byte

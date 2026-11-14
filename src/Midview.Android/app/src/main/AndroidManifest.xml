@@ -46,6 +46,8 @@
     <!-- "Papel de parede dos celulares e tablets": the teacher's picture on
          the home and lock screens. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- "Tocar para encontrar": the device vibrates while it rings. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- "Recolher arquivos": what other apps saved in Download/Midview (a
          Chrome download, a document) is hidden from the agent without
          "acesso a todos os arquivos", which the cable setup turns on
@@ -244,6 +246,18 @@
             android:exported="true" />
 
         <!-- "Pronto. Este e o Celular 07 da escola." once the phone is prepared. -->
+        <!-- "Tocar para encontrar": "Parar" over the lock screen while the device rings. -->
+        <activity
+            android:name=".find.FindActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:taskAffinity="io.github.arnoneto1.midview.agent.find"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+            android:turnScreenOn="true" />
+
         <activity
             android:name=".ui.ReadyActivity"
             android:excludeFromRecents="true"
