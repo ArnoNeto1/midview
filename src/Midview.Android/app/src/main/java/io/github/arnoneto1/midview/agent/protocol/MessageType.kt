@@ -222,4 +222,10 @@ object MessageType {
     // it undid, then forgets the teachers, stops being the Device Owner and
     // asks Android to uninstall it. Number 106 as the C# RemoveMidviewFromPhone.
     const val REMOVE_MIDVIEW_FROM_PHONE = 106
+
+    // Master -> Android agent on the screen port, after StartControl:
+    // "Travar o toque do aluno" (StudentTouchLock), one byte, 1 locks the
+    // student's touch while the teacher controls and 0 frees it. An agent
+    // from before it ignores it. Number 107 as the C# LockStudentTouch.
+    const val LOCK_STUDENT_TOUCH = 107
 }

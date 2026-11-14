@@ -37,6 +37,9 @@ object ControlNotice {
     private var stripOwner: WindowManager? = null
     private var faded = false
 
+    // Some control is on (main thread): StudentTouchLock's watchdog.
+    val active: Boolean get() = holders > 0
+
     fun show() {
         main.post {
             holders++

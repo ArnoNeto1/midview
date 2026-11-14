@@ -2,12 +2,15 @@
 <!-- AccessibilityCapture: pictures of the screen for the teacher and, only
      while the teacher controls the phone ("Controlar"), the teacher's touches
      (gestures) and typing into the focused text field (window content, read
-     on demand). No events, no keys, nothing read on its own. -->
+     on demand); while the teacher locks the student's touch, the student's
+     Back, Home, Recents and volume keys (key filter). No events, nothing
+     read on its own. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAnnouncement"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
+    android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows|flagRequestFilterKeyEvents"
     android:canPerformGestures="true"
+    android:canRequestFilterKeyEvents="true"
     android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_description"

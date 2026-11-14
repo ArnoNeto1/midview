@@ -38,6 +38,11 @@ class RemoteControlTest {
             pointer = spot
         }
 
+        val locks: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
+        override fun lockStudent(on: Boolean) {
+            locks += on
+        }
+
         fun waitFor(count: Int): List<TouchStep> {
             val until = System.currentTimeMillis() + 2_000
             while (done.size < count && System.currentTimeMillis() < until) Thread.sleep(5)
@@ -49,6 +54,40 @@ class RemoteControlTest {
     private val control = RemoteControl(target, frameSize = { Size(100, 200) })
 
     private fun event(kind: Int, x: Int = 0, y: Int = 0, key: Int = 0) = InputEvent(kind, x, y, key)
+
+    // "Travar o toque do aluno" asked before control: on at the start.
+    @Test fun theTouchLockAskedBeforeComesOnWithControl() {
+        control.lockTouch(true)
+        assertTrue(target.locks.isEmpty())
+        control.start()
+        assertEquals(listOf(true), target.locks.toList())
+        control.stopAndWait()
+        assertEquals(listOf(true, false), target.locks.toList())
+    }
+
+    @Test fun theTeacherTogglesTheTouchLockWhileControlling() {
+        control.start()
+        control.lockTouch(true)
+        control.lockTouch(false)
+        assertEquals(listOf(true, false), target.locks.toList())
+        control.stopAndWait()
+    }
+
+    // However control ends, the student's touch is freed.
+    @Test fun theEndOfControlAlwaysFreesTheTouch() {
+        control.start()
+        control.lockTouch(true)
+        control.stopAndWait()
+        assertEquals(false, target.locks.last())
+        assertEquals("hide", target.notice.last())
+    }
+
+    // A teacher's window from before it never sends it: the touch stays free.
+    @Test fun withoutTheToggleTheTouchIsNeverLocked() {
+        control.start()
+        control.stopAndWait()
+        assertFalse(target.locks.contains(true))
+    }
 
     @Test fun refusedWhenThePhoneCannotBeControlled() {
         target.refusing = "a acessibilidade está desligada"

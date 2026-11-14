@@ -55,9 +55,29 @@ class AndroidControlTarget(private val isLocked: () -> Boolean) : ControlTarget 
 
     override fun hideNotice() = ControlNotice.hide()
 
-    override fun pointerAt(spot: Spot) = ControlNotice.pointerAt(spot.x, spot.y)
+    // The student's touch lock (TouchGate, StudentTouchLock): the toggle comes
+    // on the connection's thread, the teacher's gestures on the control's.
+    private val gate = TouchGate()
+
+    override fun lockStudent(on: Boolean) = StudentTouchLock.show(synchronized(gate) { if (on) gate.want(true) else gate.stop() })
+
+    private fun teacherTouching(touching: Boolean) = StudentTouchLock.show(synchronized(gate) { gate.teacher(touching) })
 
     override fun perform(step: TouchStep) {
+        val touches = step is TouchStep.Down || step is TouchStep.Move || step is TouchStep.Up ||
+            step is TouchStep.Swipe || step is TouchStep.LongPress
+        // The finger goes below the lock: open while it is on the screen.
+        if (touches) teacherTouching(true)
+        try {
+            carryOut(step)
+        } finally {
+            if (touches && held == null) teacherTouching(false)
+        }
+    }
+
+    override fun pointerAt(spot: Spot) = ControlNotice.pointerAt(spot.x, spot.y)
+
+    private fun carryOut(step: TouchStep) {
         val service = AccessibilityCapture.instance ?: return
         when (step) {
             is TouchStep.Down -> {
@@ -72,7 +92,7 @@ class AndroidControlTarget(private val isLocked: () -> Boolean) : ControlTarget 
                 val from = heldAt
                 if (stroke == null || from == null) {
                     // The finger was lost (the student touched the screen): down again where the mouse is.
-                    perform(TouchStep.Down(step.to))
+                    carryOut(TouchStep.Down(step.to))
                     return
                 }
                 held = null

@@ -9,7 +9,9 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import io.github.arnoneto1.midview.agent.control.StudentTouchLock
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -24,11 +26,12 @@ import java.util.concurrent.atomic.AtomicReference
 // same LatestFrame as the "Iniciar agora" capture. Only while the teacher
 // controls the phone ("Controlar", control/AndroidControlTarget) does it do
 // more: the teacher's touches as gestures, and the teacher's typing into the
-// focused text field, read on demand; no events, no keys
+// focused text field, read on demand, and, with "Travar o toque do aluno",
+// the student's touches and keys taken (StudentTouchLock); no events
 // (res/xml/accessibility_capture.xml). What it puts on the screen are the
 // teacher's warning before "Fechar programas" (AndroidCloseNotice) and the
 // "being controlled" strip (ControlNotice), both letting every touch
-// through. Android binds it
+// through, and the student's touch lock. Android binds it
 // in the app's own process; the agent is started there as for any start of
 // the process (MidviewApplication).
 class AccessibilityCapture : AccessibilityService() {
@@ -57,6 +60,11 @@ class AccessibilityCapture : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+
+    // Only while the teacher locks the student's touch (StudentTouchLock):
+    // the student's Back, Home, Recents and volume keys are taken; any other
+    // time every key goes on as it came.
+    override fun onKeyEvent(event: KeyEvent): Boolean = StudentTouchLock.takesKey(event.keyCode)
 
     override fun onInterrupt() = Unit
 

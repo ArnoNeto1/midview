@@ -105,6 +105,7 @@ class ScreenStreamHandler(
                 }
                 // Without waiting for the gesture under way: the acks keep being read.
                 MessageType.STOP_CONTROL -> control?.stop()
+                MessageType.LOCK_STUDENT_TOUCH -> control?.lockTouch(message.payload.contentEquals(byteArrayOf(1)))
                 MessageType.INPUT_EVENT -> if (control?.controlling == true) {
                     // As the Session: a payload that is no InputEvent ends the connection.
                     val event = InputEvent.decode(message.payload) ?: return

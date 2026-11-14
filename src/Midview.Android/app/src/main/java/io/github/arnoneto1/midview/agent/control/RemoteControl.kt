@@ -25,6 +25,9 @@ interface ControlTarget {
 
     // The teacher's screen lock is on: the phone's buttons lead nowhere.
     val locked: Boolean
+
+    // "Travar o toque do aluno": the student's touch locked (true) or free.
+    fun lockStudent(on: Boolean) {}
 }
 
 // "Controlar" on one teacher's screen connection, as a PC's Session does it
@@ -50,6 +53,11 @@ class RemoteControl(
     // The thread of a control that was stopped and may still be finishing.
     private var ending: Thread? = null
 
+    // The teacher's "Travar o toque do aluno" (LockStudentTouch): kept across
+    // a stop and a start on the same connection. A Master from before it
+    // never sends it, and the student's touch stays free.
+    private var touchLocked = false
+
     val controlling: Boolean get() = synchronized(lock) { queue != null }
 
     fun start(): String? = synchronized(lock) {
@@ -61,11 +69,18 @@ class RemoteControl(
         val events = InputQueue()
         queue = events
         target.showNotice()
+        if (touchLocked) target.lockStudent(true)
         worker = Thread({ carryOut(events) }, "Midview control").apply {
             isDaemon = true
             start()
         }
         null
+    }
+
+    // The teacher's toggle; carried out at once while controlling.
+    fun lockTouch(on: Boolean) = synchronized(lock) {
+        touchLocked = on
+        if (queue != null) target.lockStudent(on)
     }
 
     // Ignored while not controlling, as the Session does.
@@ -126,6 +141,7 @@ class RemoteControl(
         } catch (e: InterruptedException) {
             // Ending.
         } finally {
+            target.lockStudent(false)
             target.hideNotice()
         }
     }
