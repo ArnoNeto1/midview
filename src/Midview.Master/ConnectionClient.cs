@@ -74,6 +74,10 @@ public sealed class ConnectionClient : IDisposable
 
     public void SendStopControl() => _channel.Send(new Message(MessageType.StopControl, Array.Empty<byte>()));
 
+    // A phone's or tablet's only (MessageType.LockStudentTouch).
+    public void SendLockStudentTouch(bool locked) =>
+        _channel.Send(new Message(MessageType.LockStudentTouch, StudentTouchLock.Encode(locked)));
+
     public void SendHeartbeat() => _channel.Send(new Message(MessageType.Heartbeat, Array.Empty<byte>()));
 
     public void SendInputEvent(byte[] encodedEvent) =>

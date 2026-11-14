@@ -113,4 +113,14 @@ public class PhoneControlTests
         Assert.Equal(PhoneControl.ConnectionFell("Celular 99"), PhoneControl.Dropped("Celular 99", Running("dev")));
         Assert.Contains("caiu", PhoneControl.ConnectionFell("Celular 99"));
     }
+
+    // "Travar o toque do aluno": on by default in the window, said in its mode.
+    [Fact]
+    public void Touch_lock_texts()
+    {
+        Assert.Equal("Travar o toque do aluno", PhoneControl.LockTouchLabel);
+        Assert.Equal("Controlando: o toque do aluno está travado.", PhoneControl.Controlling(touchLocked: true));
+        Assert.Equal(PhoneControl.ControllingMode, PhoneControl.Controlling(touchLocked: false));
+        Assert.Contains("Voltar", PhoneControl.LockTouchToolTip);
+    }
 }

@@ -20,6 +20,17 @@ public static class PhoneControl
 
     public const string ControllingMode = "Controlando: o aluno vê o aviso no topo da tela.";
 
+    // "Travar o toque do aluno" (MessageType.LockStudentTouch), on by default.
+    public const string LockTouchLabel = "Travar o toque do aluno";
+
+    public const string LockTouchToolTip =
+        "Enquanto você controla, o aluno não consegue tocar na tela nem usar os botões Voltar, Início e volume.";
+
+    // The window's mode while controlling a phone.
+    public static string Controlling(bool touchLocked) => touchLocked
+        ? "Controlando: o toque do aluno está travado."
+        : ControllingMode;
+
     public const string ToolbarToolTip = "Controla o celular selecionado: o aluno vê um aviso no topo da tela.";
 
     public const string PcMenuItem = "Controlar (trava o teclado e o mouse do aluno)";

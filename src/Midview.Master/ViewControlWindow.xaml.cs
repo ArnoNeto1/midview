@@ -60,10 +60,13 @@ public partial class ViewControlWindow : MidviewWindow
         // which is drawn just the same. StartControl then locks the student;
         // a heartbeat only watches.
         _client.SendScreenStream();
+        LockTouchCheckBox.Content = PhoneControl.LockTouchLabel;
+        LockTouchCheckBox.ToolTip = PhoneControl.LockTouchToolTip;
         if (control)
         {
             _phoneControlAsked = _isPhone;
             _client.SendStartControl();
+            SendTouchLock();
         }
         else
         {
@@ -546,6 +549,7 @@ public partial class ViewControlWindow : MidviewWindow
             {
                 _phoneControlAsked = _isPhone;
                 _client.SendStartControl();
+                SendTouchLock();
             }
             _controlling = !_controlling;
         });
@@ -559,7 +563,7 @@ public partial class ViewControlWindow : MidviewWindow
         Title = $"Midview - {(_controlling ? "controlando" : "vendo")} {_machineName}";
         ControlButton.Content = _controlling ? "Parar de controlar (só ver)" : "Controlar";
         ModeTextBlock.Content = _controlling
-            ? _isPhone ? PhoneControl.ControllingMode : "Controlando: o teclado e o mouse do aluno estão travados."
+            ? _isPhone ? PhoneControl.Controlling(TouchLocked) : "Controlando: o teclado e o mouse do aluno estão travados."
             : _isPhone
                 ? "Só vendo: o aluno continua usando o celular normalmente."
                 : "Só vendo: o aluno continua usando o computador normalmente.";
@@ -573,6 +577,7 @@ public partial class ViewControlWindow : MidviewWindow
         // Android's three buttons: a phone's only, working while controlling.
         PhoneButtons.Visibility = _isPhone ? Visibility.Visible : Visibility.Collapsed;
         PhoneButtons.IsEnabled = _isPhone && _controlling;
+        LockTouchCheckBox.Visibility = _isPhone ? Visibility.Visible : Visibility.Collapsed;
 
         // The password buttons exist only on the helper connection, and the
         // fill one works only while controlling: the Session never gets it.

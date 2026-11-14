@@ -455,6 +455,13 @@ public enum MessageType : byte
     // "Restaurar de fábrica" is WipePhone. An agent from before this answers
     // "Ainda não funciona em celular.".
     RemoveMidviewFromPhone = 106,
+
+    // Master -> Android agent on the screen connection, after StartControl:
+    // "Travar o toque do aluno" (StudentTouchLock), one byte, 1 locks the
+    // student's touch while the teacher controls and 0 frees it; sent again
+    // whenever the teacher changes it. Sent to phones and tablets only. An
+    // agent from before it ignores it, as it ignores any unknown type there.
+    LockStudentTouch = 107,
 }
 
 public enum CloseAppsMode : byte

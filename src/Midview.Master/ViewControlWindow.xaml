@@ -48,6 +48,9 @@
                         <Button Content="Recentes" Click="OnPhoneRecentsClicked" Padding="10,4" Margin="4,6"
                                 ToolTip="Mostra os apps abertos no celular." />
                     </StackPanel>
+                    <!-- A phone's only (ShowMode): sent with StartControl and whenever it changes. -->
+                    <CheckBox x:Name="LockTouchCheckBox" IsChecked="True" VerticalAlignment="Center" Margin="8,6,4,6"
+                              Visibility="Collapsed" Checked="OnLockTouchChanged" Unchecked="OnLockTouchChanged" />
                     <!-- Only on the helper connection (ShowMode): the password never goes over the Session. -->
                     <Button x:Name="FillPasswordButton" Content="Preencher a senha de administrador" Click="OnFillPasswordClicked"
                             Padding="10,4" Margin="4,6" Visibility="Collapsed" />
