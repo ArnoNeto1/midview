@@ -59,9 +59,15 @@ class AndroidControlTarget(private val isLocked: () -> Boolean) : ControlTarget 
     // on the connection's thread, the teacher's gestures on the control's.
     private val gate = TouchGate()
 
-    override fun lockStudent(on: Boolean) = StudentTouchLock.show(synchronized(gate) { if (on) gate.want(true) else gate.stop() })
+    // Worked out and shown under one lock: a toggle and a gesture never
+    // reach the screen in the reverse order.
+    override fun lockStudent(on: Boolean) = synchronized(gate) {
+        StudentTouchLock.show(this, if (on) gate.want(true) else gate.stop())
+    }
 
-    private fun teacherTouching(touching: Boolean) = StudentTouchLock.show(synchronized(gate) { gate.teacher(touching) })
+    private fun teacherTouching(touching: Boolean) = synchronized(gate) {
+        StudentTouchLock.show(this, gate.teacher(touching))
+    }
 
     override fun perform(step: TouchStep) {
         val touches = step is TouchStep.Down || step is TouchStep.Move || step is TouchStep.Up ||
