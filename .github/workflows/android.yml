@@ -85,7 +85,13 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Only platform-tools: the default list also asks for the old "tools"
+      # package, which newer command-line tools no longer have (the step
+      # failed with "Failed to find package 'tools'"). Gradle downloads the
+      # platform and build tools it needs.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - uses: gradle/actions/setup-gradle@v4
 
@@ -110,7 +116,13 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Only platform-tools: the default list also asks for the old "tools"
+      # package, which newer command-line tools no longer have (the step
+      # failed with "Failed to find package 'tools'"). Gradle downloads the
+      # platform and build tools it needs.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - uses: gradle/actions/setup-gradle@v4
 
