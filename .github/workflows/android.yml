@@ -163,6 +163,8 @@ jobs:
             echo "::warning::O segredo ANDROID_KEYSTORE_PASSWORD tem espaço ou quebra de linha nas pontas; o build usa a senha sem eles."
           fi
           if ! keytool -list -keystore "$keystore" -storepass "$password" -alias "$alias" > /dev/null 2>&1; then
+            # The file's fingerprint (not secret) tells a wrong key file from a wrong password.
+            echo "Arquivo da chave decodificado: $(stat -c %s "$keystore") bytes, SHA-256 $(sha256sum "$keystore" | cut -c1-64)"
             echo "::error::A senha do segredo ANDROID_KEYSTORE_PASSWORD não abre a chave do segredo ANDROID_KEYSTORE_BASE64 (ou o apelido ANDROID_KEY_ALIAS não está nela). Confira os dois com o LEIA-ME.txt da chave."
             exit 1
           fi
