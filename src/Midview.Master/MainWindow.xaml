@@ -293,6 +293,8 @@
                                             <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" local:DeviceActions.Action="Control" Click="OnControlMachineClicked" />
                                             <!-- Only for phones: shown by OnMachineMenuOpening when one is among the machines. -->
                                             <MenuItem Tag="celular" Header="Pedir de novo para ver a tela" Visibility="Collapsed" Click="OnAskScreenAgainClicked" />
+                                            <!-- "Tocar para encontrar", or "Parar o toque" while they ring (OnMachineMenuOpening). -->
+                                            <MenuItem Tag="celular" Uid="tocar" Header="Tocar para encontrar" Visibility="Collapsed" Click="OnFindPhoneMachineClicked" />
                                             <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
                                             <MenuItem Tag="bloqueio" Header="Bloquear a tela" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockMachineClicked" />
                                             <Separator />

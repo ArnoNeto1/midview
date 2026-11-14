@@ -7,8 +7,8 @@ namespace Midview.Master;
 // "Telas" (group Configurar): a menu with which screens the grid shows
 // (DeviceFilter: Todos, Computadores, Celulares, Tablets) and
 // "Otimizar celulares e tablets...", "Senha dos celulares e tablets...",
-// "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets..."
-// and, apart at the end, "Tirar o Midview dos celulares e tablets..." (the
+// "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets...",
+// "Tocar para encontrar" ("Parar o toque" while they ring) and, apart at the end, "Tirar o Midview dos celulares e tablets..." (the
 // selected Android devices, or every one the grid shows, by the rule
 // of every toolbar button: DeviceSupport.ToolbarReach). Celulares is
 // greyed in a room with no phone, and Tablets in one with no tablet (unless
@@ -34,7 +34,9 @@ public partial class MainWindow
             reachesAndroid: ToolbarReach(ToolbarAction.Optimize).Count > 0,
             phoneNetwork: () => OpenPhoneNetworkWindow(ToolbarReach(ToolbarAction.PhonePin)),
             phoneWallpaper: () => OpenPhoneWallpaperWindow(ToolbarReach(ToolbarAction.PhonePin)),
-            phoneRemove: () => OpenPhoneRemoveWindow(ToolbarReach(ToolbarAction.PhonePin)));
+            phoneRemove: () => OpenPhoneRemoveWindow(ToolbarReach(ToolbarAction.PhonePin)),
+            phoneFind: () => FindPhones(ToolbarReach(ToolbarAction.PhonePin)),
+            phoneFindHeader: FindPhonesMenuItem(ToolbarReach(ToolbarAction.PhonePin)));
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -61,7 +63,8 @@ public partial class MainWindow
     internal static ContextMenu ScreensMenu(
         DeviceFilter shown, bool hasPhones, bool hasTablets, bool hasAndroid, Action<DeviceFilter> show, Action optimize, Action phonePin,
         PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon, bool reachesAndroid = true, Action? phoneNetwork = null,
-        Action? phoneWallpaper = null, Action? phoneRemove = null)
+        Action? phoneWallpaper = null, Action? phoneRemove = null, Action? phoneFind = null,
+        string phoneFindHeader = PhoneFindText.StartMenuItem)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -122,6 +125,15 @@ public partial class MainWindow
             wallpaperItem.Click += (_, _) => phoneWallpaper?.Invoke();
             menu.Items.Add(wallpaperItem);
             Unreached(wallpaperItem);
+            var findItem = new MenuItem
+            {
+                Header = phoneFindHeader,
+                ToolTip = (phoneFindHeader == PhoneFindText.StopMenuItem ? PhoneFindText.StopToolTip : PhoneFindText.StartToolTip)
+                    + " Com alguns selecionados, só neles.",
+            };
+            findItem.Click += (_, _) => phoneFind?.Invoke();
+            menu.Items.Add(findItem);
+            Unreached(findItem);
             // The panic button, apart from the everyday items.
             menu.Items.Add(new Separator());
             var removeItem = new MenuItem

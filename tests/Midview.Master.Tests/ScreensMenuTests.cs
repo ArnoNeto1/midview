@@ -16,7 +16,7 @@ public class ScreensMenuTests
         {
             var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets...", "-", "Tirar o Midview dos celulares e tablets..." }, Headers(menu));
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Otimizar celulares e tablets...", "Senha dos celulares e tablets...", "Liberar Wi-Fi e modo avião...", "Papel de parede dos celulares e tablets...", "Tocar para encontrar", "-", "Tirar o Midview dos celulares e tablets..." }, Headers(menu));
             var items = menu.Items.OfType<MenuItem>().ToList();
             Assert.Equal(new[] { false, false, true, false }, items.Take(4).Select(item => item.IsChecked));
             Assert.All(items, item => Assert.True(item.IsEnabled));
@@ -81,6 +81,27 @@ public class ScreensMenuTests
 
             Assert.Equal(1, opened);
             Assert.True(item.IsEnabled);
+        });
+    }
+
+    // "Tocar para encontrar", or "Parar o toque" while what it reaches rings.
+    [Fact]
+    public void Tocar_para_encontrar_rings_and_says_parar_while_ringing()
+    {
+        InSta(() =>
+        {
+            var rang = 0;
+            var menu = MainWindow.ScreensMenu(
+                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { }, phoneFind: () => rang++);
+            var item = Item(menu, "Tocar para encontrar");
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(1, rang);
+            Assert.Equal(PhoneFindText.StartToolTip + " Com alguns selecionados, só neles.", item.ToolTip);
+
+            var ringing = MainWindow.ScreensMenu(
+                DeviceFilter.All, hasPhones: true, hasTablets: true, hasAndroid: true, _ => { }, () => { }, () => { },
+                phoneFindHeader: PhoneFindText.StopMenuItem);
+            Assert.True(Item(ringing, "Parar o toque").IsEnabled);
         });
     }
 

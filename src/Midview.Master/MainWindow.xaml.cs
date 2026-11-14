@@ -564,6 +564,10 @@ public partial class MainWindow : MidviewWindow
         {
             item.Header = PhoneControl.MenuItem(targets.Select(target => target.Machine).ToList());
         }
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => item.Uid == FindPhoneUid))
+        {
+            item.Header = FindPhonesMenuItem(targets.Select(target => target.Machine).ToList());
+        }
     }
 
     // Whether the item's click comes before or after this, it acts on the
