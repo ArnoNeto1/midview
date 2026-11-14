@@ -214,6 +214,9 @@ public class ProtectedStudentFoldersTests : IDisposable
             Assert.False(security.AreAccessRulesProtected); // the Desktop's permissions apply again
             Assert.Contains(RulesFor(security, Student, inherited: true),
                 rule => rule.AccessControlType == AccessControlType.Allow && rule.FileSystemRights.HasFlag(FileSystemRights.FullControl));
+            // ...and are there already: newer Windows (build 26300) keeps a
+            // folder protected if it's unprotected without them.
+            Assert.Contains(RulesFor(security, Me, inherited: true), rule => rule.IsInherited);
         }
     }
 

@@ -176,6 +176,7 @@ public static class ProtectedStudentFolders
     {
         var problems = new List<string>();
         string desktopFinal;
+        byte[] desktopDescriptor;
         try
         {
             using var desktop = OpenDesktop(desktopPath, names is null ? ReadControl | WriteDac : ReadControl, out desktopFinal);
@@ -188,6 +189,7 @@ public static class ProtectedStudentFolders
                     WriteSecurity(desktop, security, DaclSecurityInformation);
                 }
             }
+            desktopDescriptor = ReadDescriptor(desktop, DaclSecurityInformation);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -218,7 +220,8 @@ public static class ProtectedStudentFolders
                 }
                 using var folder = OpenAsItself(path, ReadControl | WriteDac);
                 CheckIsIn(folder, path);
-                WriteSecurity(folder, security, DaclSecurityInformation | UnprotectedDaclSecurityInformation);
+                WriteSecurity(folder, WithWhatItInherits(desktopDescriptor, folder, security),
+                    DaclSecurityInformation | UnprotectedDaclSecurityInformation);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
@@ -393,20 +396,68 @@ public static class ProtectedStudentFolders
 
     // The owner and permissions of an open file or folder (opened with
     // ReadControl), into security (a FileSecurity or a DirectorySecurity).
-    internal static void ReadSecurityInto(SafeFileHandle handle, FileSystemSecurity security)
+    internal static void ReadSecurityInto(SafeFileHandle handle, FileSystemSecurity security) =>
+        security.SetSecurityDescriptorBinaryForm(ReadDescriptor(handle, OwnerSecurityInformation | DaclSecurityInformation));
+
+    // A given-back folder's permissions: the explicit ones, then what it
+    // inherits from the Desktop, worked out by Windows as for a new folder
+    // there. They go in the same write as the explicit ones: newer Windows
+    // (seen on build 26300) keeps a DACL protected when it's unprotected
+    // with no inherited entries in it, where older builds cleared the flag
+    // and left the entries to come later. Only the folder itself changes,
+    // through its open handle: nothing inside it is walked.
+    private static byte[] WithWhatItInherits(byte[] desktopDescriptor, SafeFileHandle folder, DirectorySecurity explicitRules)
     {
-        GetKernelObjectSecurity(handle, OwnerSecurityInformation | DaclSecurityInformation, null, 0, out var needed);
+        var current = new RawSecurityDescriptor(ReadDescriptor(folder, OwnerSecurityInformation | GroupSecurityInformation), 0);
+        if (current.Owner is { } owner)
+        {
+            explicitRules.SetOwner(owner);
+        }
+        if (current.Group is { } group)
+        {
+            explicitRules.SetGroup(group);
+        }
+        var mapping = new GenericMapping
+        {
+            Read = FileGenericRead, Write = FileGenericWrite, Execute = FileGenericExecute, All = FileAllAccess,
+        };
+        if (!CreatePrivateObjectSecurityEx(desktopDescriptor, explicitRules.GetSecurityDescriptorBinaryForm(), out var created,
+                IntPtr.Zero, isContainerObject: true, SefDaclAutoInherit | SefAvoidPrivilegeCheck | SefAvoidOwnerCheck,
+                IntPtr.Zero, ref mapping))
+        {
+            throw new IOException($"as permissões herdadas não puderam ser calculadas (erro {Marshal.GetLastWin32Error()})");
+        }
+        try
+        {
+            var descriptor = new byte[GetSecurityDescriptorLength(created)];
+            Marshal.Copy(created, descriptor, 0, descriptor.Length);
+            return descriptor;
+        }
+        finally
+        {
+            DestroyPrivateObjectSecurity(ref created);
+        }
+    }
+
+    // The raw security descriptor of an open file or folder (opened with
+    // ReadControl), with the parts information names.
+    private static byte[] ReadDescriptor(SafeFileHandle handle, uint information)
+    {
+        GetKernelObjectSecurity(handle, information, null, 0, out var needed);
         var descriptor = new byte[needed];
-        if (!GetKernelObjectSecurity(handle, OwnerSecurityInformation | DaclSecurityInformation, descriptor, needed, out _))
+        if (!GetKernelObjectSecurity(handle, information, descriptor, needed, out _))
         {
             throw new IOException($"as permissões não puderam ser lidas (erro {Marshal.GetLastWin32Error()})");
         }
-        security.SetSecurityDescriptorBinaryForm(descriptor);
+        return descriptor;
     }
 
-    internal static void WriteSecurity(SafeFileHandle handle, FileSystemSecurity security, uint information)
+    internal static void WriteSecurity(SafeFileHandle handle, FileSystemSecurity security, uint information) =>
+        WriteSecurity(handle, security.GetSecurityDescriptorBinaryForm(), information);
+
+    private static void WriteSecurity(SafeFileHandle handle, byte[] descriptor, uint information)
     {
-        if (!SetKernelObjectSecurity(handle, information, security.GetSecurityDescriptorBinaryForm()))
+        if (!SetKernelObjectSecurity(handle, information, descriptor))
         {
             var error = Marshal.GetLastWin32Error();
             throw error == 5
@@ -425,7 +476,15 @@ public static class ProtectedStudentFolders
     private const uint FileAttributeDirectory = 0x10;
     private const uint FileAttributeReparsePoint = 0x400;
     private const uint OwnerSecurityInformation = 0x1;
+    private const uint GroupSecurityInformation = 0x2;
     internal const uint DaclSecurityInformation = 0x4;
+    private const uint SefDaclAutoInherit = 0x01;
+    private const uint SefAvoidPrivilegeCheck = 0x08;
+    private const uint SefAvoidOwnerCheck = 0x10;
+    private const uint FileGenericRead = 0x120089;
+    private const uint FileGenericWrite = 0x120116;
+    private const uint FileGenericExecute = 0x1200A0;
+    private const uint FileAllAccess = 0x1F01FF;
     internal const uint ProtectedDaclSecurityInformation = 0x80000000;
     internal const uint UnprotectedDaclSecurityInformation = 0x20000000;
 
@@ -457,4 +516,24 @@ public static class ProtectedStudentFolders
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool SetKernelObjectSecurity(SafeFileHandle handle, uint information, byte[] descriptor);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GenericMapping
+    {
+        public uint Read;
+        public uint Write;
+        public uint Execute;
+        public uint All;
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool CreatePrivateObjectSecurityEx(
+        byte[] parentDescriptor, byte[] creatorDescriptor, out IntPtr newDescriptor, IntPtr objectType,
+        bool isContainerObject, uint autoInheritFlags, IntPtr token, ref GenericMapping genericMapping);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool DestroyPrivateObjectSecurity(ref IntPtr descriptor);
+
+    [DllImport("advapi32.dll")]
+    private static extern uint GetSecurityDescriptorLength(IntPtr descriptor);
 }
