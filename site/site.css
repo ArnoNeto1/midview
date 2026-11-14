@@ -183,6 +183,9 @@ section.block { padding-block: 72px; border-top: 1px solid var(--line); }
 .extra h3 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
 .extra p { color: var(--muted); font-size: 15px; }
 @media (max-width: 860px) { .extras { grid-template-columns: 1fr; } }
+.wallpapers { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 24px; align-items: flex-start; }
+.wallpapers .shot { width: 200px; max-width: calc(50% - 8px); }
+.wallpapers figcaption a { color: inherit; }
 
 /* Como começar */
 .steps { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: passo; }

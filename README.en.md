@@ -14,7 +14,7 @@
 > works for the teacher's computer and for the students' machines.
 > Website for teachers: https://arnoneto1.github.io/midview/en/
 
-Midview manages a school's computer lab. From their own computer, the teacher sees and controls the students' machines, talks to the class, sends and collects files, blocks programs and websites, and turns the lab on or off. Everything runs over the school's local network, with no outside server. The teacher's computer uses the internet only to fetch Midview updates from GitHub, and optimized phones use a public ad-free DNS (see Privacy).
+Midview manages a school's computer lab, and the school's Android phones and tablets too. From their own computer, the teacher sees and controls the students' machines, talks to the class, sends and collects files, blocks programs and websites, and turns the lab on or off. Everything runs over the school's local network, with no outside server. The teacher's computer uses the internet only to fetch Midview updates from GitHub, and optimized phones use a public ad-free DNS (see Privacy).
 
 > **Language:** Midview's interface, installer and videos are in Brazilian Portuguese. In this page, each English name is followed by the label you will see in the app, in Portuguese.
 
@@ -42,7 +42,7 @@ The "Midview - Sala de aula" (classroom) window shows every machine's screen in 
 | **Screen** (Tela) | **View the screen** (Ver a tela) of a student (or double-click their tile), in a window shaped like their screen, with no black bands: the button bar sits over the picture and hides by itself (it comes back when the mouse touches the top edge), and **Full screen** (Tela Cheia) fills the whole monitor; **Control** (Controlar) the machine (the student's keyboard and mouse are locked and they see the notice "Este computador está sendo controlado pelo professor", "This computer is being controlled by the teacher", which all but disappears when the mouse comes near it, so it doesn't hide what's underneath). Control keeps working when the UAC screen (the administrator password prompt) appears: with the lab's password saved, **Fill in the administrator password** (Preencher a senha de administrador) types it into the UAC prompt in one click. **Lock screens** (Bloquear telas) with a padlock; while the screens are locked, if a student presses Ctrl+Alt+Del, the Windows security screen closes by itself, and while it shows it has no Task Manager, Sign out, Switch user, Lock, Change a password or shut down, restart and sleep button. |
 | **Class** (Turma) | **Message** (Mensagem) on everyone's screen; **Chat** (Bate-papo) with the class (replies reach only the teacher); **Send file** (Enviar arquivo) to the "Arquivos do professor" (teacher's files) folder; **Collect files** (Recolher arquivos) from the "Entregar ao professor" (hand in to the teacher) folder; **Class folder** (Pasta da turma), a folder on the students' desktop where whatever each one downloads or saves shows up on every computer (with classes, lessons and up to two teacher PCs). During the lesson, downloads from any program go to the class folder, and Word, Excel, PowerPoint (2016 or newer), Notepad and Paint open "Save as" in it. |
 | **Programs and websites** (Programas e sites) | **Open website** (Abrir site) (one, or up to 10 at once, separated by commas) and **Open program** (Abrir programa) on the machines; **Install program** (Instalar programa) on the whole class, as administrator, with no UAC screen and no password to type; **Uninstall program** (Desinstalar programa); **Close programs** (Fechar programas), with a warning and time for the student to save; **Block programs** (Bloquear programas) (a blocklist, or only the allowed ones); **Block websites** (Bloquear sites) (the whole internet or only some websites, still in effect after a restart). |
-| **Settings** (Configurar) | **Lab panel** (Painel do laboratório) (Chrome and Windows policies, such as an ad blocker, blocking downloads, guest mode and locking the student's desktop); **Classroom machines** (Máquinas da sala), with the pages Find and pair (Procurar e parear: search the network and pair by checking a code within 5 minutes), Updates (Atualizações: update this computer and the machines), Another teacher (Outro professor: give a colleague access or join theirs), Administrator password (Senha de administrador: save the lab's password) and Advanced (Avançado). |
+| **Settings** (Configurar) | **Lab panel** (Painel do laboratório) (Chrome and Windows policies, such as an ad blocker, blocking downloads, guest mode and locking the student's desktop); **Classroom machines** (Máquinas da sala), with the pages Find and pair (Procurar e parear: search the network and pair by checking a code within 5 minutes), Updates (Atualizações: update this computer and the machines), Configurar celular and Configurar tablet (prepare and look after the Android devices, see Phones and tablets), Another teacher (Outro professor: give a colleague access or join theirs), Administrator password (Senha de administrador: save the lab's password) and Advanced (Avançado). |
 
 The right-click menu also has **Talk** (Conversar) to a single student, **Uninstall program** (Desinstalar programa), **Edit the machine** (Editar a máquina) and **Remove from the classroom list** (Remover da lista da sala). In the bottom bar, **Show all** (Visualizar todos) fits every screen, **Online only** (Só online) hides the machines that are off, and the slider changes the size of the screens (Ctrl + mouse wheel works too). **Arrange room** (Organizar sala) lets you drag the screens until they match how the machines sit in the room, and **Align** (Alinhar) straightens the grid.
 
@@ -110,54 +110,61 @@ Limits:
 - A compromised machine in the room can reveal the **Permitir novo professor** code while it is valid (10 minutes).
 - Any trusted teacher can forget all the others, including whoever set up the room.
 
-## Phones
+## Phones and tablets
 
-Coming soon: the phone app hasn't been published yet.
+An Android phone or tablet (Android 10 or newer) shows up in the grid next to the computers and is prepared once, over a USB cable (see below). The **Telas** (screens) button picks what the grid shows: **Todos** (all), **Computadores** (computers), **Celulares** (phones) or **Tablets**. With phones or tablets in the selection, or in the grid, the toolbar buttons work on them too:
 
-An Android phone (Android 10 or newer) shows up in the grid and is paired with the 6-digit code, like the machines. The **Telas** (screens) button picks what the grid shows: **Todos** (all), **Computadores** (computers) or **Celulares** (phones); **Tablets** is coming soon. The teacher sees the phone's screen and controls it (**Controlar**: a click is a tap, dragging swipes, the mouse wheel scrolls, the keyboard types into the text field, and the window gets **Voltar**, **Início** and **Recentes**, Android's Back, Home and Recents buttons; the student sees the notice "Este celular está sendo controlado pelo professor" (this phone is being controlled by the teacher), which almost fades away when the mouse comes near, and can still touch the screen), locks it with the padlock and blocks apps and websites:
+- **View the screen** (Ver a tela) and **Control** (Controlar): a click is a tap, dragging swipes, the mouse wheel scrolls, the keyboard types into the text field, and the window gets **Voltar**, **Início** and **Recentes**, Android's Back, Home and Recents buttons. The student sees the notice "Este celular está sendo controlado pelo professor" (this phone is being controlled by the teacher), which almost fades away when the mouse comes near. **Travar o toque do aluno** (lock the student's touch), on as soon as control opens, makes the device's screen and buttons ignore the student while the teacher controls it (that's why the preparation leaves navigation on the 3 buttons: screen gestures would get past the lock). The teacher sees the screen without the student having to tap "Iniciar agora" (start now), on Android 10 too.
+- **Lock screens** (Bloquear telas) with the padlock.
+- **Message** (Mensagem), **Chat** (Bate-papo), **Send file** (Enviar arquivo, to Download/Midview), **Collect files** (Recolher arquivos) and the **Class folder** (Pasta da turma, see below).
+- **Open website** (Abrir site) in Chrome, **Open program** (Abrir programa), **Install program** (Instalar programa, an .apk file) and **Uninstall program** (Desinstalar programa, only apps Midview installed).
+- **Close programs** (Fechar programas), with a warning and time for the student, as on the PCs.
+- **Shut down** (Desligar) and **Restart** (Reiniciar) turn the screen off (the device stays on and connected), and **Schedule** (Agendar) turns the screens off on the chosen days and times.
+- **Block programs** (Bloquear programas) shows the device's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
+- **Block websites** (Bloquear sites) is the same window as for the PCs. On the device, blocked websites don't open in Chrome, and the other browsers are hidden. **Bloquear a internet** (block the internet) cuts the internet for every app, and Midview keeps seeing the device.
 
-- **Block programs** (Bloquear programas), with only phones selected (or with **Telas** on **Celulares**), shows the phone's apps with their icons. **Bloquear só estes** (block only these) greys out the ticked apps so they don't open; **Liberar só estes** (allow only these) lets only the ticked ones open (Midview, the home screen, the phone app and Settings keep working).
-- **Block websites** (Bloquear sites) is the same window as for the PCs. On the phone, blocked websites don't open in Chrome, and the other browsers are hidden. **Bloquear a internet** (block the internet) cuts the internet for every app, and Midview keeps seeing the phone.
+The app and website blocks stay in effect if the device restarts.
 
-The app and website blocks stay in effect if the phone restarts.
+Midview also always locks: the date, the time and the time zone (the device keeps setting them by itself from the network); other apps' windows over the screen and over the teacher's padlock (MIUI's floating windows, chat bubbles); **Wi-Fi** and **airplane mode** (the student can't change networks or turn the network off); and the wallpaper, when the school sets one.
 
-Midview also always locks two things on the phone: the student can't change the date, the time or the time zone (the phone keeps setting them by itself from the network), and other apps can't open windows over the screen (MIUI's floating windows, chat bubbles), not even over the teacher's padlock. Midview's own notices still show.
+The **Class folder** (Pasta da turma) covers the whole room, phones and tablets too. On the device it's Download/Midview/Pasta da turma – <class>, in the Files app, and what the student saves or moves into it shows up on every computer and device. Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it into that folder. **Recolher arquivos** and **Apagar as pastas dos alunos** don't touch it. When the lesson ends, the files leave the folder and are kept in a hidden area, Download/Midview/.midview-turmas, until the teacher's Midview collects them in the next lesson. Anything nobody collects is removed after 30 days, or sooner if the area grows past 2 GB.
 
-The **Class folder** (Pasta da turma) is for the whole room, phones included. On a phone it is Download/Midview/Pasta da turma – <class>, in the Files app, and whatever the student saves or moves there shows up on every computer and phone, as on the PCs. The phone's Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it to that folder in the Files app. It needs the all-files access that the cable setup turns on. **Collect files** and its **Apagar as pastas dos alunos** (empty the students' folders) leave it alone. When the lesson ends, its files leave the folder and are kept in a hidden area, Download/Midview/.midview-turmas, until the teacher's Midview picks them up at the next lesson (what it already has, or what was deleted with **Apagar tudo** (delete everything), is only deleted from the phone). Whatever nobody picks up goes by itself after 30 days, or sooner if the area grows past 2 GB.
+To receive files (**Enviar arquivo**, **Pasta da turma**, **Instalar programa** and the app update), the device must keep at least 100 MB free after receiving; an app or an update needs twice its size plus those 100 MB. Without that space the teacher reads "sem espaço no celular" (no space on the phone).
 
-To receive files (**Enviar arquivo**, the **Class folder**, **Instalar programa** and the app's update), the phone must still have at least 100 MB free after receiving them; an app or an update needs twice its size plus those 100 MB. Without that room, the teacher reads "sem espaço no celular" (no room on the phone).
+On Android 14 or newer, with the screen off, Midview may take a little longer to answer the teacher: from Android 14 on, Wi-Fi saves power with the screen off, and Midview can't prevent it.
 
-On a phone with Android 14 or newer, with the screen off, Midview may take a little longer to answer the teacher: from Android 14 on, the Wi-Fi goes into power saving with the screen off, and Midview can't prevent it.
+### Configurar celular and Configurar tablet
 
-These act on the selected phones or, with nothing selected, on every phone in the room:
+In **Máquinas da sala** (classroom machines), the **Configurar celular** (set up phones) and **Configurar tablet** (set up tablets) pages prepare new devices and look after the ones already in the room. Each action works on the devices selected in the grid or, with no selection, on every phone (or tablet) in the room:
 
-- **Telas** > **Otimizar celulares e tablets...** (optimize phones and tablets) uninstalls the preinstalled apps the school doesn't use (games, social networks and short videos, shopping and streaming, Xiaomi and Google extras; the system ones, which Android won't let it uninstall, are hidden instead), hides the preinstalled ad apps and turns on an ad-blocking DNS, which removes most ads from websites and apps, when the network allows it. If the ad-blocking DNS doesn't work on the network, the phone goes back to its usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself once the internet is unblocked.
-- The **Lab panel** (Painel do laboratório) also works on phones, where it makes sense: **Bloqueador de anúncios** (ad blocker) turns the ad-blocking DNS of **Otimizar** on or off (the panel decides; **Otimizar** follows it), **Travar downloads** (block downloads) makes Chrome download nothing (Chrome 131 or newer; what the teacher sends with **Enviar arquivo** still arrives), **Bloquear sites de distração** (block distraction websites) works through Chrome, and **RESET geral** frees downloads and turns the ad-blocking DNS back on. The other functions are for computers only, and the window says so under each one when there are phones in the list.
-- **Telas** > **Senha dos celulares e tablets...** (phone and tablet password) puts a 4-digit PIN on the lock screen that the student can't change or remove. The PIN isn't saved on the computer.
-- **Máquinas da sala** > **Atualizações** > **Atualizar os celulares pela rede...** (update the phones over the network) sends the new version of the phone app: the same version as the teacher's Midview, downloaded from GitHub. One phone is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything, and the blocks stay in effect; Android shows the student a notice that the app was updated by the administrator.
+- **Otimizar** (optimize) hides the advertising apps that come from the factory and turns on an ad-free DNS, which removes most ads from websites and apps, when the network allows it. If the ad-free DNS doesn't work on the network, the device goes back to the usual DNS by itself and keeps its internet. With the internet blocked, it turns on by itself when unblocked.
+- **Senha (PIN)** puts a 4-digit PIN on the lock screen that the student can't change or remove. The PIN isn't stored on the computer.
+- **Wi-Fi e modo avião** (Wi-Fi and airplane mode) frees both for a few minutes, to change networks, or locks them again; when locked, the device goes back to the school's network. You can also set an **administrator password** (senha de administrador, 6 to 12 letters or digits): with it, a teacher frees Wi-Fi and airplane mode on the device itself, from Midview's notification, without the computer.
+- **Papel de parede** (wallpaper) puts an image (JPG or PNG) on the home screen, the lock screen or both, and the student can't change it. The [Midview page for teachers](https://arnoneto1.github.io/midview/en/) has the phone and tablet rules images, ready to use.
+- **Tocar para encontrar** (ring to find) rings the alarm at full volume for up to 1 minute, to find a lost device; on the device, the **Parar** (stop) button silences it.
+- **Tirar o Midview** (remove Midview) has two choices, confirmed by typing a word: **Desfazer e tirar o Midview** (undo and remove Midview) keeps the photos and files, removes the school's locks and settings and uninstalls Midview; **Restaurar de fábrica** (factory reset) erases everything. With the administrator password, Midview can also be removed on the device itself, from Midview's notification ("Tirar o Midview deste celular").
 
-### To prepare a phone
+In **Máquinas da sala** > **Atualizações** (updates), **Atualizar os celulares** and **Atualizar os tablets** send the new app version over the network, the same version as the teacher's Midview, downloaded from GitHub. One device is updated first, and the others only after it confirms the new version. The student doesn't need to tap anything and the blocks stay in effect; Android shows the student "Atualizado pelo seu administrador" (updated by your administrator).
 
-A phone is prepared once, over a USB cable plugged into the teacher's computer. The QR on the first screen (6 taps) doesn't work: Google only lets device-management apps on its own list in that way, and Midview isn't on it.
+The **Painel do laboratório** (lab panel) also works on the devices, where it makes sense: **Bloqueador de anúncios** (ad blocker) turns the ad-free DNS on or off, **Travar downloads** (lock downloads) makes Chrome download nothing (needs Chrome 131 or newer; what the teacher sends with **Enviar arquivo** still arrives), **Bloquear sites de distração** (block distracting sites) works through Chrome, and **RESET geral** (general reset) frees downloads and turns the ad-free DNS back on. The other options are for the computers only, and the window says so under each one when there are devices in the list.
 
-1. Factory reset the phone and skip every account during setup.
-2. Turn on **Developer options** (tap **MIUI version** 7 times, on Xiaomi) and, inside them, **USB debugging**. On Xiaomi, also turn on **USB debugging (Security settings)**: it only turns on with a Mi account signed in, and sometimes with a SIM card in the phone.
-3. Sign out of every account on the phone (the Mi account too). With no account, the phone accepts Midview as its owner.
-4. Plug in the cable and tap **Allow** on the debugging prompt. On the computer, with `adb` (Android SDK Platform-Tools, downloaded from [Google's site](https://developer.android.com/tools/releases/platform-tools)) and the `MidviewAgent.apk` of the teacher's Midview version (on that version's GitHub release page), run, in this order:
+### To prepare a phone or tablet
 
-   ```
-   adb install MidviewAgent.apk
-   adb shell cmd deviceidle whitelist +io.github.arnoneto1.midview.agent
-   adb shell cmd appops set io.github.arnoneto1.midview.agent 10008 allow
-   adb shell settings put secure enabled_accessibility_services io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
-   adb shell settings put secure accessibility_enabled 1
-   adb shell dpm set-device-owner io.github.arnoneto1.midview.agent/.AdminReceiver
-   ```
+In **Máquinas da sala** > **Configurar celular** (or **Configurar tablet**), choose:
 
-   The second takes Midview out of battery saving; the third, only on Xiaomi (MIUI), lets Midview start on its own; the fourth and fifth let the teacher see the screen without the student tapping "Start now" (Android 11 or newer) and control the phone. `dpm set-device-owner` comes **last**: right after it, the phone's locks turn USB debugging off.
-5. In **Máquinas da sala** > **Procurar e parear** > **Procurar na rede**, select the phone and check the 6-digit code shown on it.
+- **Midview otimizado** (optimized, recommended): installs Midview and makes the device lighter. It removes the apps a class doesn't use (factory tests, Xiaomi and Google advertising and telemetry, the Google app, Messages and, on a tablet, the phone app and the system's style packs), turns animations off, keeps heavy apps from running unseen and arranges the home screen: no icons on the pages, just the wallpaper, and at the bottom Chrome, Camera, Gallery (or Photos), Files and Calculator. On the Redmi 10C about 460 MB more memory was left free; on the Multilaser M10 tablet, the home screen stuttered four times less.
+- **Só o Midview** (Midview only): installs Midview and leaves the rest of the device alone.
 
-If the student closes every recent app ("Clear all" on Xiaomi), Midview on the phone comes back by itself within a few seconds (more slowly when the phone is idle).
+The assistant does everything over the USB cable, one device at a time, in about 1 minute each, and shows each step with pictures:
+
+1. Reset the device to factory settings and, during the initial setup, don't set a screen lock.
+2. Turn on **Developer options** and, inside them, **USB debugging**. On a Xiaomi, also turn on **USB debugging (Security settings)**, which only turns on with a Mi account signed in. With the **school's Mi account** saved in the assistant (only on this computer, protected by Windows), Midview signs out of it by itself at the end; without it, sign out by hand.
+3. If the device's Chrome is old, the assistant opens the Play Store to update Chrome and the WebView (with a Google account on the device). Afterwards, sign out of the Google accounts: with any account on it, Android doesn't accept Midview as the device's owner.
+4. Plug in the cable, tap **Allow** on the debugging prompt and type the device's number: 7 becomes "Celular 07" (or "Tablet 07"). Midview installs the app, connects to the lab's Wi-Fi, becomes the device's owner and adds it to the room, already paired.
+
+The first time, Midview downloads Google's `adb` tool, which talks to the device over the cable, and checks it before use.
+
+If the student closes all recent apps ("Limpar tudo" on a Xiaomi), Midview on the device comes back by itself within seconds (more slowly with the screen off).
 
 ## Uninstalling
 
@@ -175,6 +182,8 @@ On optimized phones, Android looks up the addresses of websites and apps with a 
 
 A student's screen can be viewed with no notice on their machine; only remote control shows a notice. So the school must tell students and their parents or guardians that Midview is in use, as clause 6 of the [license](LICENSE) requires.
 
+The school's Mi account, if saved in the preparation assistant, stays only on the teacher's computer, protected by Windows (user DPAPI); it's typed into the device over the USB cable only to sign out of the Mi account at the end of the preparation.
+
 The lab's administrator password, if saved in **Máquinas da sala**, stays only on the teacher's computer, protected by Windows (user DPAPI), and is never sent to the students' machines. **Preencher a senha de administrador** types it into the controlled machine's UAC prompt only when the teacher clicks.
 
 Some **Lab panel** options configure Google Chrome, which can then reach Google services on its own, for example to download the ad blocker.
@@ -187,6 +196,7 @@ Some **Lab panel** options configure Google Chrome, which can then reach Google 
 | `src/Midview.Agent` | Windows service on the students' machines |
 | `src/Midview.Session` | Program that runs in the student's session: screen, control, messages and lock |
 | `src/Midview.Desk` | Helper that shows and controls the secure desktop (UAC), fills in the administrator password and closes the Ctrl+Alt+Del screen while the screens are locked |
+| `src/Midview.Android` | The phones' and tablets' app (Kotlin), the device's owner (Device Owner) |
 | `src/Midview.Protocol` | Shared library: messages, TLS, pairing, discovery and updates |
 | `tests/` | xUnit tests and the end-to-end test (`Midview.E2E`) |
 | `installer/` | Installer (Inno Setup), machine scripts and their tests |
