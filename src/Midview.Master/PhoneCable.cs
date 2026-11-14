@@ -368,7 +368,7 @@ public sealed partial class PhoneCable
         // switches (pm uninstall --user 0, settings put, cmd appops).
         if (optimize)
         {
-            Lighten();
+            Lighten(kind);
         }
 
         if (!Present())

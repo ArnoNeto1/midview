@@ -673,6 +673,66 @@ public sealed class PhoneCableTests
         Assert.DoesNotContain(ContentCall(), adb.Calls);
     }
 
+    // A tablet loses its own extra apps too (TabletRemovedApps) and keeps the
+    // Play Store from running unseen; a phone with the same apps does not.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Only_a_tablet_loses_the_tablet_apps(bool tablet)
+    {
+        var kind = tablet ? AndroidDeviceKind.Tablet : AndroidDeviceKind.Phone;
+        var call = S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+                   + CableSetupPayload.Encode("07", Thumb, "Lab", "pw", kind);
+        var adb = ReadyToPrepare()
+            .Set(call, "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Tablet 07}]\n")
+            .Set(S + "shell pm list packages",
+                "package:com.sprd.engineermode\npackage:com.android.dialer\npackage:com.miui.daemon\n"
+                + "package:com.android.vending\npackage:com.android.phone\npackage:com.android.contacts\n")
+            .Set(S + "shell pm uninstall --user 0 com.sprd.engineermode", "Success\n")
+            .Set(S + "shell pm uninstall --user 0 com.android.dialer", "Success\n")
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n");
+
+        new PhoneCable(adb).Prepare(Apk, "07", Thumb, "Lab", "pw", _ => { }, kind: kind);
+
+        var removed = adb.Calls.Where(c => c.Contains("pm uninstall --user 0", StringComparison.Ordinal)).ToList();
+        var background = adb.Calls.Where(c => c.Contains("RUN_ANY_IN_BACKGROUND", StringComparison.Ordinal)).ToList();
+        if (tablet)
+        {
+            Assert.Equal(new[]
+            {
+                S + "shell pm uninstall --user 0 com.miui.daemon",
+                S + "shell pm uninstall --user 0 com.android.dialer",
+                S + "shell pm uninstall --user 0 com.sprd.engineermode",
+            }, removed);
+            Assert.Equal(new[] { S + "shell cmd appops set com.android.vending RUN_ANY_IN_BACKGROUND ignore" }, background);
+        }
+        else
+        {
+            Assert.Equal(new[] { S + "shell pm uninstall --user 0 com.miui.daemon" }, removed);
+            Assert.Empty(background);
+        }
+    }
+
+    [Fact]
+    public void Tablet_app_list_spares_the_phone_service_contacts_and_what_the_class_needs()
+    {
+        foreach (var app in new[]
+                 {
+                     Package, "com.android.phone", "com.android.contacts", "com.android.launcher3",
+                     "com.google.android.inputmethod.latin", "com.google.android.gms", "com.android.vending",
+                     "com.android.chrome", "com.google.android.webview", "com.android.settings",
+                     "com.google.android.apps.photos", "com.google.android.documentsui", "com.google.android.apps.nbu.files",
+                     "com.android.camera2", "com.google.android.calculator", "com.android.managedprovisioning",
+                     "com.android.vpndialogs", "com.android.shell", "com.sprd.linkturbo", "com.sprd.systemupdate",
+                 })
+        {
+            Assert.DoesNotContain(app, PhoneCable.TabletRemovedApps);
+        }
+        Assert.Equal(51, PhoneCable.TabletRemovedApps.Count);
+        Assert.Empty(PhoneCable.TabletRemovedApps.Intersect(PhoneCable.RemovedApps));
+        Assert.Equal(PhoneCable.TabletRemovedApps.Count, PhoneCable.TabletRemovedApps.Distinct().Count());
+    }
+
     [Fact]
     public void Door_refusal_is_refused()
     {

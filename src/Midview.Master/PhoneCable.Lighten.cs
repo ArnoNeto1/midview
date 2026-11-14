@@ -111,12 +111,85 @@ public sealed partial class PhoneCable
         "org.mipay.android.manager",
     };
 
+    // A tablet's own extra apps out, besides the ones above: tried on the
+    // school's Multilaser M10 (Android 10, Unisoc) on 2026-11-13, the
+    // school's choice for a tablet with no SIM and no Google account. The
+    // phone (dialer, SMS push, the SIM's secure element), the Unisoc and
+    // factory test tools, the system's style packs, Keep (it opened by
+    // itself), Digital Wellbeing (the school controls it through Midview),
+    // and the maker's app store. Never the phone service (com.android.phone)
+    // or the Contacts app the cable's local account check uses. Only on a
+    // tablet, so a phone's proven list stays as it was.
+    internal static readonly IReadOnlyList<string> TabletRemovedApps = new[]
+    {
+        "com.android.dialer",
+        "com.android.modemnotifier",
+        "com.android.se",
+        "com.android.sharedstoragebackup",
+        "com.android.smspush",
+        "com.android.theme.color.black",
+        "com.android.theme.color.cinnamon",
+        "com.android.theme.color.green",
+        "com.android.theme.color.ocean",
+        "com.android.theme.color.orchid",
+        "com.android.theme.color.purple",
+        "com.android.theme.color.space",
+        "com.android.theme.icon.roundedrect",
+        "com.android.theme.icon.square",
+        "com.android.theme.icon.squircle",
+        "com.android.theme.icon.teardrop",
+        "com.android.theme.icon_pack.circular.android",
+        "com.android.theme.icon_pack.circular.launcher",
+        "com.android.theme.icon_pack.circular.settings",
+        "com.android.theme.icon_pack.circular.systemui",
+        "com.android.theme.icon_pack.circular.themepicker",
+        "com.android.theme.icon_pack.filled.android",
+        "com.android.theme.icon_pack.filled.launcher",
+        "com.android.theme.icon_pack.filled.settings",
+        "com.android.theme.icon_pack.filled.systemui",
+        "com.android.theme.icon_pack.filled.themepicker",
+        "com.android.theme.icon_pack.rounded.android",
+        "com.android.theme.icon_pack.rounded.launcher",
+        "com.android.theme.icon_pack.rounded.settings",
+        "com.android.theme.icon_pack.rounded.systemui",
+        "com.cghs.stresstest",
+        "com.google.android.apps.wellbeing",
+        "com.google.android.gmsintegration",
+        "com.google.android.keep",
+        "com.google.android.partnersetup",
+        "com.google.android.syncadapters.contacts",
+        "com.google.android.tag",
+        "com.sprd.autoslt",
+        "com.sprd.cameracalibration",
+        "com.sprd.cameraipcontrol",
+        "com.sprd.engineermode",
+        "com.sprd.logmanager",
+        "com.sprd.quickcamera",
+        "com.sprd.uasetting",
+        "com.sprd.uplmnsettings",
+        "com.sprd.validationtools",
+        "com.spreadtrum.vce",
+        "com.spreadtrum.vowifi",
+        "com.unisoc.storageclearmanager",
+        "com.zediel.pcbtest",
+        "penseavanti.com.br.app2shop_multilaser",
+    };
+
+    // On a tablet the Play Store and Google's voice also stop running unseen
+    // (with no Google account they only keep themselves busy). Undone with
+    // "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
+    internal static readonly IReadOnlyList<string> TabletHeavyApps = new[]
+    {
+        "com.android.vending",
+        "com.google.android.tts",
+    };
+
     // A lighter phone: no animations, the apps above removed, the heavy apps
     // still on it kept from running in the background, and the home screen's
     // gestures that open the removed Google app (a blank white screen) off.
     // Only from the cable, so right before the Device Owner step; a failure
     // does not stop the setup.
-    private void Lighten()
+    private void Lighten(AndroidDeviceKind kind)
     {
         foreach (var scale in new[] { "window_animation_scale", "transition_animation_scale", "animator_duration_scale" })
         {
@@ -133,14 +206,15 @@ public sealed partial class PhoneCable
             .Where(line => line.StartsWith("package:", StringComparison.Ordinal))
             .Select(line => line["package:".Length..])
             .ToHashSet(StringComparer.Ordinal);
-        foreach (var app in RemovedApps.Where(installed.Contains))
+        var tablet = kind == AndroidDeviceKind.Tablet;
+        foreach (var app in (tablet ? RemovedApps.Concat(TabletRemovedApps) : RemovedApps).Where(installed.Contains))
         {
             if (Shell(Short, "pm", "uninstall", "--user", "0", app).Text.Contains("Success", StringComparison.Ordinal))
             {
                 installed.Remove(app);
             }
         }
-        foreach (var app in HeavyApps.Where(installed.Contains))
+        foreach (var app in (tablet ? HeavyApps.Concat(TabletHeavyApps) : HeavyApps).Where(installed.Contains))
         {
             Shell(Short, "cmd", "appops", "set", app, "RUN_ANY_IN_BACKGROUND", "ignore");
         }
