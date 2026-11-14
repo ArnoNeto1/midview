@@ -131,7 +131,12 @@ public sealed class AdbTool
             {
                 request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Midview", TeacherUpdate.CurrentVersion.ToString()));
             }
-            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation);
+            // The client has no timeout of its own (the download may take
+            // long), so a server that never sends its headers is given up on
+            // after readTimeout.
+            using var headers = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+            headers.CancelAfter(readTimeout);
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, headers.Token);
         }
         catch (HttpRequestException ex)
         {

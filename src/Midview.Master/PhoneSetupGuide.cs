@@ -412,6 +412,14 @@ internal static class PhoneSetupGuide
         "Ainda não tem? Crie uma em account.xiaomi.com, uma só para a escola: com um e-mail da escola e um número de celular que fique com a escola " +
         "(a Xiaomi manda códigos por SMS para ele).";
 
+    // Shown when a password MiSignOut cannot type over the cable is saved:
+    // the assistant then shows the sign-out done by hand from the start,
+    // instead of every phone failing at its end.
+    public const string MiPasswordByHand =
+        "Esta senha tem caracteres que o Midview não consegue digitar pelo cabo (acentos ou %s). " +
+        "Ela fica guardada para você entrar na conta, mas no fim de cada aparelho você sai da conta Mi à mão. " +
+        "Para o Midview sair sozinho, troque a senha da conta Mi em account.xiaomi.com e guarde aqui a nova.";
+
     public static IReadOnlyList<GuideHelp> MiAccountHelp { get; } = new GuideHelp[]
     {
         new("Por que uma conta só da escola?",

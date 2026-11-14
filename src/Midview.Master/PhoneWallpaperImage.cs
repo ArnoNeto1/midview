@@ -69,26 +69,66 @@ public static class PhoneWallpaperImage
         return Prepare(File.ReadAllBytes(path));
     }
 
+    // More pixels than this is not opened at all (a 108-megapixel phone
+    // photo has 12000 x 9000): decoded whole, it could take gigabytes.
+    public const long MaxPixels = 120_000_000;
+
     public static Prepared Prepare(byte[] file)
     {
-        BitmapFrame frame;
+        // Only the header first: the size and the EXIF orientation, no pixels.
+        int storedWidth, storedHeight, orientation;
         try
         {
-            using var stream = new MemoryStream(file, writable: false);
+            using var header = new MemoryStream(file, writable: false);
             var decoder = BitmapDecoder.Create(
-                stream, BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.OnLoad);
-            frame = decoder.Frames[0];
+                header, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
+            var first = decoder.Frames[0];
+            (storedWidth, storedHeight) = (first.PixelWidth, first.PixelHeight);
+            orientation = Orientation(first);
         }
         catch (Exception ex) when (ex is NotSupportedException or FileFormatException or ArgumentException or IOException
             or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {
             throw new InvalidDataException(PhoneWallpaperText.NotAPicture, ex);
         }
+        if (storedWidth < 1 || storedHeight < 1)
+        {
+            throw new InvalidDataException(PhoneWallpaperText.NotAPicture);
+        }
+        if ((long)storedWidth * storedHeight > MaxPixels)
+        {
+            throw new InvalidDataException(PhoneWallpaperText.TooManyPixels);
+        }
 
-        var (degrees, mirror) = Upright(Orientation(frame));
+        var (degrees, mirror) = Upright(orientation);
         var turned = degrees is 90 or 270;
-        var (uprightWidth, uprightHeight) = turned ? (frame.PixelHeight, frame.PixelWidth) : (frame.PixelWidth, frame.PixelHeight);
+        var (uprightWidth, uprightHeight) = turned ? (storedHeight, storedWidth) : (storedWidth, storedHeight);
         var (width, height) = FitSize(uprightWidth, uprightHeight);
+
+        // Then the pixels, decoded straight to the size sent (in the file's
+        // own orientation), never whole at the photo's size.
+        BitmapSource frame;
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.StreamSource = new MemoryStream(file, writable: false);
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.IgnoreColorProfile;
+            if (width != uprightWidth || height != uprightHeight)
+            {
+                image.DecodePixelWidth = turned ? height : width;
+                image.DecodePixelHeight = turned ? width : height;
+            }
+            image.EndInit();
+            image.Freeze();
+            frame = image;
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or ArgumentException or IOException
+            or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            throw new InvalidDataException(PhoneWallpaperText.NotAPicture, ex);
+        }
 
         var transform = new TransformGroup();
         if (degrees != 0)
@@ -98,10 +138,6 @@ public static class PhoneWallpaperImage
         if (mirror)
         {
             transform.Children.Add(new ScaleTransform(-1, 1));
-        }
-        if (width != uprightWidth || height != uprightHeight)
-        {
-            transform.Children.Add(new ScaleTransform((double)width / uprightWidth, (double)height / uprightHeight));
         }
         BitmapSource picture = transform.Children.Count == 0 ? frame : new TransformedBitmap(frame, transform);
         // The JPEG has no transparency; WIC drops it.

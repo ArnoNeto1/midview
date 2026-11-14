@@ -41,10 +41,20 @@ public partial class PreparePhonesWindow
             _tool = ToolState.Missing;
             return false;
         }
-        _adb = _host.Adb(path);
-        _adbPath = path;
-        _tool = ToolState.Ready;
+        UseTool(path);
         return true;
+    }
+
+    // Found or just downloaded: the cable tool, and its path for telling
+    // another program's adb apart ("outro programa usando o cabo").
+    private void UseTool(string path)
+    {
+        if (_adb is null)
+        {
+            _adb = _host.Adb(path);
+            _adbPath = path;
+        }
+        _tool = ToolState.Ready;
     }
 
     // Called by ShowStep, after the footer is drawn, and when the download moves.
@@ -128,8 +138,7 @@ public partial class PreparePhonesWindow
             ShowTool();
             return;
         }
-        _adb ??= _host.Adb(path);
-        _tool = ToolState.Ready;
+        UseTool(path);
         ShowTool();
         UpdateCableWatch();
     }

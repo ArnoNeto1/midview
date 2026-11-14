@@ -34,13 +34,34 @@ public class DeviceRoomSectionTests
         Assert.Equal(new[] { Tablet01 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Celular02, Tablet01 }, Room));
     }
 
-    // A selection of PCs, or of the other kind, is no selection for this page.
+    // A selection of PCs, or of the other kind, reaches none of this kind:
+    // never the whole room behind the teacher's back.
     [Fact]
-    public void With_none_of_that_kind_selected_every_one_of_the_room()
+    public void With_none_of_that_kind_selected_none()
     {
-        Assert.Equal(new[] { Celular01, Celular02 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, new[] { Pc01, Tablet01 }, Room));
-        Assert.Equal(new[] { Tablet01 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Celular01 }, Room));
+        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, new[] { Pc01, Tablet01 }, Room));
+        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Celular01 }, Room));
         Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, Array.Empty<KnownMachine>(), new[] { Pc01, Celular01 }));
+    }
+
+    [Fact]
+    public void A_selection_without_that_kind_says_to_clear_it_and_the_buttons_are_off()
+    {
+        InSta(() =>
+        {
+            var section = new DeviceRoomSection();
+            section.Show(AndroidDeviceKind.Phone, 2, ringing: false, reached: 0);
+
+            Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.False(section.ButtonOf(action).IsEnabled));
+            Assert.Contains(section.Children.OfType<TextBlock>(), block =>
+                block.Text == "Nenhum celular selecionado; tire a seleção para valer para a sala toda." && block.Visibility == Visibility.Visible);
+            Assert.Equal("Nenhum tablet selecionado; tire a seleção para valer para a sala toda.",
+                DeviceRoomText.NoneSelected(AndroidDeviceKind.Tablet));
+
+            section.Show(AndroidDeviceKind.Phone, 2, ringing: false, reached: 1);
+            Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
+            Assert.DoesNotContain(section.Children.OfType<TextBlock>(), block => block.Text.StartsWith("Nenhum") && block.Visibility == Visibility.Visible);
+        });
     }
 
     [Theory]

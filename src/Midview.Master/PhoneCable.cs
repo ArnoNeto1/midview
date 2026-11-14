@@ -65,7 +65,7 @@ public sealed partial class PhoneCable
         AccountsLine.Matches(dumpsys).Any(m => int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) > 0);
 
     // How the Mi sign-out gets its clock: a fake one in the tests.
-    internal Func<Func<string[], AdbOutput>, MiSignOut> MakeSignOut { get; init; } = MiSignOut.WithRealClock;
+    internal Func<Func<string[], AdbOutput>, Func<string, AdbOutput>, MiSignOut> MakeSignOut { get; init; } = MiSignOut.WithRealClock;
 
     public PhoneCable(IAdb adb)
     {
@@ -77,6 +77,11 @@ public sealed partial class PhoneCable
 
     private AdbOutput Shell(TimeSpan timeout, params string[] command) =>
         Run(timeout, new[] { "shell" }.Concat(command).ToArray());
+
+    // One command line for the phone's shell, written to "adb shell"'s
+    // standard input: nothing of it is on adb.exe's command line.
+    private AdbOutput SecretShell(TimeSpan timeout, string line) =>
+        _adb.RunWithInput(timeout, line + "\n", "-s", _serial!, "shell");
 
     private string Prop(string name) => Shell(Short, "getprop", name).Text.Trim();
 
@@ -138,6 +143,9 @@ public sealed partial class PhoneCable
         {
             return problem;
         }
+        // Before the accounts are looked at: an app turned back on shows its
+        // accounts again, as they are.
+        ReenableLeftOff();
 
         if (!int.TryParse(Prop("ro.build.version.sdk"), NumberStyles.None, CultureInfo.InvariantCulture, out var sdk))
         {
@@ -333,7 +341,7 @@ public sealed partial class PhoneCable
             // Only the accounts are looked at after it: the switches are no
             // longer needed. A failure leaves the app installed and the
             // phone not the school's; "Tentar de novo" starts over.
-            if (!MakeSignOut(command => Shell(Short, command)).Run(miPassword!)
+            if (!MakeSignOut(command => Shell(Short, command), line => SecretShell(Short, line)).Run(miPassword!)
                 || BlockingAccounts(Shell(Short, "dumpsys", "account").Text))
             {
                 return Fail(Present() ? CableProblem.MiSignOutFailed : CableProblem.Lost);

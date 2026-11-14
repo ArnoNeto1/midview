@@ -11,10 +11,20 @@ namespace Midview.Master;
 // by the "Preparar celulares" assistant and remembered. On disk it exists
 // only as a DPAPI CurrentUser blob, like the lab Wi-Fi: another Windows user
 // (or PC) can't open it.
-public sealed record MiAccount(string Login, string Password);
+public sealed record MiAccount(string Login, string Password)
+{
+    // Whether the cable can type the password (MiSignOut.Typed): without
+    // accents or "%s". Otherwise the account still serves to sign in, and
+    // the sign-out is done by hand.
+    public bool CableCanType => MiSignOut.Typed(Password) is not null;
+}
 
 public static class MiAccountFile
 {
+    // Raised after the account is saved or taken off, by whichever window:
+    // an open assistant then uses what is saved now.
+    public static event Action? Changed;
+
     private static string PathIn(string? folder) => Path.Combine(folder ?? MasterData.Folder, "mi-account.bin");
 
     // Null when nothing is saved or the file can't be opened; never throws for those.
@@ -41,6 +51,7 @@ public static class MiAccountFile
             Encoding.UTF8.GetBytes(JsonSerializer.Serialize(account)), optionalEntropy: null, DataProtectionScope.CurrentUser);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, blob);
+        Changed?.Invoke();
     }
 
     public static void Clear(string? folder = null)
@@ -50,5 +61,6 @@ public static class MiAccountFile
         {
             File.Delete(path);
         }
+        Changed?.Invoke();
     }
 }

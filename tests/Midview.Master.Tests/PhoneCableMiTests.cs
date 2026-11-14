@@ -69,7 +69,25 @@ public sealed class PhoneCableMiTests
             {
                 return Out(SignedOut ? AdbInputAfter : "1\n");
             }
-            if (command == "input tap 360 1340" && SignOutWorks)
+            if (AsksPassword)
+            {
+                switch (command)
+                {
+                    case "input tap 360 1340":
+                        Showing = Prompt(focused: false);
+                        break;
+                    case "input tap 360 650":
+                        Showing = Prompt(focused: true);
+                        break;
+                    case "input tap 530 840" when Typed:
+                        SignedOut = true;
+                        Showing = "<hierarchy></hierarchy>";
+                        break;
+                    case "cat " + MiSignOut.DumpFile when Showing.Length > 0:
+                        return Out(Showing);
+                }
+            }
+            else if (command == "input tap 360 1340" && SignOutWorks)
             {
                 SignedOut = true;
             }
@@ -80,6 +98,29 @@ public sealed class PhoneCableMiTests
             return Out(_shell.TryGetValue(command, out var answer) ? answer : "");
         }
 
+        // "Sair" asks for the password: a prompt whose field takes the
+        // focus when tapped, and OK signs out once something was typed.
+        public bool AsksPassword;
+        public bool Typed;
+        public string Showing = "";
+        public readonly List<(string Args, string Input)> Inputs = new();
+
+        public AdbOutput RunWithInput(TimeSpan timeout, string input, params string[] args)
+        {
+            var key = string.Join(' ', args);
+            Calls.Add(key);
+            Inputs.Add((key, input));
+            Typed |= key == "-s " + Serial + " shell" && input == "input text '" + Password + "'\n";
+            return Out("");
+        }
+
+        private static string Prompt(bool focused) =>
+            "<hierarchy><node text=\"\" resource-id=\"com.xiaomi.account:id/input_pwd_view\" class=\"android.widget.EditText\" " +
+            "package=\"com.xiaomi.account\" password=\"true\" scrollable=\"false\" focused=\"" + (focused ? "true" : "false") + "\" " +
+            "bounds=\"[60,600][660,700]\" />" +
+            "<node text=\"OK\" resource-id=\"android:id/button1\" class=\"android.widget.Button\" package=\"com.xiaomi.account\" " +
+            "password=\"false\" scrollable=\"false\" bounds=\"[400,800][660,880]\" /></hierarchy>";
+
         private static AdbOutput Out(string text) => new(0, text, false);
     }
 
@@ -88,9 +129,22 @@ public sealed class PhoneCableMiTests
         var elapsed = TimeSpan.Zero;
         var cable = new PhoneCable(adb)
         {
-            MakeSignOut = shell => new MiSignOut(shell, pause => elapsed += pause, () => elapsed),
+            MakeSignOut = (shell, secretShell) => new MiSignOut(shell, secretShell, pause => elapsed += pause, () => elapsed),
         };
         return cable.Prepare(Apk, "07", Thumb, "Lab", "pw", stages.Add, miPassword: miPassword);
+    }
+
+    // The password goes to "adb shell"'s standard input: no adb command line
+    // ever holds it.
+    [Fact]
+    public void The_password_is_typed_through_standard_input_never_in_arguments()
+    {
+        var adb = new MiRedmi { AsksPassword = true };
+        var result = Prepare(adb, Password, new List<CableStage>());
+
+        Assert.Null(result.Problem);
+        Assert.Equal(new[] { ("-s " + Serial + " shell", "input text '" + Password + "'\n") }, adb.Inputs);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains(Password, StringComparison.Ordinal));
     }
 
     [Fact]

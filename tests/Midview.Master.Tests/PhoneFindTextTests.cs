@@ -46,4 +46,75 @@ public sealed class PhoneFindTextTests
         Assert.True(ringing.AllRinging(new[] { tablet }, now.AddSeconds(10)));
         Assert.False(ringing.AllRinging(Array.Empty<KnownMachine>(), now));
     }
+
+    // Reached at once (a few at a time), answers in the devices' order.
+    [Fact]
+    public async Task Devices_are_reached_in_parallel_and_answered_in_order()
+    {
+        var phones = Enumerable.Range(1, 12).Select(i => Phone($"Celular {i:00}", $"T{i}")).ToList();
+        var inside = 0;
+        var most = 0;
+        var gate = new object();
+
+        var answers = await new PhoneFindSender().SendAsync(phones, start: true, phone =>
+        {
+            lock (gate)
+            {
+                most = Math.Max(most, ++inside);
+            }
+            Thread.Sleep(100);
+            lock (gate)
+            {
+                inside--;
+            }
+            return (true, "tocando por 1 min");
+        });
+
+        Assert.NotNull(answers);
+        Assert.Equal(phones.Select(p => $"{p.Name} está tocando."), answers!.Select(a => a.Line));
+        Assert.True(most > 1, $"one at a time ({most})");
+        Assert.True(most <= PhoneFindSender.PhonesAtATime);
+    }
+
+    // An unexpected failure is that device's line, never the Master's end.
+    [Fact]
+    public async Task Any_exception_is_the_devices_own_line()
+    {
+        var phones = new[] { Phone("Tablet 01", "AA"), Phone("Celular 02", "BB") };
+
+        var answers = await new PhoneFindSender().SendAsync(phones, start: true,
+            phone => phone.Name == "Tablet 01" ? throw new ArgumentException("estranho") : (true, "tocando por 1 min"));
+
+        Assert.False(answers![0].Succeeded);
+        Assert.StartsWith("Tablet 01: ", answers[0].Line, StringComparison.Ordinal);
+        Assert.True(answers[1].Succeeded);
+    }
+
+    [Fact]
+    public async Task A_second_click_while_running_is_ignored()
+    {
+        var sender = new PhoneFindSender();
+        using var release = new ManualResetEventSlim();
+        var phones = new[] { Phone("Tablet 01", "AA") };
+
+        var first = sender.SendAsync(phones, start: true, _ =>
+        {
+            release.Wait(TimeSpan.FromSeconds(10));
+            return (true, "tocando por 1 min");
+        });
+        Assert.True(sender.Running);
+        var calls = 0;
+        var second = await sender.SendAsync(phones, start: true, _ =>
+        {
+            calls++;
+            return (true, "");
+        });
+        release.Set();
+
+        Assert.Null(second);
+        Assert.Equal(0, calls);
+        Assert.NotNull(await first);
+        Assert.False(sender.Running);
+        Assert.NotNull(await sender.SendAsync(phones, start: false, _ => (true, "toque parado")));
+    }
 }

@@ -173,6 +173,114 @@ public sealed class PhoneCableLocalAccountsTests
     }
 
     [Fact]
+    public void Contacts_already_off_is_left_off_and_never_turned_on()
+    {
+        var adb = Tablet().Set(S + "shell pm list packages -d", "package:com.android.calculator2\npackage:com.android.contacts\n");
+
+        Assert.NotNull(Prepare(adb).Phone);
+        Assert.DoesNotContain(Disable, adb.Calls);
+        Assert.DoesNotContain(Enable, adb.Calls);
+        Assert.Contains(SetDeviceOwner, adb.Calls);
+    }
+
+    // Only the Contacts app is ever turned off: a local account of the phone
+    // app (or anything else) stops the check, and nothing is turned off.
+    [Theory]
+    [InlineData("com.android.phone")]
+    [InlineData("com.android.providers.contacts")]
+    [InlineData("android")]
+    public void A_local_account_of_another_app_stops_it_and_nothing_is_turned_off(string package)
+    {
+        var accounts = TabletAccounts.Replace(
+            "ComponentInfo{com.android.contacts/com.sprd.contacts.account.PhoneAuthenticationService}",
+            "ComponentInfo{" + package + "/com.sprd.contacts.account.PhoneAuthenticationService}",
+            StringComparison.Ordinal);
+        var adb = Tablet(accounts);
+
+        Assert.Equal(CableProblem.HasAccounts, Prepare(adb).Problem);
+        Assert.DoesNotContain(adb.Calls, c => c.Contains("pm disable-user", StringComparison.Ordinal));
+    }
+
+    // The cable dropped during the Owner step, Contacts left off: written
+    // down, and turned on at the next Check of that tablet.
+    [Fact]
+    public void Contacts_left_off_by_a_dropped_cable_is_turned_on_at_the_next_check()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "midview-reenable-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = new CableReenableFile(folder);
+            var dropped = Tablet();
+            dropped.Throw = SetDeviceOwner;
+            Assert.Throws<InvalidOperationException>(
+                () => new PhoneCable(dropped) { Reenable = file }
+                    .Prepare(Apk, "01", Thumb, "Lab", "pw", _ => { }, optimize: false, kind: AndroidDeviceKind.Tablet));
+            // "pm enable" got no answer: still to do.
+            Assert.Equal(new[] { "com.android.contacts" }, file.For(Serial));
+
+            var back = Tablet().Set(Enable, "Package com.android.contacts new state: enabled\n");
+            Assert.Null(new PhoneCable(back) { Reenable = new CableReenableFile(folder) }.Check());
+
+            Assert.True(back.Calls.IndexOf(Enable) < back.Calls.IndexOf(S + "shell dumpsys account"));
+            Assert.Empty(file.For(Serial));
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Contacts_turned_back_on_leaves_nothing_written_down()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "midview-reenable-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = new CableReenableFile(folder);
+            var adb = Tablet().Set(Enable, "Package com.android.contacts new state: enabled\n");
+
+            Assert.NotNull(new PhoneCable(adb) { Reenable = file }
+                .Prepare(Apk, "01", Thumb, "Lab", "pw", _ => { }, optimize: false, kind: AndroidDeviceKind.Tablet).Phone);
+
+            Assert.Empty(file.For(Serial));
+            Assert.False(File.Exists(Path.Combine(folder, "cable-reenable.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void The_record_is_kept_per_device()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "midview-reenable-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = new CableReenableFile(folder);
+            file.Set("A", new[] { "com.android.contacts" });
+            file.Set("B", new[] { "com.android.contacts" });
+            file.Set("A", Array.Empty<string>());
+
+            Assert.Empty(new CableReenableFile(folder).For("A"));
+            Assert.Equal(new[] { "com.android.contacts" }, new CableReenableFile(folder).For("B"));
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Nothing_is_turned_off_without_local_accounts()
     {
         var adb = Tablet("  Accounts: 0\n  RegisteredServicesCache: 0 services\n");

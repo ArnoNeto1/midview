@@ -16,6 +16,11 @@ public static class PhoneWallpaperText
 
     public const string FileTooBig = "Imagem grande demais: escolha uma de até 50 MB.";
 
+    // Too many pixels to open (PhoneWallpaperImage.MaxPixels), or the
+    // computer ran out of memory opening it.
+    public const string TooManyPixels =
+        "Imagem grande demais para abrir neste computador. Escolha uma foto menor, ou diminua esta num editor de imagens.";
+
     public const string NothingChosen = "Nenhuma imagem escolhida.";
 
     public const string FileFilter = "Imagens (*.jpg; *.jpeg; *.png)|*.jpg;*.jpeg;*.png";

@@ -45,7 +45,10 @@ public partial class PreparePhonesWindow
     }
 
     // Only once the adb is in hand (FindToolAsync or the download).
-    private PhoneCable Cable() => _cable ??= new PhoneCable(_adb ?? throw new InvalidOperationException("sem adb"));
+    private PhoneCable Cable() => _cable ??= new PhoneCable(_adb ?? throw new InvalidOperationException("sem adb"))
+    {
+        Reenable = CableReenableFile.ForThisComputer(),
+    };
 
     // The cable is looked at only while its step is shown, nothing else
     // uses it and the adb is not waiting for the teacher; the ready pages

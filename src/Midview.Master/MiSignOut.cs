@@ -14,7 +14,7 @@ namespace Midview.Master;
 // middle is on the screen.
 internal sealed record UiNode(
     string Text, string Description, string Id, string Class, string Package,
-    bool Password, bool Scrollable, int X, int Y, int Top, int Bottom);
+    bool Password, bool Scrollable, int X, int Y, int Top, int Bottom, bool Focused = false);
 
 // Signs a Xiaomi phone out of the school's Mi account over the cable, the way
 // the teacher would on its screen: the Mi account settings, "Sair", the
@@ -29,8 +29,10 @@ internal sealed record UiNode(
 // question is com.miui.cloudservice's "Remover"/"Manter". The signed-in
 // screens themselves were never seen live: every step looks at the screen
 // first, and anything unexpected ends it with the phone left as it is.
-// The password goes only to the phone's "input text"; never to a log, an
-// exception or a text the teacher sees.
+// The password goes only to the phone's "input text", sent on adb shell's
+// standard input (never on adb.exe's command line, which other programs on
+// the PC can read), and only into a field the phone says has the focus;
+// never to a log, an exception or a text the teacher sees.
 public sealed class MiSignOut
 {
     public static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
@@ -55,22 +57,27 @@ public sealed class MiSignOut
         { "OK", "Confirmar", "Avançar", "Próximo", "Continuar", "Sair", "Desativar", "Confirm", "Next", "Sign out", "Turn off" };
 
     private readonly Func<string[], AdbOutput> _shell;
+    private readonly Func<string, AdbOutput> _secretShell;
     private readonly Action<TimeSpan> _pause;
     private readonly Func<TimeSpan> _elapsed;
 
-    // shell: one "adb shell" command on the phone. pause and elapsed: the
-    // clock (a fake one in the tests).
-    public MiSignOut(Func<string[], AdbOutput> shell, Action<TimeSpan> pause, Func<TimeSpan> elapsed)
+    // shell: one "adb shell" command on the phone. secretShell: one command
+    // line for the phone's shell, written to "adb shell"'s standard input
+    // (the password's only way out). pause and elapsed: the clock (a fake
+    // one in the tests).
+    public MiSignOut(
+        Func<string[], AdbOutput> shell, Func<string, AdbOutput> secretShell, Action<TimeSpan> pause, Func<TimeSpan> elapsed)
     {
         _shell = shell;
+        _secretShell = secretShell;
         _pause = pause;
         _elapsed = elapsed;
     }
 
-    public static MiSignOut WithRealClock(Func<string[], AdbOutput> shell)
+    public static MiSignOut WithRealClock(Func<string[], AdbOutput> shell, Func<string, AdbOutput> secretShell)
     {
         var watch = Stopwatch.StartNew();
-        return new MiSignOut(shell, Thread.Sleep, () => watch.Elapsed);
+        return new MiSignOut(shell, secretShell, Thread.Sleep, () => watch.Elapsed);
     }
 
     // The account types "dumpsys account" lists ("com.xiaomi", "com.google").
@@ -151,8 +158,13 @@ public sealed class MiSignOut
             {
                 if (typedAt is null)
                 {
-                    Tap(field);
-                    Shell("input", "text", typed);
+                    // OK is never tapped with the field left empty: with the
+                    // text typed nowhere, the phone would take an empty password.
+                    if (!Focus(field))
+                    {
+                        return false;
+                    }
+                    _secretShell("input text " + typed);
                     typedAt = _elapsed();
                     _pause(Second);
                     continue;
@@ -229,6 +241,31 @@ public sealed class MiSignOut
         return Parse(Shell("cat", DumpFile).Text);
     }
 
+    // Taps the password field and looks again: true once the phone says it
+    // has the focus (where "input text" types). Tapped twice at most.
+    private bool Focus(UiNode field)
+    {
+        for (var taps = 0; taps < 2; taps++)
+        {
+            Tap(field);
+            _pause(Second);
+            if (Screen() is not { } nodes)
+            {
+                continue;
+            }
+            if (PasswordField(nodes) is not { } now)
+            {
+                return false;
+            }
+            if (now.Focused)
+            {
+                return true;
+            }
+            field = now;
+        }
+        return false;
+    }
+
     private void Tap(UiNode node) => Shell(
         "input", "tap", node.X.ToString(CultureInfo.InvariantCulture), node.Y.ToString(CultureInfo.InvariantCulture));
 
@@ -288,7 +325,8 @@ public sealed class MiSignOut
                 (string?)node.Attribute("package") ?? "",
                 (string?)node.Attribute("password") == "true",
                 (string?)node.Attribute("scrollable") == "true",
-                (At(1) + At(3)) / 2, (At(2) + At(4)) / 2, At(2), At(4)));
+                (At(1) + At(3)) / 2, (At(2) + At(4)) / 2, At(2), At(4),
+                (string?)node.Attribute("focused") == "true"));
         }
         return nodes;
     }

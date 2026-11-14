@@ -29,6 +29,10 @@ internal static class DeviceRoomText
 
     public static string NoneInRoom(AndroidDeviceKind kind) => $"Nenhum {DeviceSetupText.Word(kind)} na sala ainda.";
 
+    // Something is selected in the grid, but no device of this kind.
+    public static string NoneSelected(AndroidDeviceKind kind) =>
+        $"Nenhum {DeviceSetupText.Word(kind)} selecionado; tire a seleção para valer para a sala toda.";
+
     public static string FindLine(AndroidDeviceKind kind) => $"Toca alto para achar um {DeviceSetupText.Word(kind)} perdido.";
 
     public const string FindButton = "Tocar...";
@@ -95,20 +99,23 @@ public sealed class DeviceRoomSection : StackPanel
     public AndroidDeviceKind Kind { get; private set; }
 
     // count: the devices of that kind in the room; ringing: whether all the
-    // ones the cards reach still ring ("Parar o toque", as the tile menu says).
-    public void Show(AndroidDeviceKind kind, int count, bool ringing)
+    // ones the cards reach still ring ("Parar o toque", as the tile menu says);
+    // reached: how many the cards reach (DeviceSupport.RoomTargets), the
+    // room's count when not given.
+    public void Show(AndroidDeviceKind kind, int count, bool ringing, int? reached = null)
     {
         Kind = kind;
+        var reaches = reached ?? count;
         _heading.Text = DeviceRoomText.RoomSection(kind, count);
-        _none.Text = DeviceRoomText.NoneInRoom(kind);
-        _none.Visibility = count > 0 ? Visibility.Collapsed : Visibility.Visible;
+        _none.Text = count == 0 ? DeviceRoomText.NoneInRoom(kind) : DeviceRoomText.NoneSelected(kind);
+        _none.Visibility = reaches > 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var (action, (line, button)) in _parts)
         {
             var (_, text, label) = DeviceRoomText.Card(action, kind);
             line.Text = text;
             button.Content = action == DeviceRoomAction.Find && ringing ? PhoneFindText.StopMenuItem : label;
             button.ToolTip = action == DeviceRoomAction.Find && ringing ? PhoneFindText.StopToolTip : DeviceRoomText.ToolTip(action, kind);
-            button.IsEnabled = count > 0;
+            button.IsEnabled = reaches > 0;
         }
     }
 

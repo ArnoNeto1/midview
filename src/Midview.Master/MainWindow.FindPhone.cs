@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using Midview.Protocol;
 
@@ -16,6 +15,7 @@ public partial class MainWindow
     internal const string FindPhoneUid = "tocar";
 
     private readonly PhoneFindRinging _ringing = new();
+    private readonly PhoneFindSender _findSender = new();
 
     private void OnFindPhoneMachineClicked(object sender, RoutedEventArgs e)
     {
@@ -29,29 +29,33 @@ public partial class MainWindow
     internal string FindPhonesMenuItem(IReadOnlyList<KnownMachine> targets) =>
         PhoneFindText.MenuItem(_ringing.AllRinging(targets.Where(machine => machine.IsPhone).ToList(), DateTime.Now));
 
+    // All devices at once (PhoneFindSender); a click while they are being
+    // reached is ignored.
     private async void FindPhones(IReadOnlyList<KnownMachine> targets)
     {
         var phones = targets.Where(machine => machine.IsPhone).ToList();
-        if (phones.Count == 0)
+        if (phones.Count == 0 || _findSender.Running)
         {
             return;
         }
         var start = !_ringing.AllRinging(phones, DateTime.Now);
         var seconds = start ? PhoneFind.DefaultSeconds : PhoneFind.Stop;
         StatusTextBlock.Text = start ? "Fazendo tocar..." : "Parando o toque...";
-        var answers = await Task.Run(() => phones.Select(phone =>
+        IReadOnlyList<PhoneFindAnswer>? answers;
+        try
         {
-            try
-            {
-                var (succeeded, detail) = PhoneFindClient.Send(phone, _masterCertificate, seconds);
-                return (Phone: phone, Succeeded: succeeded, Line: PhoneFindText.Summary(phone.Name, start, succeeded, detail));
-            }
-            catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException or InvalidOperationException
-                                           or System.Security.Authentication.AuthenticationException or TimeoutException)
-            {
-                return (Phone: phone, Succeeded: false, Line: PhoneFindText.Summary(phone.Name, start, false, ErrorText.Describe(ex)));
-            }
-        }).ToList());
+            answers = await _findSender.SendAsync(phones, start, phone => PhoneFindClient.Send(phone, _masterCertificate, seconds));
+        }
+        catch (Exception ex)
+        {
+            // Never the Master's end: only this click's.
+            StatusTextBlock.Text = "Não deu para fazer tocar: " + FailureText.DescribePhoneAgent(ex);
+            return;
+        }
+        if (answers is null)
+        {
+            return;
+        }
         if (start)
         {
             _ringing.Started(answers.Where(answer => answer.Succeeded).Select(answer => answer.Phone), DateTime.Now, seconds);

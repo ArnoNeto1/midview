@@ -27,6 +27,20 @@ public sealed class AdbProcessTests
         Assert.Contains("line 20000 of", output.Text);
     }
 
+    // sort.exe reads its standard input to the end: it only finishes because
+    // the input is closed after it is written.
+    [Fact]
+    public void Input_goes_to_standard_input_and_is_closed()
+    {
+        using var adb = new AdbProcess(Path.Combine(Environment.SystemDirectory, "sort.exe"));
+        var output = adb.RunWithInput(TimeSpan.FromSeconds(20), "zeta\nalpha\n");
+        Assert.False(output.TimedOut);
+        Assert.Equal(0, output.ExitCode);
+        Assert.True(output.Text.IndexOf("alpha", StringComparison.Ordinal) < output.Text.IndexOf("zeta", StringComparison.Ordinal));
+        // No byte-order mark went with it.
+        Assert.False(output.Text.Contains('﻿'));
+    }
+
     [Fact]
     public void Slow_command_is_killed_on_timeout()
     {

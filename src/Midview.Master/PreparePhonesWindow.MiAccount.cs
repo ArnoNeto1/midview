@@ -21,8 +21,48 @@ public partial class PreparePhonesWindow
     private bool _miPasswordShown;
 
     // The Midview signs out of the Mi account over the cable, unless the cable
-    // already could not (then the step is done by hand).
-    private bool MiAuto => _mi is not null && !_progress.SignOutByHand;
+    // already could not, or cannot type the password (then the step is done
+    // by hand, said so from the start).
+    private bool MiAuto => _mi is { CableCanType: true } && !_progress.SignOutByHand;
+
+    // Taken off (or saved) elsewhere while this window is open, from
+    // "Máquinas da sala": the next phone uses what is saved now.
+    private void WatchMiAccountFile()
+    {
+        MiAccountFile.Changed += OnMiAccountFileChanged;
+        Closed += (_, _) =>
+        {
+            MiAccountFile.Changed -= OnMiAccountFileChanged;
+            // The password copied from the card does not outlive the window.
+            SecretClipboard.ClearNow();
+        };
+    }
+
+    private void OnMiAccountFileChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(OnMiAccountFileChanged);
+            return;
+        }
+        var saved = MiAccountFile.Load();
+        if (saved == _mi)
+        {
+            return;
+        }
+        _mi = saved;
+        _progress.AsksMiAccount = _mi is null;
+        // A step shows the account (its card, and whether the sign-out is by
+        // hand); the account's own page keeps what is being typed.
+        if (_progress.Page == SetupPage.Step)
+        {
+            ShowPage();
+        }
+        else if (_progress.Page == SetupPage.MiAccount)
+        {
+            MiRemoveLine.Visibility = Shown(_mi is not null);
+        }
+    }
 
     // The step shown, in the words that fit how the Mi account ends.
     private GuideStep? ShownStep => _progress.Step is { } step ? PhoneSetupGuide.StepFor(step, MiAuto) : null;
@@ -91,6 +131,10 @@ public partial class PreparePhonesWindow
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
         {
             // Like the Wi-Fi: this window keeps it, and the next one asks again.
+        }
+        if (!_mi.CableCanType)
+        {
+            MidviewMessage.Show(this, PhoneSetupGuide.MiPasswordByHand, Title, MessageBoxButton.OK, MessageBoxImage.Information);
         }
         return true;
     }

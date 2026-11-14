@@ -57,7 +57,18 @@ public partial class MachinesWindow
             page.Show(kind, setup);
             page.Prepare += (asked, optimize) => _openPreparePhones(asked, optimize);
             page.CableSteps += OpenCableSteps;
-            page.RoomSection.Act += action => _roomDevices.Act(action, RoomTargets(kind));
+            page.RoomSection.Act += action =>
+            {
+                // The selection may have changed since the page was drawn.
+                if (RoomTargets(kind) is { Count: > 0 } targets)
+                {
+                    _roomDevices.Act(action, targets);
+                }
+                else
+                {
+                    ShowRoomDevices();
+                }
+            };
             page.IsVisibleChanged += (_, _) => ShowRoomDevices();
         }
         Activated += (_, _) => ShowRoomDevices();
@@ -74,7 +85,9 @@ public partial class MachinesWindow
         var room = _roster();
         foreach (var (page, kind) in new[] { (PhoneSetupPage, AndroidDeviceKind.Phone), (TabletSetupPage, AndroidDeviceKind.Tablet) })
         {
-            page.RoomSection.Show(kind, room.Count(machine => DeviceSupport.IsAndroidOf(machine, kind)), _roomDevices.Ringing(RoomTargets(kind)));
+            var targets = RoomTargets(kind);
+            page.RoomSection.Show(
+                kind, room.Count(machine => DeviceSupport.IsAndroidOf(machine, kind)), _roomDevices.Ringing(targets), targets.Count);
         }
     }
 

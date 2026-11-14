@@ -73,10 +73,15 @@ public partial class PhoneWallpaperWindow : MidviewWindow
             PictureTextBlock.Text = PhoneWallpaperText.Picture(Path.GetFileName(path), picture.Width, picture.Height, picture.Jpeg.Length);
             ShowPreview(picture.Jpeg);
         }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or OutOfMemoryException)
         {
             _picture = null;
-            PictureTextBlock.Text = ex is InvalidDataException ? ex.Message : $"Não deu para abrir o arquivo: {ex.Message}";
+            PictureTextBlock.Text = ex switch
+            {
+                InvalidDataException => ex.Message,
+                OutOfMemoryException => PhoneWallpaperText.TooManyPixels,
+                _ => $"Não deu para abrir o arquivo: {ex.Message}",
+            };
             ShowPreview(null);
         }
         finally

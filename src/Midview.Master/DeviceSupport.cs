@@ -92,14 +92,13 @@ public static class DeviceSupport
         room.Any(machine => IsAndroidOf(machine, kind));
 
     // What the cards of "Configurar celular" ("Configurar tablet") act on:
-    // the devices of that kind selected in the grid or, with none of that
-    // kind selected, every one of the room.
+    // with nothing selected in the grid, every device of that kind in the
+    // room; with a selection, only the devices of that kind in it (none when
+    // it has only PCs or the other kind: never the whole room behind the
+    // teacher's back; the section says to clear the selection).
     public static IReadOnlyList<KnownMachine> RoomTargets(
-        AndroidDeviceKind kind, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room)
-    {
-        var chosen = selected.Where(machine => IsAndroidOf(machine, kind)).ToList();
-        return chosen.Count > 0 ? chosen : room.Where(machine => IsAndroidOf(machine, kind)).ToList();
-    }
+        AndroidDeviceKind kind, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room) =>
+        (selected.Count > 0 ? selected : room).Where(machine => IsAndroidOf(machine, kind)).ToList();
 
     // The Android kind a "Telas" filter shows alone (Celulares the phones,
     // Tablets the tablets); null for Todos and Computadores.

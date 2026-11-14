@@ -63,6 +63,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         _phoneOnline = host.PhoneOnline;
         _wipe = host.Wipe;
         _progress.AsksMiAccount = _mi is null;
+        WatchMiAccountFile();
         // "Antes de começar, separe:" only before the first phone or tablet
         // of the class: the same things are needed for both.
         _progress.Start(_wifi is not null, gathered:

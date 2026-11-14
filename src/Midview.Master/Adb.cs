@@ -14,6 +14,12 @@ public sealed record AdbOutput(int ExitCode, string Text, bool TimedOut);
 public interface IAdb
 {
     AdbOutput Run(TimeSpan timeout, params string[] args);
+
+    // The same, with input written to the tool's standard input, which is
+    // then closed. For what must never be on a command line (a password,
+    // which any program on the PC could read from adb.exe's arguments).
+    AdbOutput RunWithInput(TimeSpan timeout, string input, params string[] args) =>
+        throw new NotSupportedException("this adb takes no input");
 }
 
 // Runs Google's adb.exe (found or downloaded by AdbTool), on its own server
@@ -31,7 +37,11 @@ public sealed class AdbProcess : IAdb, IDisposable
         _adbPath = adbPath;
     }
 
-    public AdbOutput Run(TimeSpan timeout, params string[] args)
+    public AdbOutput Run(TimeSpan timeout, params string[] args) => Start(timeout, null, args);
+
+    public AdbOutput RunWithInput(TimeSpan timeout, string input, params string[] args) => Start(timeout, input, args);
+
+    private AdbOutput Start(TimeSpan timeout, string? input, string[] args)
     {
         _used = true;
         var start = new ProcessStartInfo(_adbPath)
@@ -42,7 +52,13 @@ public sealed class AdbProcess : IAdb, IDisposable
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
+            RedirectStandardInput = input is not null,
         };
+        if (input is not null)
+        {
+            // No byte-order mark: it would reach the phone's shell as text.
+            start.StandardInputEncoding = new UTF8Encoding(false);
+        }
         foreach (var arg in args)
         {
             start.ArgumentList.Add(arg);
@@ -64,6 +80,18 @@ public sealed class AdbProcess : IAdb, IDisposable
             // Both pipes are read at once, so a full buffer on one can't stall the other.
             var stdout = process.StandardOutput.ReadToEndAsync();
             var stderr = process.StandardError.ReadToEndAsync();
+            if (input is not null)
+            {
+                try
+                {
+                    process.StandardInput.Write(input);
+                    process.StandardInput.Close();
+                }
+                catch (IOException)
+                {
+                    // The tool ended before reading it: its output says why.
+                }
+            }
 
             var timedOut = !process.WaitForExit(timeout);
             if (timedOut)

@@ -175,6 +175,32 @@ public sealed class AdbToolTests : IDisposable
         AssertNothingKept();
     }
 
+    // A server that takes the request and never sends its headers: given up
+    // on after the read timeout, as no internet.
+    [Fact]
+    public async Task A_server_that_never_answers_is_given_up_on()
+    {
+        var tool = Tool(new FakeGoogle(_zip) { NeverAnswers = true });
+
+        var download = tool.DownloadAsync(null, CancellationToken.None, TimeSpan.FromMilliseconds(200));
+        var finished = await Task.WhenAny(download, Task.Delay(TimeSpan.FromSeconds(30)));
+
+        Assert.Same(download, finished);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => download);
+        Assert.Equal(AdbTool.Unreachable, error.Message);
+        AssertNothingKept();
+    }
+
+    [Fact]
+    public async Task Cancelling_while_waiting_for_the_server_is_a_cancellation()
+    {
+        var tool = Tool(new FakeGoogle(_zip) { NeverAnswers = true });
+        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tool.DownloadAsync(null, cancel.Token, TimeSpan.FromSeconds(30)));
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
@@ -304,22 +330,29 @@ public sealed class AdbToolTests : IDisposable
 
         public bool Unreachable { get; init; }
 
+        // Takes the request and never answers.
+        public bool NeverAnswers { get; init; }
+
         public HttpStatusCode Status { get; init; } = HttpStatusCode.OK;
 
         // Sent as a stream of unknown length, as a proxy may.
         public bool WithoutLength { get; init; }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Asked.Add(request.RequestUri!);
             if (Unreachable)
             {
                 throw new HttpRequestException("no route to host");
             }
+            if (NeverAnswers)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
             HttpContent content = WithoutLength
                 ? new StreamContent(new UnknownLength(body))
                 : new ByteArrayContent(body);
-            return Task.FromResult(new HttpResponseMessage(Status) { Content = content });
+            return new HttpResponseMessage(Status) { Content = content };
         }
     }
 

@@ -43,6 +43,56 @@ public static class PhoneFindClient
             masterCertificate, MessageType.FindPhone, PhoneFind.Encode(seconds));
 }
 
+// How one device answered "Tocar para encontrar" (or "Parar o toque").
+public sealed record PhoneFindAnswer(KnownMachine Phone, bool Succeeded, string Line);
+
+// Sends it to every device at once, a few at a time (a device that does not
+// answer holds only its own slot), one run at a time: a second click while
+// one runs is ignored. Never throws for a device: its failure is its line.
+public sealed class PhoneFindSender
+{
+    public const int PhonesAtATime = 8;
+
+    private int _running;
+
+    public bool Running => Volatile.Read(ref _running) == 1;
+
+    // The answers in the devices' order; null when a run is in progress.
+    public async Task<IReadOnlyList<PhoneFindAnswer>?> SendAsync(
+        IReadOnlyList<KnownMachine> phones, bool start, Func<KnownMachine, (bool Succeeded, string Detail)> send)
+    {
+        if (Interlocked.Exchange(ref _running, 1) == 1)
+        {
+            return null;
+        }
+        try
+        {
+            using var slots = new SemaphoreSlim(PhonesAtATime);
+            return await Task.WhenAll(phones.Select(phone => Task.Run(async () =>
+            {
+                await slots.WaitAsync();
+                try
+                {
+                    var (succeeded, detail) = send(phone);
+                    return new PhoneFindAnswer(phone, succeeded, PhoneFindText.Summary(phone.Name, start, succeeded, detail));
+                }
+                catch (Exception ex)
+                {
+                    return new PhoneFindAnswer(phone, false, PhoneFindText.Summary(phone.Name, start, false, FailureText.DescribePhoneAgent(ex)));
+                }
+                finally
+                {
+                    slots.Release();
+                }
+            })));
+        }
+        finally
+        {
+            Volatile.Write(ref _running, 0);
+        }
+    }
+}
+
 // Which devices the teacher set ringing, and until when (by their agent's
 // thumbprint): the menus offer "Parar o toque" while all those they reach
 // still ring. The device itself may stop sooner (the student's "Parar").

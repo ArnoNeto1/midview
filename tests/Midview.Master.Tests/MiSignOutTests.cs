@@ -18,9 +18,9 @@ public sealed class MiSignOutTests
     // One element of a scripted screen.
     private static string Node(
         string text, string bounds, string id = "", string package = "com.xiaomi.account",
-        string cls = "android.widget.Button", bool password = false, bool scrollable = false) =>
+        string cls = "android.widget.Button", bool password = false, bool scrollable = false, bool focused = false) =>
         $"<node index=\"0\" text=\"{text}\" resource-id=\"{id}\" class=\"{cls}\" package=\"{package}\" content-desc=\"\" " +
-        $"clickable=\"true\" enabled=\"true\" scrollable=\"{(scrollable ? "true" : "false")}\" " +
+        $"clickable=\"true\" enabled=\"true\" focused=\"{(focused ? "true" : "false")}\" scrollable=\"{(scrollable ? "true" : "false")}\" " +
         $"password=\"{(password ? "true" : "false")}\" bounds=\"{bounds}\" />";
 
     // A dump as the phone prints it (MIUI adds a stack trace before it).
@@ -37,10 +37,16 @@ public sealed class MiSignOutTests
         Node("Sair", "[60,1300][660,1380]", "com.xiaomi.account:id/logout_btn"));
 
     // The password prompt: field at 360,650, OK at 530,840.
-    private static readonly string PasswordPrompt = Screen(
-        Node("Inserir senha", "[60,600][660,700]", "com.xiaomi.account:id/input_pwd_view", cls: "android.widget.EditText", password: true),
+    private static string Prompt(bool focused) => Screen(
+        Node("Inserir senha", "[60,600][660,700]", "com.xiaomi.account:id/input_pwd_view",
+            cls: "android.widget.EditText", password: true, focused: focused),
         Node("Cancelar", "[60,800][320,880]", "android:id/button2"),
         Node("OK", "[400,800][660,880]", "android:id/button1"));
+
+    private static readonly string PasswordPrompt = Prompt(focused: false);
+
+    // The same, once a tap gave the field the focus.
+    private static readonly string FocusedPrompt = Prompt(focused: true);
 
     // "Excluir itens sincronizados deste dispositivo?": Remover at 190,1440, Manter at 530,1440.
     private static readonly string KeepOrRemove = Screen(
@@ -78,7 +84,24 @@ public sealed class MiSignOutTests
             return new AdbOutput(0, "", false);
         }
 
-        public MiSignOut SignOut() => new(Shell, pause => Elapsed += pause, () => Elapsed);
+        // What went as arguments, apart from what went on standard input.
+        public readonly List<string> Args = new();
+        public readonly List<string> Inputs = new();
+
+        public AdbOutput SecretShell(string line)
+        {
+            Inputs.Add(line);
+            Calls.Add(line);
+            return new AdbOutput(0, "", false);
+        }
+
+        public MiSignOut SignOut() => new(
+            command =>
+            {
+                Args.Add(string.Join(' ', command));
+                return Shell(command);
+            },
+            SecretShell, pause => Elapsed += pause, () => Elapsed);
 
         public int Count(string prefix) => Calls.Count(c => c.StartsWith(prefix, StringComparison.Ordinal));
     }
@@ -88,6 +111,7 @@ public sealed class MiSignOutTests
     {
         var phone = new FakePhone();
         phone.OnTap[(360, 1340)] = () => phone.Showing = PasswordPrompt;
+        phone.OnTap[(360, 650)] = () => phone.Showing = FocusedPrompt;
         phone.OnTap[(530, 840)] = () => phone.Showing = KeepOrRemove;
         phone.OnTap[(530, 1440)] = () =>
         {
@@ -105,9 +129,13 @@ public sealed class MiSignOutTests
 
         Assert.Contains("am start -W -a android.settings.XIAOMI_ACCOUNT_SYNC_SETTINGS", phone.Calls);
         Assert.Equal(new[] { "input text 'Escola%s2026!'" }, phone.Calls.Where(c => c.StartsWith("input text", StringComparison.Ordinal)));
-        // The field is tapped before typing, OK after.
+        // Typed only on standard input: the password is in no command's arguments.
+        Assert.Equal(new[] { "input text 'Escola%s2026!'" }, phone.Inputs);
+        Assert.DoesNotContain(phone.Args, a => a.Contains("Escola", StringComparison.Ordinal) || a.StartsWith("input text", StringComparison.Ordinal));
+        // The field is tapped (and seen focused) before typing, OK after.
         var typed = phone.Calls.IndexOf("input text 'Escola%s2026!'");
-        Assert.Equal("input tap 360 650", phone.Calls[typed - 1]);
+        Assert.Equal("input tap 360 650", phone.Calls.Take(typed).Last(c => c.StartsWith("input tap", StringComparison.Ordinal)));
+        Assert.Equal(Dump, phone.Calls[typed - 1]);
         Assert.True(phone.Calls.IndexOf("input tap 530 840") > typed);
         Assert.Contains("input tap 530 1440", phone.Calls);
         Assert.DoesNotContain("input tap 190 1440", phone.Calls);
@@ -132,6 +160,39 @@ public sealed class MiSignOutTests
         Assert.Equal(0, phone.Count("input tap"));
         // The list is scrolled to look for "Sair", a few times only.
         Assert.Equal(4, phone.Count("input swipe 360 1240 360 460"));
+        Assert.Equal("input keyevent KEYCODE_HOME", phone.Calls[^2]);
+    }
+
+    [Fact]
+    public void A_field_focused_only_by_the_second_tap_gets_the_password()
+    {
+        var phone = Signing();
+        var taps = 0;
+        phone.OnTap[(360, 650)] = () =>
+        {
+            if (++taps == 2)
+            {
+                phone.Showing = FocusedPrompt;
+            }
+        };
+        Assert.True(phone.SignOut().Run(Password));
+
+        Assert.Equal(2, phone.Count("input tap 360 650"));
+        Assert.Equal(1, phone.Count("input text"));
+    }
+
+    // Typed nowhere, the phone would take an empty password: OK is never tapped.
+    [Fact]
+    public void A_field_that_never_gets_the_focus_is_left_to_the_teacher()
+    {
+        var phone = Signing();
+        phone.OnTap[(360, 650)] = () => { };
+        Assert.False(phone.SignOut().Run(Password));
+
+        Assert.Equal(2, phone.Count("input tap 360 650"));
+        Assert.Equal(0, phone.Count("input text"));
+        Assert.Empty(phone.Inputs);
+        Assert.Equal(0, phone.Count("input tap 530 840"));
         Assert.Equal("input keyevent KEYCODE_HOME", phone.Calls[^2]);
     }
 
