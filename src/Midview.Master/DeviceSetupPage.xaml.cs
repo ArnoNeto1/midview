@@ -28,7 +28,9 @@ internal static class DeviceSetupText
     {
         $"1. {Capital(kind)} sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: " +
         "restaure só se ele tem uma conta que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o PIN do professor.",
-        "2. Nas Opções do desenvolvedor: Depuração USB e Instalar via USB ligadas.",
+        kind == AndroidDeviceKind.Tablet
+            ? "2. Nas Opções do desenvolvedor: Depuração USB ligada."
+            : "2. Nas Opções do desenvolvedor: Depuração USB e Instalar via USB ligadas.",
         "3. Ligue o cabo neste computador.",
     };
 
@@ -148,9 +150,15 @@ public partial class DeviceSetupPage : UserControl
         }
     }
 
+    // Only on the phones' page: the tablet's steps have no Mi account.
     private void ShowMiAccount()
     {
         MiAccountLine.Inlines.Clear();
+        MiAccountLine.Visibility = _kind == AndroidDeviceKind.Tablet ? Visibility.Collapsed : Visibility.Visible;
+        if (_kind == AndroidDeviceKind.Tablet)
+        {
+            return;
+        }
         if (MiAccountFile.Load() is not { } account)
         {
             MiAccountLine.Inlines.Add(new Run(DeviceSetupText.MiAccountNone));

@@ -55,6 +55,14 @@ public class PhoneSetupGuideTabletTests
         Assert.Contains(steps["desenvolvedor"].Taps, tap => tap.Contains("Número da versão", StringComparison.Ordinal));
     }
 
+    // "Instalar via USB" is MIUI's own switch: a tablet's page doesn't ask for it.
+    [Fact]
+    public void The_tablet_page_asks_only_for_usb_debugging()
+    {
+        Assert.DoesNotContain("Instalar via USB", DeviceSetupText.BeforeStarting(AndroidDeviceKind.Tablet)[1], StringComparison.Ordinal);
+        Assert.Contains("Instalar via USB", DeviceSetupText.BeforeStarting(AndroidDeviceKind.Phone)[1], StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("Ligue o celular no computador", "Ligue o tablet no computador")]
     [InlineData("Quantos celulares a escola tem?", "Quantos tablets a escola tem?")]
