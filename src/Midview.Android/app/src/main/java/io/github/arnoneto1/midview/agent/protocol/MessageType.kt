@@ -233,4 +233,17 @@ object MessageType {
     // encontrar" (PhoneFind: the seconds to ring, or 0 to stop), answered with
     // one CommandAck (CommandResult). Number 108 as the C# FindPhone.
     const val FIND_PHONE = 108
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Contas do
+    // aparelho" (a PhoneNetworkFree payload, as FREE_PHONE_NETWORK's: the
+    // minutes, 1 to 60, the device's accounts may be added or removed, or 0
+    // to lock them again now; AccountsFree), answered with a CommandAck
+    // (CommandResult). Number 109 as the C# FreePhoneAccounts.
+    const val FREE_PHONE_ACCOUNTS = 109
+
+    // Master -> Android agent (port 28900), trusted teacher only, no payload:
+    // "Sair das contas do Chrome" (ChromeDataClear: Chrome's data erased),
+    // answered with a CommandAck (CommandResult) once Android says how it
+    // went. Number 110 as the C# ClearChromeData.
+    const val CLEAR_CHROME_DATA = 110
 }

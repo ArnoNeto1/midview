@@ -11,7 +11,9 @@ public enum DeviceRoomAction
     Optimize,
     Pin,
     Network,
+    Accounts,
     Wallpaper,
+    ClearChrome,
     Find,
     Remove,
 }
@@ -43,6 +45,14 @@ internal static class DeviceRoomText
         DeviceRoomAction.Optimize => ("Otimizar", "Tira apps que a turma não usa e liga o DNS sem anúncios.", "Otimizar..."),
         DeviceRoomAction.Pin => ("Senha (PIN)", "PIN de 4 números que o aluno não troca.", "Definir PIN..."),
         DeviceRoomAction.Network => ("Wi-Fi e modo avião", "Travados. Libere por um tempo para trocar de rede.", "Liberar..."),
+        DeviceRoomAction.Accounts => (
+            "Contas do aparelho",
+            "Travadas: o aluno não põe nem tira contas. Libere por um tempo para pôr a conta Google da escola.",
+            "Liberar..."),
+        DeviceRoomAction.ClearChrome => (
+            "Sair das contas do Chrome",
+            "Apaga os logins de sites, os cookies, o histórico e as abas do Chrome. O próximo aluno abre o Chrome limpo.",
+            "Sair das contas..."),
         DeviceRoomAction.Wallpaper => ("Papel de parede", "Põe a imagem da escola na tela inicial e de bloqueio.", "Escolher imagem..."),
         DeviceRoomAction.Find => ("Tocar para encontrar", FindLine(kind), FindButton),
         _ => ("Tirar o Midview", "Desfaz tudo e desinstala, ou restaura de fábrica.", "Tirar o Midview..."),
@@ -56,6 +66,10 @@ internal static class DeviceRoomText
             DeviceRoomAction.Optimize => $"Esconde os apps de propaganda dos {words} e liga o DNS sem anúncios.",
             DeviceRoomAction.Pin => $"Põe ou tira o PIN de 4 números da tela de bloqueio dos {words}; o aluno não consegue trocá-lo.",
             DeviceRoomAction.Network => $"Libera por alguns minutos o Wi-Fi e o modo avião, que ficam travados nos {words}, ou trava de novo.",
+            DeviceRoomAction.Accounts =>
+                $"Libera por alguns minutos as contas dos {words}, que ficam travadas, para pôr a conta Google da escola em Configurações > Contas; ou trava de novo.",
+            DeviceRoomAction.ClearChrome =>
+                $"No fim da aula: tira os alunos das contas dos sites no Chrome dos {words}, apagando logins, cookies, histórico e abas. Pede confirmação.",
             DeviceRoomAction.Wallpaper => $"Põe uma imagem como papel de parede da tela inicial e da de bloqueio dos {words}; o aluno não consegue trocá-la.",
             DeviceRoomAction.Find => PhoneFindText.StartToolTip,
             _ => $"Desfaz tudo o que o Midview fez nos {words} e o desinstala (fotos e arquivos ficam), ou os restaura de fábrica (apaga tudo). Pede confirmação.",
@@ -65,7 +79,9 @@ internal static class DeviceRoomText
 }
 
 // The lower part of a "Configurar" page: the room's devices of that kind,
-// with one card per action in two columns (one at the window's narrowest).
+// with one card per action in two columns (one at the window's narrowest),
+// two by two: Otimizar and PIN, the Wi-Fi's and the accounts' locks, the
+// wallpaper and Chrome's logins, ringing and taking the Midview off.
 // Built in code so it holds without the app's resources (its styles are
 // resource references).
 public sealed class DeviceRoomSection : StackPanel

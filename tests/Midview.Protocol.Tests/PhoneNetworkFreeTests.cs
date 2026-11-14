@@ -8,6 +8,9 @@ public class PhoneNetworkFreeTests
     {
         Assert.Equal(103, (int)MessageType.FreePhoneNetwork);
         Assert.Equal(104, (int)MessageType.SetPhoneAdminPassword);
+        // "Contas do aparelho" (the same payload) and "Sair das contas do Chrome".
+        Assert.Equal(109, (int)MessageType.FreePhoneAccounts);
+        Assert.Equal(110, (int)MessageType.ClearChromeData);
     }
 
     [Theory]

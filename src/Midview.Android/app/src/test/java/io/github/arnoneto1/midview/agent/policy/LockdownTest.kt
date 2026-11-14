@@ -292,6 +292,23 @@ class LockdownTest {
         assertEquals(base, free.restrictions)
     }
 
+    // The accounts are locked on every build, and left alone while "Contas
+    // do aparelho" frees them (AccountsFree says so); they are not among the
+    // locks every start puts back regardless.
+    @Test fun theAccountsAreLockedUnlessFreed() {
+        for (debuggable in listOf(false, true)) {
+            val gw = FakeGateway(sdkInt = 29, debuggable = debuggable)
+            assertTrue(Lockdown(gw).apply())
+            assertTrue("no_modify_accounts" in gw.restrictions)
+        }
+
+        val free = FakeGateway(sdkInt = 34)
+        assertTrue(Lockdown(free, accounts = { /* freed: not run */ }).apply())
+        assertEquals(all(34) - "no_modify_accounts", free.restrictions)
+        assertEquals(listOf("no_modify_accounts"), Lockdown.ACCOUNT_RESTRICTIONS)
+        assertFalse("no_modify_accounts" in Lockdown.RESTRICTIONS)
+    }
+
     // Turning the Wi-Fi off is its own lock only from Android 13.
     @Test fun turningTheWifiOffIsLockedFromAndroid13() {
         assertEquals(listOf("no_config_wifi", "no_airplane_mode"), Lockdown.networkRestrictions(32))

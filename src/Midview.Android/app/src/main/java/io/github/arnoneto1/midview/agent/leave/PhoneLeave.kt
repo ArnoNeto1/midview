@@ -335,9 +335,13 @@ class PhoneLeave(
     companion object {
         // Every restriction any version of the agent sets, lifted even if
         // Android does not list it as the admin's (Lockdown's, the network's
-        // on any Android, and DISALLOW_APPS_CONTROL of Android 10).
+        // on any Android, the accounts', freed or not, and
+        // DISALLOW_APPS_CONTROL of Android 10).
         val KNOWN_RESTRICTIONS: Set<String> =
-            (Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(Int.MAX_VALUE) + Lockdown.DISALLOW_APPS_CONTROL).toSet()
+            (
+                Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(Int.MAX_VALUE) + Lockdown.ACCOUNT_RESTRICTIONS +
+                    Lockdown.DISALLOW_APPS_CONTROL
+                ).toSet()
 
         // The apps uninstalled for this user that come back: every one the
         // phone still knows (a system app removed by the cable setup or by

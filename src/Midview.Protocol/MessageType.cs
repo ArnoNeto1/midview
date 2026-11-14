@@ -470,6 +470,25 @@ public enum MessageType : byte
     // it answers one CommandAck (CommandResult). An agent from before it
     // answers "Ainda não funciona em celular.".
     FindPhone = 108,
+
+    // Master -> Android agent (port 28900), from a trusted teacher only:
+    // "Contas do aparelho" (a PhoneNetworkFree payload, as FreePhoneNetwork's:
+    // the minutes, 1 to 60, the device's accounts may be added or removed, or
+    // 0 to lock them again now). The accounts stay locked otherwise; the
+    // teacher frees them to put the school's Google account on a prepared
+    // device. The agent locks them again by itself when the time is up.
+    // Answered with a CommandAck (CommandResult); an agent from before this
+    // answers "Ainda não funciona em celular.".
+    FreePhoneAccounts = 109,
+
+    // Master -> Android agent (port 28900), from a trusted teacher only, no
+    // payload: "Sair das contas do Chrome". The agent erases Chrome's data
+    // (the logins to websites, the cookies, the history and the tabs; Chrome
+    // shows its first screen again) and keeps Chrome's policies. Answered
+    // with one CommandAck (CommandResult) once Android says how it went, which
+    // can take several seconds; an agent from before this answers "Ainda não
+    // funciona em celular.".
+    ClearChromeData = 110,
 }
 
 public enum CloseAppsMode : byte

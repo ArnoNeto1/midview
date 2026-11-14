@@ -18,7 +18,7 @@ class FakeLeaveGateway : LeaveGateway {
     var refuse: Set<String> = emptySet()
 
     var owner = true
-    val restrictions = (Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(33) + "no_from_somewhere_else").toMutableSet()
+    val restrictions = (Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(33) + Lockdown.ACCOUNT_RESTRICTIONS + "no_from_somewhere_else").toMutableSet()
     var ownAppLocked = true
     var lockTask = true
     var accessibilityLimited = true

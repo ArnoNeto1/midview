@@ -83,7 +83,7 @@ public class DeviceRoomSectionTests
     }
 
     [Fact]
-    public void Six_cards_with_their_buttons_all_on_with_devices_in_the_room()
+    public void Eight_cards_with_their_buttons_all_on_with_devices_in_the_room()
     {
         InSta(() =>
         {
@@ -91,13 +91,21 @@ public class DeviceRoomSectionTests
             section.Show(AndroidDeviceKind.Phone, 2, ringing: false);
 
             Assert.Equal(
-                new[] { "Otimizar...", "Definir PIN...", "Liberar...", "Escolher imagem...", "Tocar...", "Tirar o Midview..." },
+                new[]
+                {
+                    "Otimizar...", "Definir PIN...", "Liberar...", "Liberar...", "Escolher imagem...", "Sair das contas...", "Tocar...",
+                    "Tirar o Midview...",
+                },
                 Enum.GetValues<DeviceRoomAction>().Select(action => (string)section.ButtonOf(action).Content));
             Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
             var texts = Texts(section);
             Assert.Contains("CELULARES DA SALA (2) · OU SÓ OS SELECIONADOS NA TELA", texts);
             Assert.Contains("Toca alto para achar um celular perdido.", texts);
             Assert.Contains("Senha (PIN)", texts);
+            Assert.Contains("Contas do aparelho", texts);
+            Assert.Contains("Travadas: o aluno não põe nem tira contas. Libere por um tempo para pôr a conta Google da escola.", texts);
+            Assert.Contains("Sair das contas do Chrome", texts);
+            Assert.Contains("Apaga os logins de sites, os cookies, o histórico e as abas do Chrome. O próximo aluno abre o Chrome limpo.", texts);
             Assert.DoesNotContain(section.Children.OfType<TextBlock>(), block => block.Text == "Nenhum celular na sala ainda." && block.Visibility == Visibility.Visible);
         });
     }
@@ -136,6 +144,16 @@ public class DeviceRoomSectionTests
 
             Assert.Equal(Enum.GetValues<DeviceRoomAction>().Reverse(), asked);
         });
+    }
+
+    // The two cards of the device's accounts and Chrome say the page's kind in their tooltips.
+    [Fact]
+    public void The_accounts_and_chrome_cards_speak_of_the_pages_kind()
+    {
+        Assert.Contains("contas dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.Accounts, AndroidDeviceKind.Tablet));
+        Assert.Contains("contas dos celulares", DeviceRoomText.ToolTip(DeviceRoomAction.Accounts, AndroidDeviceKind.Phone));
+        Assert.Contains("Chrome dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Tablet));
+        Assert.EndsWith("Com alguns celulares selecionados na tela, só neles.", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Phone));
     }
 
     // "Parar o toque" while all the devices it reaches still ring, as the tile menu.

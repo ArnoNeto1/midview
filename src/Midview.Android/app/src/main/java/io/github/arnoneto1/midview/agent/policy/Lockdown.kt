@@ -75,9 +75,9 @@ interface DevicePolicyGateway {
 // safe mode, no other users, no files over USB, no changing the private DNS
 // or the VPN (the internet block is the agent's VPN), no installing apps from
 // outside a store (an APK downloaded in Chrome) and no adding or removing
-// accounts (a Google account would open the Play Store, and a Google or Mi
-// account would tie the phone to the student after a reset), the app cannot be
-// uninstalled, force-stopped nor have its data cleared. The teacher's
+// accounts (a Google account of the student's would open the Play Store, and
+// a Google or Mi account would tie the phone to the student after a reset),
+// the app cannot be uninstalled, force-stopped nor have its data cleared. The teacher's
 // "Bloquear telas" is allowed too: this app alone may hold the phone in lock
 // task mode, with nothing of the system's left to reach (no home, recents,
 // notifications nor power menu). Of the accessibility services only the
@@ -88,6 +88,11 @@ interface DevicePolicyGateway {
 // state, so applying again changes nothing. The Wi-Fi and airplane mode are
 // locked too (networkRestrictions), unless the teacher or the admin
 // password freed them for a while: network decides (NetworkFree.unlessFree).
+// So are the accounts (ACCOUNT_RESTRICTIONS), unless the teacher freed them
+// for the school's Google account to go on: accounts decides
+// (AccountsFree.unlessFree). None of it is set before the device is owned:
+// the cable's set-device-owner, which refuses a device with an account,
+// comes first.
 //
 // A debug build keeps adb and factory reset, so a test phone or emulator
 // made Device Owner can still be reached and reset. The APK published for
@@ -97,6 +102,8 @@ class Lockdown(
     private val packageName: String = PACKAGE,
     // Runs the network locks unless they are freed for now (NetworkFree).
     private val network: (lockNetwork: () -> Unit) -> Unit = { it() },
+    // Runs the accounts lock unless it is freed for now (AccountsFree).
+    private val accounts: (lockAccounts: () -> Unit) -> Unit = { it() },
 ) {
     // True when the locks were applied (the app is the Device Owner). A step
     // the system refuses does not stop the others; the first refusal is
@@ -116,6 +123,7 @@ class Lockdown(
             .filterNot { gw.debuggable && it in KEPT_ON_DEBUG_BUILDS }
             .forEach { r -> step { gw.addUserRestriction(r) } }
         step { network { networkRestrictions(gw.sdkInt).forEach { r -> step { gw.addUserRestriction(r) } } } }
+        step { accounts { ACCOUNT_RESTRICTIONS.forEach { r -> step { gw.addUserRestriction(r) } } } }
         step { gw.setUninstallBlocked(packageName, true) }
         if (gw.sdkInt >= ANDROID_11) {
             step { gw.setUserControlDisabled(listOf(packageName)) }
@@ -144,7 +152,8 @@ class Lockdown(
         // DISALLOW_USB_FILE_TRANSFER, DISALLOW_CONFIG_PRIVATE_DNS,
         // DISALLOW_CONFIG_VPN, DISALLOW_INSTALL_UNKNOWN_SOURCES,
         // DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY (Android 10, the oldest
-        // the agent runs on) and DISALLOW_MODIFY_ACCOUNTS. no_config_vpn keeps
+        // the agent runs on); DISALLOW_MODIFY_ACCOUNTS is
+        // ACCOUNT_RESTRICTIONS, which the teacher may free. no_config_vpn keeps
         // the student out of the VPN settings, where the agent's VPN is while
         // the internet is blocked; Android still starts an always-on VPN the
         // Device Owner sets. The unknown sources ones grey "Instalar apps
@@ -178,7 +187,6 @@ class Lockdown(
             "no_config_vpn",
             "no_install_unknown_sources",
             "no_install_unknown_sources_globally",
-            "no_modify_accounts",
             "no_config_date_time",
             "no_create_windows",
             "no_config_tethering",
@@ -195,6 +203,14 @@ class Lockdown(
         // Wi-Fi e modo avião" (NetworkFree).
         fun networkRestrictions(sdkInt: Int): List<String> =
             listOf("no_config_wifi", "no_airplane_mode") + if (sdkInt >= ANDROID_13) listOf("no_change_wifi_state") else emptyList()
+
+        // UserManager.DISALLOW_MODIFY_ACCOUNTS: no account added or removed
+        // in Settings, nor by an app asking Android to add one. Freed for a
+        // while by "Contas do aparelho" (AccountsFree), so the teacher puts
+        // the school's Google account on the device (the Play Store keeps
+        // Chrome up to date with it); Chrome itself never signs into it
+        // (ChromePolicy's BrowserSignin).
+        val ACCOUNT_RESTRICTIONS = listOf("no_modify_accounts")
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,
         // left off on debug builds.

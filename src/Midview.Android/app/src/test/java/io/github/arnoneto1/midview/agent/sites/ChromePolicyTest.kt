@@ -8,9 +8,21 @@ import org.junit.Test
 class ChromePolicyTest {
     private fun state(vararg domains: String, internet: Boolean = false) = SiteBlockState(domains.toSet(), internet)
 
-    // Nothing blocked: Chrome only skips its Terms of Service screen on first run.
-    @Test fun nothingBlockedLeavesChromeOnlySkippingItsTerms() {
-        assertEquals(mapOf<String, Any>("TosDialogBehavior" to 2), ChromePolicy.restrictions(SiteBlockState.EMPTY))
+    // Nothing blocked: Chrome only skips its Terms of Service (in Custom
+    // Tabs) and keeps the browser out of any account.
+    @Test fun nothingBlockedLeavesChromeOnlySkippingItsTermsAndSignedOut() {
+        assertEquals(
+            mapOf<String, Any>("TosDialogBehavior" to 2, "BrowserSignin" to 0),
+            ChromePolicy.restrictions(SiteBlockState.EMPTY),
+        )
+    }
+
+    // The Chrome browser never signs into the device's accounts (the
+    // school's Google account), whatever else is blocked.
+    @Test fun browserSignInIsAlwaysOff() {
+        assertEquals(0, ChromePolicy.restrictions(SiteBlockState.EMPTY)["BrowserSignin"])
+        assertEquals(0, ChromePolicy.restrictions(state("youtube.com"))["BrowserSignin"])
+        assertEquals(0, ChromePolicy.restrictions(state("youtube.com", internet = true), blockDownloads = true)["BrowserSignin"])
     }
 
     // The student's first Chrome opens without the Terms of Service dialog,
@@ -57,7 +69,7 @@ class ChromePolicyTest {
 
     @Test fun theBlocklistGoesAsAListOfTexts() {
         val restrictions = ChromePolicy.restrictions(state("youtube.com"))
-        assertEquals(setOf("TosDialogBehavior", "URLBlocklist"), restrictions.keys)
+        assertEquals(setOf("TosDialogBehavior", "BrowserSignin", "URLBlocklist"), restrictions.keys)
         assertArrayEquals(arrayOf("www.youtube.com", "youtube.com"), restrictions["URLBlocklist"] as Array<*>)
     }
 
@@ -69,11 +81,11 @@ class ChromePolicyTest {
     // "Travar downloads" of the lab panel: Chrome's "Block all downloads".
     @Test fun blockedDownloadsGoAsDownloadRestrictions3() {
         assertEquals(
-            mapOf<String, Any>("TosDialogBehavior" to 2, "DownloadRestrictions" to 3),
+            mapOf<String, Any>("TosDialogBehavior" to 2, "BrowserSignin" to 0, "DownloadRestrictions" to 3),
             ChromePolicy.restrictions(SiteBlockState.EMPTY, blockDownloads = true),
         )
         val both = ChromePolicy.restrictions(state("youtube.com"), blockDownloads = true)
-        assertEquals(setOf("TosDialogBehavior", "URLBlocklist", "DownloadRestrictions"), both.keys)
+        assertEquals(setOf("TosDialogBehavior", "BrowserSignin", "URLBlocklist", "DownloadRestrictions"), both.keys)
         assertEquals(3, both["DownloadRestrictions"])
     }
 }

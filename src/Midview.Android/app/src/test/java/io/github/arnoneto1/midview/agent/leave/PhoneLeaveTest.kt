@@ -87,6 +87,8 @@ class PhoneLeaveTest {
         assertEquals((PhoneLeave.KNOWN_RESTRICTIONS + "no_from_somewhere_else").size, lifted)
         assertTrue("no_control_apps" in PhoneLeave.KNOWN_RESTRICTIONS)
         assertTrue("no_change_wifi_state" in PhoneLeave.KNOWN_RESTRICTIONS)
+        // "Contas do aparelho": lifted on leaving, whether freed or not.
+        assertTrue("no_modify_accounts" in PhoneLeave.KNOWN_RESTRICTIONS)
         assertTrue(Lockdown.RESTRICTIONS.all { it in PhoneLeave.KNOWN_RESTRICTIONS })
     }
 

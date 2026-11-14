@@ -58,6 +58,12 @@ public partial class MainWindow
             case DeviceRoomAction.Network:
                 OpenPhoneNetworkWindow(devices);
                 break;
+            case DeviceRoomAction.Accounts:
+                OpenPhoneAccountsWindow(devices, clearChrome: false);
+                break;
+            case DeviceRoomAction.ClearChrome:
+                OpenPhoneAccountsWindow(devices, clearChrome: true);
+                break;
             case DeviceRoomAction.Wallpaper:
                 OpenPhoneWallpaperWindow(devices);
                 break;
@@ -103,6 +109,20 @@ public partial class MainWindow
             return;
         }
         ShowOnce("rede-celulares", phones, () => new PhoneNetworkWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
+    }
+
+    // "Contas do aparelho" and "Sair das contas do Chrome": the same devices as the PIN.
+    private void OpenPhoneAccountsWindow(IReadOnlyList<KnownMachine> phones, bool clearChrome)
+    {
+        if (phones.Count == 0)
+        {
+            StatusTextBlock.Text = clearChrome
+                ? "Nenhum celular ou tablet na lista da sala para sair das contas do Chrome."
+                : "Nenhum celular ou tablet na lista da sala para liberar as contas.";
+            return;
+        }
+        ShowOnce(clearChrome ? "chrome-celulares" : "contas-celulares", phones,
+            () => new PhoneAccountsWindow(phones, IsEveryPhone(phones), _masterCertificate, clearChrome) { Owner = this });
     }
 
     // "Papel de parede dos celulares e tablets...": the same devices as the PIN.

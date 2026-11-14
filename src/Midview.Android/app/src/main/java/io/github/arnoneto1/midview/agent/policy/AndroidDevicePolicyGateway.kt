@@ -81,8 +81,19 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
         dpm.addUserRestriction(admin, r)
     }
 
-    // Only NetworkFree lifts a lock, for "Liberar Wi-Fi e modo avião".
+    // Only TimedFree lifts a lock, for "Liberar Wi-Fi e modo avião"
+    // (NetworkFree) and "Contas do aparelho" (AccountsFree).
     fun clearUserRestriction(r: String) = dpm.clearUserRestriction(admin, r)
+
+    // "Sair das contas do Chrome" (ChromeDataClear): an app's data erased as
+    // Settings' "Limpar armazenamento" does, the app stopped first (Android 9
+    // on, Device Owner only). done is told whether Android did it, on the
+    // binder thread that brings the answer. The app's managed configuration
+    // (setApplicationRestrictions) is the system's, not the app's data;
+    // ChromeDataClear writes Chrome's again afterwards all the same.
+    fun clearApplicationUserData(pkg: String, done: (Boolean) -> Unit) {
+        dpm.clearApplicationUserData(admin, pkg, { it.run() }) { _, succeeded -> done(succeeded) }
+    }
 
     override fun setUninstallBlocked(pkg: String, blocked: Boolean) {
         if (blocked) refuseWhileLeaving()
@@ -189,7 +200,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
         // Applies the locks and never fails its caller: a refused lock is
         // logged, and the next start of the agent tries again. The Wi-Fi and
-        // airplane mode stay free while their time runs (SchoolNetwork).
+        // airplane mode, and the accounts, stay free while their time runs
+        // (SchoolNetwork).
         fun lockDown(context: Context) {
             // The Midview is leaving the phone (PhoneLeaving): never locked again.
             if (PhoneLeaving.isActive(context)) return
@@ -197,7 +209,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
                 val network = SchoolNetwork.network(context)
                 // Once the Device Owner: the school's network out of the user's hands.
                 if (AndroidDevicePolicyGateway(context).isDeviceOwner()) SchoolNetwork.wifi(context).lockOwnersNetworks()
-                if (Lockdown(AndroidDevicePolicyGateway(context), network = network::unlessFree).apply()) {
+                val accounts = SchoolNetwork.accounts(context)
+                if (Lockdown(AndroidDevicePolicyGateway(context), network = network::unlessFree, accounts = accounts::unlessFree).apply()) {
                     Log.i(TAG, "School phone locks applied.")
                 }
             } catch (e: RuntimeException) {

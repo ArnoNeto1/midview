@@ -70,6 +70,11 @@ class CommandHandler(
     // password (AdminUnlock): the payload in, the CommandAck's result out.
     private val freeNetwork: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val adminPassword: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Contas do aparelho" (AccountsFree) and "Sair das contas do Chrome"
+    // (ChromeDataClear, which waits for Android on this connection's thread):
+    // the payload in, the CommandAck's result out.
+    private val freeAccounts: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    private val clearChrome: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Papel de parede dos celulares e tablets" (TeacherWallpaper): the
     // payload in, the CommandAck's result out.
     private val wallpaper: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -266,6 +271,14 @@ class CommandHandler(
         }
         MessageType.SET_PHONE_ADMIN_PASSWORD -> {
             val (done, detail) = adminPassword(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        MessageType.FREE_PHONE_ACCOUNTS -> {
+            val (done, detail) = freeAccounts(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        MessageType.CLEAR_CHROME_DATA -> {
+            val (done, detail) = clearChrome(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
         // On this connection's thread: Android scales the picture, a second or two.

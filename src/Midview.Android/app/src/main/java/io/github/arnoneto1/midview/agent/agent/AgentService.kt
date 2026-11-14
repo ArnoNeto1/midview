@@ -43,6 +43,7 @@ import io.github.arnoneto1.midview.agent.pairing.PairingFlow
 import io.github.arnoneto1.midview.agent.policy.AndroidDevicePolicyGateway
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
 import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
+import io.github.arnoneto1.midview.agent.policy.TimedFree
 import io.github.arnoneto1.midview.agent.programs.SilentUninstaller
 import io.github.arnoneto1.midview.agent.programs.TeacherPrograms
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
@@ -54,6 +55,7 @@ import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
 import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
 import io.github.arnoneto1.midview.agent.sites.BlockVpnService
 import io.github.arnoneto1.midview.agent.sites.ChromeConfig
+import io.github.arnoneto1.midview.agent.sites.ChromeDataClear
 import io.github.arnoneto1.midview.agent.sites.ChromePolicy
 import io.github.arnoneto1.midview.agent.sites.InternetBlock
 import io.github.arnoneto1.midview.agent.sites.OtherBrowsers
@@ -336,20 +338,32 @@ class AgentService : Service() {
         // "Agendar": the screen off at the teacher's shutdown time, by the same countdown.
         val powerSchedule = scheduledScreenOff(power, log, ::own)
         val classFolder = AgentClassFolder(this, log, ::own)
-        // The Wi-Fi locked again right when its free time ends (the watchdog
-        // is the fallback, also for a phone asleep then).
-        val relock = Runnable { SchoolNetwork.check(this) }
-        own(
-            SchoolNetwork.network(this).follow { end ->
-                main.removeCallbacks(relock)
-                if (end != null) main.postDelayed(relock, (end - System.currentTimeMillis()).coerceAtLeast(0) + RELOCK_MARGIN_MILLIS)
-            },
+        // The Wi-Fi, and the accounts, locked again right when their free
+        // time ends (the watchdog is the fallback, also for a phone asleep then).
+        fun relockOnTime(free: TimedFree) {
+            val relock = Runnable { SchoolNetwork.check(this) }
+            own(
+                free.follow { end ->
+                    main.removeCallbacks(relock)
+                    if (end != null) main.postDelayed(relock, (end - System.currentTimeMillis()).coerceAtLeast(0) + RELOCK_MARGIN_MILLIS)
+                },
+            )
+            own { main.removeCallbacks(relock) }
+        }
+        relockOnTime(SchoolNetwork.network(this))
+        relockOnTime(SchoolNetwork.accounts(this))
+        // "Sair das contas do Chrome": Chrome's policies written again after.
+        val chromeClear = ChromeDataClear(
+            policyGateway::isDeviceOwner, policyGateway.sdkInt, installedApps::isChromeInstalled,
+            clear = policyGateway::clearApplicationUserData,
+            reapplyPolicy = { sites.reapply() },
+            log = log,
         )
-        own { main.removeCallbacks(relock) }
         val commands = CommandHandler(
             trusted, pairing, consent, appBlock, sites, optimizer, updater, policyGateway,
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
             freeNetwork = SchoolNetwork.network(this)::handle, adminPassword = SchoolNetwork.admin(this)::setPassword,
+            freeAccounts = SchoolNetwork.accounts(this)::handle, clearChrome = chromeClear::handle,
             powerSchedule = powerSchedule::handle,
             // "Desfazer e tirar o Midview" (PhoneLeave).
             isLeaving = { PhoneLeaving.isActive(this) },

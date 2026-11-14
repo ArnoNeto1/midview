@@ -7,17 +7,19 @@ import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
 import io.github.arnoneto1.midview.agent.provisioning.CableSetup
 import java.io.File
 
-// The process's one NetworkFree and AdminUnlock, on the app's storage and
-// the Device Owner's DevicePolicyManager: the teacher's commands, the
-// "Ajustes da escola" screen, Lockdown at each start and the watchdog all
-// share them (and so their lock).
+// The process's one NetworkFree, AccountsFree and AdminUnlock, on the app's
+// storage and the Device Owner's DevicePolicyManager: the teacher's
+// commands, the "Ajustes da escola" screen, Lockdown at each start and the
+// watchdog all share them (and so their lock).
 object SchoolNetwork {
     private const val TAG = "Midview"
     private const val NETWORK_FREE_FILE = "network-free.txt"
+    private const val ACCOUNTS_FREE_FILE = "accounts-free.txt"
     private const val ADMIN_PASSWORD_FILE = "admin-password.bin"
     private const val ADMIN_ATTEMPTS_FILE = "admin-attempts.txt"
 
     @Volatile private var network: NetworkFree? = null
+    @Volatile private var accounts: AccountsFree? = null
     @Volatile private var wifi: SchoolWifi? = null
     @Volatile private var admin: AdminUnlock? = null
 
@@ -38,6 +40,22 @@ object SchoolNetwork {
                     rejoinWifi = { wifi(app).rejoin() },
                 )
             }.also { network = it }
+        }
+
+    // "Contas do aparelho": the device's accounts, locked unless freed.
+    fun accounts(context: Context): AccountsFree =
+        accounts ?: synchronized(this) {
+            accounts ?: run {
+                val app = context.applicationContext
+                val gw = AndroidDevicePolicyGateway(app)
+                AccountsFree(
+                    File(app.filesDir, ACCOUNTS_FREE_FILE), Lockdown.ACCOUNT_RESTRICTIONS,
+                    isDeviceOwner = gw::isDeviceOwner,
+                    addRestriction = gw::addUserRestriction,
+                    clearRestriction = gw::clearUserRestriction,
+                    log = log,
+                )
+            }.also { accounts = it }
         }
 
     // The school's Wi-Fi: the one the cable setup added.
@@ -61,14 +79,19 @@ object SchoolNetwork {
             }.also { admin = it }
         }
 
-    // The watchdog's check: the Wi-Fi locked again once its free time is up.
-    // Never fails its caller.
+    // The watchdog's check: the Wi-Fi and the accounts locked again once
+    // their free time is up. Never fails its caller.
     fun check(context: Context) {
         if (PhoneLeaving.isActive(context)) return
         try {
             network(context).check()
         } catch (e: RuntimeException) {
             Log.w(TAG, "Couldn't check the Wi-Fi's free time", e)
+        }
+        try {
+            accounts(context).check()
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Couldn't check the accounts' free time", e)
         }
     }
 }
