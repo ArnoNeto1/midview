@@ -32,7 +32,7 @@ internal sealed record GuideStep(
 /// prints are for a Xiaomi with MIUI 14 (Redmi 10C). Other MIUI versions get the Settings search
 /// tip in each "Deu errado?"; no menu path is written without a print or a source.
 /// </summary>
-internal static class PhoneSetupGuide
+internal static partial class PhoneSetupGuide
 {
     private const string Folder = "Assets/PrepararCelular/";
 

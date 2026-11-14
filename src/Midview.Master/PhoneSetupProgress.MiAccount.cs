@@ -39,7 +39,7 @@ internal sealed partial class PhoneSetupProgress
 
     private void ShowStepOrMiAccount(int index)
     {
-        if (index == MiStep && AsksMiAccount && !_miAsked)
+        if (index == MiStep && AsksMiAccount && !_miAsked && Kind != AndroidDeviceKind.Tablet)
         {
             _miAsked = true;
             _beforeMi = StepIndex;

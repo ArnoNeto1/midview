@@ -1,0 +1,133 @@
+using System.Runtime.ExceptionServices;
+using System.Text.RegularExpressions;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Documents;
+using Midview.Master;
+using Xunit;
+
+public class PhoneSetupGuideTabletTests
+{
+    private static IEnumerable<string> Texts(GuideStep step) =>
+        new[] { step.Title, step.NextText, step.Timing ?? "" }
+            .Concat(step.Taps)
+            .Concat(step.Help.SelectMany(Texts));
+
+    private static IEnumerable<string> Texts(GuideHelp help) =>
+        new[] { help.Problem, help.Answer }.Concat((help.Links ?? Array.Empty<GuideHelp>()).SelectMany(Texts));
+
+    [Fact]
+    public void A_tablet_has_the_phones_steps_in_the_same_order()
+    {
+        Assert.Equal(
+            PhoneSetupGuide.Steps.Select(step => step.Id),
+            PhoneSetupGuide.StepsFor(AndroidDeviceKind.Tablet).Select(step => step.Id));
+        Assert.Same(PhoneSetupGuide.Steps, PhoneSetupGuide.StepsFor(AndroidDeviceKind.Phone));
+    }
+
+    // Nothing about a phone, a Xiaomi or its chip shows to a teacher preparing a tablet,
+    // and no print of the Redmi's MIUI.
+    [Fact]
+    public void A_tablets_steps_never_speak_of_a_phone_a_xiaomi_or_a_chip()
+    {
+        var phoneWords = new Regex(@"\b(celular|celulares|MIUI|Xiaomi|chip|Conta Mi|conta Mi)\b", RegexOptions.IgnoreCase);
+        foreach (var step in PhoneSetupGuide.StepsFor(AndroidDeviceKind.Tablet))
+        {
+            Assert.Null(step.Image);
+            foreach (var text in Texts(step))
+            {
+                Assert.False(phoneWords.IsMatch(text), $"{step.Id}: {text}");
+            }
+        }
+        foreach (var text in PhoneSetupGuide.GatherFor(AndroidDeviceKind.Tablet).Items
+                     .Concat(Texts(PhoneSetupGuide.LockedWithPinFor(AndroidDeviceKind.Tablet))))
+        {
+            Assert.False(phoneWords.IsMatch(text), text);
+        }
+    }
+
+    [Fact]
+    public void A_tablet_turns_on_usb_debugging_and_leaves_no_screen_lock()
+    {
+        var steps = PhoneSetupGuide.StepsFor(AndroidDeviceKind.Tablet).ToDictionary(step => step.Id);
+        Assert.Equal("Ligue a Depuração USB", steps["chaves"].Title);
+        Assert.Equal("Confira que o tablet está sem senha de tela", steps["chip-conta-mi"].Title);
+        Assert.Contains(steps["desenvolvedor"].Taps, tap => tap.Contains("Número da versão", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Ligue o celular no computador", "Ligue o tablet no computador")]
+    [InlineData("Quantos celulares a escola tem?", "Quantos tablets a escola tem?")]
+    [InlineData("Ver \"Celular travado com PIN\"", "Ver \"Tablet travado com PIN\"")]
+    [InlineData("Sem a palavra", "Sem a palavra")]
+    public void A_phones_text_reads_in_a_tablets_words(string phone, string tablet)
+    {
+        Assert.Equal(tablet, PhoneSetupGuide.ForKind(phone, AndroidDeviceKind.Tablet));
+        Assert.Equal(phone, PhoneSetupGuide.ForKind(phone, AndroidDeviceKind.Phone));
+    }
+
+    // The window keeps its texts in the words of the device it prepares: the
+    // ones there at first, the ones set later, and back when it turns to a phone.
+    [Fact]
+    public void The_window_follows_the_devices_words()
+    {
+        InSta(() =>
+        {
+            var kind = AndroidDeviceKind.Tablet;
+            var status = new TextBlock { Text = "O celular está no cabo." };
+            var link = new TextBlock();
+            link.Inlines.Add(new Run("Ver "));
+            link.Inlines.Add(new Hyperlink(new Run("Celular travado com PIN")));
+            var button = new Button { Content = "Preparar outro celular" };
+            var input = new TextBox { Text = "rede do celular" };
+            var window = new Window
+            {
+                Width = 300, Height = 200, ShowInTaskbar = false, WindowStyle = WindowStyle.None,
+                Left = -10000, Top = -10000,
+                Content = new StackPanel { Children = { status, link, button, input } },
+            };
+            PhoneSetupGuide.FollowDeviceWords(window, () => kind);
+            window.Show();
+            window.UpdateLayout();
+
+            Assert.Equal("O tablet está no cabo.", status.Text);
+            Assert.Equal("Ver Tablet travado com PIN", string.Concat(link.Inlines.SelectMany(RunsOf).Select(run => run.Text)));
+            Assert.Equal("Preparar outro tablet", button.Content);
+            Assert.Equal("rede do celular", input.Text);
+
+            status.Text = "Há mais de um celular no cabo.";
+            window.UpdateLayout();
+            Assert.Equal("Há mais de um tablet no cabo.", status.Text);
+
+            kind = AndroidDeviceKind.Phone;
+            window.InvalidateMeasure();
+            window.UpdateLayout();
+            Assert.Equal("Há mais de um celular no cabo.", status.Text);
+            Assert.Equal("Preparar outro celular", button.Content);
+            window.Close();
+        });
+    }
+
+    private static IEnumerable<Run> RunsOf(Inline inline) => inline switch
+    {
+        Run run => new[] { run },
+        Span span => span.Inlines.SelectMany(RunsOf),
+        _ => Array.Empty<Run>(),
+    };
+
+    private static void InSta(Action body)
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try { body(); } catch (Exception e) { failure = e; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (failure is not null)
+        {
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+    }
+}

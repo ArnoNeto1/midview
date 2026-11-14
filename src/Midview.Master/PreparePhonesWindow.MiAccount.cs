@@ -23,7 +23,7 @@ public partial class PreparePhonesWindow
     // The Midview signs out of the Mi account over the cable, unless the cable
     // already could not, or cannot type the password (then the step is done
     // by hand, said so from the start).
-    private bool MiAuto => _mi is { CableCanType: true } && !_progress.SignOutByHand;
+    private bool MiAuto => Kind != AndroidDeviceKind.Tablet && _mi is { CableCanType: true } && !_progress.SignOutByHand;
 
     // Taken off (or saved) elsewhere while this window is open, from
     // "Máquinas da sala": the next phone uses what is saved now.
@@ -166,7 +166,7 @@ public partial class PreparePhonesWindow
     // The card on the step that signs in with the account.
     private void ShowMiCard(GuideStep step)
     {
-        var onStep = step.Id == "chip-conta-mi";
+        var onStep = step.Id == "chip-conta-mi" && Kind != AndroidDeviceKind.Tablet;
         MiCard.Visibility = Shown(onStep);
         if (!onStep)
         {

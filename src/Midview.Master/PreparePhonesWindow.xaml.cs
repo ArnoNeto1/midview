@@ -70,6 +70,7 @@ public partial class PreparePhonesWindow : MidviewWindow
             _devicesInClass(AndroidDeviceKind.Phone) + _devicesInClass(AndroidDeviceKind.Tablet) > 0
             || PhoneTotalFile.Asked() || PhoneTotalFile.Asked(kind: AndroidDeviceKind.Tablet));
         InitializeCable();
+        PhoneSetupGuide.FollowDeviceWords(this, () => _progress.Kind);
         ShowPage();
     }
 
@@ -327,7 +328,7 @@ public partial class PreparePhonesWindow : MidviewWindow
 
     private void ShowGather()
     {
-        var gather = PhoneSetupGuide.Gather;
+        var gather = PhoneSetupGuide.GatherFor(Kind);
         GatherTitle.Text = gather.Title;
         GatherList.Children.Clear();
         for (var i = 0; i < gather.Items.Count; i++)

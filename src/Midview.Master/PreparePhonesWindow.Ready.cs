@@ -58,7 +58,7 @@ public partial class PreparePhonesWindow
                 FailedTitle.Text = $"Não deu para terminar o {name}";
                 FailedText.Text = _progress.ProblemText ?? "";
                 FailedHint.Text = _progress.ProblemStepId is { } id
-                    ? $"Volte ao passo {stepNumber} ({PhoneSetupGuide.Steps[stepNumber!.Value - 1].Title}) e confira; " +
+                    ? $"Volte ao passo {stepNumber} ({PhoneSetupGuide.StepsFor(Kind)[stepNumber!.Value - 1].Title}) e confira; " +
                       "ao ligar o cabo de novo, o Midview continua sozinho. Se já corrigiu, toque em \"Tentar de novo\". " +
                       "O celular ainda não é da escola: dá para recomeçar sem problema."
                     : _progress.Problem == CableProblem.TooOld ? "Separe este celular e prepare outro." : "";

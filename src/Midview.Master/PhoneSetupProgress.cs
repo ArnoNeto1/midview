@@ -52,7 +52,7 @@ internal sealed partial class PhoneSetupProgress
     // The guide step shown (meaningful on SetupPage.Step).
     public int StepIndex { get; private set; }
 
-    public GuideStep? Step => Page == SetupPage.Step ? PhoneSetupGuide.Steps[StepIndex] : null;
+    public GuideStep? Step => Page == SetupPage.Step ? PhoneSetupGuide.StepsFor(Kind)[StepIndex] : null;
 
     public string? StepId => Step?.Id;
 
@@ -316,7 +316,7 @@ internal sealed partial class PhoneSetupProgress
         var (text, step) = PhoneCable.Describe(problem);
         SignOutByHand |= problem is CableProblem.HasAccounts or CableProblem.MiSignOutFailed;
         Problem = problem;
-        ProblemText = text;
+        ProblemText = PhoneSetupGuide.ForKind(text, Kind);
         ProblemStepId = step;
         Page = SetupPage.CableFailed;
     }

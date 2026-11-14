@@ -88,19 +88,19 @@ public partial class PreparePhonesWindow
             SetupPage.MiAccount => PhoneSetupGuide.MiAccountHelp.ToList(),
             // What the cable found: the helps of the step that fixes it.
             SetupPage.CableFailed when _progress.ProblemStepId is { } id =>
-                PhoneSetupGuide.StepFor(PhoneSetupGuide.Steps.First(step => step.Id == id), MiAuto).Help.ToList(),
+                PhoneSetupGuide.StepFor(PhoneSetupGuide.StepsFor(Kind).First(step => step.Id == id), MiAuto).Help.ToList(),
             _ => new List<GuideHelp>(),
         };
         if (_progress.Page == SetupPage.CableFailed && _progress.Problem == CableProblem.AlreadySchool)
         {
             // A school phone that does not show up in the Midview cannot be wiped from it.
-            helps.Add(PhoneSetupGuide.LockedWithPin);
+            helps.Add(PhoneSetupGuide.LockedWithPinFor(Kind));
         }
         if (_progress.Page == SetupPage.ConfirmRedo
             || (_progress.Page == SetupPage.Step && _progress.Wipe == WipeState.Failed))
         {
             // The way out of a wipe that failed (and of redoing an offline phone): first in the list.
-            helps.Insert(0, PhoneSetupGuide.LockedWithPin);
+            helps.Insert(0, PhoneSetupGuide.LockedWithPinFor(Kind));
         }
         // The fixed helps an answer points to come after it, once each.
         foreach (var help in helps.ToList())
