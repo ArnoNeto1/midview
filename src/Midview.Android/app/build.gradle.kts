@@ -22,10 +22,12 @@ val midviewVersionCode: Int = midviewVersion.split('.').map { it.toInt() }.let {
 
 // The release key comes from the environment (the CI secrets), never from a
 // committed file. Without all four values the release APK is built unsigned.
+// Spaces and line breaks around a secret (pasted from a text file) are not
+// part of it: the key's password is letters and digits only.
 val keystorePath: String? = System.getenv("MIDVIEW_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
-val keystorePassword: String? = System.getenv("MIDVIEW_KEYSTORE_PASSWORD")?.takeIf { it.isNotEmpty() }
-val signingKeyAlias: String? = System.getenv("MIDVIEW_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-val signingKeyPassword: String? = System.getenv("MIDVIEW_KEY_PASSWORD")?.takeIf { it.isNotEmpty() } ?: keystorePassword
+val keystorePassword: String? = System.getenv("MIDVIEW_KEYSTORE_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() }
+val signingKeyAlias: String? = System.getenv("MIDVIEW_KEY_ALIAS")?.trim()?.takeIf { it.isNotBlank() }
+val signingKeyPassword: String? = System.getenv("MIDVIEW_KEY_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() } ?: keystorePassword
 val canSignRelease = keystorePath != null && keystorePassword != null && signingKeyAlias != null
 
 android {

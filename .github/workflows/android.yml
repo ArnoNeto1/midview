@@ -152,6 +152,20 @@ jobs:
             echo "::error::A tag $tag não combina com a versão $version de Directory.Build.props: use v$version, sem sufixo (o Master procura o APK na versão v$version)."
             exit 1
           fi
+          # The key opens with the password (the build trims spaces and line
+          # breaks around the secrets, as here), before minutes of building.
+          keystore="$RUNNER_TEMP/check.jks"
+          trap 'rm -f "$keystore"' EXIT
+          echo "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$keystore"
+          password=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          alias=$(printf '%s' "$KEY_ALIAS" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ "$password" != "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::O segredo ANDROID_KEYSTORE_PASSWORD tem espaço ou quebra de linha nas pontas; o build usa a senha sem eles."
+          fi
+          if ! keytool -list -keystore "$keystore" -storepass "$password" -alias "$alias" > /dev/null 2>&1; then
+            echo "::error::A senha do segredo ANDROID_KEYSTORE_PASSWORD não abre a chave do segredo ANDROID_KEYSTORE_BASE64 (ou o apelido ANDROID_KEY_ALIAS não está nela). Confira os dois com o LEIA-ME.txt da chave."
+            exit 1
+          fi
 
       - name: Gerar o APK assinado
         working-directory: src/Midview.Android
@@ -162,7 +176,7 @@ jobs:
         run: |
           keystore="$RUNNER_TEMP/midview-android.jks"
           trap 'rm -f "$keystore"' EXIT
-          echo "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          echo "$KEYSTORE_BASE64" | base64 --decode --ignore-garbage > "$keystore"
           export MIDVIEW_KEYSTORE_PATH="$keystore"
           ./gradlew assembleRelease
           apk=app/build/outputs/apk/release/app-release.apk
