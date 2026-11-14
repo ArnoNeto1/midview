@@ -157,7 +157,7 @@ In **Máquinas da sala** > **Configurar celular** (or **Configurar tablet**), ch
 
 The assistant does everything over the USB cable, one device at a time, in about 1 minute each, and shows each step with pictures:
 
-1. Reset the device to factory settings and, during the initial setup, don't set a screen lock.
+1. Leave the device without a screen lock. A factory reset isn't needed: reset only a device with an account nobody knows the password of, or one that once had a screen lock when the school will use Midview's **Senha (PIN)** (a device that once had a screen lock doesn't take that PIN).
 2. Turn on **Developer options** and, inside them, **USB debugging**. On a Xiaomi, also turn on **USB debugging (Security settings)**, which only turns on with a Mi account signed in. With the **school's Mi account** saved in the assistant (only on this computer, protected by Windows), Midview signs out of it by itself at the end; without it, sign out by hand.
 3. If the device's Chrome is old, the assistant opens the Play Store to update Chrome and the WebView (with a Google account on the device). Afterwards, sign out of the Google accounts: with any account on it, Android doesn't accept Midview as the device's owner.
 4. Plug in the cable, tap **Allow** on the debugging prompt and type the device's number: 7 becomes "Celular 07" (or "Tablet 07"). Midview installs the app, connects to the lab's Wi-Fi, becomes the device's owner and adds it to the room, already paired.

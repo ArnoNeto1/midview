@@ -124,12 +124,12 @@ public class MachinesPhoneSetupTests
     }
 
     [Theory]
-    [InlineData(AndroidDeviceKind.Phone, "Configurar celular", "1. Celular restaurado de fábrica, sem conta Google.")]
-    [InlineData(AndroidDeviceKind.Tablet, "Configurar tablet", "1. Tablet restaurado de fábrica, sem conta Google.")]
+    [InlineData(AndroidDeviceKind.Phone, "Configurar celular", "1. Celular sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: ")]
+    [InlineData(AndroidDeviceKind.Tablet, "Configurar tablet", "1. Tablet sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: ")]
     public void Each_page_names_its_kind(AndroidDeviceKind kind, string heading, string firstLine)
     {
         Assert.Equal(heading, DeviceSetupText.Heading(kind));
-        Assert.Equal(firstLine, DeviceSetupText.BeforeStarting(kind)[0]);
+        Assert.StartsWith(firstLine, DeviceSetupText.BeforeStarting(kind)[0]);
         Assert.Contains(kind == AndroidDeviceKind.Tablet ? "o tablet for restaurado" : "o celular for restaurado", DeviceSetupText.Kept(kind));
     }
 

@@ -26,7 +26,8 @@ internal static class DeviceSetupText
 
     public static IReadOnlyList<string> BeforeStarting(AndroidDeviceKind kind) => new[]
     {
-        $"1. {Capital(kind)} restaurado de fábrica, sem conta Google.",
+        $"1. {Capital(kind)} sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: " +
+        "restaure só se ele tem uma conta que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o PIN do professor.",
         "2. Nas Opções do desenvolvedor: Depuração USB e Instalar via USB ligadas.",
         "3. Ligue o cabo neste computador.",
     };

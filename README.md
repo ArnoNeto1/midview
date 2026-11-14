@@ -155,7 +155,7 @@ Em **Máquinas da sala** > **Configurar celular** (ou **Configurar tablet**), es
 
 O assistente faz tudo pelo cabo USB, um aparelho de cada vez, em cerca de 1 minuto cada, e mostra cada passo com imagens:
 
-1. Restaure o aparelho para o padrão de fábrica e, na configuração inicial, não ponha senha de tela.
+1. Deixe o aparelho sem senha de tela. Não precisa restaurar de fábrica: restaure só se ele tem uma conta que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o **Senha (PIN)** do Midview (um aparelho que já teve senha de tela não aceita esse PIN).
 2. Ligue as **Opções do desenvolvedor** e, dentro delas, a **Depuração USB**. Na Xiaomi, ligue também a **Depuração USB (configurações de segurança)**, que só liga com uma conta Mi conectada. Com a **conta Mi da escola** guardada no assistente (só neste computador, protegida pelo Windows), o Midview sai dela sozinho no fim; sem ela, saia à mão.
 3. Se o Chrome do aparelho for antigo, o assistente abre a Play Store para atualizar o Chrome e o WebView (com uma conta Google no aparelho). Depois, saia das contas Google: com alguma conta, o Android não aceita o Midview como dono.
 4. Ligue o cabo, toque em **Permitir** no aviso de depuração e digite o número do aparelho: o 7 vira "Celular 07" (ou "Tablet 07"). O Midview instala o aplicativo, liga o Wi-Fi do laboratório, se torna dono do aparelho e o põe na sala, já pareado.

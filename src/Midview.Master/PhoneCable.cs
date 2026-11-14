@@ -456,7 +456,7 @@ public sealed partial class PhoneCable
         CableProblem.Refused => ("O celular recusou a preparação. Tente de novo.", "cabo"),
         CableProblem.Lost => ("O cabo soltou no meio. Ligue de novo e tente outra vez.", "cabo"),
         CableProblem.MiSignOutFailed => ("O Midview não conseguiu sair da conta Mi sozinho. Saia dela no celular e tente de novo.", "sair-contas"),
-        CableProblem.ScreenLocked => ("Tire a senha de bloqueio do aparelho antes (Configurações > Segurança > Bloqueio de tela > Nenhum): com ela, o PIN do professor não funciona neste aparelho.", "cabo"),
+        CableProblem.ScreenLocked => ("Tire a senha de bloqueio do aparelho (Configurações > Segurança > Bloqueio de tela > Nenhum) e tente de novo. Se a escola for usar o PIN do professor neste aparelho, restaure-o de fábrica antes: um aparelho que já teve senha de tela não aceita esse PIN.", "cabo"),
         _ => throw new ArgumentOutOfRangeException(nameof(p)),
     };
 }

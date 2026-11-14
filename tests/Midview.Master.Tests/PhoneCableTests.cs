@@ -833,7 +833,7 @@ public sealed class PhoneCableTests
 
     [Theory]
     [InlineData(CableProblem.NoPhone, "O celular n\u00e3o est\u00e1 no cabo.\nFeche outros programas que usam o celular pelo cabo (Android Studio, scrcpy, outro Midview) e tente de novo.", "cabo")]
-    [InlineData(CableProblem.ScreenLocked, "Tire a senha de bloqueio do aparelho antes (Configura\u00e7\u00f5es > Seguran\u00e7a > Bloqueio de tela > Nenhum): com ela, o PIN do professor n\u00e3o funciona neste aparelho.", "cabo")]
+    [InlineData(CableProblem.ScreenLocked, "Tire a senha de bloqueio do aparelho (Configurações > Segurança > Bloqueio de tela > Nenhum) e tente de novo. Se a escola for usar o PIN do professor neste aparelho, restaure-o de fábrica antes: um aparelho que já teve senha de tela não aceita esse PIN.", "cabo")]
     [InlineData(CableProblem.TooMany, "H\u00e1 mais de um celular no cabo. Deixe s\u00f3 um.", "cabo")]
     [InlineData(CableProblem.Unauthorized, "Falta tocar em Permitir no celular.", "cabo")]
     [InlineData(CableProblem.TooOld, "Este celular \u00e9 antigo demais para o Midview (precisa do Android 10 ou mais novo).", null)]
