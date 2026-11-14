@@ -33,19 +33,27 @@ internal static class DeviceSetupText
 
     // The count is PhoneCable's own list, so the page never says a number of
     // apps the cable does not remove.
-    public static string Optimized(AndroidDeviceKind kind) =>
-        $"Instala o Midview e deixa o {Word(kind)} mais leve: tira {PhoneCable.RemovedApps.Count} apps que a turma não usa " +
-        "(testes de fábrica, propaganda e coleta de dados, App Google), desliga as animações e segura os apps pesados em segundo plano.";
+    public static string Optimized(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet
+        ? $"Instala o Midview e deixa o tablet mais leve: tira até {PhoneCable.RemovedApps.Count + PhoneCable.TabletRemovedApps.Count} apps " +
+          "que a turma não usa (testes de fábrica, propaganda e coleta de dados, App Google, telefone, estilos do sistema), " +
+          "desliga as animações, segura os apps pesados em segundo plano e arruma a tela inicial."
+        : $"Instala o Midview e deixa o {Word(kind)} mais leve: tira {PhoneCable.RemovedApps.Count} apps que a turma não usa " +
+          "(testes de fábrica, propaganda e coleta de dados, App Google), desliga as animações, segura os apps pesados " +
+          "em segundo plano e arruma a tela inicial.";
 
-    // Measured on the school's Redmi 10C on 2026-11-13.
-    public const string Gain = "Ganho no Redmi 10C: cerca de 460 MB a mais de memória livre, menos travadas e menos bateria.";
+    // Measured on the school's Redmi 10C and Multilaser M10 on 2026-11-13.
+    public static string Gain(AndroidDeviceKind kind) => kind == AndroidDeviceKind.Tablet
+        ? "Ganho no tablet Multilaser M10: a tela inicial trava quatro vezes menos (de 20% para 5% dos quadros)."
+        : "Ganho no Redmi 10C: cerca de 460 MB a mais de memória livre, menos travadas e menos bateria.";
 
     public static string OnlyMidview(AndroidDeviceKind kind) =>
         $"Instala o Midview e não mexe no resto do {Word(kind)}. " +
         $"Use se a turma precisa de algum app da lista ou se quer o {Word(kind)} como veio de fábrica.";
 
     public static string Kept(AndroidDeviceKind kind) =>
-        "Câmera, galeria, calculadora, arquivos, gravador de tela, WPS e Chrome ficam. " +
+        (kind == AndroidDeviceKind.Tablet
+            ? "Câmera, Fotos, Files, calculadora, relógio, gravador e Chrome ficam. "
+            : "Câmera, galeria, calculadora, arquivos, gravador de tela, WPS e Chrome ficam. ") +
         $"Os apps tirados voltam se o {Word(kind)} for restaurado de fábrica.";
 
     // The school's Mi account line: where it is saved and changed (the
@@ -104,7 +112,7 @@ public partial class DeviceSetupPage : UserControl
         SwitchesLine.Text = before[1];
         CableLine.Text = before[2];
         OptimizedText.Text = DeviceSetupText.Optimized(kind);
-        GainText.Text = DeviceSetupText.Gain;
+        GainText.Text = DeviceSetupText.Gain(kind);
         OnlyMidviewText.Text = DeviceSetupText.OnlyMidview(kind);
         KeptText.Text = DeviceSetupText.Kept(kind);
 

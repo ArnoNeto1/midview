@@ -118,6 +118,9 @@ public class MachinesPhoneSetupTests
     {
         Assert.Contains($"tira {PhoneCable.RemovedApps.Count} apps", DeviceSetupText.Optimized(AndroidDeviceKind.Phone));
         Assert.StartsWith("Instala o Midview e deixa o tablet mais leve", DeviceSetupText.Optimized(AndroidDeviceKind.Tablet));
+        Assert.Contains($"tira até {PhoneCable.RemovedApps.Count + PhoneCable.TabletRemovedApps.Count} apps", DeviceSetupText.Optimized(AndroidDeviceKind.Tablet));
+        Assert.Contains("Redmi 10C", DeviceSetupText.Gain(AndroidDeviceKind.Phone));
+        Assert.Contains("Multilaser M10", DeviceSetupText.Gain(AndroidDeviceKind.Tablet));
     }
 
     [Theory]
