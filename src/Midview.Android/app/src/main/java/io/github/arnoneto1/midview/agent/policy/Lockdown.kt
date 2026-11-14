@@ -59,6 +59,11 @@ interface DevicePolicyGateway {
     // factory reset protection out of it (so the next owner is not asked for
     // the old account). Device Owner only; the phone restarts into setup.
     fun wipe()
+
+    // Whether Android lets this app erase the phone: a phone made Device
+    // Owner before the app asked for it (wipe-data, device_admin.xml) gets it
+    // at its next restart, and until then Android 10 to 13 refuse the wipe.
+    fun canWipe(): Boolean = true
     val sdkInt: Int
 
     // A debug build (ApplicationInfo.FLAG_DEBUGGABLE).

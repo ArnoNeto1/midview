@@ -184,7 +184,7 @@ class CommandHandler(
             channel.send(answer(message, channel.remoteThumbprint))
             // After the ack is on the wire, and off this thread: the wipe
             // kills the connection and the process with it.
-            if (message.type == MessageType.WIPE_PHONE && gateway.isDeviceOwner()) {
+            if (message.type == MessageType.WIPE_PHONE && gateway.isDeviceOwner() && gateway.canWipe()) {
                 runLater(WIPE_DELAY_MILLIS) {
                     // A refusal must not take the agent down with it.
                     try {
@@ -334,10 +334,12 @@ class CommandHandler(
         // Only a Device Owner can erase the phone; the wipe itself is started
         // by handle(), once this answer has been sent.
         MessageType.WIPE_PHONE ->
-            if (gateway.isDeviceOwner()) {
-                Message(MessageType.COMMAND_ACK, CommandResult.encode(true, WIPING))
-            } else {
+            if (!gateway.isDeviceOwner()) {
                 Message(MessageType.COMMAND_ACK, CommandResult.encode(false, NOT_PREPARED))
+            } else if (!gateway.canWipe()) {
+                Message(MessageType.COMMAND_ACK, CommandResult.encode(false, RESTART_TO_WIPE))
+            } else {
+                Message(MessageType.COMMAND_ACK, CommandResult.encode(true, WIPING))
             }
         // Everything a PC does and a phone doesn't yet: the teacher reads why.
         else -> Message(MessageType.COMMAND_ACK, CommandResult.encode(false, CommandResult.NOT_ON_PHONE))
@@ -355,6 +357,7 @@ class CommandHandler(
         const val SCREEN_ALREADY_ALLOWED = "a tela já está liberada"
         const val WIPING = "apagando"
         const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."
+        const val RESTART_TO_WIPE = "o Android só deixa apagar depois que o aparelho reiniciar: reinicie e tente de novo"
         const val INVALID_REQUEST = "pedido inválido"
         const val LEAVING = "o Midview está saindo deste celular"
 

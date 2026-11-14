@@ -88,6 +88,9 @@ class FakeSiteGateway(var owner: Boolean = true) : DevicePolicyGateway {
 
     override fun isDeviceOwner() = owner
 
+    var wipeAllowed = true
+    override fun canWipe() = wipeAllowed
+
     // "Apagar e preparar de novo": how often the phone was erased, what runs
     // as it is, and what the test saw then.
     var wipes = 0

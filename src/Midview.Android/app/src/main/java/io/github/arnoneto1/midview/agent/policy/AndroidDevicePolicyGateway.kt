@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.policy
 
+import android.app.admin.DeviceAdminInfo
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -53,6 +54,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     }
 
     override fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(app.packageName)
+
+    override fun canWipe(): Boolean = dpm.hasGrantedPolicy(admin, DeviceAdminInfo.USES_POLICY_WIPE_DATA)
 
     // The "no factory reset" lock (Lockdown) is lifted for the wipe, so it
     // cannot stand in the way of the Device Owner's own wipe, and put back if

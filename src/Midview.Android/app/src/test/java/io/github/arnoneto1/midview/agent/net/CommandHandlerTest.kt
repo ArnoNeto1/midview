@@ -446,6 +446,19 @@ class CommandHandlerTest {
         assertEquals(0, gateway.wipes)
     }
 
+    // Made Device Owner before the app asked for wipe-data: Android refuses
+    // the wipe until a restart, and the teacher reads that instead of "apagando".
+    @Test fun wipeAndroidWontAllowYetSaysToRestart() {
+        trusted.add(teacher)
+        gateway.wipeAllowed = false
+        val channel = FakeChannel(teacher, message(MessageType.WIPE_PHONE))
+        handler.handle(channel)
+
+        val ack = channel.sent.single()
+        assertEquals(false to CommandHandler.RESTART_TO_WIPE, CommandResult.decode(ack.payload))
+        assertEquals(0, gateway.wipes)
+    }
+
     @Test fun wipeWhenNotDeviceOwnerSaysWhy() {
         trusted.add(teacher)
         gateway.owner = false
