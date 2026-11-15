@@ -62,7 +62,17 @@ public partial class PhoneAccountsWindow : MidviewWindow
 
     private PhoneAccountsAction LockAction => _debugging ? PhoneAccountsAction.LockDebugging : PhoneAccountsAction.Lock;
 
-    private async void OnFreeClicked(object sender, RoutedEventArgs e) => await RunAsync(FreeAction, ChosenMinutes);
+    // Freeing USB debugging opens the devices to a computer on the cable: asked first.
+    private async void OnFreeClicked(object sender, RoutedEventArgs e)
+    {
+        if (_debugging && !_running && MidviewMessage.Show(
+                this, PhoneAccountsText.FreeDebuggingConfirm(_rows.Count, ChosenMinutes), Title,
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        await RunAsync(FreeAction, ChosenMinutes);
+    }
 
     private async void OnLockClicked(object sender, RoutedEventArgs e) => await RunAsync(LockAction, PhoneNetworkFree.LockNow);
 

@@ -58,7 +58,13 @@ public static class PhoneAccountsText
 
     // The warning under it, in the page's word ("celular" or "tablet").
     public static string DebuggingWarning(string word) =>
-        $"Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao {word}; ele pergunta \"Permitir depuração USB?\" na tela.";
+        $"Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao {word}; ele pergunta \"Permitir depuração USB?\" na tela. " +
+        "Um computador autorizado continua autorizado nas próximas vezes que a depuração for liberada.";
+
+    // Asked before freeing it: one click frees every device listed.
+    public static string FreeDebuggingConfirm(int devices, int minutes) =>
+        (devices == 1 ? "Liberar a depuração USB no aparelho" : $"Liberar a depuração USB nos {devices} aparelhos") +
+        $" por {Minutes(minutes)}? Enquanto isso, um computador no cabo pode pedir acesso a eles.";
 
     // Said once in the "Sair das contas do Chrome" window, before the button.
     public const string ClearChromeExplanation =

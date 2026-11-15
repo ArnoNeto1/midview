@@ -55,8 +55,13 @@ public class PhoneAccountsTextTests
             PhoneAccountsText.Summary(PhoneAccountsAction.FreeDebugging, 30, 2, 2));
         Assert.Equal("Depuração USB desligada e travada.", PhoneAccountsText.Summary(PhoneAccountsAction.LockDebugging, 0, 1, 1));
         Assert.Equal(
-            "Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao tablet; ele pergunta \"Permitir depuração USB?\" na tela.",
+            "Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao tablet; ele pergunta \"Permitir depuração USB?\" na tela. " +
+            "Um computador autorizado continua autorizado nas próximas vezes que a depuração for liberada.",
             PhoneAccountsText.DebuggingWarning("tablet"));
+        Assert.Equal(
+            "Liberar a depuração USB nos 3 aparelhos por 10 minutos? Enquanto isso, um computador no cabo pode pedir acesso a eles.",
+            PhoneAccountsText.FreeDebuggingConfirm(3, 10));
+        Assert.StartsWith("Liberar a depuração USB no aparelho por 30 minutos?", PhoneAccountsText.FreeDebuggingConfirm(1, 30));
         Assert.Contains("liga sozinha", PhoneAccountsText.DebuggingExplanation);
     }
 
