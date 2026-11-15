@@ -314,7 +314,9 @@ public sealed class PhoneCableChromeCopyTests : IDisposable
         Assert.False(PhoneCable.Fits(copy, abis, 29, 810305100));
         Assert.False(PhoneCable.Fits(copy, abis, 28, 404413833));
         Assert.False(PhoneCable.Fits(copy, new[] { "arm64-v8a" }, 29, 404413833));
-        Assert.True(PhoneCable.Fits(copy with { Abi = "" }, new[] { "x86_64" }, 29, 0));
+        Assert.True(PhoneCable.Fits(copy with { Abi = "" }, new[] { "x86_64" }, 29, 404413833));
+        // Never on a device without the app: only an update is checked against Google's signature.
+        Assert.False(PhoneCable.Fits(copy, abis, 29, 0));
         Assert.False(PhoneCable.Fits(copy with { VersionName = "126.0.6478.71" }, abis, 29, 0));
     }
 

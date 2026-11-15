@@ -227,9 +227,13 @@ public sealed partial class PhoneCable
 
     // A copy fits a device with these processors and Android when it is
     // built for one of them (or for none), runs on that Android, is up to
-    // date and is newer than the device's own version.
+    // date and is newer than the device's own version. Only over an app the
+    // device already has (own > 0): Android then installs it only with the
+    // same signature as the factory one (Google's), so a copy changed on
+    // this computer, hashes and all, can never plant a fake Chrome.
     internal static bool Fits(ChromeCopyManifest copy, IReadOnlyCollection<string> abis, int sdk, long own) =>
-        (copy.Abi.Length == 0 || abis.Contains(copy.Abi))
+        own > 0
+        && (copy.Abi.Length == 0 || abis.Contains(copy.Abi))
         && copy.MinSdk <= sdk
         && Major("versionName=" + copy.VersionName) >= ChromeMinimum
         && copy.VersionCode > own;
