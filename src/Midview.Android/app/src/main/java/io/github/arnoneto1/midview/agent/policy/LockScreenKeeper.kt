@@ -40,7 +40,12 @@ class AndroidScreenLockGateway(context: Context) : ScreenLockGateway {
     }
 
     // PASSWORD_QUALITY_NUMERIC, at least 4 digits (the admin declares
-    // limit-password for it), or no rule at all.
+    // limit-password for it), or no rule at all. "No rule" also takes the
+    // minimum length back to 0: Android 10 counts an admin's minimum length
+    // whatever its quality (getPasswordMinimumLength asks with quality
+    // UNSPECIFIED), so with 4 still kept, resetPasswordWithToken refuses the
+    // empty lock ("password length 0 does not meet required length 4") and
+    // the teacher's "Tirar o PIN" failed on the school's Multilaser M10.
     @Suppress("DEPRECATION")
     override fun requirePin(required: Boolean) {
         if (required) {
@@ -48,6 +53,7 @@ class AndroidScreenLockGateway(context: Context) : ScreenLockGateway {
             dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_NUMERIC)
             dpm.setPasswordMinimumLength(admin, PIN_LENGTH)
         } else {
+            dpm.setPasswordMinimumLength(admin, 0)
             dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
         }
     }

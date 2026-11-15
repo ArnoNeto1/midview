@@ -112,6 +112,7 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
     override fun removeScreenPin(): Boolean {
         val keeper = LockScreenKeeper.get(app)
         if (keeper.teacherPinSet() && !keeper.setTeacherPin(ByteArray(0)).first) return false
+        dpm.setPasswordMinimumLength(admin, 0)
         dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
         runCatching { dpm.clearResetPasswordToken(admin) }
         LockScreenKeeper.forget(app)
