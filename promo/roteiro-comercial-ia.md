@@ -1,8 +1,8 @@
 # Roteiro de produção: comercial do Midview (ElevenLabs + Higgsfield)
 
-Comercial de cerca de 50 segundos, 16:9, 1080p, em quatro cenas. A locução é
-gerada no ElevenLabs e o ambiente (o laboratório, as partículas, os fundos) no
-Higgsfield.
+Comercial de 52 segundos, 16:9, 1080p, em quatro cenas. A locução é gerada no
+ElevenLabs e o ambiente (o laboratório, as partículas, os fundos) no
+Higgsfield. A montagem está em `src/comercial` (veja "Montagem", no fim).
 
 **Regra do filme: todo quadro em que o Midview aparece é imagem real do
 programa**, gravada da tela. A IA não desenha, não anima e não "melhora" a
@@ -14,15 +14,15 @@ que não tem texto (a alternativa filmada está lá).
 nenhum ciano. O Midview chega em preto, cinza e ciano elétrico, e a partir daí
 o ciano é a única cor do filme.
 
-| Cena | Tempo (estimado) | Imagem | Aplicativo real na tela |
+| Cena | Tempo (na montagem) | Imagem | Aplicativo real na tela |
 | --- | --- | --- | --- |
-| 1. A Dor | 0:00 a 0:11 | Higgsfield | nada (o Midview ainda não chegou) |
-| 2. A Virada | 0:11 a 0:20 | Higgsfield, depois a janela real | cerca de 4 s |
-| 3. A Ação | 0:20 a 0:39 | Tela real, com 1 a 2 s de Higgsfield | cerca de 18 s |
-| 4. Call to Action | 0:39 a 0:50 | Fundo do Higgsfield + janela real, logo e endereço | cerca de 6 s |
+| 1. A Dor | 0:00 a 0:10,9 | Higgsfield | nada (o Midview ainda não chegou) |
+| 2. A Virada | 0:10,9 a 0:21,7 | Higgsfield (3,9 s), depois a janela real | 7 s |
+| 3. A Ação | 0:21,7 a 0:41,3 | Tela real | a cena toda |
+| 4. Call to Action | 0:41,3 a 0:52,3 | Fundo do Higgsfield + janela real, logo e endereço | a janela, ao lado da logo |
 
-Os tempos são estimativas pelo número de palavras. Gere a locução primeiro e
-monte a imagem em cima dela, não o contrário.
+Os tempos são os da montagem, feita em cima da locução gravada: a imagem segue
+a voz, não o contrário.
 
 ## O que o roteiro afirma, e onde isso está no repositório
 
@@ -105,9 +105,10 @@ fictícias. Servem como imagem parada num canto do quadro, mas são pequenas (a
 maior tem 1340×760) para ocupar a tela inteira em 1080p: para o filme, grave de
 novo.
 
-Os vídeos do Remotion desta pasta **não** são imagem real: são a janela
-redesenhada em React. Use-os só como rascunho, para acertar o tempo da
-montagem antes de gravar, e troque todos pelas tomadas reais no corte final.
+Os vídeos antigos do Remotion desta pasta (`MidviewPromo`, `MidviewTutorial`,
+`MidviewReels` e as suas variações) **não** são imagem real: são a janela
+redesenhada em React, e não entram no comercial. A montagem do comercial
+também é do Remotion, mas corta as tomadas reais.
 
 ### A imagem real e o Higgsfield
 
@@ -191,7 +192,7 @@ distrações. [pausa curta] Você pede atenção... e ninguém ouve. [pausa curt
 Cansado de não conseguir bloquear as telas, ou fechar os programas, na hora
 certa? [pausa dramática]
 
-**Prompt Higgsfield** (10 segundos):
+**Prompt Higgsfield** (11 segundos; a montagem usa 10,9 s):
 
 ```text
 Cinematic wide shot of a school computer lab in chaos, seen from the back of the room near the teacher's desk. Four rows of desktop monitors glow with chaotic, mismatched content: fast-moving colorful video games, endless scrolling video feeds, flashing chat bubbles, all abstract and slightly blurred, no readable text, no recognizable logos. Students are seen only from behind, hunched toward their screens, a few turning to each other and laughing, nobody looking at the front. In the foreground, slightly out of focus, a tired teacher in their forties raises one hand asking for attention, is ignored, lowers the hand and exhales, shoulders dropping. Camera: handheld, slow uneasy push-in at eye level, 35mm lens, shallow depth of field, subtle focus breathing. Lighting: harsh flat overhead fluorescent tubes with a faint flicker and a sickly warm-green cast, clashing multicolored monitor light spilling on desks and shoulders, dust visible in the air. Color: desaturated muddy warm tones against oversaturated screen colors, absolutely no cyan or teal anywhere in the frame. Mood: noisy, overwhelming, out of control. Photorealistic, anamorphic film look, natural motion blur, fine film grain, 24 fps. No readable text, no logos, no user interface, no faces of students.
@@ -215,8 +216,9 @@ inclinada em 3D, e assenta de frente; em "ao vivo, na sua tela" ela ocupa o
 quadro inteiro, com a grade de telas se atualizando. É a primeira vez que o
 produto aparece, e é o produto de verdade.
 
-**Prompt Higgsfield** (6 segundos, só a primeira metade da cena; o pulso de luz
-deve cair em "acabou"):
+**Prompt Higgsfield** (4 segundos: a montagem usa 3,9 s, até a janela real
+entrar; o pulso de luz deve cair perto dos 2 segundos, junto com o impacto da
+trilha, logo depois de "acabou"):
 
 ```text
 Extreme slow motion, one continuous shot. The same school computer lab, now frozen in time: the overhead lights cut out and the room drops into deep black and charcoal gray. From the teacher's desk in the foreground, a single pulse of electric cyan light, exact color #00BBD4, bursts outward as a thin shockwave ring that sweeps across the room. As the wave crosses each row, the chaotic colors on every monitor are wiped away one by one and replaced by a calm, uniform dark-gray screen showing one simple flat light-gray padlock icon in the center. The students are motionless dark silhouettes seen from behind. Thousands of fine glowing cyan particles and hair-thin threads of light trail behind the wave, linking monitor to monitor like a network, then settle and hang suspended in the air. Camera: perfectly smooth slow dolly forward down the center aisle with a gentle upward crane move, 24mm lens, deep parallax through the floating particles. Lighting: volumetric cyan beams cutting through light haze, soft cyan rim light on desks and chairs, glossy reflections on a dark polished floor, pitch-black shadows. Color palette: strictly black, charcoal gray, electric cyan #00BBD4 and light gray, no other hues. Style: Unreal Engine 5 cinematic render, ray-traced reflections, hyper-detailed, premium technology commercial, 120 fps slow motion. No readable text, no logos, no user interface.
@@ -303,7 +305,7 @@ Over-the-shoulder close-up of a teacher's hand resting on a computer mouse in fr
 laboratório. Sem complicação. [pausa curta] Gratuito para escolas.
 [pausa dramática] Baixe agora. O endereço está na tela.
 
-**Prompt Higgsfield** (10 segundos, fundo de encerramento):
+**Prompt Higgsfield** (11 segundos, fundo de encerramento):
 
 ```text
 Luxurious dark abstract background for a technology brand end card. Deep black and charcoal-gray space above a polished black glass floor. Fine particles drift slowly through volumetric light shafts descending from above: soft light-gray particles on the left half of the frame, electric cyan particles, exact color #00BBD4, on the right half, meeting and gently swirling at the center. Far in the background, softly out of focus, hair-thin cyan lines sketch a faint network of connected nodes. The center of the frame stays clean, dark and empty, reserved as negative space for a logo. Camera: very slow, perfectly smooth push-in with subtle parallax, 35mm lens, shallow depth of field, large soft bokeh. Lighting: volumetric cyan god rays through thin haze, gentle rim glow near the edges, soft vignette, subtle mirror reflections on the floor. Style: premium, minimal, Unreal Engine 5 cinematic render, ray tracing, ultra clean, seamless slow motion. No text, no letters, no logos, no people.
@@ -340,6 +342,27 @@ Efeitos pontuais: o burburinho de sala na Cena 1, cortado a seco em "O caos
 acabou"; um grave no pulso de luz; um clique seco de mouse e um "trava" curto a
 cada bloqueio da Cena 3.
 
-Para Reels e Shorts, gere as cenas de IA de novo em 9:16 em vez de recortar o
-16:9 e, nas tomadas reais, use aproximações nos botões e em parte da grade no
-lugar da janela inteira (a gravação em 4K aguenta o recorte).
+## Montagem
+
+O corte está em `src/comercial`, em três composições, todas feitas das tomadas
+R1 a R6:
+
+| Composição | Formato | Cenas de IA |
+| --- | --- | --- |
+| `MidviewComercial` | 16:9, 52,3 s | as três deste roteiro |
+| `MidviewComercialVertical` | 9:16, 32 s | nenhuma |
+| `MidviewReels3min` | 9:16, 179,9 s | nenhuma |
+
+A mídia (tomadas, locução, trilha e cenas de IA) fica fora do git, em
+`out/comercial/public`. Para o corte 16:9:
+
+```bash
+npm run comercial:audio
+npm run comercial:render
+```
+
+As cenas de IA entram pelo campo `ia` de `src/comercial/tempo.json`: `cena1`,
+`cena2` e `cena4`, cada uma com o `arquivo` e a `duracao` do vídeo. Enquanto
+uma delas está vazia, o corte mostra um aviso no lugar (cenas 1 e 2) ou um
+fundo de partículas desenhado (cena 4). O vídeo mais curto que o seu trecho
+anda um pouco mais devagar para cobri-lo; o mais longo é cortado no fim.
