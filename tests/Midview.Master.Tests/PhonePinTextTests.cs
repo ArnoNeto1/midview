@@ -98,9 +98,9 @@ public class PhonePinTextTests
         var minHeight = double.Parse(Regex.Match(xaml, "MinHeight=\"(\\d+)\"").Groups[1].Value, CultureInfo.InvariantCulture);
         Assert.True(minHeight <= 672, $"MinHeight {minHeight} would not fit a small screen");
         Assert.Contains("O aluno não consegue trocar nem tirar o PIN", xaml);
-        Assert.Contains("use esta janela, não o celular", xaml);
-        Assert.Contains("precisa ser desbloqueado uma vez antes", xaml);
-        Assert.Contains("antes da versão 0.0.57 precisam ser reiniciados uma vez", xaml);
+        Assert.Contains("use esta janela, não o aparelho", xaml);
+        Assert.Contains("só aceita o PIN depois de restaurado de fábrica", xaml);
+        Assert.DoesNotContain("0.0.57", xaml);
         Assert.Contains("MaxLength=\"4\"", xaml);
         Assert.Contains("Content=\"Pôr o PIN\"", xaml);
         Assert.Contains("Content=\"Tirar o PIN\"", xaml);

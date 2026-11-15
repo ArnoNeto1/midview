@@ -14,9 +14,9 @@
             <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
-                               Text="Põe um PIN de 4 números na tela de bloqueio. O aluno não consegue trocar nem tirar o PIN: se tentar, o Midview põe o do professor de volta. Para pôr, trocar ou tirar o PIN, use esta janela, não o celular." />
+                               Text="Põe um PIN de 4 números na tela de bloqueio. O aluno não consegue trocar nem tirar o PIN: se tentar, o Midview põe o do professor de volta. Para pôr, trocar ou tirar o PIN, use esta janela, não o aparelho." />
                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Text="Um celular que já tinha uma trava de tela precisa ser desbloqueado uma vez antes. Os preparados antes da versão 0.0.57 precisam ser reiniciados uma vez. O PIN não fica guardado neste computador: anote-o." />
+                               Text="Um aparelho que já tinha senha de tela antes do Midview só aceita o PIN depois de restaurado de fábrica. O PIN não fica guardado neste computador: anote-o." />
                 </StackPanel>
             </Border>
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
