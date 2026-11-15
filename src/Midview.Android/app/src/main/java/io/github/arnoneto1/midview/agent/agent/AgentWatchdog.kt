@@ -37,7 +37,8 @@ class AgentWatchdog : BroadcastReceiver() {
         // The lock screen too: the teacher's PIN put back if Android's
         // "password changed" never came.
         LockScreenKeeper.check(context)
-        // The Wi-Fi and airplane mode locked again once their free time is up.
+        // The Wi-Fi and airplane mode, the accounts and USB debugging locked
+        // again once their free time is up.
         SchoolNetwork.check(context)
         arm(context)
     }
