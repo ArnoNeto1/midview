@@ -15,6 +15,7 @@ public enum DeviceRoomAction
     Wallpaper,
     ClearChrome,
     Find,
+    Debugging,
     Remove,
 }
 
@@ -39,6 +40,9 @@ internal static class DeviceRoomText
 
     public const string FindButton = "Tocar...";
 
+    public static string DebuggingLine(AndroidDeviceKind kind) =>
+        $"Travada: o aluno não liga a depuração. Libere por um tempo para conferir o {DeviceSetupText.Word(kind)} pelo cabo; ela liga sozinha e desliga no fim.";
+
     // Each card: its title, its line and its button.
     public static (string Title, string Line, string Button) Card(DeviceRoomAction action, AndroidDeviceKind kind) => action switch
     {
@@ -55,6 +59,7 @@ internal static class DeviceRoomText
             "Sair das contas..."),
         DeviceRoomAction.Wallpaper => ("Papel de parede", "Põe a imagem da escola na tela inicial e de bloqueio.", "Escolher imagem..."),
         DeviceRoomAction.Find => ("Tocar para encontrar", FindLine(kind), FindButton),
+        DeviceRoomAction.Debugging => ("Depuração USB", DebuggingLine(kind), "Liberar..."),
         _ => ("Tirar o Midview", "Desfaz tudo e desinstala, ou restaura de fábrica.", "Tirar o Midview..."),
     };
 
@@ -72,6 +77,8 @@ internal static class DeviceRoomText
                 $"No fim da aula: tira os alunos das contas dos sites no Chrome dos {words}, apagando logins, cookies, histórico e abas. Pede confirmação.",
             DeviceRoomAction.Wallpaper => $"Põe uma imagem como papel de parede da tela inicial e da de bloqueio dos {words}; o aluno não consegue trocá-la.",
             DeviceRoomAction.Find => PhoneFindText.StartToolTip,
+            DeviceRoomAction.Debugging =>
+                $"Libera por alguns minutos a depuração USB dos {words}, que fica travada, e a liga, para conferi-los pelo cabo; no fim ela desliga e trava de novo. Ou trava agora.",
             _ => $"Desfaz tudo o que o Midview fez nos {words} e o desinstala (fotos e arquivos ficam), ou os restaura de fábrica (apaga tudo). Pede confirmação.",
         };
         return line + $" Com alguns {words} selecionados na tela, só neles.";
@@ -81,7 +88,8 @@ internal static class DeviceRoomText
 // The lower part of a "Configurar" page: the room's devices of that kind,
 // with one card per action in two columns (one at the window's narrowest),
 // two by two: Otimizar and PIN, the Wi-Fi's and the accounts' locks, the
-// wallpaper and Chrome's logins, ringing and taking the Midview off.
+// wallpaper and Chrome's logins, ringing and USB debugging (both to reach a
+// device in hand), and taking the Midview off alone at the end.
 // Built in code so it holds without the app's resources (its styles are
 // resource references).
 public sealed class DeviceRoomSection : StackPanel

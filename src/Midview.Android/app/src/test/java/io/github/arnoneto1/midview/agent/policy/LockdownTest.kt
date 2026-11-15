@@ -309,6 +309,23 @@ class LockdownTest {
         assertFalse("no_modify_accounts" in Lockdown.RESTRICTIONS)
     }
 
+    // USB debugging is locked on release builds, and left alone while
+    // "Depuração USB" frees it (DebuggingFree says so); it is not among the
+    // locks every start puts back regardless. A debug build never locks it.
+    @Test fun usbDebuggingIsLockedUnlessFreed() {
+        val release = FakeGateway(sdkInt = 34)
+        assertTrue(Lockdown(release).apply())
+        assertTrue("no_debugging_features" in release.restrictions)
+
+        val free = FakeGateway(sdkInt = 34)
+        assertTrue(Lockdown(free, debugging = { /* freed: not run */ }).apply())
+        assertEquals(all(34) - "no_debugging_features", free.restrictions)
+        assertEquals(listOf("no_debugging_features"), Lockdown.DEBUGGING_RESTRICTIONS)
+        assertFalse("no_debugging_features" in Lockdown.RESTRICTIONS)
+        assertEquals(emptyList<String>(), Lockdown.debuggingRestrictions(debuggable = true))
+        assertEquals(listOf("no_debugging_features"), Lockdown.debuggingRestrictions(debuggable = false))
+    }
+
     // Turning the Wi-Fi off is its own lock only from Android 13.
     @Test fun turningTheWifiOffIsLockedFromAndroid13() {
         assertEquals(listOf("no_config_wifi", "no_airplane_mode"), Lockdown.networkRestrictions(32))

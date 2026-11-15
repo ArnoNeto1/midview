@@ -3,10 +3,10 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// "Contas do aparelho" and "Sair das contas do Chrome" on one device, on its
-// agent's port 28900: FreePhoneAccounts with the minutes (0 locks again
-// now), or ClearChromeData, each answered with a CommandAck saying how it
-// went.
+// "Contas do aparelho", "Depuração USB" and "Sair das contas do Chrome" on
+// one device, on its agent's port 28900: FreePhoneAccounts or
+// FreePhoneDebugging with the minutes (0 locks again now), or
+// ClearChromeData, each answered with a CommandAck saying how it went.
 public static class PhoneAccountsClient
 {
     // The device waits for Android to erase Chrome's data (up to a minute)
@@ -18,6 +18,10 @@ public static class PhoneAccountsClient
     public static (bool Succeeded, string Detail)? Free(
         KnownMachine phone, int minutes, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>
         Send(phone, MessageType.FreePhoneAccounts, PhoneNetworkFree.Encode(minutes), masterCertificate, port, null);
+
+    public static (bool Succeeded, string Detail)? FreeDebugging(
+        KnownMachine phone, int minutes, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>
+        Send(phone, MessageType.FreePhoneDebugging, PhoneNetworkFree.Encode(minutes), masterCertificate, port, null);
 
     public static (bool Succeeded, string Detail)? ClearChrome(
         KnownMachine phone, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>

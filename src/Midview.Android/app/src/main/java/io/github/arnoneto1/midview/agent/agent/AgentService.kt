@@ -338,8 +338,8 @@ class AgentService : Service() {
         // "Agendar": the screen off at the teacher's shutdown time, by the same countdown.
         val powerSchedule = scheduledScreenOff(power, log, ::own)
         val classFolder = AgentClassFolder(this, log, ::own)
-        // The Wi-Fi, and the accounts, locked again right when their free
-        // time ends (the watchdog is the fallback, also for a phone asleep then).
+        // The Wi-Fi, the accounts and USB debugging locked again right when
+        // their free time ends (the watchdog is the fallback, also for a phone asleep then).
         fun relockOnTime(free: TimedFree) {
             val relock = Runnable { SchoolNetwork.check(this) }
             own(
@@ -352,6 +352,7 @@ class AgentService : Service() {
         }
         relockOnTime(SchoolNetwork.network(this))
         relockOnTime(SchoolNetwork.accounts(this))
+        relockOnTime(SchoolNetwork.debugging(this))
         // "Sair das contas do Chrome": Chrome's policies written again after.
         val chromeClear = ChromeDataClear(
             policyGateway::isDeviceOwner, policyGateway.sdkInt, installedApps::isChromeInstalled,
@@ -364,6 +365,7 @@ class AgentService : Service() {
             log = log, screenPin = lockScreen::setTeacherPin, closeApps = countdown::request, power = power::request,
             freeNetwork = SchoolNetwork.network(this)::handle, adminPassword = SchoolNetwork.admin(this)::setPassword,
             freeAccounts = SchoolNetwork.accounts(this)::handle, clearChrome = chromeClear::handle,
+            freeDebugging = SchoolNetwork.debugging(this)::handle,
             powerSchedule = powerSchedule::handle,
             // "Desfazer e tirar o Midview" (PhoneLeave).
             isLeaving = { PhoneLeaving.isActive(this) },

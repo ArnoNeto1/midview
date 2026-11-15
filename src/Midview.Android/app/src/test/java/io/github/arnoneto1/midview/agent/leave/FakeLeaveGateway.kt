@@ -18,7 +18,14 @@ class FakeLeaveGateway : LeaveGateway {
     var refuse: Set<String> = emptySet()
 
     var owner = true
-    val restrictions = (Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(33) + Lockdown.ACCOUNT_RESTRICTIONS + "no_from_somewhere_else").toMutableSet()
+    val restrictions = (
+        Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(33) + Lockdown.ACCOUNT_RESTRICTIONS + Lockdown.DEBUGGING_RESTRICTIONS +
+            "no_from_somewhere_else"
+        ).toMutableSet()
+
+    // "Depuração USB" freed by the teacher (DebuggingFree), and adb on with it.
+    var debuggingFreed = false
+    var usbDebugging = false
     var ownAppLocked = true
     var lockTask = true
     var accessibilityLimited = true
@@ -61,6 +68,14 @@ class FakeLeaveGateway : LeaveGateway {
     override fun clearRestriction(r: String) {
         call("clearRestriction")
         restrictions -= r
+    }
+
+    override fun endDebuggingFree() {
+        call("endDebuggingFree")
+        if (debuggingFreed) {
+            debuggingFreed = false
+            usbDebugging = false
+        }
     }
 
     override fun releaseOwnApp() {
@@ -169,5 +184,5 @@ class FakeLeaveGateway : LeaveGateway {
     fun undone(): Boolean =
         restrictions.isEmpty() && !ownAppLocked && !lockTask && !accessibilityLimited && suspended.isEmpty() && hidden.isEmpty() &&
             !chromePolicy && vpn == null && !vpnRunning && dns.mode == PrivateDns.MODE_OPPORTUNISTIC && !networksLocked && !pin &&
-            !wallpaper
+            !wallpaper && !usbDebugging
 }

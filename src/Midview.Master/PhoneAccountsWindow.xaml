@@ -5,7 +5,7 @@
         Title="Contas dos celulares e tablets" Height="620" Width="660" MinHeight="440" MinWidth="540"
         MaxHeight="{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height}"
         WindowStartupLocation="CenterOwner">
-    <!-- "Contas do aparelho" (minutes, Liberar, Travar agora) or "Sair das contas do Chrome" (one button, confirmed): the mode given. -->
+    <!-- "Contas do aparelho" and "Depuração USB" (minutes, Liberar, Travar agora) or "Sair das contas do Chrome" (one button, confirmed): the card given. -->
     <DockPanel Margin="24,22,24,20">
         <StackPanel DockPanel.Dock="Top">
             <local:DialogHeader x:Name="DialogHeading" Icon="&#xE77B;" Heading="Contas dos celulares e tablets" Accent="{StaticResource CelularesBrush}">
@@ -14,6 +14,8 @@
             <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock x:Name="ExplanationTextBlock" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                    <!-- "Depuração USB" only: what a computer on the cable may ask while it is free. -->
+                    <TextBlock x:Name="WarningTextBlock" Style="{StaticResource WarningText}" FontSize="13" Margin="0,8,0,0" Visibility="Collapsed" />
                     <StackPanel x:Name="MinutesPanel" Orientation="Horizontal" Margin="0,12,0,0">
                         <TextBlock Text="Liberar por" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,0" />
                         <RadioButton x:Name="TenMinutesRadioButton" GroupName="Minutes" Content="10 minutos" IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0" />

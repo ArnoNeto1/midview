@@ -75,6 +75,8 @@ class CommandHandler(
     // the payload in, the CommandAck's result out.
     private val freeAccounts: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     private val clearChrome: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
+    // "Depuração USB" (DebuggingFree): the payload in, the CommandAck's result out.
+    private val freeDebugging: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
     // "Papel de parede dos celulares e tablets" (TeacherWallpaper): the
     // payload in, the CommandAck's result out.
     private val wallpaper: (ByteArray) -> Pair<Boolean, String> = { false to CommandResult.NOT_ON_PHONE },
@@ -275,6 +277,10 @@ class CommandHandler(
         }
         MessageType.FREE_PHONE_ACCOUNTS -> {
             val (done, detail) = freeAccounts(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
+        MessageType.FREE_PHONE_DEBUGGING -> {
+            val (done, detail) = freeDebugging(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
         MessageType.CLEAR_CHROME_DATA -> {

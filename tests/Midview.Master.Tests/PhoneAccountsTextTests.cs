@@ -40,6 +40,26 @@ public class PhoneAccountsTextTests
         Assert.Contains("\"Continuar sem fazer login\"", PhoneAccountsText.ClearChromeExplanation);
     }
 
+    // "Depuração USB": its own heading, progress and summary, and the warning in the page's word.
+    [Fact]
+    public void Usb_debugging_has_its_own_words()
+    {
+        Assert.Equal("Depuração USB do celular ou tablet", PhoneAccountsText.Heading(PhoneAccountsAction.FreeDebugging, 1));
+        Assert.Equal("Depuração USB dos celulares e tablets", PhoneAccountsText.Heading(PhoneAccountsAction.LockDebugging, 2));
+        Assert.Equal("Liberando a depuração USB nos 3 aparelhos...", PhoneAccountsText.Progress(PhoneAccountsAction.FreeDebugging, 3));
+        Assert.Equal("Travando a depuração USB no aparelho...", PhoneAccountsText.Progress(PhoneAccountsAction.LockDebugging, 1));
+        Assert.Equal("liberando…", PhoneAccountsText.Working(PhoneAccountsAction.FreeDebugging));
+        Assert.Equal("travando…", PhoneAccountsText.Working(PhoneAccountsAction.LockDebugging));
+        Assert.Equal(
+            "Depuração USB liberada e ligada por 30 minutos nos 2 aparelhos.",
+            PhoneAccountsText.Summary(PhoneAccountsAction.FreeDebugging, 30, 2, 2));
+        Assert.Equal("Depuração USB desligada e travada.", PhoneAccountsText.Summary(PhoneAccountsAction.LockDebugging, 0, 1, 1));
+        Assert.Equal(
+            "Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao tablet; ele pergunta \"Permitir depuração USB?\" na tela.",
+            PhoneAccountsText.DebuggingWarning("tablet"));
+        Assert.Contains("liga sozinha", PhoneAccountsText.DebuggingExplanation);
+    }
+
     [Fact]
     public void A_line_is_the_agents_answer_or_the_old_version()
     {

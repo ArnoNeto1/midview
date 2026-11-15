@@ -489,6 +489,16 @@ public enum MessageType : byte
     // can take several seconds; an agent from before this answers "Ainda não
     // funciona em celular.".
     ClearChromeData = 110,
+
+    // Master -> Android agent (port 28900), from a trusted teacher only:
+    // "Depuração USB" (a PhoneNetworkFree payload, as FreePhoneNetwork's: the
+    // minutes, 1 to 60, USB debugging is free, or 0 to lock it again now).
+    // USB debugging stays locked otherwise; while free the agent turns it on
+    // itself, so the teacher checks a device over the cable, and when the
+    // time is up it turns it off and locks it again by itself. Answered with
+    // a CommandAck (CommandResult); an agent from before this answers "Ainda
+    // não funciona em celular.".
+    FreePhoneDebugging = 111,
 }
 
 public enum CloseAppsMode : byte

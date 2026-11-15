@@ -1,18 +1,28 @@
 namespace Midview.Master;
 
-// What the "Contas do aparelho" and "Sair das contas do Chrome" windows do
-// to the devices.
+// What the "Contas do aparelho", "Depuração USB" and "Sair das contas do
+// Chrome" windows do to the devices.
 public enum PhoneAccountsAction
 {
     Free,
     Lock,
     ClearChrome,
+    FreeDebugging,
+    LockDebugging,
 }
 
-// How those two windows word each device's answer, kept apart so it can be
+// Which card of Configurar celular/tablet opened PhoneAccountsWindow.
+public enum PhoneAccountsCard
+{
+    Accounts,
+    ClearChrome,
+    Debugging,
+}
+
+// How those windows word each device's answer, kept apart so it can be
 // tested. The agent's own details ("contas do aparelho liberadas por 10
-// minutos", "Chrome limpo: ...") are already in Portuguese and are shown as
-// they come.
+// minutos", "depuração USB travada", "Chrome limpo: ...") are already in
+// Portuguese and are shown as they come.
 public static class PhoneAccountsText
 {
     // An agent from before these commands: it fails a command it doesn't know.
@@ -27,6 +37,9 @@ public static class PhoneAccountsText
         PhoneAccountsAction.ClearChrome => devices == 1
             ? "Sair das contas do Chrome do celular ou tablet"
             : "Sair das contas do Chrome dos celulares e tablets",
+        PhoneAccountsAction.FreeDebugging or PhoneAccountsAction.LockDebugging => devices == 1
+            ? "Depuração USB do celular ou tablet"
+            : "Depuração USB dos celulares e tablets",
         _ => devices == 1 ? "Contas do celular ou tablet" : "Contas dos celulares e tablets",
     };
 
@@ -36,6 +49,16 @@ public static class PhoneAccountsText
         "Para pôr a conta Google da escola num aparelho já preparado (com ela, a Play Store mantém o Chrome atualizado), libere por alguns minutos " +
         "e ponha a conta em Configurações > Contas; depois elas travam de novo sozinhas. O Chrome nunca entra nessa conta: o aluno continua " +
         "fazendo login só nos sites (Classroom e outros).";
+
+    // Said once in the "Depuração USB" window.
+    public const string DebuggingExplanation =
+        "A depuração USB fica travada nos celulares e tablets da escola: o aluno não a liga (com ela, um computador pelo cabo instala apps " +
+        "e mexe no aparelho). Para conferir um aparelho pelo cabo, libere por alguns minutos: a depuração liga sozinha e, no fim do tempo, " +
+        "desliga e trava de novo.";
+
+    // The warning under it, in the page's word ("celular" or "tablet").
+    public static string DebuggingWarning(string word) =>
+        $"Enquanto liberada, um computador ligado pelo cabo pode pedir acesso ao {word}; ele pergunta \"Permitir depuração USB?\" na tela.";
 
     // Said once in the "Sair das contas do Chrome" window, before the button.
     public const string ClearChromeExplanation =
@@ -56,8 +79,8 @@ public static class PhoneAccountsText
 
     public static string Working(PhoneAccountsAction action) => action switch
     {
-        PhoneAccountsAction.Free => "liberando…",
-        PhoneAccountsAction.Lock => "travando…",
+        PhoneAccountsAction.Free or PhoneAccountsAction.FreeDebugging => "liberando…",
+        PhoneAccountsAction.Lock or PhoneAccountsAction.LockDebugging => "travando…",
         _ => "limpando o Chrome…",
     };
 
@@ -68,6 +91,8 @@ public static class PhoneAccountsText
         {
             PhoneAccountsAction.Free => "Liberando as contas",
             PhoneAccountsAction.Lock => "Travando as contas",
+            PhoneAccountsAction.FreeDebugging => "Liberando a depuração USB",
+            PhoneAccountsAction.LockDebugging => "Travando a depuração USB",
             _ => "Saindo das contas do Chrome",
         };
         return devices == 1 ? $"{verb} no aparelho..." : $"{verb} nos {devices} aparelhos...";
@@ -80,6 +105,8 @@ public static class PhoneAccountsText
         {
             PhoneAccountsAction.Free => $"Contas liberadas por {Minutes(minutes)}",
             PhoneAccountsAction.Lock => "Contas travadas",
+            PhoneAccountsAction.FreeDebugging => $"Depuração USB liberada e ligada por {Minutes(minutes)}",
+            PhoneAccountsAction.LockDebugging => "Depuração USB desligada e travada",
             _ => "Chrome limpo",
         };
         return (done, total) switch

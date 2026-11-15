@@ -23,6 +23,10 @@ interface LeaveGateway {
     fun restrictions(): Set<String>
     fun clearRestriction(r: String)
 
+    // A free time of "Depuração USB" dropped, and the USB debugging it
+    // turned on turned off (DebuggingFree.leave); nothing when none was kept.
+    fun endDebuggingFree()
+
     // The app may be uninstalled, force-stopped and have its data cleared.
     fun releaseOwnApp()
 
@@ -256,6 +260,9 @@ class PhoneLeave(
             val refused = (gw.restrictions() + KNOWN_RESTRICTIONS).sorted().filterNot { r -> tried { gw.clearRestriction(r) } }
             check(refused.isEmpty()) { "restrictions kept: $refused" }
         }
+        // USB debugging as the lock left it (off), also when the teacher had
+        // freed it; never a reason to stay.
+        quietly("turn off the USB debugging the teacher freed") { gw.endDebuggingFree() }
         step(LeaveStep.LOCK_TASK) { gw.endLockTask() }
         step(LeaveStep.OWN_APP) { gw.releaseOwnApp() }
         step(LeaveStep.ACCESSIBILITY) { gw.allowEveryAccessibilityService() }
@@ -335,12 +342,12 @@ class PhoneLeave(
     companion object {
         // Every restriction any version of the agent sets, lifted even if
         // Android does not list it as the admin's (Lockdown's, the network's
-        // on any Android, the accounts', freed or not, and
+        // on any Android, the accounts' and USB debugging's, freed or not, and
         // DISALLOW_APPS_CONTROL of Android 10).
         val KNOWN_RESTRICTIONS: Set<String> =
             (
                 Lockdown.RESTRICTIONS + Lockdown.networkRestrictions(Int.MAX_VALUE) + Lockdown.ACCOUNT_RESTRICTIONS +
-                    Lockdown.DISALLOW_APPS_CONTROL
+                    Lockdown.DEBUGGING_RESTRICTIONS + Lockdown.DISALLOW_APPS_CONTROL
                 ).toSet()
 
         // The apps uninstalled for this user that come back: every one the

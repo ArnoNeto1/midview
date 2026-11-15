@@ -10,6 +10,7 @@ import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Log
 import io.github.arnoneto1.midview.agent.AdminReceiver
 import io.github.arnoneto1.midview.agent.leave.PhoneLeaving
@@ -82,8 +83,19 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
     }
 
     // Only TimedFree lifts a lock, for "Liberar Wi-Fi e modo avião"
-    // (NetworkFree) and "Contas do aparelho" (AccountsFree).
+    // (NetworkFree), "Contas do aparelho" (AccountsFree) and "Depuração USB"
+    // (DebuggingFree).
     fun clearUserRestriction(r: String) = dpm.clearUserRestriction(admin, r)
+
+    // "Depuração USB" (DebuggingFree): USB debugging turned on or off as the
+    // Device Owner (Settings.Global.ADB_ENABLED is on
+    // DevicePolicyManagerService's list for setGlobalSetting). Android refuses
+    // turning it on while DISALLOW_DEBUGGING_FEATURES is set, so the lock is
+    // lifted first. Never turned on once the Midview is leaving the phone.
+    fun setUsbDebugging(on: Boolean) {
+        if (on) refuseWhileLeaving()
+        dpm.setGlobalSetting(admin, Settings.Global.ADB_ENABLED, if (on) "1" else "0")
+    }
 
     // "Sair das contas do Chrome" (ChromeDataClear): an app's data erased as
     // Settings' "Limpar armazenamento" does, the app stopped first (Android 9
@@ -200,8 +212,8 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
 
         // Applies the locks and never fails its caller: a refused lock is
         // logged, and the next start of the agent tries again. The Wi-Fi and
-        // airplane mode, and the accounts, stay free while their time runs
-        // (SchoolNetwork).
+        // airplane mode, the accounts and USB debugging stay free while their
+        // time runs (SchoolNetwork).
         fun lockDown(context: Context) {
             // The Midview is leaving the phone (PhoneLeaving): never locked again.
             if (PhoneLeaving.isActive(context)) return
@@ -210,7 +222,12 @@ class AndroidDevicePolicyGateway(context: Context) : DevicePolicyGateway {
                 // Once the Device Owner: the school's network out of the user's hands.
                 if (AndroidDevicePolicyGateway(context).isDeviceOwner()) SchoolNetwork.wifi(context).lockOwnersNetworks()
                 val accounts = SchoolNetwork.accounts(context)
-                if (Lockdown(AndroidDevicePolicyGateway(context), network = network::unlessFree, accounts = accounts::unlessFree).apply()) {
+                val debugging = SchoolNetwork.debugging(context)
+                val lockdown = Lockdown(
+                    AndroidDevicePolicyGateway(context),
+                    network = network::unlessFree, accounts = accounts::unlessFree, debugging = debugging::unlessFree,
+                )
+                if (lockdown.apply()) {
                     Log.i(TAG, "School phone locks applied.")
                 }
             } catch (e: RuntimeException) {

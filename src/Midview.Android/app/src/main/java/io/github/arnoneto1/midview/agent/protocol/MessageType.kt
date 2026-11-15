@@ -246,4 +246,11 @@ object MessageType {
     // answered with a CommandAck (CommandResult) once Android says how it
     // went. Number 110 as the C# ClearChromeData.
     const val CLEAR_CHROME_DATA = 110
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Depuração
+    // USB" (a PhoneNetworkFree payload, as FREE_PHONE_NETWORK's: the minutes,
+    // 1 to 60, USB debugging is free and turned on, or 0 to turn it off and
+    // lock it again now; DebuggingFree), answered with a CommandAck
+    // (CommandResult). Number 111 as the C# FreePhoneDebugging.
+    const val FREE_PHONE_DEBUGGING = 111
 }

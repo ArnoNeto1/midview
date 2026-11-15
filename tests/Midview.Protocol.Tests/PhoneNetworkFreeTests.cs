@@ -11,6 +11,8 @@ public class PhoneNetworkFreeTests
         // "Contas do aparelho" (the same payload) and "Sair das contas do Chrome".
         Assert.Equal(109, (int)MessageType.FreePhoneAccounts);
         Assert.Equal(110, (int)MessageType.ClearChromeData);
+        // "Depuração USB" (the same payload).
+        Assert.Equal(111, (int)MessageType.FreePhoneDebugging);
     }
 
     [Theory]

@@ -89,7 +89,34 @@ class PhoneLeaveTest {
         assertTrue("no_change_wifi_state" in PhoneLeave.KNOWN_RESTRICTIONS)
         // "Contas do aparelho": lifted on leaving, whether freed or not.
         assertTrue("no_modify_accounts" in PhoneLeave.KNOWN_RESTRICTIONS)
+        // "Depuração USB" too.
+        assertTrue("no_debugging_features" in PhoneLeave.KNOWN_RESTRICTIONS)
         assertTrue(Lockdown.RESTRICTIONS.all { it in PhoneLeave.KNOWN_RESTRICTIONS })
+    }
+
+    // USB debugging the teacher freed (and so turned on) is off again after
+    // the leaving, as the lock left it, and the lock itself is lifted.
+    @Test fun usbDebuggingTheTeacherFreedIsTurnedOffWithoutTheLock() {
+        gw.debuggingFreed = true
+        gw.usbDebugging = true
+        gw.restrictions -= "no_debugging_features"
+
+        val report = leave().start()
+
+        assertTrue(report.complete)
+        assertFalse(gw.usbDebugging)
+        assertFalse("no_debugging_features" in gw.restrictions)
+        assertTrue(firstOf("clearRestriction") < firstOf("endDebuggingFree"))
+    }
+
+    // Android refusing to turn it off is no reason for the Midview to stay.
+    @Test fun aRefusedTurningOffOfUsbDebuggingStillLeaves() {
+        gw.refuse = setOf("endDebuggingFree")
+
+        val report = leave().start()
+
+        assertTrue(report.complete)
+        assertTrue(gw.restrictions.isEmpty())
     }
 
     @Test fun runningItAgainChangesNothing() {

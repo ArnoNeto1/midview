@@ -83,7 +83,8 @@ internal static class DeviceSetupText
 // the device); they work only with the assistant out (PhoneSetupOffer.Wizard),
 // otherwise the page still explains the two ways and says why they are off.
 // Below, the room's devices of that kind (RoomSection: optimize, PIN, Wi-Fi,
-// accounts, wallpaper, Chrome's logins, ring, take the Midview off),
+// accounts, wallpaper, Chrome's logins, ring, USB debugging, take the
+// Midview off),
 // whatever the gate.
 public partial class DeviceSetupPage : UserControl
 {

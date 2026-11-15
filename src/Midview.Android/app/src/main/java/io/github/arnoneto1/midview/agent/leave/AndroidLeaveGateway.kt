@@ -24,6 +24,7 @@ import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 import io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
 import io.github.arnoneto1.midview.agent.screen.ConsentActivity
 import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
@@ -52,6 +53,8 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
     }
 
     override fun clearRestriction(r: String) = dpm.clearUserRestriction(admin, r)
+
+    override fun endDebuggingFree() = SchoolNetwork.debugging(app).leave()
 
     override fun releaseOwnApp() {
         dpm.setUninstallBlocked(admin, app.packageName, false)

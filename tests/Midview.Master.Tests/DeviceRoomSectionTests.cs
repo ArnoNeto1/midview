@@ -83,7 +83,7 @@ public class DeviceRoomSectionTests
     }
 
     [Fact]
-    public void Eight_cards_with_their_buttons_all_on_with_devices_in_the_room()
+    public void Nine_cards_with_their_buttons_all_on_with_devices_in_the_room()
     {
         InSta(() =>
         {
@@ -94,7 +94,7 @@ public class DeviceRoomSectionTests
                 new[]
                 {
                     "Otimizar...", "Definir PIN...", "Liberar...", "Liberar...", "Escolher imagem...", "Sair das contas...", "Tocar...",
-                    "Tirar o Midview...",
+                    "Liberar...", "Tirar o Midview...",
                 },
                 Enum.GetValues<DeviceRoomAction>().Select(action => (string)section.ButtonOf(action).Content));
             Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
@@ -106,6 +106,10 @@ public class DeviceRoomSectionTests
             Assert.Contains("Travadas: o aluno não põe nem tira contas. Libere por um tempo para pôr a conta Google da escola.", texts);
             Assert.Contains("Sair das contas do Chrome", texts);
             Assert.Contains("Apaga os logins de sites, os cookies, o histórico e as abas do Chrome. O próximo aluno abre o Chrome limpo.", texts);
+            Assert.Contains("Depuração USB", texts);
+            Assert.Contains(
+                "Travada: o aluno não liga a depuração. Libere por um tempo para conferir o celular pelo cabo; ela liga sozinha e desliga no fim.",
+                texts);
             Assert.DoesNotContain(section.Children.OfType<TextBlock>(), block => block.Text == "Nenhum celular na sala ainda." && block.Visibility == Visibility.Visible);
         });
     }
@@ -154,6 +158,20 @@ public class DeviceRoomSectionTests
         Assert.Contains("contas dos celulares", DeviceRoomText.ToolTip(DeviceRoomAction.Accounts, AndroidDeviceKind.Phone));
         Assert.Contains("Chrome dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Tablet));
         Assert.EndsWith("Com alguns celulares selecionados na tela, só neles.", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Phone));
+    }
+
+    // "Depuração USB" says the page's kind on its card and in its tooltip.
+    [Fact]
+    public void The_debugging_card_speaks_of_the_pages_kind()
+    {
+        Assert.Equal(
+            "Travada: o aluno não liga a depuração. Libere por um tempo para conferir o tablet pelo cabo; ela liga sozinha e desliga no fim.",
+            DeviceRoomText.Card(DeviceRoomAction.Debugging, AndroidDeviceKind.Tablet).Line);
+        Assert.Equal(("Depuração USB", "Liberar..."), (
+            DeviceRoomText.Card(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone).Title,
+            DeviceRoomText.Card(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone).Button));
+        Assert.Contains("depuração USB dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.Debugging, AndroidDeviceKind.Tablet));
+        Assert.EndsWith("Com alguns celulares selecionados na tela, só neles.", DeviceRoomText.ToolTip(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone));
     }
 
     // "Parar o toque" while all the devices it reaches still ring, as the tile menu.

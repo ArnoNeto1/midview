@@ -90,9 +90,11 @@ interface DevicePolicyGateway {
 // password freed them for a while: network decides (NetworkFree.unlessFree).
 // So are the accounts (ACCOUNT_RESTRICTIONS), unless the teacher freed them
 // for the school's Google account to go on: accounts decides
-// (AccountsFree.unlessFree). None of it is set before the device is owned:
-// the cable's set-device-owner, which refuses a device with an account,
-// comes first.
+// (AccountsFree.unlessFree). So is USB debugging (DEBUGGING_RESTRICTIONS),
+// unless the teacher freed it to check the device over the cable: debugging
+// decides (DebuggingFree.unlessFree). None of it is set before the device
+// is owned: the cable's set-device-owner, which refuses a device with an
+// account, comes first.
 //
 // A debug build keeps adb and factory reset, so a test phone or emulator
 // made Device Owner can still be reached and reset. The APK published for
@@ -104,6 +106,8 @@ class Lockdown(
     private val network: (lockNetwork: () -> Unit) -> Unit = { it() },
     // Runs the accounts lock unless it is freed for now (AccountsFree).
     private val accounts: (lockAccounts: () -> Unit) -> Unit = { it() },
+    // Runs the USB debugging lock unless it is freed for now (DebuggingFree).
+    private val debugging: (lockDebugging: () -> Unit) -> Unit = { it() },
 ) {
     // True when the locks were applied (the app is the Device Owner). A step
     // the system refuses does not stop the others; the first refusal is
@@ -124,6 +128,7 @@ class Lockdown(
             .forEach { r -> step { gw.addUserRestriction(r) } }
         step { network { networkRestrictions(gw.sdkInt).forEach { r -> step { gw.addUserRestriction(r) } } } }
         step { accounts { ACCOUNT_RESTRICTIONS.forEach { r -> step { gw.addUserRestriction(r) } } } }
+        step { debugging { debuggingRestrictions(gw.debuggable).forEach { r -> step { gw.addUserRestriction(r) } } } }
         step { gw.setUninstallBlocked(packageName, true) }
         if (gw.sdkInt >= ANDROID_11) {
             step { gw.setUserControlDisabled(listOf(packageName)) }
@@ -148,12 +153,13 @@ class Lockdown(
         const val PACKAGE = "io.github.arnoneto1.midview.agent"
 
         // The values of UserManager.DISALLOW_FACTORY_RESET,
-        // DISALLOW_DEBUGGING_FEATURES, DISALLOW_SAFE_BOOT, DISALLOW_ADD_USER,
+        // DISALLOW_SAFE_BOOT, DISALLOW_ADD_USER,
         // DISALLOW_USB_FILE_TRANSFER, DISALLOW_CONFIG_PRIVATE_DNS,
         // DISALLOW_CONFIG_VPN, DISALLOW_INSTALL_UNKNOWN_SOURCES,
         // DISALLOW_INSTALL_UNKNOWN_SOURCES_GLOBALLY (Android 10, the oldest
         // the agent runs on); DISALLOW_MODIFY_ACCOUNTS is
-        // ACCOUNT_RESTRICTIONS, which the teacher may free. no_config_vpn keeps
+        // ACCOUNT_RESTRICTIONS and DISALLOW_DEBUGGING_FEATURES
+        // DEBUGGING_RESTRICTIONS, which the teacher may free. no_config_vpn keeps
         // the student out of the VPN settings, where the agent's VPN is while
         // the internet is blocked; Android still starts an always-on VPN the
         // Device Owner sets. The unknown sources ones grey "Instalar apps
@@ -179,7 +185,6 @@ class Lockdown(
         // picker goes around it; TeacherWallpaper hides that one.
         val RESTRICTIONS = listOf(
             "no_factory_reset",
-            "no_debugging_features",
             "no_safe_boot",
             "no_add_user",
             "no_usb_file_transfer",
@@ -211,6 +216,16 @@ class Lockdown(
         // Chrome up to date with it); Chrome itself never signs into it
         // (ChromePolicy's BrowserSignin).
         val ACCOUNT_RESTRICTIONS = listOf("no_modify_accounts")
+
+        // UserManager.DISALLOW_DEBUGGING_FEATURES: no developer options nor
+        // USB or wireless debugging (Android turns adb off when it is set).
+        // Freed for a while by "Depuração USB" (DebuggingFree), which turns
+        // USB debugging on itself, so the teacher checks the device over the
+        // cable; left off on debug builds (debuggingRestrictions).
+        val DEBUGGING_RESTRICTIONS = listOf("no_debugging_features")
+
+        fun debuggingRestrictions(debuggable: Boolean): List<String> =
+            DEBUGGING_RESTRICTIONS.filterNot { debuggable && it in KEPT_ON_DEBUG_BUILDS }
 
         // UserManager.DISALLOW_FACTORY_RESET and DISALLOW_DEBUGGING_FEATURES,
         // left off on debug builds.

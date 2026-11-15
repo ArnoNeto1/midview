@@ -8,16 +8,18 @@ import java.io.IOException
 
 // Some of the school's locks (restrictions, Android's user restrictions)
 // lifted for a while by the teacher's command, and put back when the time is
-// up: "Liberar Wi-Fi e modo avião" (NetworkFree) and "Contas do aparelho"
-// (AccountsFree). The end is kept in the app's storage (file, as kind) on
-// the wall clock, so neither a restart of the agent nor of the device leaves
-// them open: every start checks it (Lockdown asks unlessFree), and so does
-// the watchdog every few seconds (check). The student cannot move the end:
+// up: "Liberar Wi-Fi e modo avião" (NetworkFree), "Contas do aparelho"
+// (AccountsFree) and "Depuração USB" (DebuggingFree). The end is kept in the
+// app's storage (file, as kind) on the wall clock, so neither a restart of
+// the agent nor of the device leaves them open: every start checks it
+// (Lockdown asks unlessFree), and so does the watchdog every few seconds
+// (check). The student cannot move the end:
 // the date and time are locked too (no_config_date_time); a clock that went
 // back anyway (an end further away than the longest time allowed) locks
 // again at once. Anything unreadable counts as locked. whileLocked runs at
 // each check while locked, afterFree when a free time ends (NetworkFree
-// keeps the school's Wi-Fi with them). The agent follows the end (follow)
+// keeps the school's Wi-Fi with them), whenFreed once the locks are lifted
+// (DebuggingFree turns USB debugging on). The agent follows the end (follow)
 // to lock again right on time; the watchdog is the fallback.
 open class TimedFree(
     private val file: File,
@@ -31,6 +33,7 @@ open class TimedFree(
     private val log: (String, Throwable?) -> Unit = { _, _ -> },
     private val whileLocked: () -> Unit = {},
     private val afterFree: () -> Unit = {},
+    private val whenFreed: () -> Unit = {},
 ) {
     // What the teacher reads (in Portuguese), and the name the log gives
     // the locks (in English: "the device accounts").
@@ -75,6 +78,7 @@ open class TimedFree(
         follower?.invoke(end)
         try {
             restrictions.forEach(clearRestriction)
+            whenFreed()
         } catch (e: RuntimeException) {
             log("Android did not free ${texts.logName}", e)
             lock()
@@ -113,6 +117,15 @@ open class TimedFree(
     fun unlessFree(lockThem: () -> Unit) {
         check()
         if (until == null) lockThem()
+    }
+
+    // The Midview leaving the phone (PhoneLeave): the free time dropped
+    // without locking again. True when one was kept (running or not).
+    @Synchronized
+    fun forget(): Boolean {
+        if (until == null && !file.exists()) return false
+        clearState()
+        return true
     }
 
     private fun isRunning(end: Long, at: Long): Boolean = at < end && end - at <= MAX_MILLIS

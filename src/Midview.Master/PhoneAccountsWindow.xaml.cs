@@ -6,37 +6,50 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// Two cards of Configurar celular/tablet, one window. "Contas do aparelho":
-// the school's devices keep their accounts locked; the teacher frees them on
-// every device at once for 10, 30 or 60 minutes ("Liberar"), to put the
-// school's Google account on, after which they lock again by themselves, or
-// locks them now ("Travar agora"). "Sair das contas do Chrome" (clearChrome):
-// Chrome's data erased on every device, after a question, since it cannot be
-// undone. Each device's line says how it went (PhoneAccountsText).
+// Three cards of Configurar celular/tablet, one window. "Contas do
+// aparelho": the school's devices keep their accounts locked; the teacher
+// frees them on every device at once for 10, 30 or 60 minutes ("Liberar"),
+// to put the school's Google account on, after which they lock again by
+// themselves, or locks them now ("Travar agora"). "Depuração USB" the same
+// way: USB debugging freed and turned on, to check a device over the cable,
+// then off and locked again (with a warning of what a computer on the cable
+// may ask meanwhile). "Sair das contas do Chrome": Chrome's data erased on
+// every device, after a question, since it cannot be undone. Each device's
+// line says how it went (PhoneAccountsText).
 public partial class PhoneAccountsWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
     private readonly ObservableCollection<PhoneRow> _rows;
     private readonly bool _clearChrome;
+    private readonly bool _debugging;
     private bool _running;
 
     // allPhones: phones is every Android device in the classroom list.
-    public PhoneAccountsWindow(IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate, bool clearChrome)
+    public PhoneAccountsWindow(IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate, PhoneAccountsCard card)
     {
         InitializeComponent();
         _masterCertificate = masterCertificate;
-        _clearChrome = clearChrome;
-        Title = DialogHeading.Heading = PhoneAccountsText.Heading(
-            clearChrome ? PhoneAccountsAction.ClearChrome : PhoneAccountsAction.Free, phones.Count);
-        if (clearChrome)
+        _clearChrome = card == PhoneAccountsCard.ClearChrome;
+        _debugging = card == PhoneAccountsCard.Debugging;
+        Title = DialogHeading.Heading = PhoneAccountsText.Heading(FreeAction, phones.Count);
+        if (_clearChrome)
         {
             DialogHeading.Icon = "";
         }
+        else if (_debugging)
+        {
+            // Segoe MDL2 Assets' USB.
+            DialogHeading.Icon = "";
+            WarningTextBlock.Text = PhoneAccountsText.DebuggingWarning(DeviceSetupText.Word(PhoneUpdateText.KindOf(phones)));
+            WarningTextBlock.Visibility = Visibility.Visible;
+        }
         TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones);
-        ExplanationTextBlock.Text = clearChrome ? PhoneAccountsText.ClearChromeExplanation : PhoneAccountsText.AccountsExplanation;
-        MinutesPanel.Visibility = AccountsButtons.Visibility = clearChrome ? Visibility.Collapsed : Visibility.Visible;
-        ClearChromeButton.Visibility = clearChrome ? Visibility.Visible : Visibility.Collapsed;
-        FreeButton.IsDefault = !clearChrome;
+        ExplanationTextBlock.Text = _clearChrome
+            ? PhoneAccountsText.ClearChromeExplanation
+            : _debugging ? PhoneAccountsText.DebuggingExplanation : PhoneAccountsText.AccountsExplanation;
+        MinutesPanel.Visibility = AccountsButtons.Visibility = _clearChrome ? Visibility.Collapsed : Visibility.Visible;
+        ClearChromeButton.Visibility = _clearChrome ? Visibility.Visible : Visibility.Collapsed;
+        FreeButton.IsDefault = !_clearChrome;
         _rows = new ObservableCollection<PhoneRow>(phones.Select(phone => new PhoneRow(phone)));
         PhonesList.ItemsSource = _rows;
     }
@@ -44,9 +57,14 @@ public partial class PhoneAccountsWindow : MidviewWindow
     private int ChosenMinutes =>
         ThirtyMinutesRadioButton.IsChecked == true ? 30 : SixtyMinutesRadioButton.IsChecked == true ? 60 : PhoneNetworkFree.DefaultMinutes;
 
-    private async void OnFreeClicked(object sender, RoutedEventArgs e) => await RunAsync(PhoneAccountsAction.Free, ChosenMinutes);
+    private PhoneAccountsAction FreeAction =>
+        _clearChrome ? PhoneAccountsAction.ClearChrome : _debugging ? PhoneAccountsAction.FreeDebugging : PhoneAccountsAction.Free;
 
-    private async void OnLockClicked(object sender, RoutedEventArgs e) => await RunAsync(PhoneAccountsAction.Lock, PhoneNetworkFree.LockNow);
+    private PhoneAccountsAction LockAction => _debugging ? PhoneAccountsAction.LockDebugging : PhoneAccountsAction.Lock;
+
+    private async void OnFreeClicked(object sender, RoutedEventArgs e) => await RunAsync(FreeAction, ChosenMinutes);
+
+    private async void OnLockClicked(object sender, RoutedEventArgs e) => await RunAsync(LockAction, PhoneNetworkFree.LockNow);
 
     // It cannot be undone: asked first.
     private async void OnClearChromeClicked(object sender, RoutedEventArgs e)
@@ -106,9 +124,13 @@ public partial class PhoneAccountsWindow : MidviewWindow
         }
         try
         {
-            var answer = action == PhoneAccountsAction.ClearChrome
-                ? PhoneAccountsClient.ClearChrome(phone, _masterCertificate)
-                : PhoneAccountsClient.Free(phone, minutes, _masterCertificate);
+            var answer = action switch
+            {
+                PhoneAccountsAction.ClearChrome => PhoneAccountsClient.ClearChrome(phone, _masterCertificate),
+                PhoneAccountsAction.FreeDebugging or PhoneAccountsAction.LockDebugging =>
+                    PhoneAccountsClient.FreeDebugging(phone, minutes, _masterCertificate),
+                _ => PhoneAccountsClient.Free(phone, minutes, _masterCertificate),
+            };
             return (answer is { Succeeded: true } ? PhoneRowState.Done : PhoneRowState.Failed, PhoneAccountsText.Line(answer));
         }
         catch (Exception ex)

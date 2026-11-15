@@ -59,10 +59,13 @@ public partial class MainWindow
                 OpenPhoneNetworkWindow(devices);
                 break;
             case DeviceRoomAction.Accounts:
-                OpenPhoneAccountsWindow(devices, clearChrome: false);
+                OpenPhoneAccountsWindow(devices, PhoneAccountsCard.Accounts);
                 break;
             case DeviceRoomAction.ClearChrome:
-                OpenPhoneAccountsWindow(devices, clearChrome: true);
+                OpenPhoneAccountsWindow(devices, PhoneAccountsCard.ClearChrome);
+                break;
+            case DeviceRoomAction.Debugging:
+                OpenPhoneAccountsWindow(devices, PhoneAccountsCard.Debugging);
                 break;
             case DeviceRoomAction.Wallpaper:
                 OpenPhoneWallpaperWindow(devices);
@@ -111,18 +114,26 @@ public partial class MainWindow
         ShowOnce("rede-celulares", phones, () => new PhoneNetworkWindow(phones, IsEveryPhone(phones), _masterCertificate) { Owner = this });
     }
 
-    // "Contas do aparelho" and "Sair das contas do Chrome": the same devices as the PIN.
-    private void OpenPhoneAccountsWindow(IReadOnlyList<KnownMachine> phones, bool clearChrome)
+    // "Contas do aparelho", "Depuração USB" and "Sair das contas do Chrome": the same devices as the PIN.
+    private void OpenPhoneAccountsWindow(IReadOnlyList<KnownMachine> phones, PhoneAccountsCard card)
     {
         if (phones.Count == 0)
         {
-            StatusTextBlock.Text = clearChrome
-                ? "Nenhum celular ou tablet na lista da sala para sair das contas do Chrome."
-                : "Nenhum celular ou tablet na lista da sala para liberar as contas.";
+            StatusTextBlock.Text = card switch
+            {
+                PhoneAccountsCard.ClearChrome => "Nenhum celular ou tablet na lista da sala para sair das contas do Chrome.",
+                PhoneAccountsCard.Debugging => "Nenhum celular ou tablet na lista da sala para liberar a depuração USB.",
+                _ => "Nenhum celular ou tablet na lista da sala para liberar as contas.",
+            };
             return;
         }
-        ShowOnce(clearChrome ? "chrome-celulares" : "contas-celulares", phones,
-            () => new PhoneAccountsWindow(phones, IsEveryPhone(phones), _masterCertificate, clearChrome) { Owner = this });
+        var key = card switch
+        {
+            PhoneAccountsCard.ClearChrome => "chrome-celulares",
+            PhoneAccountsCard.Debugging => "depuracao-celulares",
+            _ => "contas-celulares",
+        };
+        ShowOnce(key, phones, () => new PhoneAccountsWindow(phones, IsEveryPhone(phones), _masterCertificate, card) { Owner = this });
     }
 
     // "Papel de parede dos celulares e tablets...": the same devices as the PIN.
