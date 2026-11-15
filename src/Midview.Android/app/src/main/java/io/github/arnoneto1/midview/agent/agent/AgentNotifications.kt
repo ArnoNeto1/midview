@@ -92,7 +92,7 @@ internal fun AgentService.createChannels() {
         }
     }
     notifications().createNotificationChannel(
-        NotificationChannel(StatusChannel.ID, "Midview", NotificationManager.IMPORTANCE_LOW).apply {
+        NotificationChannel(StatusChannel.ID, "Midview", NotificationManager.IMPORTANCE_MIN).apply {
             lockscreenVisibility = StatusChannel.LOCK_SCREEN
         },
     )

@@ -2,7 +2,7 @@ package io.github.arnoneto1.midview.agent.agent
 
 import android.app.Notification
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class StatusChannelTest {
@@ -13,14 +13,15 @@ class StatusChannelTest {
 
     // A channel's lock screen visibility cannot change once created.
     @Test fun itHasAChannelOfItsOwn() {
-        assertNotEquals(StatusChannel.OLD_ID, StatusChannel.ID)
+        assertFalse(StatusChannel.ID in StatusChannel.OLD_IDS)
+        assertFalse(StatusChannel.SCREEN_ID in StatusChannel.OLD_IDS)
     }
 
     // Only the old status channel goes: the teacher's messages, the
     // countdowns, the screen request and the pairing code keep theirs.
     @Test fun onlyTheOldStatusChannelIsDeleted() {
-        val existing = listOf("status", "pairing", "teacher", "screen", StatusChannel.ID)
-        assertEquals(listOf("status"), StatusChannel.stale(existing))
-        assertEquals(emptyList<String>(), StatusChannel.stale(listOf("pairing", StatusChannel.ID)))
+        val existing = listOf("status", "status-unlocked", "pairing", "teacher", "screen", StatusChannel.ID, StatusChannel.SCREEN_ID)
+        assertEquals(listOf("status", "status-unlocked", "screen"), StatusChannel.stale(existing))
+        assertEquals(emptyList<String>(), StatusChannel.stale(listOf("pairing", StatusChannel.ID, StatusChannel.SCREEN_ID)))
     }
 }

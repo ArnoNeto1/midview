@@ -25,6 +25,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import io.github.arnoneto1.midview.agent.agent.DeviceWord
+import io.github.arnoneto1.midview.agent.agent.StatusChannel
 
 // The capture of the screen, once the student tapped "Iniciar agora"
 // (ConsentActivity): a foreground service of type mediaProjection, as
@@ -230,11 +231,17 @@ class ScreenCaptureService : Service() {
 
     private fun goForeground() {
         val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Tela compartilhada", NotificationManager.IMPORTANCE_LOW))
-        val notification = Notification.Builder(this, CHANNEL)
+        // Minimal, as the agent's own (StatusChannel says why).
+        manager.createNotificationChannel(
+            NotificationChannel(StatusChannel.SCREEN_ID, "Tela compartilhada", NotificationManager.IMPORTANCE_MIN).apply {
+                lockscreenVisibility = StatusChannel.LOCK_SCREEN
+            },
+        )
+        val notification = Notification.Builder(this, StatusChannel.SCREEN_ID)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle(DeviceWord.say(NOTIFICATION_TEXT))
             .setOngoing(true)
+            .setVisibility(StatusChannel.LOCK_SCREEN)
             .build()
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
     }
@@ -243,7 +250,6 @@ class ScreenCaptureService : Service() {
         const val NOTIFICATION_TEXT = "O professor pode ver a tela deste celular"
 
         private const val TAG = "Midview"
-        private const val CHANNEL = "screen"
         private const val NOTIFICATION_ID = 3
         // One held, two for Android to fill meanwhile.
         private const val MAX_IMAGES = 3
