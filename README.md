@@ -125,6 +125,8 @@ Os bloqueios de apps e de sites continuam valendo se o aparelho reiniciar.
 
 O Midview também trava, sempre: a data, a hora e o fuso horário (o aparelho continua acertando tudo sozinho pela rede); as janelas de outros apps por cima da tela e do cadeado do professor (as janelas flutuantes da MIUI, os balões de conversa); o **Wi-Fi** e o **modo avião** (o aluno não troca de rede nem desliga a rede); e o papel de parede, quando a escola põe um.
 
+Nos aparelhos da escola só aparecem as notificações do Midview: as dos outros apps somem (os alertas de emergência, como os da Defesa Civil, continuam aparecendo).
+
 A **Pasta da turma** vale para a sala toda, celulares e tablets também. No aparelho ela fica em Download/Midview/Pasta da turma – <turma>, no app Arquivos, e o que o aluno salva ou move para ela aparece em todos os computadores e aparelhos. O Chrome continua baixando em Download (no Android não há como mandar os downloads para outra pasta): para dividir um download com a turma, o aluno o move para essa pasta. **Recolher arquivos** e o seu **Apagar as pastas dos alunos** não mexem nela. Quando a aula acaba, os arquivos saem da pasta e ficam guardados numa área escondida, Download/Midview/.midview-turmas, até o Midview do professor buscá-los na aula seguinte. O que ninguém buscar sai sozinho depois de 30 dias, ou antes, se a área passar de 2 GB.
 
 Para receber arquivos (**Enviar arquivo**, **Pasta da turma**, **Instalar programa** e a atualização do aplicativo), o aparelho precisa continuar com pelo menos 100 MB livres depois de receber; um app ou uma atualização precisa de duas vezes o seu tamanho, mais esses 100 MB. Sem esse espaço, o professor lê "sem espaço no celular".

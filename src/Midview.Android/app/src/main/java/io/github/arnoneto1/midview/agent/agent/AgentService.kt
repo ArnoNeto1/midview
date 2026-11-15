@@ -408,6 +408,7 @@ class AgentService : Service() {
             lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
             classFolder = ClassFolderHandler(classFolder.folder)::serve,
         )
+        val otherNotifications = otherAppsNotifications(log)
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
         synchronized(lock) {
@@ -422,6 +423,7 @@ class AgentService : Service() {
             packageWatcher = PackageWatcher(this) {
                 appBlock.reapply()
                 otherBrowsers.apply()
+                otherNotifications.apply()
             }.also { it.start() }
             dnsWatcher = DnsWatcher(this, optimizer, log).also { it.start() }
             classFolder.startLooking()

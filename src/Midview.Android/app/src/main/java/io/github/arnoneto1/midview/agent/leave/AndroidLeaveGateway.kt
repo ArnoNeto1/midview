@@ -24,6 +24,7 @@ import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.lock.LockActivity
 import io.github.arnoneto1.midview.agent.optimize.PrivateDns
 import io.github.arnoneto1.midview.agent.policy.LockScreenKeeper
+import io.github.arnoneto1.midview.agent.policy.Lockdown
 import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 import io.github.arnoneto1.midview.agent.screen.AccessibilityCapture
 import io.github.arnoneto1.midview.agent.screen.ConsentActivity
@@ -85,6 +86,23 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
     override fun unhide(pkg: String): Boolean = dpm.setApplicationHidden(admin, pkg, false) || !dpm.isApplicationHidden(admin, pkg)
 
     override fun clearChromePolicy() = dpm.setApplicationRestrictions(admin, ChromePolicy.PACKAGE, Bundle())
+
+    // Only the apps the Device Owner denies (their grant state is DENIED
+    // only while the policy holds it), hidden ones too; an app Android cannot
+    // say anything of (one uninstalled for the user) is not denied.
+    override fun allowNotifications() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        fun denied(pkg: String) = runCatching {
+            dpm.getPermissionGrantState(admin, pkg, Lockdown.POST_NOTIFICATIONS) == DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED
+        }.getOrDefault(false)
+        val stuck = everyApp().map { it.packageName }.filter(::denied).filter { pkg ->
+            runCatching {
+                dpm.setPermissionGrantState(admin, pkg, Lockdown.POST_NOTIFICATIONS, DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT)
+            }
+            denied(pkg)
+        }
+        check(stuck.isEmpty()) { "notifications still denied: $stuck" }
+    }
 
     override fun alwaysOnVpn(): AlwaysOnVpn? {
         val pkg = dpm.getAlwaysOnVpnPackage(admin) ?: return null

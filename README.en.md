@@ -127,6 +127,8 @@ The app and website blocks stay in effect if the device restarts.
 
 Midview also always locks: the date, the time and the time zone (the device keeps setting them by itself from the network); other apps' windows over the screen and over the teacher's padlock (MIUI's floating windows, chat bubbles); **Wi-Fi** and **airplane mode** (the student can't change networks or turn the network off); and the wallpaper, when the school sets one.
 
+On the school's devices only Midview's notifications show: other apps' notifications go away (emergency alerts, such as the Defesa Civil's, still show).
+
 The **Class folder** (Pasta da turma) covers the whole room, phones and tablets too. On the device it's Download/Midview/Pasta da turma – <class>, in the Files app, and what the student saves or moves into it shows up on every computer and device. Chrome still downloads to Download (Android has no way to send downloads to another folder): to share a download with the class, the student moves it into that folder. **Recolher arquivos** and **Apagar as pastas dos alunos** don't touch it. When the lesson ends, the files leave the folder and are kept in a hidden area, Download/Midview/.midview-turmas, until the teacher's Midview collects them in the next lesson. Anything nobody collects is removed after 30 days, or sooner if the area grows past 2 GB.
 
 To receive files (**Enviar arquivo**, **Pasta da turma**, **Instalar programa** and the app update), the device must keep at least 100 MB free after receiving; an app or an update needs twice its size plus those 100 MB. Without that space the teacher reads "sem espaço no celular" (no space on the phone).

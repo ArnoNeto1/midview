@@ -50,6 +50,12 @@ interface LeaveGateway {
     // Chrome's managed configuration (the site and download blocks) cleared.
     fun clearChromePolicy()
 
+    // Android 13 and newer: every app the Device Owner denied notifications
+    // (NotificationDenial) back to the default, so the student may turn them
+    // on again in Settings (Android keeps them off until then); throws when
+    // an app is still denied. Nothing before Android 13.
+    fun allowNotifications()
+
     // The always-on VPN, what it was before the internet block
     // (InternetBlock's record), setting it and stopping the agent's own.
     fun alwaysOnVpn(): AlwaysOnVpn?
@@ -101,6 +107,7 @@ enum class LeaveStep(val said: String) {
     SUSPENDED("os apps bloqueados"),
     HIDDEN("os apps escondidos"),
     CHROME("as regras do Chrome"),
+    NOTIFICATIONS("as notificações dos apps"),
     VPN("o bloqueio da internet"),
     DNS("o DNS sem anúncios"),
     WIFI("a rede Wi-Fi da escola"),
@@ -279,6 +286,7 @@ class PhoneLeave(
             check(kept.isEmpty()) { "still hidden: $kept" }
         }
         step(LeaveStep.CHROME) { gw.clearChromePolicy() }
+        step(LeaveStep.NOTIFICATIONS) { gw.allowNotifications() }
         step(LeaveStep.VPN) { freeVpn() }
         step(LeaveStep.DNS) {
             if (gw.privateDns().isStrictOn(AdblockDns.HOST)) {

@@ -18,6 +18,8 @@ public sealed class PhoneCableTests
     private const string Thumb = "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12";
     private const string SetDeviceOwner = S + "shell dpm set-device-owner " + Admin;
     private const string Accessibility = "io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.screen.AccessibilityCapture";
+    private const string AllowListener =
+        S + "shell cmd notification allow_listener io.github.arnoneto1.midview.agent/io.github.arnoneto1.midview.agent.notifications.NotificationSweeper";
 
     // Answers by the exact arguments, joined with spaces; whatever is not set
     // answers an empty success. Records every call in order.
@@ -311,6 +313,7 @@ public sealed class PhoneCableTests
             S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow",
             S + "shell settings put secure enabled_accessibility_services " + Accessibility,
             S + "shell settings put secure accessibility_enabled 1",
+            AllowListener,
             S + "shell settings put global force_fsg_nav_bar 0",
             ContentCall(),
             // The home screen (PhoneHomeScreen), on a Xiaomi: its settings do
@@ -513,6 +516,7 @@ public sealed class PhoneCableTests
             .Set(S + "shell cmd appops set " + Package + " PROJECT_MEDIA allow", "Error: Unknown operation string", 255)
             .Set(S + "shell settings put secure enabled_accessibility_services " + Accessibility, "Error", 255)
             .Set(S + "shell settings put secure accessibility_enabled 1", "Error", 255)
+            .Set(AllowListener, "Error: unknown command", 255)
             .Set(S + "shell settings put global force_fsg_nav_bar 0", "Error", 255)
             .Set(S + "shell settings put global window_animation_scale 0", "Error", 255)
             .Set(S + "shell settings put global transition_animation_scale 0", "Error", 255)
@@ -637,6 +641,7 @@ public sealed class PhoneCableTests
         // Everything else runs as with the optimized setup.
         Assert.Contains(S + "install -r " + Apk, adb.Calls);
         Assert.Contains(S + "shell settings put secure accessibility_enabled 1", adb.Calls);
+        Assert.Contains(AllowListener, adb.Calls);
         Assert.Contains(S + "shell settings put global force_fsg_nav_bar 0", adb.Calls);
         Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
     }
@@ -655,6 +660,22 @@ public sealed class PhoneCableTests
         Assert.Contains(
             S + "shell cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.threebutton", adb.Calls);
         Assert.DoesNotContain(adb.Calls, c => c.Contains("force_fsg_nav_bar", StringComparison.Ordinal));
+    }
+
+    // Only the Midview's notifications: the agent's listener is allowed from
+    // the cable, as the screen reader is, before the Device Owner step (also
+    // on a device without MIUI, as the school's Android 10 tablet).
+    [Fact]
+    public void The_notification_listener_is_allowed_before_the_owner_step()
+    {
+        var adb = ReadyToPrepare().Set(S + "shell getprop ro.miui.ui.version.name", "\n");
+
+        var result = Prepare(adb);
+
+        Assert.Null(result.Problem);
+        var listener = adb.Calls.IndexOf(AllowListener);
+        Assert.True(listener > adb.Calls.IndexOf(S + "shell settings put secure accessibility_enabled 1"));
+        Assert.True(listener < adb.Calls.IndexOf(SetDeviceOwner));
     }
 
     // A tablet: named "Tablet 07" here, and told so in the package.

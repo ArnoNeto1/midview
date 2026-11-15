@@ -51,6 +51,8 @@ public sealed partial class PhoneCable
     private const string ThreeButtonNavigation = "com.android.internal.systemui.navbar.threebutton";
     private const string AccessibilityService =
         PhoneProvisioning.AgentPackage + "/" + PhoneProvisioning.AgentPackage + ".screen.AccessibilityCapture";
+    private const string NotificationListener =
+        PhoneProvisioning.AgentPackage + "/" + PhoneProvisioning.AgentPackage + ".notifications.NotificationSweeper";
 
     private readonly IAdb _adb;
 
@@ -309,6 +311,11 @@ public sealed partial class PhoneCable
         // Device Owner step; a failure does not stop the setup either.
         Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
         Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
+        // Only the Midview's notifications on the device: the agent's
+        // listener takes the other apps' away, once allowed. A Device Owner
+        // cannot allow it itself on Android 10 (the school's tablet), the
+        // shell can; a failure does not stop the setup.
+        Shell(Short, "cmd", "notification", "allow_listener", NotificationListener);
         // "Travar o toque do aluno" during Controlar covers the system bar's
         // three buttons, but not gesture navigation's swipes: with gestures
         // the student still goes home or back. So the three buttons, in both

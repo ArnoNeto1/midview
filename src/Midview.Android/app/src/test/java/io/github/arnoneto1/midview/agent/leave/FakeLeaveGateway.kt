@@ -32,6 +32,7 @@ class FakeLeaveGateway : LeaveGateway {
     val suspended = mutableSetOf("com.whatsapp", "com.instagram.android")
     val hidden = mutableSetOf("com.android.thememanager", "com.miui.msa.global", "org.mozilla.firefox")
     var chromePolicy = true
+    val notificationsDenied = mutableSetOf("com.whatsapp", "com.google.android.youtube")
     var vpn: AlwaysOnVpn? = AlwaysOnVpn(Lockdown.PACKAGE, lockdown = true)
     var beforeBlock: Previous? = Previous(null)
     var vpnRunning = true
@@ -113,6 +114,11 @@ class FakeLeaveGateway : LeaveGateway {
         chromePolicy = false
     }
 
+    override fun allowNotifications() {
+        call("allowNotifications")
+        notificationsDenied.clear()
+    }
+
     override fun alwaysOnVpn(): AlwaysOnVpn? = vpn
 
     override fun vpnBeforeBlock(): Previous? = beforeBlock
@@ -183,6 +189,6 @@ class FakeLeaveGateway : LeaveGateway {
     // Nothing of the school's left on the phone.
     fun undone(): Boolean =
         restrictions.isEmpty() && !ownAppLocked && !lockTask && !accessibilityLimited && suspended.isEmpty() && hidden.isEmpty() &&
-            !chromePolicy && vpn == null && !vpnRunning && dns.mode == PrivateDns.MODE_OPPORTUNISTIC && !networksLocked && !pin &&
+            !chromePolicy && notificationsDenied.isEmpty() && vpn == null && !vpnRunning && dns.mode == PrivateDns.MODE_OPPORTUNISTIC && !networksLocked && !pin &&
             !wallpaper && !usbDebugging
 }

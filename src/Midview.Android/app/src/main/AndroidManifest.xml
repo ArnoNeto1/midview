@@ -103,6 +103,20 @@
                 android:resource="@xml/accessibility_capture" />
         </service>
 
+        <!-- Only the Midview's notifications on a school device: the other
+             apps' are taken away. Turned on by cable while the device is
+             prepared ("cmd notification allow_listener"); only the system
+             may bind it (BIND_NOTIFICATION_LISTENER_SERVICE). -->
+        <service
+            android:name=".notifications.NotificationSweeper"
+            android:exported="true"
+            android:label="Midview"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <!-- "Bloquear a internet": the phone's always-on VPN, set by the
              Device Owner, which lets nothing out but the agent. Only the
              system may bind it (BIND_VPN_SERVICE). -->

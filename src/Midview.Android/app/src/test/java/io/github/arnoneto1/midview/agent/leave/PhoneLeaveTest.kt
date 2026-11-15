@@ -224,6 +224,23 @@ class PhoneLeaveTest {
         assertEquals(listOf("forgetTeachers", "stopAgent", "askUninstall"), gw.calls)
     }
 
+    // An app still denied its notifications (Android 13+) keeps the Midview,
+    // as any other lock: the student could never turn them on again.
+    @Test fun notificationsStillDeniedKeepTheMidview() {
+        gw.refuse = setOf("allowNotifications")
+
+        val report = leave().start()
+
+        assertEquals(listOf(LeaveStep.NOTIFICATIONS), report.failed)
+        assertTrue(gw.restrictions.isEmpty())
+        assertTrue(gw.suspended.isEmpty())
+        assertEquals(
+            "Não deu para desfazer as notificações dos apps. " +
+                "O Midview continua no celular: tente de novo ou use Restaurar de fábrica.",
+            report.text(),
+        )
+    }
+
     @Test fun aRefusedStepNeverStopsTheOthersAndIsSaid() {
         gw.refuse = setOf("removeScreenPin", "clearWallpaper")
 

@@ -9,6 +9,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.util.Log
+import io.github.arnoneto1.midview.agent.notifications.AndroidNotificationPermissions
+import io.github.arnoneto1.midview.agent.notifications.NotificationDenial
 import io.github.arnoneto1.midview.agent.ui.PairingCodeActivity
 import io.github.arnoneto1.midview.agent.ui.SchoolSettingsActivity
 
@@ -21,6 +23,12 @@ private const val SHOW_TIMEOUT_MILLIS = 3_000L
 private const val PAIRING_CHANNEL = "pairing"
 private const val STATUS_NOTIFICATION = 1
 private const val PAIRING_NOTIFICATION = 2
+
+// The other apps' notifications denied at the source (Android 13 and
+// newer), at the agent's start and with every app installed or updated (the
+// package watcher); the listener (NotificationSweeper) takes away the rest.
+internal fun AgentService.otherAppsNotifications(log: (String, Throwable?) -> Unit) =
+    NotificationDenial(AndroidNotificationPermissions(this), log)
 
 // True only when the code is really on the screen: the notification
 // can show (the app's notifications and the pairing channel are on), or
