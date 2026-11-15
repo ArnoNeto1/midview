@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 
 namespace Midview.Master;
 
@@ -55,11 +56,15 @@ internal static partial class PhoneSetupGuide
     public static GuideHelp ForKind(GuideHelp help, AndroidDeviceKind kind) => kind != AndroidDeviceKind.Tablet ? help
         : new GuideHelp(ForKind(help.Problem, kind), ForKind(help.Answer, kind), help.Links?.Select(link => ForKind(link, kind)).ToList());
 
+    /// <summary>The Tag of an element showing the teacher's own data (a Wi-Fi name, a login, a
+    /// password): FollowDeviceWords leaves it, and what is inside it, as it is.</summary>
+    public const string AsIs = "AsIs";
+
     /// <summary>
     /// Keeps every text the window shows in the words of the device it prepares (<paramref name="kind"/>):
     /// the texts there now and the ones set later (the cable's status, the steps), so no "celular"
-    /// written for a phone shows to a teacher preparing a tablet, and back. Inputs are left alone.
-    /// Called once, when the window is built.
+    /// written for a phone shows to a teacher preparing a tablet, and back. Inputs and elements
+    /// tagged <see cref="AsIs"/> are left alone. Called once, when the window is built.
     /// </summary>
     public static void FollowDeviceWords(Window window, Func<AndroidDeviceKind> kind)
     {
@@ -72,6 +77,8 @@ internal static partial class PhoneSetupGuide
             {
                 switch (inline)
                 {
+                    case { Tag: AsIs }:
+                        break;
                     case Run run when Words(run.Text) is var text && text != run.Text:
                         run.Text = text;
                         break;
@@ -86,6 +93,8 @@ internal static partial class PhoneSetupGuide
         {
             switch (item)
             {
+                case FrameworkElement { Tag: AsIs }:
+                    return;
                 case TextBlock block:
                     FixInlines(block.Inlines);
                     break;
@@ -103,13 +112,25 @@ internal static partial class PhoneSetupGuide
             }
         }
 
-        // Every layout pass, so the texts set later (the cable's status, the
-        // rows built for a step) are fixed before they show; a text already
-        // in the device's words is left as it is, so this settles at once.
+        // After a layout pass, so the texts set later (the cable's status, the
+        // rows built for a step) are fixed before they show. Layout passes come
+        // in bursts for the whole app (the classroom's thumbnails too): one walk
+        // per burst, and only while this window shows. A text already in the
+        // device's words is left as it is, so this settles at once.
+        var pending = false;
         window.LayoutUpdated += (_, _) =>
         {
-            words = kind();
-            Fix(window);
+            if (pending || !window.IsVisible)
+            {
+                return;
+            }
+            pending = true;
+            window.Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
+            {
+                pending = false;
+                words = kind();
+                Fix(window);
+            });
         };
     }
 

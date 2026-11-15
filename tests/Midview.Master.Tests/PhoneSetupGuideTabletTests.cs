@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using Midview.Master;
 using Xunit;
 
@@ -88,33 +89,44 @@ public class PhoneSetupGuideTabletTests
             link.Inlines.Add(new Hyperlink(new Run("Celular travado com PIN")));
             var button = new Button { Content = "Preparar outro celular" };
             var input = new TextBox { Text = "rede do celular" };
+            // The teacher's own data (a Wi-Fi name, a login) stays as typed.
+            var ssid = new TextBlock { Text = "Celulares-Lab", Tag = PhoneSetupGuide.AsIs };
+            var line = new TextBlock();
+            line.Inlines.Add(new Run("Wi-Fi do celular: "));
+            line.Inlines.Add(new Run("Tablet2024") { Tag = PhoneSetupGuide.AsIs });
             var window = new Window
             {
                 Width = 300, Height = 200, ShowInTaskbar = false, WindowStyle = WindowStyle.None,
                 Left = -10000, Top = -10000,
-                Content = new StackPanel { Children = { status, link, button, input } },
+                Content = new StackPanel { Children = { status, link, button, input, ssid, line } },
             };
             PhoneSetupGuide.FollowDeviceWords(window, () => kind);
             window.Show();
-            window.UpdateLayout();
+            window.UpdateLayout(); Settle(window);
 
             Assert.Equal("O tablet está no cabo.", status.Text);
             Assert.Equal("Ver Tablet travado com PIN", string.Concat(link.Inlines.SelectMany(RunsOf).Select(run => run.Text)));
             Assert.Equal("Preparar outro tablet", button.Content);
             Assert.Equal("rede do celular", input.Text);
+            Assert.Equal("Celulares-Lab", ssid.Text);
+            Assert.Equal("Wi-Fi do tablet: Tablet2024", string.Concat(line.Inlines.SelectMany(RunsOf).Select(run => run.Text)));
 
             status.Text = "Há mais de um celular no cabo.";
-            window.UpdateLayout();
+            window.UpdateLayout(); Settle(window);
             Assert.Equal("Há mais de um tablet no cabo.", status.Text);
 
             kind = AndroidDeviceKind.Phone;
             window.InvalidateMeasure();
-            window.UpdateLayout();
+            window.UpdateLayout(); Settle(window);
             Assert.Equal("Há mais de um celular no cabo.", status.Text);
             Assert.Equal("Preparar outro celular", button.Content);
             window.Close();
         });
     }
+
+    // Runs what the window queued after its layout (the follower's walk).
+    private static void Settle(Window window) =>
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
 
     private static IEnumerable<Run> RunsOf(Inline inline) => inline switch
     {
