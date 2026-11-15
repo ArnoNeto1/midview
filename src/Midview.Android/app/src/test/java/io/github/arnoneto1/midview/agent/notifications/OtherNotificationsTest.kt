@@ -31,6 +31,9 @@ class OtherNotificationsTest {
 
     @Test fun androidsOwnStay() {
         assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false))
+        // Android's "Atualizado pelo seu administrador" after a Midview update goes too.
+        assertTrue(OtherNotifications.removes("android", clearable = true, foreground = false, tag = Lockdown.PACKAGE))
+        assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false, tag = "other"))
         assertFalse(OtherNotifications.removes("com.android.systemui", clearable = true, foreground = false))
     }
 

@@ -48,7 +48,7 @@ class NotificationSweeper : NotificationListenerService() {
     // of an ongoing one: those are never asked for, so nothing is logged.
     private fun sweep(sbn: StatusBarNotification): Boolean {
         val foreground = (sbn.notification.flags and Notification.FLAG_FOREGROUND_SERVICE) != 0
-        if (!OtherNotifications.removes(sbn.packageName, sbn.isClearable, foreground)) return false
+        if (!OtherNotifications.removes(sbn.packageName, sbn.isClearable, foreground, sbn.tag)) return false
         return try {
             cancelNotification(sbn.key)
             true

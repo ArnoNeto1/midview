@@ -24,7 +24,14 @@ object OtherNotifications {
     // another app's, and one the student could swipe away. An ongoing or
     // foreground one cannot be removed by a listener (Android ignores it),
     // so it is left alone.
-    fun removes(pkg: String, clearable: Boolean, foreground: Boolean): Boolean = clearable && !foreground && pkg !in KEPT
+    // Also Android's "Atualizado pelo seu administrador", which Android
+    // posts after each update of the Midview, tagged with the Midview's
+    // package (seen on the school's Multilaser M10: pkg "android", channel
+    // DEVICE_ADMIN_ALERTS, tag the agent's package).
+    fun removes(pkg: String, clearable: Boolean, foreground: Boolean, tag: String? = null): Boolean =
+        clearable && !foreground && (pkg !in KEPT || (pkg == ANDROID && tag == Lockdown.PACKAGE))
+
+    private const val ANDROID = "android"
 
     // An app whose notifications Android 13+ denies at the source
     // (POST_NOTIFICATIONS): every other app, except the phone's dialer
