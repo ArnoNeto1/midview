@@ -28,10 +28,17 @@ object OtherNotifications {
     // posts after each update of the Midview, tagged with the Midview's
     // package (seen on the school's Multilaser M10: pkg "android", channel
     // DEVICE_ADMIN_ALERTS, tag the agent's package).
-    fun removes(pkg: String, clearable: Boolean, foreground: Boolean, tag: String? = null): Boolean =
-        clearable && !foreground && (pkg !in KEPT || (pkg == ANDROID && tag == Lockdown.PACKAGE))
+    // And Android's "Rede Wi-Fi aberta disponível": its "Conectar" joins
+    // that open network even with the Wi-Fi locked (seen on Tablet 16, an
+    // Android 10, 2026-11-16), out of the school's network. Android's
+    // channel for it is NETWORK_AVAILABLE; "Fazer login na rede" (the
+    // voucher's page) comes on another one and stays.
+    fun removes(pkg: String, clearable: Boolean, foreground: Boolean, tag: String? = null, channel: String? = null): Boolean =
+        clearable && !foreground &&
+            (pkg !in KEPT || (pkg == ANDROID && (tag == Lockdown.PACKAGE || channel == OPEN_NETWORK_CHANNEL)))
 
     private const val ANDROID = "android"
+    const val OPEN_NETWORK_CHANNEL = "NETWORK_AVAILABLE"
 
     // An app whose notifications Android 13+ denies at the source
     // (POST_NOTIFICATIONS): every other app, except the phone's dialer

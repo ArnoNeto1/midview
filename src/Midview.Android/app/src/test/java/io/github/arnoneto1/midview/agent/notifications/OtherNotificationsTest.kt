@@ -37,6 +37,14 @@ class OtherNotificationsTest {
         assertFalse(OtherNotifications.removes("com.android.systemui", clearable = true, foreground = false))
     }
 
+    // Its "Conectar" joins an open network with the Wi-Fi locked; the
+    // voucher's "Fazer login na rede" comes on another channel and stays.
+    @Test fun androidsOpenNetworkOfferGoes() {
+        assertTrue(OtherNotifications.removes("android", clearable = true, foreground = false, channel = "NETWORK_AVAILABLE"))
+        assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false, channel = "NETWORK_ALERTS"))
+        assertFalse(OtherNotifications.removes("com.android.systemui", clearable = true, foreground = false, channel = "NETWORK_AVAILABLE"))
+    }
+
     // Android ignores a listener's cancel of these: never asked for.
     @Test fun ongoingAndForegroundOnesAreLeftAlone() {
         assertFalse(OtherNotifications.removes("com.spotify.music", clearable = false, foreground = false))
