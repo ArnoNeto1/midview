@@ -2,6 +2,8 @@ package io.github.arnoneto1.midview.agent.notifications
 
 import android.app.Notification
 import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -60,5 +62,21 @@ class NotificationSweeper : NotificationListenerService() {
 
     companion object {
         private const val TAG = "Midview"
+
+        // At the agent's start on a school device: the listener back on if a
+        // leaving of the Midview let go of it. Android keeps that let-go
+        // ("snoozed") across the app's uninstall and install, so a device
+        // the Midview left and was prepared again without a reset had no
+        // sweeping at all (seen on the Redmi 10C, 2026-11-17). Nothing while
+        // the Midview is leaving.
+        fun wake(context: Context) {
+            if (PhoneLeaving.isActive(context)) return
+            if (context.getSystemService(DevicePolicyManager::class.java)?.isDeviceOwnerApp(context.packageName) != true) return
+            try {
+                requestRebind(ComponentName(context, NotificationSweeper::class.java))
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "The notification sweeper could not be woken", e)
+            }
+        }
     }
 }

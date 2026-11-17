@@ -45,6 +45,15 @@ class OtherNotificationsTest {
         assertFalse(OtherNotifications.removes("com.android.systemui", clearable = true, foreground = false, channel = "NETWORK_AVAILABLE"))
     }
 
+    // "Excluído pelo seu administrador", one per app the optimization took
+    // away, tagged with that app's package; the untagged admin alerts stay.
+    @Test fun androidsAppRemovedByTheAdminGoes() {
+        assertTrue(OtherNotifications.removes("android", clearable = true, foreground = false, tag = "com.google.android.apps.photos", channel = "DEVICE_ADMIN_ALERTS"))
+        assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false, tag = null, channel = "DEVICE_ADMIN_ALERTS"))
+        assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false, tag = "ranker_group", channel = "DEVICE_ADMIN_ALERTS"))
+        assertFalse(OtherNotifications.removes("android", clearable = true, foreground = false, tag = "com.google.android.apps.photos", channel = "USB"))
+    }
+
     // Android ignores a listener's cancel of these: never asked for.
     @Test fun ongoingAndForegroundOnesAreLeftAlone() {
         assertFalse(OtherNotifications.removes("com.spotify.music", clearable = false, foreground = false))

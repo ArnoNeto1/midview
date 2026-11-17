@@ -34,6 +34,7 @@ import io.github.arnoneto1.midview.agent.net.LockScreenHandler
 import io.github.arnoneto1.midview.agent.net.ScreenStreamHandler
 import io.github.arnoneto1.midview.agent.net.ThumbnailHandler
 import io.github.arnoneto1.midview.agent.net.TlsServer
+import io.github.arnoneto1.midview.agent.notifications.NotificationSweeper
 import io.github.arnoneto1.midview.agent.optimize.AdblockDns
 import io.github.arnoneto1.midview.agent.optimize.AndroidDnsNetwork
 import io.github.arnoneto1.midview.agent.optimize.DnsWatcher
@@ -409,6 +410,7 @@ class AgentService : Service() {
             classFolder = ClassFolderHandler(classFolder.folder)::serve,
         )
         val otherNotifications = otherAppsNotifications(log)
+        NotificationSweeper.wake(this)
         val responder = DiscoveryResponder(pairing, identity.thumbprint) { DeviceName.read(this) }
 
         synchronized(lock) {

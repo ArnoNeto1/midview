@@ -33,12 +33,23 @@ object OtherNotifications {
     // Android 10, 2026-11-16), out of the school's network. Android's
     // channel for it is NETWORK_AVAILABLE; "Fazer login na rede" (the
     // voucher's page) comes on another one and stays.
+    // And Android's "Excluído pelo seu administrador", one per app the
+    // optimization takes away (seen on the Redmi 10C, 2026-11-17: Fotos,
+    // OneDrive...): DEVICE_ADMIN_ALERTS, tagged with that app's package. The
+    // channel's untagged ones (the device is managed) stay.
     fun removes(pkg: String, clearable: Boolean, foreground: Boolean, tag: String? = null, channel: String? = null): Boolean =
         clearable && !foreground &&
-            (pkg !in KEPT || (pkg == ANDROID && (tag == Lockdown.PACKAGE || channel == OPEN_NETWORK_CHANNEL)))
+            (pkg !in KEPT || (pkg == ANDROID && androidsToRemove(tag, channel)))
+
+    private fun androidsToRemove(tag: String?, channel: String?): Boolean =
+        tag == Lockdown.PACKAGE ||
+            channel == OPEN_NETWORK_CHANNEL ||
+            (channel == DEVICE_ADMIN_CHANNEL && tag != null && PACKAGE_NAME.matches(tag))
 
     private const val ANDROID = "android"
     const val OPEN_NETWORK_CHANNEL = "NETWORK_AVAILABLE"
+    const val DEVICE_ADMIN_CHANNEL = "DEVICE_ADMIN_ALERTS"
+    private val PACKAGE_NAME = Regex("""[A-Za-z][\w]*(\.[A-Za-z][\w]*)+""")
 
     // An app whose notifications Android 13+ denies at the source
     // (POST_NOTIFICATIONS): every other app, except the phone's dialer
