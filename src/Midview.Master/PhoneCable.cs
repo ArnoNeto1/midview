@@ -382,11 +382,29 @@ public sealed partial class PhoneCable
             return Fail(CableProblem.Lost);
         }
 
+        // Again, right before the Owner step: MIUI turned its autostart
+        // (appop 10008) back to "ignore" some time after the install (seen on
+        // the Redmi 10C, 2026-11-17), and then it blocks the "admin enabled"
+        // broadcast that starts the agent once it is the owner: the phone
+        // stayed the school's with no Midview running. Meanwhile Android had
+        // dropped the screen reader and the notification listener it could
+        // not start, so both are given again. A failure does not stop the setup.
+        Shell(Short, "cmd", "appops", "set", package, "10008", "allow");
+        Shell(Short, "cmd", "deviceidle", "whitelist", "+" + package);
+        Shell(Short, "settings", "put", "secure", "enabled_accessibility_services", AccessibilityService);
+        Shell(Short, "settings", "put", "secure", "accessibility_enabled", "1");
+        Shell(Short, "cmd", "notification", "allow_listener", NotificationListener);
+
         var owner = WithLocalAccountsHidden(
             () => Shell(Short, "dpm", "set-device-owner", PhoneProvisioning.AdminComponent));
-        // From here on nothing else touches the cable.
         if (owner.Text.Contains("Success", StringComparison.Ordinal))
         {
+            // The agent's start, last: MIUI does not deliver Android's "admin
+            // enabled" to an app it has not let start by itself, and the phone
+            // stayed the school's with no locks and no agent (Redmi 10C,
+            // 2026-11-17). The agent may turn the USB debugging off right
+            // away, so its answer is not waited on and nothing else follows.
+            Shell(Short, "content", "call", "--uri", Authority, "--method", "start");
             return new CableResult(phone, null, false, homeByHand, onLauncher3);
         }
         if (owner.Text.Contains("MANAGE_DEVICE_ADMINS", StringComparison.Ordinal))

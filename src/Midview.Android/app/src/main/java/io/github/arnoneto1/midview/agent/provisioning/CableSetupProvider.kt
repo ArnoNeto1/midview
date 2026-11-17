@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Binder
 import android.os.Bundle
+import io.github.arnoneto1.midview.agent.AdminReceiver
 import io.github.arnoneto1.midview.agent.agent.DeviceName
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
@@ -20,6 +21,7 @@ class CableSetupProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == METHOD_START) return start()
         if (method != METHOD_PREPARE) return null
         val context = context ?: return null
         val dir = context.filesDir
@@ -47,6 +49,20 @@ class CableSetupProvider : ContentProvider() {
         }
     }
 
+    // The cable's last call, right after "dpm set-device-owner": the locks
+    // on and the agent started, as Android's "admin enabled" would. MIUI
+    // does not deliver that broadcast to an app it has not let start by
+    // itself (seen on the Redmi 10C, 2026-11-17: the phone stayed the
+    // school's with no locks and no agent until a later watchdog alarm).
+    // Only from the shell, and only once the app is the Device Owner.
+    private fun start(): Bundle? {
+        val context = context ?: return null
+        val owner = Binder.getCallingUid() == CableSetupDoor.SHELL_UID &&
+            context.getSystemService(DevicePolicyManager::class.java).isDeviceOwnerApp(context.packageName)
+        if (owner) AdminReceiver.lockDownAndStart(context)
+        return Bundle().apply { putBoolean("ok", owner) }
+    }
+
     override fun query(uri: Uri, projection: Array<String>?, selection: String?, selectionArgs: Array<String>?, sortOrder: String?): Cursor? = null
 
     override fun getType(uri: Uri): String? = null
@@ -60,5 +76,6 @@ class CableSetupProvider : ContentProvider() {
     companion object {
         const val AUTHORITY = "io.github.arnoneto1.midview.agent.setup"
         const val METHOD_PREPARE = "prepare"
+        const val METHOD_START = "start"
     }
 }

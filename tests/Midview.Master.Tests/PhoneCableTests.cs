@@ -334,7 +334,16 @@ public sealed class PhoneCableTests
             S + "shell settings put system open_personal_assistant 0",
             S + "shell pm list packages",
             "devices",
+            // MIUI's autostart, allowed again (it turns back off after the
+            // install), and what Android dropped meanwhile.
+            S + "shell cmd appops set " + Package + " 10008 allow",
+            S + "shell cmd deviceidle whitelist +" + Package,
+            S + "shell settings put secure enabled_accessibility_services " + Accessibility,
+            S + "shell settings put secure accessibility_enabled 1",
+            AllowListener,
             SetDeviceOwner,
+            // The agent started by the cable (MIUI drops "admin enabled").
+            S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method start",
         }, afterCheck);
         Assert.Equal(
             new[] { CableStage.Checking, CableStage.Installing, CableStage.Wifi, CableStage.Pairing, CableStage.HomeScreen, CableStage.Owner },
@@ -348,7 +357,7 @@ public sealed class PhoneCableTests
     {
         var adb = ReadyToPrepare();
         Prepare(adb);
-        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+        Assert.Equal(SetDeviceOwner, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -388,7 +397,7 @@ public sealed class PhoneCableTests
         var result = Prepare(new SecondPhoneAfter(adb, ContentCall()));
         Assert.Null(result.Problem);
         Assert.False(result.OwnerUnconfirmed);
-        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+        Assert.Equal(SetDeviceOwner, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -551,6 +560,26 @@ public sealed class PhoneCableTests
         Assert.All(background, c => Assert.True(adb.Calls.IndexOf(c) < owner));
     }
 
+    // MIUI turns its autostart back off some time after the install; without
+    // it the agent is not started once it is the owner.
+    [Fact]
+    public void Miui_autostart_is_allowed_again_right_before_the_owner_step()
+    {
+        var adb = ReadyToPrepare().Set(S + "shell pm list packages",
+            "package:com.miui.daemon\npackage:" + Package + "\n")
+            .Set(S + "shell pm uninstall --user 0 com.miui.daemon", "Success\n");
+
+        Prepare(adb);
+
+        var autostart = S + "shell cmd appops set " + Package + " 10008 allow";
+        var owner = adb.Calls.IndexOf(SetDeviceOwner);
+        var removed = adb.Calls.IndexOf(S + "shell pm uninstall --user 0 com.miui.daemon");
+        var last = adb.Calls.LastIndexOf(autostart);
+        Assert.Equal(2, adb.Calls.Count(c => c == autostart));
+        Assert.True(last > removed && last < owner);
+        Assert.True(adb.Calls.LastIndexOf(S + "shell cmd deviceidle whitelist +" + Package) is var idle && idle > removed && idle < owner);
+    }
+
     [Fact]
     public void Heavy_app_list_spares_what_the_phone_and_midview_need()
     {
@@ -643,7 +672,7 @@ public sealed class PhoneCableTests
         Assert.Contains(S + "shell settings put secure accessibility_enabled 1", adb.Calls);
         Assert.Contains(AllowListener, adb.Calls);
         Assert.Contains(S + "shell settings put global force_fsg_nav_bar 0", adb.Calls);
-        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+        Assert.Equal(SetDeviceOwner, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -831,7 +860,7 @@ public sealed class PhoneCableTests
         Assert.Null(result.Problem);
         Assert.True(result.OwnerUnconfirmed);
         Assert.Equal("Celular 07", result.Phone!.Name);
-        Assert.Equal(SetDeviceOwner, adb.Calls[^1]);
+        Assert.Equal(SetDeviceOwner, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]

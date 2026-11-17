@@ -121,7 +121,7 @@ public sealed class PhoneCableHomeScreenTests
         var arranged = First(adb, PhoneHomeScreen.SettingsActivity);
         Assert.True(arranged > First(adb, "content call"));
         Assert.True(First(adb, "rm -f " + PhoneHomeScreen.DumpFile) < First(adb, "window_animation_scale"));
-        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls[^1]);
+        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public sealed class PhoneCableHomeScreenTests
         Assert.True(result.HomeByHand);
         Assert.False(result.HomeOnLauncher3);
         Assert.Contains(CableStage.HomeScreen, stages);
-        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls[^1]);
+        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class PhoneCableHomeScreenTests
         Assert.True(First(adb, ResolveHome) > First(adb, "content call"));
         Assert.True(First(adb, PhoneLauncher3Home.SettingsAction) > First(adb, ResolveHome));
         Assert.True(First(adb, "rm -f " + PhoneLauncher3Home.DumpFile) < First(adb, "window_animation_scale"));
-        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls[^1]);
+        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public sealed class PhoneCableHomeScreenTests
         Assert.True(result.HomeByHand);
         Assert.True(result.HomeOnLauncher3);
         Assert.Contains(CableStage.HomeScreen, stages);
-        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls[^1]);
+        Assert.Equal("-s " + Serial + " shell dpm set-device-owner " + Admin, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]

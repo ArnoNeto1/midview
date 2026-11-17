@@ -138,7 +138,8 @@ public sealed class PhoneCableLocalAccountsTests
         var owner = adb.Calls.IndexOf(SetDeviceOwner);
         var enable = adb.Calls.IndexOf(Enable);
         Assert.True(disable >= 0 && disable < owner && owner < enable);
-        Assert.Equal(adb.Calls.Count - 1, enable);
+        Assert.Equal(adb.Calls.Count - 2, enable);
+        Assert.EndsWith("--method start", adb.Calls[^1]);
         Assert.Single(adb.Calls, Disable);
         Assert.Single(adb.Calls, Enable);
     }
@@ -150,7 +151,7 @@ public sealed class PhoneCableLocalAccountsTests
             "java.lang.IllegalStateException: Not allowed to set the device owner because there are already some accounts on the device\n");
 
         Assert.Equal(CableProblem.HasAccounts, Prepare(adb).Problem);
-        Assert.Equal(Enable, adb.Calls[^1]);
+        Assert.Equal(Enable, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -159,7 +160,7 @@ public sealed class PhoneCableLocalAccountsTests
         var adb = Tablet().Set(SetDeviceOwner, "", timedOut: true);
 
         Assert.True(Prepare(adb).OwnerUnconfirmed);
-        Assert.Equal(Enable, adb.Calls[^1]);
+        Assert.Equal(Enable, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -169,7 +170,7 @@ public sealed class PhoneCableLocalAccountsTests
         adb.Throw = SetDeviceOwner;
 
         Assert.Throws<InvalidOperationException>(() => Prepare(adb));
-        Assert.Equal(Enable, adb.Calls[^1]);
+        Assert.Equal(Enable, adb.Calls.Last(c => !c.EndsWith("--method start", StringComparison.Ordinal)));
     }
 
     [Fact]
