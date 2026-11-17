@@ -236,7 +236,7 @@ internal static partial class PhoneSetupGuide
             "Tire a conta Google do tablet",
             new[]
             {
-                "Abra as Configurações e toque em \"Contas\".",
+                "Com o cabo ligado, o Midview abre sozinho a tela \"Contas\". Se não abrir, abra as Configurações e toque em \"Contas\".",
                 "Toque na conta Google.",
                 "Toque em \"Remover conta\" e confirme.",
                 "Se entrou numa conta Google na Play Store, no passo anterior, é ela que sai agora.",

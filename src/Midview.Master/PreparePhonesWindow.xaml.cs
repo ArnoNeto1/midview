@@ -324,6 +324,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowHelp();
         PageScroll.ScrollToTop();
         UpdateCableWatch();
+        OpenAccountsOnce();
     }
 
     private void ShowGather()

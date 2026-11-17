@@ -274,8 +274,7 @@ internal static partial class PhoneSetupGuide
             "Tire a conta Google do celular",
             new[]
             {
-                "Abra as Configurações (ícone de engrenagem).",
-                "Toque em \"Contas e sincronização\".",
+                "Com o cabo ligado, o Midview abre sozinho as Configurações em \"Contas e sincronização\". Se não abrir, abra as Configurações (ícone de engrenagem) e toque em \"Contas e sincronização\".",
                 "Na seção \"GOOGLE\", toque na conta.",
                 "Toque em \"Mais\" e depois em \"Remover conta\".",
                 "Se o celular pedir, digite a senha de tela do celular ou da conta.",
