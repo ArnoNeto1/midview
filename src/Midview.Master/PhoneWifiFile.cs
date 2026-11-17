@@ -29,6 +29,15 @@ public static class PhoneWifiFile
         }
     }
 
+    // What is wrong with the password typed for the lab Wi-Fi, or null when it
+    // is fine: 8 or more characters, or none at all for an open network (a
+    // school's Wi-Fi with a voucher page, like Omada's). The phone takes an
+    // empty password as an open network (CableSetupData).
+    public static string? PasswordProblem(string password) =>
+        password.Length is > 0 and < 8
+            ? "A senha do Wi-Fi tem pelo menos 8 caracteres. Numa rede com voucher, deixe em branco: cada aparelho digita o próprio código depois."
+            : null;
+
     public static void Save(string ssid, string password, string? folder = null)
     {
         var path = PathIn(folder);

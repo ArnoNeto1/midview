@@ -179,7 +179,7 @@ public partial class PreparePhonesWindow : MidviewWindow
         ShowPage();
     }
 
-    // Same rules as before the assistant: a name, and a password of 8 or more.
+    // A name, and a password of 8 or more, or none for an open network.
     private bool SaveWifi()
     {
         var ssid = SsidInput.Text.Trim();
@@ -188,9 +188,9 @@ public partial class PreparePhonesWindow : MidviewWindow
             WifiErrorText.Text = "Digite o nome do Wi-Fi do laboratório.";
             return false;
         }
-        if (PasswordInput.Text.Length < 8)
+        if (PhoneWifiFile.PasswordProblem(PasswordInput.Text) is { } problem)
         {
-            WifiErrorText.Text = "A senha do Wi-Fi tem pelo menos 8 caracteres.";
+            WifiErrorText.Text = problem;
             return false;
         }
         WifiErrorText.Text = "";

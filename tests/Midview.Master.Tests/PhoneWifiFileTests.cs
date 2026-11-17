@@ -31,6 +31,25 @@ public class PhoneWifiFileTests : IDisposable
         }
     }
 
+    // A school's voucher Wi-Fi (Omada) is open: no password, the voucher code
+    // is typed later on each device's login page.
+    [Fact]
+    public void An_open_network_has_no_password_and_a_short_one_is_refused()
+    {
+        Assert.Null(PhoneWifiFile.PasswordProblem(""));
+        Assert.Null(PhoneWifiFile.PasswordProblem("12345678"));
+        Assert.NotNull(PhoneWifiFile.PasswordProblem("1234567"));
+        Assert.NotNull(PhoneWifiFile.PasswordProblem(" "));
+    }
+
+    [Fact]
+    public void An_open_network_round_trips()
+    {
+        PhoneWifiFile.Save("Hermann 2026", "", _folder);
+
+        Assert.Equal(("Hermann 2026", ""), PhoneWifiFile.Load(_folder));
+    }
+
     [Fact]
     public void Load_returns_null_when_absent_or_damaged()
     {

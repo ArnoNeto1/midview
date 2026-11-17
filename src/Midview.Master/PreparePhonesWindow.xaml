@@ -50,7 +50,9 @@
                     <TextBlock Style="{StaticResource Hint}" Text="Nome da rede" />
                     <TextBox x:Name="SsidInput" Margin="0,3,0,10" Padding="6,4" />
                     <TextBlock Style="{StaticResource Hint}" Text="Senha" />
-                    <TextBox x:Name="PasswordInput" Margin="0,3,0,10" Padding="6,4" />
+                    <TextBox x:Name="PasswordInput" Margin="0,3,0,4" Padding="6,4" />
+                    <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,0,0,10" TextWrapping="Wrap"
+                               Text="Rede com voucher (cada aparelho digita o próprio código na página &quot;Fazer login na rede&quot;)? Deixe a senha em branco: o código não vai aqui." />
                     <TextBlock x:Name="WifiErrorText" Style="{StaticResource ErrorText}" />
                 </StackPanel>
 
