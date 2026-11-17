@@ -193,20 +193,31 @@ public sealed partial class PhoneCable
     // choice on 2026-11-17, looking at the Redmi 10C prepared with no SIM:
     // Weather, Music, Mi Video, Themes, Personal Safety, the SIM toolkit,
     // the dialer, Contacts, the Downloads screen (the file manager shows
-    // them) and the Clock. Never the phone service (com.android.phone, the
-    // lock screen's emergency calls) nor the downloads provider itself.
+    // them) and the Clock; then Digital Wellbeing (as on a tablet) and
+    // Google Drive. Never the phone service (com.android.phone, the lock
+    // screen's emergency calls) nor the downloads provider itself.
     internal static readonly IReadOnlyList<string> PhoneRemovedApps = new[]
     {
         "com.android.deskclock",
         "com.android.providers.downloads.ui",
         "com.android.stk",
         "com.android.thememanager",
+        "com.google.android.apps.docs",
         "com.google.android.apps.safetyhub",
+        "com.google.android.apps.wellbeing",
         "com.google.android.contacts",
         "com.google.android.dialer",
         "com.miui.player",
         "com.miui.videoplayer",
         "com.miui.weather2",
+    };
+
+    // On a phone the Play Store also stops running unseen (the school's
+    // choice, 2026-11-17: about 138 MB on the Redmi 10C); it still opens
+    // when someone uses it. Undone like the others.
+    internal static readonly IReadOnlyList<string> PhoneHeavyApps = new[]
+    {
+        "com.android.vending",
     };
 
     // On a tablet the Play Store and Google's voice also stop running unseen
@@ -248,7 +259,7 @@ public sealed partial class PhoneCable
                 installed.Remove(app);
             }
         }
-        foreach (var app in (tablet ? HeavyApps.Concat(TabletHeavyApps) : HeavyApps).Where(installed.Contains))
+        foreach (var app in HeavyApps.Concat(tablet ? TabletHeavyApps : PhoneHeavyApps).Where(installed.Contains))
         {
             Shell(Short, "cmd", "appops", "set", app, "RUN_ANY_IN_BACKGROUND", "ignore");
         }

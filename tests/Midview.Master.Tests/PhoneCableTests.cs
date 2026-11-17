@@ -555,6 +555,8 @@ public sealed class PhoneCableTests
         {
             S + "shell cmd appops set cn.wps.moffice_eng RUN_ANY_IN_BACKGROUND ignore",
             S + "shell cmd appops set com.mi.globalminusscreen RUN_ANY_IN_BACKGROUND ignore",
+            // A phone's own (PhoneHeavyApps).
+            S + "shell cmd appops set com.android.vending RUN_ANY_IN_BACKGROUND ignore",
         }, background);
         var owner = adb.Calls.IndexOf(SetDeviceOwner);
         Assert.All(background, c => Assert.True(adb.Calls.IndexOf(c) < owner));
@@ -723,8 +725,8 @@ public sealed class PhoneCableTests
         Assert.DoesNotContain(ContentCall(), adb.Calls);
     }
 
-    // A tablet loses its own extra apps too (TabletRemovedApps) and keeps the
-    // Play Store from running unseen; a phone with the same apps does not.
+    // A tablet loses its own extra apps too (TabletRemovedApps); both keep the
+    // Play Store from running unseen; a phone keeps the tablet apps.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -759,7 +761,7 @@ public sealed class PhoneCableTests
         else
         {
             Assert.Equal(new[] { S + "shell pm uninstall --user 0 com.miui.daemon" }, removed);
-            Assert.Empty(background);
+            Assert.Equal(new[] { S + "shell cmd appops set com.android.vending RUN_ANY_IN_BACKGROUND ignore" }, background);
         }
     }
 
@@ -825,7 +827,8 @@ public sealed class PhoneCableTests
         {
             Assert.DoesNotContain(app, PhoneCable.PhoneRemovedApps);
         }
-        Assert.Equal(10, PhoneCable.PhoneRemovedApps.Count);
+        Assert.Equal(12, PhoneCable.PhoneRemovedApps.Count);
+        Assert.Empty(PhoneCable.PhoneHeavyApps.Intersect(PhoneCable.PhoneRemovedApps));
         Assert.Empty(PhoneCable.PhoneRemovedApps.Intersect(PhoneCable.RemovedApps));
     }
 
