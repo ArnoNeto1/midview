@@ -189,6 +189,26 @@ public sealed partial class PhoneCable
         "com.google.android.youtube",
     };
 
+    // A phone's own extra apps out, besides the ones above: the school's
+    // choice on 2026-11-17, looking at the Redmi 10C prepared with no SIM:
+    // Weather, Music, Mi Video, Themes, Personal Safety, the SIM toolkit,
+    // the dialer, Contacts, the Downloads screen (the file manager shows
+    // them) and the Clock. Never the phone service (com.android.phone, the
+    // lock screen's emergency calls) nor the downloads provider itself.
+    internal static readonly IReadOnlyList<string> PhoneRemovedApps = new[]
+    {
+        "com.android.deskclock",
+        "com.android.providers.downloads.ui",
+        "com.android.stk",
+        "com.android.thememanager",
+        "com.google.android.apps.safetyhub",
+        "com.google.android.contacts",
+        "com.google.android.dialer",
+        "com.miui.player",
+        "com.miui.videoplayer",
+        "com.miui.weather2",
+    };
+
     // On a tablet the Play Store and Google's voice also stop running unseen
     // (with no Google account they only keep themselves busy). Undone with
     // "cmd appops set <app> RUN_ANY_IN_BACKGROUND allow".
@@ -221,7 +241,7 @@ public sealed partial class PhoneCable
             .Select(line => line["package:".Length..])
             .ToHashSet(StringComparer.Ordinal);
         var tablet = kind == AndroidDeviceKind.Tablet;
-        foreach (var app in (tablet ? RemovedApps.Concat(TabletRemovedApps) : RemovedApps).Where(installed.Contains))
+        foreach (var app in RemovedApps.Concat(tablet ? TabletRemovedApps : PhoneRemovedApps).Where(installed.Contains))
         {
             if (Shell(Short, "pm", "uninstall", "--user", "0", app).Text.Contains("Success", StringComparison.Ordinal))
             {

@@ -68,6 +68,10 @@ object UnusedApps {
         "com.google.android.apps.maps",
         "com.miui.fm",
         "com.google.android.youtube",
+        // The school took Clima off the phones on 2026-11-17; MIUI refuses to
+        // remove it over the cable ("can't uninstall pkg"), the Device Owner
+        // uninstalls it (seen on the Redmi 10C).
+        "com.miui.weather2",
     )
 
     val PACKAGES: List<String> = GAMES + SOCIAL + SHOPPING + EXTRAS
@@ -77,7 +81,7 @@ object UnusedApps {
     // keyboard, the WebView, Google Play services and the Play Store, the
     // settings, Chrome, the camera, the phone and messages, the installer,
     // and the school's everyday apps (Calculadora, Galeria, Relógio,
-    // Arquivos, Notas, Clima, Gravador, WPS and Google's Docs).
+    // Arquivos, Notas, Gravador, WPS and Google's Docs).
     val PROTECTED: Set<String> = setOf(
         Lockdown.PACKAGE,
         "com.miui.home",
@@ -112,7 +116,6 @@ object UnusedApps {
         "com.google.android.documentsui",
         "com.android.documentsui",
         "com.miui.notes",
-        "com.miui.weather2",
         "com.android.soundrecorder",
         "com.miui.soundrecorder",
         "cn.wps.xiaomi.abroad.lite",

@@ -783,6 +783,52 @@ public sealed class PhoneCableTests
         Assert.Equal(PhoneCable.TabletRemovedApps.Count, PhoneCable.TabletRemovedApps.Distinct().Count());
     }
 
+    // The school's choice for phones (2026-11-17): removed on a phone, never
+    // on a tablet, and never the phone service nor the downloads provider.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Only_a_phone_loses_the_phone_apps(bool tablet)
+    {
+        var kind = tablet ? AndroidDeviceKind.Tablet : AndroidDeviceKind.Phone;
+        var call = S + "shell content call --uri content://io.github.arnoneto1.midview.agent.setup --method prepare --extra setup:s:"
+                   + CableSetupPayload.Encode("07", Thumb, "Lab", "pw", kind);
+        var adb = ReadyToPrepare()
+            .Set(call, "Result: Bundle[{ok=true, thumbprint=" + Thumb + ", name=Celular 07}]\n")
+            .Set(S + "shell pm list packages",
+                "package:com.google.android.dialer\npackage:com.android.deskclock\npackage:com.android.phone\n"
+                + "package:com.android.providers.downloads\n")
+            .Set(S + "shell pm uninstall --user 0 com.google.android.dialer", "Success\n")
+            .Set(S + "shell pm uninstall --user 0 com.android.deskclock", "Success\n");
+
+        new PhoneCable(adb).Prepare(Apk, "07", Thumb, "Lab", "pw", _ => { }, kind: kind);
+
+        var removed = adb.Calls.Where(c => c.Contains("pm uninstall --user 0", StringComparison.Ordinal)).ToList();
+        Assert.Equal(tablet ? Array.Empty<string>() : new[]
+        {
+            S + "shell pm uninstall --user 0 com.android.deskclock",
+            S + "shell pm uninstall --user 0 com.google.android.dialer",
+        }, removed);
+    }
+
+    [Fact]
+    public void Phone_app_list_spares_the_phone_service_and_what_the_class_needs()
+    {
+        foreach (var app in new[]
+                 {
+                     Package, "com.android.phone", "com.android.providers.downloads", "com.miui.home",
+                     "com.google.android.inputmethod.latin", "com.google.android.gms", "com.android.vending",
+                     "com.android.chrome", "com.google.android.webview", "com.android.settings", "com.android.camera",
+                     "com.miui.gallery", "com.miui.calculator", "com.mi.android.globalFileexplorer", "cn.wps.moffice_eng",
+                     "com.miui.notes", "com.android.soundrecorder", "com.miui.securitycenter",
+                 })
+        {
+            Assert.DoesNotContain(app, PhoneCable.PhoneRemovedApps);
+        }
+        Assert.Equal(10, PhoneCable.PhoneRemovedApps.Count);
+        Assert.Empty(PhoneCable.PhoneRemovedApps.Intersect(PhoneCable.RemovedApps));
+    }
+
     [Fact]
     public void Door_refusal_is_refused()
     {

@@ -38,10 +38,12 @@ class UnusedAppsTest {
                 "com.google.android.apps.photos", "com.tencent.igxiaomi", "com.google.android.gm",
                 "com.google.android.calendar", "com.google.android.apps.googleassistant", "com.google.android.apps.maps",
                 "com.miui.fm", "com.google.android.youtube",
+                // The school took Clima off on 2026-11-17.
+                "com.miui.weather2",
             ),
             UnusedApps.EXTRAS,
         )
-        assertEquals(41, UnusedApps.PACKAGES.size)
+        assertEquals(42, UnusedApps.PACKAGES.size)
         assertEquals(UnusedApps.PACKAGES.size, UnusedApps.PACKAGES.toSet().size)
         assertTrue(UnusedApps.PACKAGES.all(PhoneAppPolicy::isValidPackageName))
     }
@@ -60,7 +62,7 @@ class UnusedAppsTest {
             "com.google.android.webview", "com.google.android.gms", "com.android.vending", "com.android.settings",
             "com.android.chrome", "com.android.camera", "com.google.android.dialer", "com.miui.calculator",
             "com.miui.gallery", "com.android.deskclock", "com.mi.android.globalFileexplorer", "com.miui.notes",
-            "com.miui.weather2", "com.android.soundrecorder", "cn.wps.xiaomi.abroad.lite",
+            "com.android.soundrecorder", "cn.wps.xiaomi.abroad.lite",
             "com.google.android.apps.docs.editors.docs",
         )
         assertTrue((essential - UnusedApps.PROTECTED).toString(), UnusedApps.PROTECTED.containsAll(essential))

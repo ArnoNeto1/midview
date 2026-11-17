@@ -40,8 +40,8 @@ internal static class DeviceSetupText
         ? $"Instala o Midview e deixa o tablet mais leve: tira até {PhoneCable.RemovedApps.Count + PhoneCable.TabletRemovedApps.Count} apps " +
           "que a turma não usa (testes de fábrica, propaganda e coleta de dados, App Google, telefone, estilos do sistema), " +
           "desliga as animações, segura os apps pesados em segundo plano e arruma a tela inicial."
-        : $"Instala o Midview e deixa o {Word(kind)} mais leve: tira {PhoneCable.RemovedApps.Count} apps que a turma não usa " +
-          "(testes de fábrica, propaganda e coleta de dados, App Google), desliga as animações, segura os apps pesados " +
+        : $"Instala o Midview e deixa o {Word(kind)} mais leve: tira até {PhoneCable.RemovedApps.Count + PhoneCable.PhoneRemovedApps.Count} apps que a turma não usa " +
+          "(testes de fábrica, propaganda e coleta de dados, App Google, telefone, contatos, relógio, música e vídeo), desliga as animações, segura os apps pesados " +
           "em segundo plano e arruma a tela inicial.";
 
     // Measured on the school's Redmi 10C and Multilaser M10 on 2026-11-13.
