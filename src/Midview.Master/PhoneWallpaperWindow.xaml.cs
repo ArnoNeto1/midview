@@ -24,6 +24,7 @@ public partial class PhoneWallpaperWindow : MidviewWindow
     private readonly ObservableCollection<PhoneRow> _rows;
     private PhoneWallpaperImage.Prepared? _picture;
     private bool _running;
+    private readonly IReadOnlyList<AndroidDeviceKind> _kinds;
 
     // allPhones: phones is every Android device in the classroom list.
     public PhoneWallpaperWindow(IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate)
@@ -36,6 +37,8 @@ public partial class PhoneWallpaperWindow : MidviewWindow
         HomeRadioButton.Content = PhoneWallpaperText.Choice(PhoneWallpaperScreens.Home);
         LockRadioButton.Content = PhoneWallpaperText.Choice(PhoneWallpaperScreens.Lock);
         PictureTextBlock.Text = PhoneWallpaperText.NothingChosen;
+        _kinds = PhoneDefaultsFile.KindsOf(phones.Select(phone => phone.Name));
+        DefaultTextBlock.Text = PhoneDefaultsFile.NextOnes(_kinds);
         _rows = new ObservableCollection<PhoneRow>(phones.Select(phone => new PhoneRow(phone)));
         PhonesList.ItemsSource = _rows;
         ShowState();
@@ -135,6 +138,10 @@ public partial class PhoneWallpaperWindow : MidviewWindow
         }
 
         var restore = image.Length == 0;
+        if (DefaultCheckBox.IsChecked == true)
+        {
+            KeepForTheNextOnes(restore ? null : new PhoneDefaultsFile.Wallpaper(screens, image));
+        }
         _running = true;
         ShowState();
         ProgressTextBlock.Text = PhoneWallpaperText.Progress(restore, _rows.Count);
@@ -152,6 +159,22 @@ public partial class PhoneWallpaperWindow : MidviewWindow
         {
             _running = false;
             ShowState();
+        }
+    }
+
+    // The school's default for the devices prepared next (null: none, the
+    // device's own). Not keeping it is not worth refusing the sending.
+    private void KeepForTheNextOnes(PhoneDefaultsFile.Wallpaper? wallpaper)
+    {
+        try
+        {
+            foreach (var kind in _kinds)
+            {
+                PhoneDefaultsFile.SaveWallpaper(kind, wallpaper);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
         }
     }
 

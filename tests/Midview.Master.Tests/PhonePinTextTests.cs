@@ -107,13 +107,15 @@ public class PhonePinTextTests
         Assert.Contains("Content=\"Mostrar\"", xaml);
     }
 
-    // Nothing in the window or the client writes the PIN anywhere: the teacher types it each time.
+    // Nothing in the window or the client writes the PIN anywhere but the
+    // school's defaults for the devices prepared next (PhoneDefaultsFile, a
+    // DPAPI blob), and only with "Pôr também nos próximos" checked.
     [Fact]
-    public void The_pin_is_never_saved_on_the_pc()
+    public void The_pin_is_saved_only_as_the_schools_default()
     {
         foreach (var file in new[] { "PhonePinWindow.xaml.cs", "PhonePinClient.cs", "PhonePinText.cs" })
         {
-            var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Midview.Master", file));
+            var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Midview.Master", file)).Replace("PhoneDefaultsFile.", "");
             Assert.DoesNotContain("File.", code);
             Assert.DoesNotContain("MasterData", code);
             Assert.DoesNotContain("Registry", code);

@@ -24,6 +24,7 @@ public partial class PhonePinWindow : MidviewWindow
         _masterCertificate = masterCertificate;
         Title = DialogHeading.Heading = PhonePinText.Heading(phones.Count);
         TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones);
+        DefaultTextBlock.Text = PhoneDefaultsFile.NextOnes(PhoneDefaultsFile.KindsOf(phones.Select(phone => phone.Name)));
         _rows = new ObservableCollection<PhoneRow>(phones.Select(phone => new PhoneRow(phone)));
         PhonesList.ItemsSource = _rows;
         DataObject.AddPastingHandler(PinPasswordBox, OnPinPasting);
@@ -122,6 +123,19 @@ public partial class PhonePinWindow : MidviewWindow
         }
 
         var set = pin.Length > 0;
+        if (DefaultCheckBox.IsChecked == true)
+        {
+            // The PIN for the devices prepared next (or none). Not keeping it
+            // is not worth refusing the sending.
+            try
+            {
+                PhoneDefaultsFile.SavePin(set ? pin : null);
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
+                                           or System.Security.Cryptography.CryptographicException)
+            {
+            }
+        }
         _running = true;
         ShowPinState();
         ProgressTextBlock.Text = PhonePinText.Progress(set, _rows.Count);

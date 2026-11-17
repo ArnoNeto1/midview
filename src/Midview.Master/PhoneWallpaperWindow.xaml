@@ -36,6 +36,9 @@
                         <RadioButton x:Name="BothRadioButton" GroupName="Screens" IsChecked="True" Margin="0,0,0,6" />
                         <RadioButton x:Name="HomeRadioButton" GroupName="Screens" Margin="0,0,0,6" />
                         <RadioButton x:Name="LockRadioButton" GroupName="Screens" />
+                        <CheckBox x:Name="DefaultCheckBox" IsChecked="True" Margin="0,14,0,0">
+                            <TextBlock x:Name="DefaultTextBlock" TextWrapping="Wrap" />
+                        </CheckBox>
                         <WrapPanel Margin="0,14,0,0">
                             <Button x:Name="ApplyButton" Content="Aplicar" Click="OnApplyClicked"
                                     Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,8,8" IsDefault="True" IsEnabled="False" />

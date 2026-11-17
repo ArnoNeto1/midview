@@ -16,7 +16,7 @@
                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap"
                                Text="Põe um PIN de 4 números na tela de bloqueio. O aluno não consegue trocar nem tirar o PIN: se tentar, o Midview põe o do professor de volta. Para pôr, trocar ou tirar o PIN, use esta janela, não o aparelho." />
                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Text="Um aparelho que já tinha senha de tela antes do Midview só aceita o PIN depois de restaurado de fábrica. O PIN não fica guardado neste computador: anote-o." />
+                               Text="Um aparelho que já tinha senha de tela antes do Midview só aceita o PIN depois de restaurado de fábrica. Anote o PIN: ele só fica guardado neste computador, protegido pelo Windows, para os próximos aparelhos preparados." />
                 </StackPanel>
             </Border>
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
@@ -33,6 +33,9 @@
                           Checked="OnShowPinChanged" Unchecked="OnShowPinChanged" />
                 <TextBlock x:Name="PinHintTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
             </StackPanel>
+            <CheckBox x:Name="DefaultCheckBox" IsChecked="True" Margin="0,12,0,0">
+                <TextBlock x:Name="DefaultTextBlock" TextWrapping="Wrap" />
+            </CheckBox>
             <DockPanel Margin="0,14,0,10">
                 <Button x:Name="SetButton" DockPanel.Dock="Left" Content="Pôr o PIN" Click="OnSetClicked"
                         Style="{StaticResource PrimaryButton}" Padding="14,6" Margin="0,0,8,0" IsEnabled="False" IsDefault="True" />

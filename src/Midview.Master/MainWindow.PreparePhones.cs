@@ -28,6 +28,10 @@ public partial class MainWindow
     private DispatcherTimer? _phoneJoinTimer;
     private bool _phoneJoinSearching;
 
+    // Devices the cable just prepared that still wait for the school's
+    // defaults (PhoneDefaultsFile): put once each answers (OnPhoneJoinTick).
+    private readonly HashSet<string> _defaultsPending = new(StringComparer.OrdinalIgnoreCase);
+
     private void OnPreparePhonesClicked(object sender, RoutedEventArgs e) =>
         OpenPreparePhonesWindow((PreparedKind(), true));
 
@@ -105,6 +109,10 @@ public partial class MainWindow
         {
             StatusTextBlock.Text = problem;
         }
+        if (phone.AgentThumbprint is { } agent && !PhoneDefaultsFile.Load().IsEmpty)
+        {
+            _defaultsPending.Add(agent);
+        }
         WatchPreparedPhone(phone);
     }
 
@@ -138,6 +146,7 @@ public partial class MainWindow
     // One search at a time, at most every 10 s, for all the phones waited for.
     private async void OnPhoneJoinTick()
     {
+        PutDefaultsOnArrivals();
         var now = DateTimeOffset.Now;
         var due = _phoneJoinWatch.Tick(now, IsPhoneOnline);
         if (_phoneJoinWatch.IsEmpty)
@@ -157,6 +166,31 @@ public partial class MainWindow
         finally
         {
             _phoneJoinSearching = false;
+        }
+    }
+
+    // The school's picture and PIN on each device just prepared that answers
+    // now, once; the teacher reads how it went in the status bar.
+    private void PutDefaultsOnArrivals()
+    {
+        foreach (var agent in _defaultsPending.Where(IsPhoneOnline).ToList())
+        {
+            _defaultsPending.Remove(agent);
+            var device = _tiles.First(tile => tile.Machine.IsPhone
+                && string.Equals(tile.Machine.AgentThumbprint, agent, StringComparison.OrdinalIgnoreCase)).Machine;
+            var kind = PhoneWipe.TargetOf(device.Name)?.Kind ?? AndroidDeviceKind.Phone;
+            var certificate = _masterCertificate;
+            _ = Task.Run(() => PreparedDefaults.Apply(
+                    device.Name, kind, PhoneDefaultsFile.Load(),
+                    wallpaper => PhoneWallpaperClient.Send(device, wallpaper.Screens, wallpaper.Jpeg, certificate),
+                    pin => PhonePinClient.Send(device, pin, certificate)))
+                .ContinueWith(done =>
+                {
+                    if (done.Status == TaskStatus.RanToCompletion && done.Result is { } said)
+                    {
+                        StatusTextBlock.Text = said;
+                    }
+                }, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }
 
