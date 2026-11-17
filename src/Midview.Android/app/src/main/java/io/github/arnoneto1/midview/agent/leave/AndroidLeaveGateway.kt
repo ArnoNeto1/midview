@@ -95,11 +95,18 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
         fun denied(pkg: String) = runCatching {
             dpm.getPermissionGrantState(admin, pkg, Lockdown.POST_NOTIFICATIONS) == DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED
         }.getOrDefault(false)
-        val stuck = everyApp().map { it.packageName }.filter(::denied).filter { pkg ->
+        fun allow(pkgs: List<String>) = pkgs.filter { pkg ->
             runCatching {
                 dpm.setPermissionGrantState(admin, pkg, Lockdown.POST_NOTIFICATIONS, DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT)
             }
             denied(pkg)
+        }
+        // Once more for any still denied: the first removal from the Redmi
+        // 10C (2026-11-17) found some, the second none (its log was lost).
+        var stuck = allow(everyApp().map { it.packageName }.filter(::denied))
+        if (stuck.isNotEmpty()) {
+            SystemClock.sleep(RETRY_MILLIS)
+            stuck = allow(stuck)
         }
         check(stuck.isEmpty()) { "notifications still denied: $stuck" }
     }
@@ -133,7 +140,13 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
     override fun removeScreenPin(): Boolean {
         val keeper = LockScreenKeeper.get(app)
         if (keeper.teacherPinSet() && !keeper.setTeacherPin(ByteArray(0)).first) return false
-        dpm.setPasswordMinimumLength(admin, 0)
+        // Android 13 refuses a minimum length under a quality below NUMERIC
+        // ("password quality should be at least 131072", seen on the Redmi
+        // 10C, 2026-11-17, after the teacher's PIN was put and taken off):
+        // the length goes only while the quality still asks for one.
+        if (dpm.getPasswordQuality(admin) >= DevicePolicyManager.PASSWORD_QUALITY_NUMERIC) {
+            dpm.setPasswordMinimumLength(admin, 0)
+        }
         dpm.setPasswordQuality(admin, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
         runCatching { dpm.clearResetPasswordToken(admin) }
         LockScreenKeeper.forget(app)
@@ -221,6 +234,7 @@ class AndroidLeaveGateway(context: Context, private val keep: File) : LeaveGatew
         private const val NOTIFICATION = 3
         private const val ADMIN_GONE_MILLIS = 5_000L
         private const val ADMIN_POLL_MILLIS = 100L
+        private const val RETRY_MILLIS = 1_000L
 
         const val TAP_TITLE = "Toque para terminar de tirar o Midview"
         const val TAP_TEXT = "As travas da escola já saíram deste celular. Falta só confirmar a desinstalação do Midview."
