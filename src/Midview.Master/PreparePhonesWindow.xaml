@@ -11,9 +11,10 @@
         <!-- Where the teacher is, and the lab Wi-Fi ("trocar" goes back to it). -->
         <DockPanel DockPanel.Dock="Top" Margin="0,10,0,0">
             <TextBlock x:Name="WifiLine" DockPanel.Dock="Right" Style="{StaticResource Hint}" TextWrapping="NoWrap"
-                       TextTrimming="CharacterEllipsis" MaxWidth="240" Margin="12,0,0,0">
+                       TextTrimming="CharacterEllipsis" MaxWidth="360" Margin="12,0,0,0">
                 <Run Text="Wi-Fi:" /> <Run x:Name="WifiNameRun" Tag="AsIs" /> ·
-                <Hyperlink Click="OnChangeWifiClicked">trocar</Hyperlink>
+                <Hyperlink Click="OnChangeWifiClicked">trocar</Hyperlink> ·
+                <Hyperlink Click="OnChangeDefaultsClicked"><Run Text="Papel de parede e PIN" /></Hyperlink>
             </TextBlock>
             <TextBlock x:Name="CaptionText" Style="{StaticResource Hint}" FontWeight="SemiBold" />
         </DockPanel>
@@ -54,6 +55,50 @@
                     <TextBlock Style="{StaticResource Hint}" FontSize="12" Margin="0,0,0,10" TextWrapping="Wrap"
                                Text="Rede com voucher (cada aparelho digita o próprio código na página &quot;Fazer login na rede&quot;)? Deixe a senha em branco: o código não vai aqui." />
                     <TextBlock x:Name="WifiErrorText" Style="{StaticResource ErrorText}" />
+                </StackPanel>
+
+                <!-- Papel de parede e PIN da escola (once for each kind, or "Papel de parede e PIN" above):
+                     PhoneDefaultsFile, put on each device prepared next as it joins the class. -->
+                <StackPanel x:Name="DefaultsPage">
+                    <TextBlock x:Name="DefaultsTitle" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock x:Name="DefaultsIntro" Style="{StaticResource Hint}" FontSize="13" Margin="0,6,0,14" TextWrapping="Wrap" />
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <DockPanel>
+                                <Button x:Name="DefaultsChooseButton" DockPanel.Dock="Right" Content="Escolher imagem..."
+                                        Click="OnDefaultsChooseClicked" Padding="12,5" />
+                                <TextBlock Text="Papel de parede" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <DockPanel Margin="0,10,0,0">
+                                <Border x:Name="DefaultsPreview" DockPanel.Dock="Left" Width="52" Height="80" CornerRadius="6"
+                                        BorderThickness="1" BorderBrush="{StaticResource LineBrush}" Margin="0,0,12,0" />
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="DefaultsPictureText" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                    <RadioButton x:Name="DefaultsLockRadio" GroupName="DefaultsScreens" Margin="0,0,0,4" />
+                                    <RadioButton x:Name="DefaultsBothRadio" GroupName="DefaultsScreens" Margin="0,0,0,4" />
+                                    <RadioButton x:Name="DefaultsHomeRadio" GroupName="DefaultsScreens" Margin="0,0,0,4" />
+                                    <TextBlock x:Name="DefaultsNoPictureLink" FontSize="12.5">
+                                        <Hyperlink Click="OnDefaultsNoPictureClicked"><Run Text="Sem imagem" /></Hyperlink>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="Senha (PIN)" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <StackPanel Orientation="Horizontal">
+                                <PasswordBox x:Name="DefaultsPinBox" Width="110" MaxLength="4" FontSize="16" Padding="8,4"
+                                             PreviewTextInput="OnDefaultsPinTyping" PasswordChanged="OnDefaultsPinChanged" />
+                                <TextBox x:Name="DefaultsPinText" Width="110" MaxLength="4" FontSize="16" Padding="8,4" Visibility="Collapsed"
+                                         PreviewTextInput="OnDefaultsPinTyping" TextChanged="OnDefaultsPinChanged" />
+                                <CheckBox x:Name="DefaultsShowPin" Content="Mostrar" VerticalAlignment="Center" Margin="12,0,0,0"
+                                          Click="OnDefaultsShowPinClicked" />
+                            </StackPanel>
+                            <TextBlock x:Name="DefaultsPinHint" Style="{StaticResource Hint}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="DefaultsErrorText" Style="{StaticResource ErrorText}" TextWrapping="Wrap" />
                 </StackPanel>
 
                 <!-- Antes de começar, separe: (only before the first phone) -->

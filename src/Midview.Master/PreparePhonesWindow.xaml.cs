@@ -68,7 +68,8 @@ public partial class PreparePhonesWindow : MidviewWindow
         // of the class: the same things are needed for both.
         _progress.Start(_wifi is not null, gathered:
             _devicesInClass(AndroidDeviceKind.Phone) + _devicesInClass(AndroidDeviceKind.Tablet) > 0
-            || PhoneTotalFile.Asked() || PhoneTotalFile.Asked(kind: AndroidDeviceKind.Tablet));
+            || PhoneTotalFile.Asked() || PhoneTotalFile.Asked(kind: AndroidDeviceKind.Tablet),
+            defaultsAsked: PhoneDefaultsFile.Asked(kind));
         InitializeCable();
         PhoneSetupGuide.FollowDeviceWords(this, () => _progress.Kind);
         ShowPage();
@@ -108,6 +109,12 @@ public partial class PreparePhonesWindow : MidviewWindow
                 break;
             case SetupPage.MiAccount:
                 if (!SaveMiAccount())
+                {
+                    return;
+                }
+                break;
+            case SetupPage.Defaults:
+                if (!SaveDefaults())
                 {
                     return;
                 }
@@ -159,6 +166,14 @@ public partial class PreparePhonesWindow : MidviewWindow
         if (_progress.Page == SetupPage.CableFailed)
         {
             _progress.Again();
+            ShowPage();
+            return;
+        }
+        // "Pular": on to the steps, no default saved.
+        if (_progress.Page == SetupPage.Defaults)
+        {
+            SkipDefaults();
+            _progress.Next();
             ShowPage();
             return;
         }
@@ -257,6 +272,7 @@ public partial class PreparePhonesWindow : MidviewWindow
     {
         var page = _progress.Page;
         WifiPage.Visibility = Shown(page == SetupPage.Wifi);
+        DefaultsPage.Visibility = Shown(page == SetupPage.Defaults);
         GatherPage.Visibility = Shown(page == SetupPage.Gather);
         MiAccountPage.Visibility = Shown(page == SetupPage.MiAccount);
         StepPage.Visibility = Shown(page == SetupPage.Step);
@@ -276,6 +292,7 @@ public partial class PreparePhonesWindow : MidviewWindow
                 : _progress.StepCaption,
             SetupPage.Wifi => _progress.ReturnsAfterWifi ? "Trocar o Wi-Fi" : "Antes de começar",
             SetupPage.Gather => "Antes de começar",
+            SetupPage.Defaults => _progress.ReturnsAfterDefaults ? "Trocar o padrão da escola" : "Antes de começar",
             SetupPage.MiAccount => _progress.Name is { } named ? $"Conta Mi da escola · {named}" : "Conta Mi da escola",
             SetupPage.Cable or SetupPage.CableFailed => $"{_progress.Name} · no cabo",
             _ => _progress.Name ?? "",
@@ -290,6 +307,9 @@ public partial class PreparePhonesWindow : MidviewWindow
                     PasswordInput.Text = saved.Password;
                 }
                 Footer(back: _progress.ReturnsAfterWifi, next: "Guardar e continuar");
+                break;
+            case SetupPage.Defaults:
+                ShowDefaultsPage();
                 break;
             case SetupPage.Gather:
                 ShowGather();

@@ -77,6 +77,20 @@ public static class PhoneDefaultsFile
         Save(kind == AndroidDeviceKind.Tablet ? current with { Tablet = wallpaper } : current with { Phone = wallpaper }, folder);
     }
 
+    // Whether "Papel de parede e PIN da escola" was asked in "Preparar
+    // celulares" for that kind (saved or skipped): it is asked only once.
+    public static bool Asked(AndroidDeviceKind kind, string? folder = null) => File.Exists(AskedPath(kind, folder));
+
+    public static void MarkAsked(AndroidDeviceKind kind, string? folder = null)
+    {
+        var path = AskedPath(kind, folder);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "");
+    }
+
+    private static string AskedPath(AndroidDeviceKind kind, string? folder) =>
+        Path.Combine(folder ?? MasterData.Folder, kind == AndroidDeviceKind.Tablet ? "tablet-defaults-asked.txt" : "phone-defaults-asked.txt");
+
     // The kinds of device among the window's targets, by their names
     // ("Celular 07", "Tablet 03"); a phone paired by code counts as a phone.
     public static IReadOnlyList<AndroidDeviceKind> KindsOf(IEnumerable<string> names)

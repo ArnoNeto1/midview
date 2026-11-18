@@ -4,6 +4,7 @@ namespace Midview.Master;
 internal enum SetupPage
 {
     Wifi,
+    Defaults,
     Gather,
     MiAccount,
     Step,
@@ -43,6 +44,12 @@ internal sealed partial class PhoneSetupProgress
 
     // "Antes de começar, separe:" was shown (or the teacher did it before).
     private bool _gathered;
+
+    // "Papel de parede e PIN da escola" was asked for this kind (now or before).
+    private bool _defaultsAsked = true;
+
+    // The step to come back to after the defaults page ("trocar").
+    private int? _afterDefaults;
 
     // After "Já existe um Celular 07": whether that one was online and can be wiped.
     private bool _takenOnline;
@@ -164,17 +171,28 @@ internal sealed partial class PhoneSetupProgress
     // The Wi-Fi page was opened with "trocar": Back returns to the step.
     public bool ReturnsAfterWifi => Page == SetupPage.Wifi && _afterWifi is not null;
 
+    // The defaults page was opened with "trocar": Back returns to the step.
+    public bool ReturnsAfterDefaults => Page == SetupPage.Defaults && _afterDefaults is not null;
+
     public string ConfirmRedoText => $"Já existe um {Name}. Vai preparar de novo o {Number}?";
 
     // hasWifi: the lab Wi-Fi is saved. gathered: the teacher already went
     // through "Antes de começar, separe:" (it is shown only once).
-    public void Start(bool hasWifi, bool gathered)
+    // defaultsAsked: "Papel de parede e PIN da escola" was asked for this
+    // kind (PhoneDefaultsFile.Asked; it is shown only once).
+    public void Start(bool hasWifi, bool gathered, bool defaultsAsked = true)
     {
         Reset();
         _gathered = gathered;
+        _defaultsAsked = defaultsAsked;
+        _afterDefaults = null;
         if (!hasWifi)
         {
             Page = SetupPage.Wifi;
+        }
+        else if (!defaultsAsked)
+        {
+            Page = SetupPage.Defaults;
         }
         else if (!gathered)
         {
@@ -201,6 +219,14 @@ internal sealed partial class PhoneSetupProgress
         Page = SetupPage.Wifi;
     }
 
+    // "trocar" by "Papel de parede e PIN": the way back is the step the
+    // teacher was on.
+    public void ChangeDefaults()
+    {
+        _afterDefaults = Page == SetupPage.Step ? StepIndex : NumberStep;
+        Page = SetupPage.Defaults;
+    }
+
     public void Next()
     {
         switch (Page)
@@ -208,6 +234,26 @@ internal sealed partial class PhoneSetupProgress
             case SetupPage.Wifi when _afterWifi is { } step:
                 ShowStep(step);
                 _afterWifi = null;
+                break;
+            // "Guardar e seguir" or "Pular": asked either way.
+            case SetupPage.Defaults:
+                _defaultsAsked = true;
+                if (_afterDefaults is { } back)
+                {
+                    ShowStep(back);
+                    _afterDefaults = null;
+                }
+                else if (!_gathered)
+                {
+                    ShowGather();
+                }
+                else
+                {
+                    ShowStep(NumberStep);
+                }
+                break;
+            case SetupPage.Wifi when !_defaultsAsked:
+                Page = SetupPage.Defaults;
                 break;
             // "Guardar e continuar" (or "Pular por agora").
             case SetupPage.MiAccount:
@@ -256,6 +302,13 @@ internal sealed partial class PhoneSetupProgress
             case SetupPage.Wifi when _afterWifi is { } step:
                 ShowStep(step);
                 _afterWifi = null;
+                break;
+            case SetupPage.Defaults when _afterDefaults is { } back:
+                ShowStep(back);
+                _afterDefaults = null;
+                break;
+            case SetupPage.Defaults:
+                Page = SetupPage.Wifi;
                 break;
             case SetupPage.ConfirmRedo:
                 ShowStep(NumberStep);
