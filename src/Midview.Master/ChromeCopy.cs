@@ -18,8 +18,13 @@ public sealed record ChromeCopyManifest(
 // Chrome and Android System WebView as the Play Store left them on the first
 // device, kept on this computer so every next device gets them over the cable
 // (PhoneCable.InstallChromeCopy) with no Google account and no Play Store:
-// <MasterData.Folder>\chrome-copia\<package>\<abi>\, the APK files and
-// copia.json. Only the newest copy of each app for each processor is kept.
+// <MasterData.Folder>\chrome-copia\<package>\<abi>-android<minSdk>\, the
+// APK files and copia.json (before 0.0.62, <abi>\ alone). Only the newest
+// copy of each app for each processor and oldest Android is kept: the Play
+// Store sends a newer phone a Chrome for Android 12L and up only, with the
+// same version as the tablets' Android 10 one, and that copy must never take
+// the tablets' place. A copy that runs on as old an Android and is as new
+// makes another one useless, which is then dropped.
 // A copy is written in a folder of its own and moved into place only when
 // complete, so a cable dropped halfway never leaves half a copy.
 public sealed class ChromeCopy
@@ -68,7 +73,8 @@ public sealed class ChromeCopy
             foreach (var dir in Directory.GetDirectories(folder))
             {
                 if (Read(dir) is { } manifest && manifest.Package == package
-                    && Path.GetFileName(dir) == AbiFolder(manifest.Abi))
+                    && (Path.GetFileName(dir) == CopyFolder(manifest.Abi, manifest.MinSdk)
+                        || Path.GetFileName(dir) == AbiFolder(manifest.Abi)))
                 {
                     copies.Add((manifest, dir));
                 }
@@ -80,12 +86,10 @@ public sealed class ChromeCopy
         return copies.OrderByDescending(c => c.Item1.VersionCode).ToList();
     }
 
-    // The copy of the app for that processor, if any.
-    public ChromeCopyManifest? Find(string package, string abi) =>
-        Copies(package).Select(c => c.Manifest).FirstOrDefault(m => m.Abi == abi);
-
-    // Whether a copy as new as versionCode (or newer) is already kept.
-    public bool Holds(string package, string abi, long versionCode) => Find(package, abi)?.VersionCode >= versionCode;
+    // Whether a copy for that processor is already kept that is as new as
+    // versionCode (or newer) and runs on an Android as old as minSdk (or older).
+    public bool Holds(string package, string abi, int minSdk, long versionCode) =>
+        Copies(package).Any(c => Covers(c.Manifest, abi, minSdk, versionCode));
 
     // An empty folder to pull a new copy into, beside the copies (the same
     // disk, so Keep only renames it).
@@ -135,7 +139,8 @@ public sealed class ChromeCopy
     }
 
     // The files pulled into draft become the copy of the app for that
-    // processor, in place of an older one; the draft is gone either way.
+    // processor and Android, in place of the copies it makes useless; the
+    // draft is gone either way.
     // False when they don't (a copy as new is kept already, a name that is
     // not an app's, the disk refused).
     public bool Keep(string draft, string package, string versionName, long versionCode, string abi, int minSdk, IReadOnlyList<string> files)
@@ -143,7 +148,7 @@ public sealed class ChromeCopy
         try
         {
             if (!PackageName.IsMatch(package) || !IsAbi(abi) || files.Count == 0 || !files.All(IsFileName)
-                || Holds(package, abi, versionCode))
+                || Holds(package, abi, minSdk, versionCode))
             {
                 Discard(draft);
                 return false;
@@ -156,7 +161,9 @@ public sealed class ChromeCopy
             var manifest = new ChromeCopyManifest(package, versionName, versionCode, abi, minSdk, listed);
             File.WriteAllText(Path.Combine(draft, ManifestName), JsonSerializer.Serialize(manifest, Json));
 
-            var target = Path.Combine(Root, package, AbiFolder(abi));
+            var useless = Copies(package).Where(c => Covers(manifest, c.Manifest.Abi, c.Manifest.MinSdk, c.Manifest.VersionCode))
+                .Select(c => c.Folder).ToList();
+            var target = Path.Combine(Root, package, CopyFolder(abi, minSdk));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             string? old = null;
             if (Directory.Exists(target))
@@ -168,6 +175,10 @@ public sealed class ChromeCopy
             if (old is not null)
             {
                 Discard(old);
+            }
+            foreach (var folder in useless.Where(f => f != target))
+            {
+                Discard(folder);
             }
             return true;
         }
@@ -202,6 +213,14 @@ public sealed class ChromeCopy
     public void Remove(string folder) => Discard(folder);
 
     private static string AbiFolder(string abi) => abi.Length == 0 ? AnyAbiFolder : abi;
+
+    private static string CopyFolder(string abi, int minSdk) =>
+        AbiFolder(abi) + "-android" + minSdk.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    // Whether copy is as good as one of that processor, Android and version:
+    // as new, and running on as old an Android.
+    private static bool Covers(ChromeCopyManifest copy, string abi, int minSdk, long versionCode) =>
+        copy.Abi == abi && copy.MinSdk <= minSdk && copy.VersionCode >= versionCode;
 
     private static ChromeCopyManifest? Read(string folder)
     {

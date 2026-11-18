@@ -98,7 +98,7 @@ public sealed partial class PhoneCable
         {
             var app = ReadApp(package, Shell(Short, "dumpsys", "package", package).Text);
             if (app is null || app.Major < ChromeMinimum || app.StaticLibraries || !ChromeCopy.IsAbi(app.Abi)
-                || store.Holds(package, app.Abi, app.VersionCode))
+                || store.Holds(package, app.Abi, app.MinSdk, app.VersionCode))
             {
                 continue;
             }
