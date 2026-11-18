@@ -26,8 +26,14 @@ internal static class DeviceSetupText
 
     public static IReadOnlyList<string> BeforeStarting(AndroidDeviceKind kind) => new[]
     {
-        $"1. {Capital(kind)} sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: " +
-        "restaure só se ele tem uma conta que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o PIN do professor.",
+        // The state's tablets come with the Secretaria de Educação's account,
+        // whose management locks the developer options and the account itself.
+        kind == AndroidDeviceKind.Tablet
+            ? "1. Tablet sem senha de tela e sem conta Google. Tablet com a conta da Secretaria de Educação (SED) precisa ser restaurado " +
+              "de fábrica antes: essa conta trava as Opções do desenvolvedor e não sai do tablet. Restaure também se ele tem uma conta " +
+              "que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o PIN do professor."
+            : $"1. {Capital(kind)} sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: " +
+              "restaure só se ele tem uma conta que ninguém sabe a senha, ou se já teve senha de tela e a escola vai usar o PIN do professor.",
         kind == AndroidDeviceKind.Tablet
             ? "2. Nas Opções do desenvolvedor: Depuração USB ligada."
             : "2. Nas Opções do desenvolvedor: Depuração USB e Instalar via USB ligadas.",

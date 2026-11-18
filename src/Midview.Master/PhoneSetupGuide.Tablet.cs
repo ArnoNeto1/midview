@@ -191,6 +191,11 @@ internal static partial class PhoneSetupGuide
             {
                 new("Diz que já é desenvolvedor",
                     "Então o modo de desenvolvedor já está ligado neste tablet. Siga para o próximo passo."),
+                new("Diz que está bloqueado pelo administrador",
+                    "O tablet tem a conta da Secretaria de Educação (SED), que trava o modo de desenvolvedor e não deixa tirar a conta. " +
+                    "Restaure-o de fábrica: Configurações > Sistema > Opções de redefinição > Limpar todos os dados. " +
+                    "Na primeira configuração, pule o Wi-Fi e a conta Google e não ponha senha de tela; ligue o Wi-Fi só na tela inicial. " +
+                    "Depois volte ao primeiro passo."),
                 TabletNotFound,
             }),
 

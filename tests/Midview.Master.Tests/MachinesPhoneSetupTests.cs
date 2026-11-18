@@ -125,7 +125,7 @@ public class MachinesPhoneSetupTests
 
     [Theory]
     [InlineData(AndroidDeviceKind.Phone, "Configurar celular", "1. Celular sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: ")]
-    [InlineData(AndroidDeviceKind.Tablet, "Configurar tablet", "1. Tablet sem senha de tela e sem conta Google. Não precisa restaurar de fábrica: ")]
+    [InlineData(AndroidDeviceKind.Tablet, "Configurar tablet", "1. Tablet sem senha de tela e sem conta Google. Tablet com a conta da Secretaria")]
     public void Each_page_names_its_kind(AndroidDeviceKind kind, string heading, string firstLine)
     {
         Assert.Equal(heading, DeviceSetupText.Heading(kind));

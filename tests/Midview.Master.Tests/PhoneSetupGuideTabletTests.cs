@@ -56,6 +56,24 @@ public class PhoneSetupGuideTabletTests
         Assert.Contains(steps["desenvolvedor"].Taps, tap => tap.Contains("Número da versão", StringComparison.Ordinal));
     }
 
+    // The state's tablets come with the Secretaria de Educação's account,
+    // whose management locks the developer options and keeps the account on
+    // the tablet: only a factory reset from Settings frees them.
+    [Fact]
+    public void A_tablet_of_the_secretaria_is_restored_first()
+    {
+        var first = DeviceSetupText.BeforeStarting(AndroidDeviceKind.Tablet)[0];
+        Assert.StartsWith("1. Tablet sem senha de tela e sem conta Google. Tablet com a conta da Secretaria de Educação (SED) precisa ser restaurado de fábrica antes", first);
+        Assert.DoesNotContain("Não precisa restaurar", first, StringComparison.Ordinal);
+        Assert.DoesNotContain("SED", DeviceSetupText.BeforeStarting(AndroidDeviceKind.Phone)[0], StringComparison.Ordinal);
+
+        var developer = PhoneSetupGuide.StepsFor(AndroidDeviceKind.Tablet).Single(step => step.Id == "desenvolvedor");
+        var locked = Assert.Single(developer.Help, help => help.Problem.Contains("bloqueado", StringComparison.Ordinal));
+        Assert.Contains("Secretaria de Educação (SED)", locked.Answer, StringComparison.Ordinal);
+        Assert.Contains("Limpar todos os dados", locked.Answer, StringComparison.Ordinal);
+        Assert.Contains("pule o Wi-Fi e a conta Google", locked.Answer, StringComparison.Ordinal);
+    }
+
     // "Instalar via USB" is MIUI's own switch: a tablet's page doesn't ask for it.
     [Fact]
     public void The_tablet_page_asks_only_for_usb_debugging()
