@@ -12,8 +12,10 @@ namespace Midview.Desk;
 // teacher's input onto it. It serves one trusted Master, over the same wire
 // protocol SessionServer uses (ScreenStream/ScreenFrame + FrameCredit for the
 // screen, StartControl/StopControl/InputEvent for control, and
-// FillAdminPassword to type the admin password into a UAC prompt), trimmed to screen
-// and input only: no chat, files, class folder, input lock, thumbnails or
+// FillAdminPassword to type the admin password into a UAC prompt, and
+// ClipboardText to copy and paste both ways while controlling, through the
+// Session's ClipboardBridge), trimmed to screen and input only: no chat,
+// files, class folder, input lock, thumbnails or
 // screen lock (the Session, in its own process, holds the input lock through a
 // separate HoldInputLock connection; the helper only sees and drives).
 //
@@ -47,6 +49,7 @@ public sealed class DeskServer
     private readonly IInputInjector _inputInjector;
     private readonly DesktopFollower _follower;
     private readonly Action<IntPtr> _attachThreadToDesktop;
+    private readonly IClipboard? _clipboard;
 
     // One controlling Master served at a time, the same single-serving-slot
     // policy SessionServer uses: Program.cs wires one shared desktop-following
@@ -63,7 +66,8 @@ public sealed class DeskServer
         Func<IScreenCapture> captureForCurrentDesktop,
         IInputInjector inputInjector,
         DesktopFollower follower,
-        Action<IntPtr>? attachThreadToDesktop = null)
+        Action<IntPtr>? attachThreadToDesktop = null,
+        IClipboard? clipboard = null)
     {
         _listener = listener;
         _agentCertificate = agentCertificate;
@@ -74,6 +78,7 @@ public sealed class DeskServer
         // The real SetThreadDesktop is wired in Task 7; a no-op keeps the
         // normal-desktop path (and the tests) working without it.
         _attachThreadToDesktop = attachThreadToDesktop ?? (_ => { });
+        _clipboard = clipboard;
     }
 
     public void Run(CancellationToken cancellationToken)
@@ -151,10 +156,15 @@ public sealed class DeskServer
         // the worker thread for the same reason as the input above.
         var pendingFills = new ConcurrentQueue<byte[]>();
 
+        // The student's clipboard kept in step with the teacher's while
+        // controlling: the text the teacher copied is put here by this loop,
+        // and the student's is sent by the worker (the channel's one writer).
+        var clipboardBridge = _clipboard is null ? null : new ClipboardBridge(_clipboard);
+
         // The worker only sends (ScreenFrame), this loop only receives -- the
         // one reader / one writer pattern SslStream supports without locking.
         using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var worker = new Thread(() => DesktopWorker(channel, tcpClient, captureCts, credit, cadence, pendingInput, pendingFills))
+        var worker = new Thread(() => DesktopWorker(channel, tcpClient, captureCts, credit, cadence, pendingInput, pendingFills, clipboardBridge))
         {
             IsBackground = true,
         };
@@ -173,10 +183,12 @@ public sealed class DeskServer
                     // nothing. The input lock is the Session's, not the helper's.
                     case MessageType.StartControl:
                         isControlling = true;
+                        if (clipboardBridge is not null) clipboardBridge.Controlling = true;
                         break;
 
                     case MessageType.StopControl:
                         isControlling = false;
+                        if (clipboardBridge is not null) clipboardBridge.Controlling = false;
                         break;
 
                     // Only keeps the connection from timing out; nothing to do.
@@ -226,6 +238,15 @@ public sealed class DeskServer
                         }
                         break;
 
+                    // The teacher's copied text, only while controlling.
+                    case MessageType.ClipboardText:
+                        if (isControlling && clipboardBridge is not null
+                            && ClipboardText.Decode(message.Payload) is { } incoming)
+                        {
+                            clipboardBridge.ApplyRemote(incoming);
+                        }
+                        break;
+
                     case MessageType.FrameAck:
                         if (ScreenFrame.DecodeAck(message.Payload) is { } frameId)
                         {
@@ -252,7 +273,7 @@ public sealed class DeskServer
     private void DesktopWorker(
         SecureChannel channel, TcpClient tcpClient, CancellationTokenSource captureCts,
         FrameCredit credit, CaptureCadence cadence, ConcurrentQueue<InputEvent> pendingInput,
-        ConcurrentQueue<byte[]> pendingFills)
+        ConcurrentQueue<byte[]> pendingFills, ClipboardBridge? clipboardBridge)
     {
         // Each control connection starts its own capture: forget any desktop a
         // previous connection's worker reported, so the first poll below reports
@@ -322,6 +343,14 @@ public sealed class DeskServer
                 foreach (var payload in messages)
                 {
                     channel.Send(new Midview.Protocol.Message(MessageType.ScreenFrame, payload));
+                }
+
+                // This is the only thread that writes to the channel, so the
+                // student's copied text is sent from here (throttled inside).
+                var copiedText = clipboardBridge?.PollLocal();
+                if (copiedText is not null)
+                {
+                    channel.Send(new Midview.Protocol.Message(MessageType.ClipboardText, ClipboardText.Encode(copiedText)));
                 }
 
                 var rest = cadence.RestMs(workMs, (int)sw.ElapsedMilliseconds, Environment.TickCount64);

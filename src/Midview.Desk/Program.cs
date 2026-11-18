@@ -106,7 +106,8 @@ new DeskServer(
     () => new DeskScreenCapture(),
     new SendInputInjector(),
     new DesktopFollower(inputDesktops.Current),
-    AttachThreadToDesktop).Run(CancellationToken.None);
+    AttachThreadToDesktop,
+    new WindowsClipboard()).Run(CancellationToken.None);
 
 return 0;
 

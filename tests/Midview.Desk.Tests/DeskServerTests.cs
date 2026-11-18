@@ -239,6 +239,105 @@ public class DeskServerTests
         }
     }
 
+    // Copy and paste between the teacher and the student while controlling
+    // through the helper, as through the Session (ClipboardBridge): "Controlar"
+    // has gone through the helper since it existed, and the copied text was
+    // lost on the way.
+    [Fact]
+    public async Task The_teachers_copied_text_reaches_the_students_clipboard_while_controlling()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.ClipboardText, ClipboardText.Encode("Olá, turma")));
+
+        await WaitUntil(() => harness.Clipboard.Text == "Olá, turma");
+    }
+
+    [Fact]
+    public async Task The_students_copied_text_reaches_the_teacher_while_controlling()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.StartControl, Array.Empty<byte>()));
+        harness.Clipboard.Text = "copiado no aluno";
+
+        var copied = await Task.Run(() =>
+        {
+            while (true)
+            {
+                var message = master.Channel.Receive();
+                if (message.Type == MessageType.ClipboardText)
+                {
+                    return ClipboardText.Decode(message.Payload);
+                }
+                if (message.Type == MessageType.ScreenFrame && ScreenFrame.Decode(message.Payload) is { } frame)
+                {
+                    master.Channel.Send(new Message(MessageType.FrameAck, ScreenFrame.EncodeAck(frame.FrameId)));
+                }
+            }
+        }).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("copiado no aluno", copied);
+    }
+
+    // Only watching, nothing crosses either way.
+    [Fact]
+    public async Task Nothing_is_copied_while_only_watching()
+    {
+        using var harness = new DeskHarness(new FakeScreenCapture(200, 100));
+        using var master = harness.ConnectMaster();
+        master.Channel.Send(new Message(MessageType.ScreenStream, Array.Empty<byte>()));
+        master.Channel.Send(new Message(MessageType.ClipboardText, ClipboardText.Encode("do professor")));
+        harness.Clipboard.Text = "do aluno";
+
+        // Whatever arrives in 2 s, frames acknowledged so more can come; a
+        // still screen sends nothing after the first, so the reader is left
+        // blocked and ends when the connection closes.
+        var seen = new System.Collections.Concurrent.ConcurrentQueue<MessageType>();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                while (true)
+                {
+                    var message = master.Channel.Receive();
+                    seen.Enqueue(message.Type);
+                    if (message.Type == MessageType.ScreenFrame && ScreenFrame.Decode(message.Payload) is { } frame)
+                    {
+                        master.Channel.Send(new Message(MessageType.FrameAck, ScreenFrame.EncodeAck(frame.FrameId)));
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // The connection closed at the end of the test.
+            }
+        });
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        var types = seen.ToArray();
+
+        Assert.DoesNotContain(MessageType.ClipboardText, types);
+        Assert.Equal("do aluno", harness.Clipboard.Text);
+    }
+
+    private sealed class FakeClipboard : IClipboard
+    {
+        private volatile string? _text;
+
+        public string? Text
+        {
+            get => _text;
+            set => _text = value;
+        }
+
+        public string? GetText() => _text;
+
+        public void SetText(string text) => _text = text;
+    }
+
     private sealed class FakeInputInjector : IInputInjector
     {
         private readonly List<InputEvent> _injected = new();
@@ -319,7 +418,8 @@ public class DeskServerTests
                     {
                         _attachedTo.Add(desktop);
                     }
-                });
+                },
+                Clipboard);
             _serverTask = Task.Run(() => server.Run(_stop.Token));
         }
 
@@ -328,6 +428,8 @@ public class DeskServerTests
         public X509Certificate2 MasterCert { get; } = SelfSignedCertificate.Create("master-under-test");
 
         public FakeInputInjector Injector { get; } = new();
+
+        public FakeClipboard Clipboard { get; } = new();
 
         public IReadOnlyList<IntPtr> AttachedTo
         {
