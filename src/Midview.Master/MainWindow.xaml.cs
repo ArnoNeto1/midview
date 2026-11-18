@@ -225,7 +225,9 @@ public partial class MainWindow : MidviewWindow
         };
     }
 
-    // The selection the toolbar goes by: while a tile's menu is open and marks
+    // The selection "Ver a tela" and "Controlar" go by (the other toolbar
+    // buttons reach the whole room the "Telas" filter shows, whatever is
+    // selected: DeviceSupport.ToolbarReach): while a tile's menu is open and marks
     // its tile, the one there was before (the menu's own actions go by
     // TargetsOf), so neither the toolbar's buttons nor what the status bar
     // says of its reach change with the menu.
@@ -233,15 +235,10 @@ public partial class MainWindow : MidviewWindow
         _selectionBeforeMenu is { } before ? before.Items.Where(_tiles.Contains).ToList() : _selection.Selected;
 
     private string? ReachNotice() =>
-        DeviceSupport.ReachNotice(_devices, ToolbarSelection().Count, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
-
-    // The same for "Bloquear telas", which never goes by the selection.
-    private string? ScreenLockReachNotice() =>
-        DeviceSupport.ReachNotice(_devices, 0, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
+        DeviceSupport.ReachNotice(_devices, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
 
     // Greys the toolbar buttons that do not work on the machines they would
-    // reach (ToolbarReach: the selection, or every machine the "Telas" filter
-    // shows), and words the screen-lock button for them. A room, or a
+    // reach (ToolbarReach: every machine the "Telas" filter shows), and words the screen-lock button for them. A room, or a
     // filter, with no machines keeps them on, as they say so themselves when
     // clicked.
     private void UpdateActionButtons()
@@ -892,7 +889,7 @@ public partial class MainWindow : MidviewWindow
         }
         StatusTextBlock.Text = WithNotice(
             _screenLocks.Count > 0 ? $"Telas desbloqueadas. Continuam bloqueadas: {_screenLocks.Count}." : "Telas desbloqueadas.",
-            ScreenLockReachNotice());
+            ReachNotice());
     }
 
     // One item for both, like the toolbar's button: while any of the machines
@@ -1008,7 +1005,7 @@ public partial class MainWindow : MidviewWindow
             + (waiting > 0 ? $" Aguardando {waiting}." : string.Empty)
             + (gotOut.Count > 0 ? $" Saíram do bloqueio: {Names(gotOut)}." : string.Empty)
             + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty),
-            Joined(_screenLockLeftOut, ScreenLockReachNotice()));
+            Joined(_screenLockLeftOut, ReachNotice()));
     }
 
     private void OnMessageClassClicked(object sender, RoutedEventArgs e)
@@ -1147,10 +1144,10 @@ public partial class MainWindow : MidviewWindow
         });
     }
 
-    // The machines a toolbar button acts on (DeviceSupport.ToolbarReach): the
-    // selection, or every machine the "Telas" filter shows.
+    // The machines a toolbar button acts on (DeviceSupport.ToolbarReach):
+    // every machine the "Telas" filter shows, whatever is selected.
     private IReadOnlyList<MachineTile> ToolbarTiles(ToolbarAction action) =>
-        DeviceSupport.ToolbarReach(action, ToolbarSelection(), _tiles, _devices, tile => tile.Machine);
+        DeviceSupport.ToolbarReach(action, _tiles, _devices, tile => tile.Machine);
 
     private IReadOnlyList<KnownMachine> ToolbarReach(ToolbarAction action) =>
         ToolbarTiles(action).Select(tile => tile.Machine).ToList();
@@ -1452,7 +1449,7 @@ public partial class MainWindow : MidviewWindow
     // Over the network (Wake-on-LAN), to every machine whose network card
     // the Master has learned (RememberMacAddress); the status bar says who.
     // reach: from the toolbar, whom it reached when not the whole room
-    // ("Só na seleção (1).").
+    // ("Só nos computadores (8).").
     private async void Wake(IReadOnlyList<KnownMachine> machines, string? reach = null)
     {
         if (!SupportedTargets(ref machines, ToolbarAction.Wake, out var supportNotice))
@@ -1578,7 +1575,7 @@ public partial class MainWindow : MidviewWindow
                 () => OpenAddMachineWindow(existing: null), OpenGiveAccessWindow, OpenJoinClassWindow,
                 kind => OpenPhoneUpdateWindow(RoomPhones(kind), kind), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize)),
                 new DeviceRoomCallbacks(
-                    () => ToolbarSelection().Select(tile => tile.Machine).ToList(), ActOnRoomDevices,
+                    ActOnRoomDevices,
                     devices => _ringing.AllRinging(devices, DateTime.Now))) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;

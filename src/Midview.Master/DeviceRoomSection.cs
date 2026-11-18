@@ -25,16 +25,12 @@ internal static class DeviceRoomText
     public static string NewSection(AndroidDeviceKind kind) =>
         kind == AndroidDeviceKind.Tablet ? "PREPARAR UM TABLET NOVO" : "PREPARAR UM CELULAR NOVO";
 
-    // The count is every device of that kind in the room; the cards act on
-    // the selected ones of that kind when there are some (DeviceSupport.RoomTargets).
+    // The count is every device of that kind in the room, which the cards
+    // act on (DeviceSupport.RoomTargets).
     public static string RoomSection(AndroidDeviceKind kind, int count) =>
-        $"{DeviceSetupText.Words(kind).ToUpperInvariant()} DA SALA ({count})" + (count > 0 ? " · OU SÓ OS SELECIONADOS NA TELA" : string.Empty);
+        $"{DeviceSetupText.Words(kind).ToUpperInvariant()} DA SALA ({count})";
 
     public static string NoneInRoom(AndroidDeviceKind kind) => $"Nenhum {DeviceSetupText.Word(kind)} na sala ainda.";
-
-    // Something is selected in the grid, but no device of this kind.
-    public static string NoneSelected(AndroidDeviceKind kind) =>
-        $"Nenhum {DeviceSetupText.Word(kind)} selecionado; tire a seleção para valer para a sala toda.";
 
     public static string FindLine(AndroidDeviceKind kind) => $"Toca alto para achar um {DeviceSetupText.Word(kind)} perdido.";
 
@@ -81,7 +77,7 @@ internal static class DeviceRoomText
                 $"Libera por alguns minutos a depuração USB dos {words}, que fica travada, e a liga, para conferi-los pelo cabo; no fim ela desliga e trava de novo. Ou trava agora.",
             _ => $"Desfaz tudo o que o Midview fez nos {words} e o desinstala (fotos e arquivos ficam), ou os restaura de fábrica (apaga tudo). Pede confirmação.",
         };
-        return line + $" Com alguns {words} selecionados na tela, só neles.";
+        return line + $" Para um {DeviceSetupText.Word(kind)} só, use o botão direito na tela dele.";
     }
 }
 
@@ -122,24 +118,22 @@ public sealed class DeviceRoomSection : StackPanel
 
     public AndroidDeviceKind Kind { get; private set; }
 
-    // count: the devices of that kind in the room; ringing: whether all the
-    // ones the cards reach still ring ("Parar o toque", as the tile menu says);
-    // reached: how many the cards reach (DeviceSupport.RoomTargets), the
-    // room's count when not given.
-    public void Show(AndroidDeviceKind kind, int count, bool ringing, int? reached = null)
+    // count: the devices of that kind in the room, which the cards reach
+    // (DeviceSupport.RoomTargets); ringing: whether all of them still ring
+    // ("Parar o toque", as the tile menu says).
+    public void Show(AndroidDeviceKind kind, int count, bool ringing)
     {
         Kind = kind;
-        var reaches = reached ?? count;
         _heading.Text = DeviceRoomText.RoomSection(kind, count);
-        _none.Text = count == 0 ? DeviceRoomText.NoneInRoom(kind) : DeviceRoomText.NoneSelected(kind);
-        _none.Visibility = reaches > 0 ? Visibility.Collapsed : Visibility.Visible;
+        _none.Text = DeviceRoomText.NoneInRoom(kind);
+        _none.Visibility = count > 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var (action, (line, button)) in _parts)
         {
             var (_, text, label) = DeviceRoomText.Card(action, kind);
             line.Text = text;
             button.Content = action == DeviceRoomAction.Find && ringing ? PhoneFindText.StopMenuItem : label;
             button.ToolTip = action == DeviceRoomAction.Find && ringing ? PhoneFindText.StopToolTip : DeviceRoomText.ToolTip(action, kind);
-            button.IsEnabled = reaches > 0;
+            button.IsEnabled = count > 0;
         }
     }
 

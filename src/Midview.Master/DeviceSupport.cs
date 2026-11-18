@@ -92,13 +92,10 @@ public static class DeviceSupport
         room.Any(machine => IsAndroidOf(machine, kind));
 
     // What the cards of "Configurar celular" ("Configurar tablet") act on:
-    // with nothing selected in the grid, every device of that kind in the
-    // room; with a selection, only the devices of that kind in it (none when
-    // it has only PCs or the other kind: never the whole room behind the
-    // teacher's back; the section says to clear the selection).
-    public static IReadOnlyList<KnownMachine> RoomTargets(
-        AndroidDeviceKind kind, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room) =>
-        (selected.Count > 0 ? selected : room).Where(machine => IsAndroidOf(machine, kind)).ToList();
+    // every device of that kind in the room, whatever is selected in the grid,
+    // as the toolbar (a few are reached from a tile's right-click menu).
+    public static IReadOnlyList<KnownMachine> RoomTargets(AndroidDeviceKind kind, IReadOnlyList<KnownMachine> room) =>
+        room.Where(machine => IsAndroidOf(machine, kind)).ToList();
 
     // The Android kind a "Telas" filter shows alone (Celulares the phones,
     // Tablets the tablets); null for Todos and Computadores.
@@ -142,42 +139,33 @@ public static class DeviceSupport
         _ => true,
     };
 
-    // Whom a toolbar button reaches: what the teacher sees. The selection
-    // when there is one (it only ever holds tiles the grid shows), except for
-    // "Bloquear telas", which always locks the whole room the filter shows
-    // (one screen is locked from its tile's menu); otherwise
-    // every machine the "Telas" filter shows (Todos: the whole room;
+    // Whom a toolbar button reaches: every machine the "Telas" filter shows,
+    // whatever is selected in the grid (a student selected to look at is no
+    // reason to act on that one alone; one machine, or a few, are reached from
+    // a tile's right-click menu) (Todos: the whole room;
     // Computadores: the PCs; Celulares: the phones; Tablets: the tablets). "Só online"
     // does not narrow it: a machine that is off is still there to be turned
     // on. The phone actions keep the Android devices of it. A button whose
     // action none of them can do is greyed (IsEnabled); the ones among them
     // that cannot do it are left out with a notice (LeftOutNotice).
     public static IReadOnlyList<KnownMachine> ToolbarReach(
-        ToolbarAction action, IReadOnlyList<KnownMachine> selected, IReadOnlyList<KnownMachine> room, DeviceFilter shown) =>
-        ToolbarReach(action, selected, room, shown, machine => machine);
+        ToolbarAction action, IReadOnlyList<KnownMachine> room, DeviceFilter shown) =>
+        ToolbarReach(action, room, shown, machine => machine);
 
     // The same rule over the grid's tiles (machineOf gives each one's machine).
     public static IReadOnlyList<T> ToolbarReach<T>(
-        ToolbarAction action, IReadOnlyList<T> selected, IReadOnlyList<T> room, DeviceFilter shown, Func<T, KnownMachine> machineOf)
+        ToolbarAction action, IReadOnlyList<T> room, DeviceFilter shown, Func<T, KnownMachine> machineOf)
     {
-        var seen = selected.Count > 0 && action != ToolbarAction.ScreenLock
-            ? selected
-            : room.Where(item => Shows(machineOf(item), shown)).ToList();
+        var seen = room.Where(item => Shows(machineOf(item), shown)).ToList();
         return IsPhoneOnly(action) ? seen.Where(item => IsAndroid(machineOf(item))).ToList() : seen;
     }
 
     // Said in the status bar when the toolbar does not reach the whole room:
-    // with a selection, after what a button did ("Só na seleção (1)."); with
-    // nothing selected, while the "Telas" filter leaves machines out ("Só nos
-    // celulares (3)."). Null when it reaches every machine of the room, with
-    // Todos and nothing selected, and when the filter shows nothing (the grid
-    // says so).
-    public static string? ReachNotice(DeviceFilter shown, int selected, int reached, int room)
+    // while the "Telas" filter leaves machines out ("Só nos celulares (3).").
+    // Null when it reaches every machine of the room, with Todos, and when
+    // the filter shows nothing (the grid says so).
+    public static string? ReachNotice(DeviceFilter shown, int reached, int room)
     {
-        if (selected > 0)
-        {
-            return selected < room ? $"Só na seleção ({selected})." : null;
-        }
         if (reached == 0 || reached == room)
         {
             return null;
@@ -216,8 +204,7 @@ public static class DeviceSupport
 }
 
 // What the toolbar's "Bloquear telas" does to the machines it reaches
-// (DeviceSupport.ToolbarReach: every machine the "Telas" filter shows, the
-// selection or not): while any of them is locked it gives them back (one
+// (DeviceSupport.ToolbarReach: every machine the "Telas" filter shows): while any of them is locked it gives them back (one
 // student locked from the tile's menu, or a machine that joined a locked
 // room, is no reason to lock the rest first); otherwise it locks them.
 // Machines out of its reach (hidden by "Telas") keep their lock: switching

@@ -3,10 +3,10 @@ using Midview.Protocol;
 using Xunit;
 
 // Every toolbar button reaches what the teacher sees (DeviceSupport.ToolbarReach):
-// the selection when there is one, otherwise every machine the "Telas" filter
-// shows. "Bloquear telas" alone always reaches every machine the filter shows,
-// selection or not (one screen is locked from its tile's menu). It locks or
-// gives back only those (ScreenLockReach), and switching the filter never
+// every machine the "Telas" filter shows, whatever is selected in the grid
+// (one machine, or a few, are reached from a tile's right-click menu; only
+// "Ver a tela" and "Controlar" go by the selection). "Bloquear telas" locks
+// or gives back only those (ScreenLockReach), and switching the filter never
 // unlocks anything.
 public class ToolbarReachTests
 {
@@ -34,44 +34,13 @@ public class ToolbarReachTests
         return data;
     }
 
-    // Every toolbar action that goes by the selection.
-    public static TheoryData<ToolbarAction> SelectionActions()
-    {
-        var data = new TheoryData<ToolbarAction>();
-        foreach (var action in ToolbarActions().Select(row => (ToolbarAction)row[0]).Where(action => action != ToolbarAction.ScreenLock))
-        {
-            data.Add(action);
-        }
-        return data;
-    }
-
     [Theory]
     [MemberData(nameof(ToolbarActions))]
-    public void Nothing_selected_reaches_every_machine_the_filter_shows(ToolbarAction action)
+    public void Every_button_reaches_every_machine_the_filter_shows(ToolbarAction action)
     {
-        Assert.Equal(Room, DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Pc1, Pc2 }, DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Computers));
-        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Phones));
-    }
-
-    // The selection only ever holds tiles the grid shows; it is the reach under every filter.
-    // A student selected to look at is no reason to lock only that screen:
-    // the toolbar's "Bloquear telas" locks the whole room the filter shows.
-    [Fact]
-    public void The_screen_lock_button_reaches_every_shown_machine_even_with_a_selection()
-    {
-        Assert.Equal(Room, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Pc1 }, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Pc1, Pc2 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Pc2 }, Room, DeviceFilter.Computers));
-    }
-
-    [Theory]
-    [MemberData(nameof(SelectionActions))]
-    public void A_selection_is_the_reach_under_every_filter(ToolbarAction action)
-    {
-        Assert.Equal(new[] { Cel1, Pc2 }, DeviceSupport.ToolbarReach(action, new[] { Cel1, Pc2 }, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Pc1 }, DeviceSupport.ToolbarReach(action, new[] { Pc1 }, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Pc2 }, DeviceSupport.ToolbarReach(action, new[] { Pc2 }, Room, DeviceFilter.Computers));
-        Assert.Equal(new[] { Cel2 }, DeviceSupport.ToolbarReach(action, new[] { Cel2 }, Room, DeviceFilter.Phones));
+        Assert.Equal(Room, DeviceSupport.ToolbarReach(action, Room, DeviceFilter.All));
+        Assert.Equal(new[] { Pc1, Pc2 }, DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Computers));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Phones));
     }
 
     // A filter that shows nothing reaches nothing (the button then says so).
@@ -82,8 +51,8 @@ public class ToolbarReachTests
     {
         var onlyTheOtherKind = shown == DeviceFilter.Phones ? new[] { Pc1, Pc2 } : new[] { Cel1, Cel2 };
 
-        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, onlyTheOtherKind, shown));
-        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, None, Array.Empty<KnownMachine>(), DeviceFilter.All));
+        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, onlyTheOtherKind, shown));
+        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, Array.Empty<KnownMachine>(), DeviceFilter.All));
     }
 
     // "Otimizar" and the PIN (Telas menu): the Android devices of the same reach.
@@ -93,12 +62,9 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.UpdatePhones)]
     public void Phone_actions_keep_the_android_devices_of_the_reach(ToolbarAction action)
     {
-        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Phones));
-        Assert.Empty(DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Computers));
-        Assert.Equal(new[] { Cel2 }, DeviceSupport.ToolbarReach(action, new[] { Cel2 }, Room, DeviceFilter.All));
-        Assert.Equal(new[] { Cel1 }, DeviceSupport.ToolbarReach(action, new[] { Pc1, Cel1 }, Room, DeviceFilter.All));
-        Assert.Empty(DeviceSupport.ToolbarReach(action, new[] { Pc1 }, Room, DeviceFilter.All));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, Room, DeviceFilter.All));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Phones));
+        Assert.Empty(DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Computers));
     }
 
     // The tiles' version goes by the same rule, through each tile's machine.
@@ -107,13 +73,12 @@ public class ToolbarReachTests
     {
         var tiles = Room.Select(machine => (Name: machine.Name, Machine: machine)).ToList();
 
-        var reach = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, Array.Empty<(string, KnownMachine)>(), tiles, DeviceFilter.Phones, tile => tile.Item2);
+        var reach = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, tiles, DeviceFilter.Phones, tile => tile.Item2);
 
         Assert.Equal(new[] { "Cel 01", "Cel 02" }, reach.Select(tile => tile.Item1));
     }
 
-    // With Celulares and nothing selected the reach is phones alone: what a
-    // phone can't do is greyed, as for a selection of phones only.
+    // With Celulares the reach is phones alone: what a phone can't do is greyed.
     [Theory]
     [InlineData(ToolbarAction.ScreenLock, true)]
     [InlineData(ToolbarAction.BlockPrograms, true)]
@@ -134,9 +99,9 @@ public class ToolbarReachTests
     [InlineData(ToolbarAction.LabConfig, true)]
     public void Phones_filter_greys_what_a_phone_cannot_do(ToolbarAction action, bool enabled)
     {
-        Assert.Equal(enabled, DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Phones), action));
-        Assert.True(DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.All), action));
-        Assert.True(DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, None, Room, DeviceFilter.Computers), action));
+        Assert.Equal(enabled, DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Phones), action));
+        Assert.True(DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, Room, DeviceFilter.All), action));
+        Assert.True(DeviceSupport.IsEnabled(DeviceSupport.ToolbarReach(action, Room, DeviceFilter.Computers), action));
     }
 
     [Fact]
@@ -157,46 +122,29 @@ public class ToolbarReachTests
     }
 
     // Celulares reaches the phones alone and Tablets the tablets alone, the
-    // phone-only actions (optimizing, the PIN) too; a selection is still the reach.
+    // phone-only actions (optimizing, the PIN) too.
     [Fact]
     public void Phones_and_tablets_each_reach_their_own_kind()
     {
         var room = new[] { Pc1, Cel1, Tab1, Cel2 };
-        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.Phones));
-        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.Tablets));
-        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.Tablets));
-        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.PhonePin, None, room, DeviceFilter.Phones));
-        Assert.Equal(new[] { Cel1, Tab1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.All));
-        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Cel1 }, room, DeviceFilter.Tablets));
-        Assert.Equal(new[] { Cel1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, new[] { Cel1 }, room, DeviceFilter.Tablets));
-        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, None, new[] { Pc1, Cel1 }, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, room, DeviceFilter.Phones));
+        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.PhonePin, room, DeviceFilter.Phones));
+        Assert.Equal(new[] { Cel1, Tab1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, room, DeviceFilter.All));
+        Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, new[] { Pc1, Cel1 }, DeviceFilter.Tablets));
     }
 
-    // The status bar, while nothing is selected and the filter leaves machines out.
+    // The status bar, while the filter leaves machines out.
     [Fact]
     public void The_reach_notice_says_whom_the_toolbar_reaches()
     {
-        Assert.Equal("Só nos celulares (3).", DeviceSupport.ReachNotice(DeviceFilter.Phones, selected: 0, reached: 3, room: 11));
-        Assert.Equal("Só nos computadores (8).", DeviceSupport.ReachNotice(DeviceFilter.Computers, selected: 0, reached: 8, room: 11));
-        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.All, selected: 0, reached: 11, room: 11));
-        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Computers, selected: 0, reached: 8, room: 8));
-        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Phones, selected: 0, reached: 0, room: 8));
-        Assert.Equal("Só nos tablets (2).", DeviceSupport.ReachNotice(DeviceFilter.Tablets, selected: 0, reached: 2, room: 11));
-    }
-
-    // A selection is the reach under every filter: a button that acted on it
-    // says so, unless every machine of the room is selected.
-    [Theory]
-    [InlineData(DeviceFilter.All)]
-    [InlineData(DeviceFilter.Computers)]
-    [InlineData(DeviceFilter.Phones)]
-    [InlineData(DeviceFilter.Tablets)]
-    public void The_reach_notice_names_a_selection(DeviceFilter shown)
-    {
-        Assert.Equal("Só na seleção (1).", DeviceSupport.ReachNotice(shown, selected: 1, reached: 1, room: 20));
-        Assert.Equal("Só na seleção (2).", DeviceSupport.ReachNotice(shown, selected: 2, reached: 2, room: 11));
-        // Every machine of the room selected: the whole room, nothing to say.
-        Assert.Null(DeviceSupport.ReachNotice(shown, selected: 11, reached: 11, room: 11));
+        Assert.Equal("Só nos celulares (3).", DeviceSupport.ReachNotice(DeviceFilter.Phones, reached: 3, room: 11));
+        Assert.Equal("Só nos computadores (8).", DeviceSupport.ReachNotice(DeviceFilter.Computers, reached: 8, room: 11));
+        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.All, reached: 11, room: 11));
+        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Computers, reached: 8, room: 8));
+        Assert.Null(DeviceSupport.ReachNotice(DeviceFilter.Phones, reached: 0, room: 8));
+        Assert.Equal("Só nos tablets (2).", DeviceSupport.ReachNotice(DeviceFilter.Tablets, reached: 2, room: 11));
     }
 
     [Fact]
@@ -208,7 +156,7 @@ public class ToolbarReachTests
         Assert.Equal("Nenhuma máquina na lista da sala para bloquear.", DeviceSupport.NoneReachedText(DeviceFilter.All, "bloquear"));
     }
 
-    // "Bloquear telas" under each filter (a selection changes nothing): what one press locks
+    // "Bloquear telas" under each filter: what one press locks
     // or gives back, run against a set of locks the way MainWindow keeps them.
     private sealed class Locks
     {
@@ -224,8 +172,8 @@ public class ToolbarReachTests
             Locked.ExceptWith(toUnlock);
         }
 
-        public void Press(DeviceFilter shown, params KnownMachine[] selected) =>
-            Press(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, selected, Room, shown));
+        public void Press(DeviceFilter shown) =>
+            Press(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, Room, shown));
     }
 
     [Fact]
@@ -261,22 +209,6 @@ public class ToolbarReachTests
         Assert.Empty(locks.Locked);
     }
 
-    // A student selected to look at: the press still locks every machine the
-    // filter shows, and the next one gives them back.
-    [Fact]
-    public void Lock_with_a_selection_still_locks_every_shown_machine()
-    {
-        var locks = new Locks();
-
-        locks.Press(DeviceFilter.All, Pc2);
-        Assert.Equal(Room, Room.Where(locks.Locked.Contains));
-        locks.Press(DeviceFilter.All, Pc2);
-        Assert.Empty(locks.Locked);
-
-        locks.Press(DeviceFilter.Phones, Cel1);
-        Assert.Equal(new[] { Cel1, Cel2 }, Room.Where(locks.Locked.Contains));
-    }
-
     // The PCs locked before stay locked when the teacher switches to Celulares:
     // the button then reaches the phones only, and gives back only them.
     [Fact]
@@ -286,7 +218,7 @@ public class ToolbarReachTests
         locks.Press(DeviceFilter.All);
 
         // Celulares: every phone locked, so the button gives them back...
-        var phones = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, Room, DeviceFilter.Phones);
+        var phones = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, Room, DeviceFilter.Phones);
         Assert.True(locks.Releases(phones));
         locks.Press(DeviceFilter.Phones);
 
@@ -308,22 +240,22 @@ public class ToolbarReachTests
         var locks = new Locks();
         locks.Press(DeviceFilter.Phones);
 
-        Assert.False(locks.Releases(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, Room, DeviceFilter.Computers)));
+        Assert.False(locks.Releases(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, Room, DeviceFilter.Computers)));
         locks.Press(DeviceFilter.Computers);
 
         Assert.Equal(Room, Room.Where(locks.Locked.Contains));
     }
 
     // One student locked from the tile's menu is given back by the toolbar's
-    // press, selected or not, and the other 19 are not locked.
+    // press, and the other 19 are not locked.
     [Fact]
-    public void One_of_20_locked_with_nothing_selected_is_given_back()
+    public void One_of_20_locked_is_given_back()
     {
         var room = Enumerable.Range(1, 20)
             .Select(i => new KnownMachine($"Aluno-{i:00}", $"192.0.2.{i}", "ANY", null))
             .ToArray();
         var locked = new HashSet<KnownMachine> { room[2] };
-        var reach = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.All);
+        var reach = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, room, DeviceFilter.All);
 
         Assert.True(ScreenLockReach.Releases(reach, machine => machine, locked.Contains));
         var (toLock, toUnlock) = ScreenLockReach.Plan(reach, machine => machine, locked.Contains);

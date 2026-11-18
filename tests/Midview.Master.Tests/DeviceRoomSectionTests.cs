@@ -20,53 +20,37 @@ public class DeviceRoomSectionTests
     private static readonly KnownMachine Tablet01 = Android("Tablet 01");
     private static readonly KnownMachine[] Room = { Pc01, Celular01, Celular02, Tablet01 };
 
+    // Every device of that kind in the room, whatever is selected in the
+    // grid (a few are reached from a tile's right-click menu).
     [Fact]
-    public void With_nothing_selected_every_device_of_that_kind_in_the_room()
+    public void The_cards_reach_every_device_of_that_kind_in_the_room()
     {
-        Assert.Equal(new[] { Celular01, Celular02 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, Array.Empty<KnownMachine>(), Room));
-        Assert.Equal(new[] { Tablet01 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, Array.Empty<KnownMachine>(), Room));
+        Assert.Equal(new[] { Celular01, Celular02 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, Room));
+        Assert.Equal(new[] { Tablet01 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, Room));
+        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Pc01, Celular01 }));
     }
 
     [Fact]
-    public void With_some_of_that_kind_selected_only_those()
-    {
-        Assert.Equal(new[] { Celular02 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, new[] { Pc01, Celular02, Tablet01 }, Room));
-        Assert.Equal(new[] { Tablet01 }, DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Celular02, Tablet01 }, Room));
-    }
-
-    // A selection of PCs, or of the other kind, reaches none of this kind:
-    // never the whole room behind the teacher's back.
-    [Fact]
-    public void With_none_of_that_kind_selected_none()
-    {
-        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Phone, new[] { Pc01, Tablet01 }, Room));
-        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, new[] { Celular01 }, Room));
-        Assert.Empty(DeviceSupport.RoomTargets(AndroidDeviceKind.Tablet, Array.Empty<KnownMachine>(), new[] { Pc01, Celular01 }));
-    }
-
-    [Fact]
-    public void A_selection_without_that_kind_says_to_clear_it_and_the_buttons_are_off()
+    public void A_room_without_that_kind_says_so_and_the_buttons_are_off()
     {
         InSta(() =>
         {
             var section = new DeviceRoomSection();
-            section.Show(AndroidDeviceKind.Phone, 2, ringing: false, reached: 0);
+            section.Show(AndroidDeviceKind.Phone, 0, ringing: false);
 
             Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.False(section.ButtonOf(action).IsEnabled));
             Assert.Contains(section.Children.OfType<TextBlock>(), block =>
-                block.Text == "Nenhum celular selecionado; tire a seleção para valer para a sala toda." && block.Visibility == Visibility.Visible);
-            Assert.Equal("Nenhum tablet selecionado; tire a seleção para valer para a sala toda.",
-                DeviceRoomText.NoneSelected(AndroidDeviceKind.Tablet));
+                block.Text == "Nenhum celular na sala ainda." && block.Visibility == Visibility.Visible);
 
-            section.Show(AndroidDeviceKind.Phone, 2, ringing: false, reached: 1);
+            section.Show(AndroidDeviceKind.Phone, 2, ringing: false);
             Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
             Assert.DoesNotContain(section.Children.OfType<TextBlock>(), block => block.Text.StartsWith("Nenhum") && block.Visibility == Visibility.Visible);
         });
     }
 
     [Theory]
-    [InlineData(AndroidDeviceKind.Phone, 3, "CELULARES DA SALA (3) · OU SÓ OS SELECIONADOS NA TELA")]
-    [InlineData(AndroidDeviceKind.Tablet, 1, "TABLETS DA SALA (1) · OU SÓ OS SELECIONADOS NA TELA")]
+    [InlineData(AndroidDeviceKind.Phone, 3, "CELULARES DA SALA (3)")]
+    [InlineData(AndroidDeviceKind.Tablet, 1, "TABLETS DA SALA (1)")]
     [InlineData(AndroidDeviceKind.Tablet, 0, "TABLETS DA SALA (0)")]
     public void The_heading_counts_the_devices_of_that_kind(AndroidDeviceKind kind, int count, string heading)
     {
@@ -99,7 +83,7 @@ public class DeviceRoomSectionTests
                 Enum.GetValues<DeviceRoomAction>().Select(action => (string)section.ButtonOf(action).Content));
             Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
             var texts = Texts(section);
-            Assert.Contains("CELULARES DA SALA (2) · OU SÓ OS SELECIONADOS NA TELA", texts);
+            Assert.Contains("CELULARES DA SALA (2)", texts);
             Assert.Contains("Toca alto para achar um celular perdido.", texts);
             Assert.Contains("Senha (PIN)", texts);
             Assert.Contains("Contas do aparelho", texts);
@@ -157,7 +141,7 @@ public class DeviceRoomSectionTests
         Assert.Contains("contas dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.Accounts, AndroidDeviceKind.Tablet));
         Assert.Contains("contas dos celulares", DeviceRoomText.ToolTip(DeviceRoomAction.Accounts, AndroidDeviceKind.Phone));
         Assert.Contains("Chrome dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Tablet));
-        Assert.EndsWith("Com alguns celulares selecionados na tela, só neles.", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Phone));
+        Assert.EndsWith("Para um celular só, use o botão direito na tela dele.", DeviceRoomText.ToolTip(DeviceRoomAction.ClearChrome, AndroidDeviceKind.Phone));
     }
 
     // "Depuração USB" says the page's kind on its card and in its tooltip.
@@ -171,7 +155,7 @@ public class DeviceRoomSectionTests
             DeviceRoomText.Card(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone).Title,
             DeviceRoomText.Card(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone).Button));
         Assert.Contains("depuração USB dos tablets", DeviceRoomText.ToolTip(DeviceRoomAction.Debugging, AndroidDeviceKind.Tablet));
-        Assert.EndsWith("Com alguns celulares selecionados na tela, só neles.", DeviceRoomText.ToolTip(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone));
+        Assert.EndsWith("Para um celular só, use o botão direito na tela dele.", DeviceRoomText.ToolTip(DeviceRoomAction.Debugging, AndroidDeviceKind.Phone));
     }
 
     // "Parar o toque" while all the devices it reaches still ring, as the tile menu.
