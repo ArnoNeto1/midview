@@ -40,6 +40,6 @@ public static class ScreenLockText
     // telas" not).
     public static (string Label, string Badge, string ToolTip) ClassButton(bool releases) =>
         releases
-            ? ("Desbloquear\ntelas", ClosedPadlock, "Devolve a tela, o teclado e o mouse aos alunos: os selecionados, ou todos os que a grade mostra.")
-            : ("Bloquear\ntelas", OpenPadlock, "Cobre a tela dos alunos com um cadeado e trava o teclado e o mouse: os selecionados, ou todos os que a grade mostra.");
+            ? ("Desbloquear\ntelas", ClosedPadlock, "Devolve a tela, o teclado e o mouse a todos os alunos que a grade mostra. Para um aluno só, use o botão direito na tela dele.")
+            : ("Bloquear\ntelas", OpenPadlock, "Cobre com um cadeado a tela de todos os alunos que a grade mostra e trava o teclado e o mouse. Para um aluno só, use o botão direito na tela dele.");
 }

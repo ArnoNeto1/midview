@@ -143,7 +143,9 @@ public static class DeviceSupport
     };
 
     // Whom a toolbar button reaches: what the teacher sees. The selection
-    // when there is one (it only ever holds tiles the grid shows); otherwise
+    // when there is one (it only ever holds tiles the grid shows), except for
+    // "Bloquear telas", which always locks the whole room the filter shows
+    // (one screen is locked from its tile's menu); otherwise
     // every machine the "Telas" filter shows (Todos: the whole room;
     // Computadores: the PCs; Celulares: the phones; Tablets: the tablets). "Só online"
     // does not narrow it: a machine that is off is still there to be turned
@@ -158,7 +160,9 @@ public static class DeviceSupport
     public static IReadOnlyList<T> ToolbarReach<T>(
         ToolbarAction action, IReadOnlyList<T> selected, IReadOnlyList<T> room, DeviceFilter shown, Func<T, KnownMachine> machineOf)
     {
-        var seen = selected.Count > 0 ? selected : room.Where(item => Shows(machineOf(item), shown)).ToList();
+        var seen = selected.Count > 0 && action != ToolbarAction.ScreenLock
+            ? selected
+            : room.Where(item => Shows(machineOf(item), shown)).ToList();
         return IsPhoneOnly(action) ? seen.Where(item => IsAndroid(machineOf(item))).ToList() : seen;
     }
 
@@ -212,33 +216,22 @@ public static class DeviceSupport
 }
 
 // What the toolbar's "Bloquear telas" does to the machines it reaches
-// (DeviceSupport.ToolbarReach). With nothing selected, as it always did:
-// while any of them is locked it gives them back (one student locked from
-// the tile's menu, or a machine that joined a locked room, is no reason to
-// lock the rest first); otherwise it locks them. With a selection: while
-// every one of them that can be locked is locked, it gives them back;
-// otherwise it locks the ones that are not. Machines out of its reach
-// (hidden by "Telas", or left out of a selection) keep their lock:
-// switching the filter never unlocks anything by itself.
+// (DeviceSupport.ToolbarReach: every machine the "Telas" filter shows, the
+// selection or not): while any of them is locked it gives them back (one
+// student locked from the tile's menu, or a machine that joined a locked
+// room, is no reason to lock the rest first); otherwise it locks them.
+// Machines out of its reach (hidden by "Telas") keep their lock: switching
+// the filter never unlocks anything by itself.
 public static class ScreenLockReach
 {
     // True when the button gives the screens back ("Desbloquear telas").
-    // selection: the reach is the teacher's selection, not what "Telas" shows.
-    public static bool Releases<T>(
-        IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked, bool selection)
-    {
-        if (!selection)
-        {
-            return reach.Any(isLocked);
-        }
-        var lockable = reach.Where(item => DeviceSupport.Supports(machineOf(item).Kind, ToolbarAction.ScreenLock)).ToList();
-        return lockable.Count > 0 && lockable.All(isLocked);
-    }
+    public static bool Releases<T>(IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked) =>
+        reach.Any(isLocked);
 
     // What one press does: the machines it locks, or the ones it gives back.
     public static (IReadOnlyList<T> Lock, IReadOnlyList<T> Unlock) Plan<T>(
-        IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked, bool selection) =>
-        Releases(reach, machineOf, isLocked, selection)
+        IReadOnlyList<T> reach, Func<T, KnownMachine> machineOf, Func<T, bool> isLocked) =>
+        Releases(reach, machineOf, isLocked)
             ? (Array.Empty<T>(), reach.Where(isLocked).ToList())
             : (reach.Where(item => DeviceSupport.Supports(machineOf(item).Kind, ToolbarAction.ScreenLock) && !isLocked(item)).ToList(),
                Array.Empty<T>());

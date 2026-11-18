@@ -235,6 +235,10 @@ public partial class MainWindow : MidviewWindow
     private string? ReachNotice() =>
         DeviceSupport.ReachNotice(_devices, ToolbarSelection().Count, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
 
+    // The same for "Bloquear telas", which never goes by the selection.
+    private string? ScreenLockReachNotice() =>
+        DeviceSupport.ReachNotice(_devices, 0, ToolbarTiles(ToolbarAction.ScreenLock).Count, _tiles.Count);
+
     // Greys the toolbar buttons that do not work on the machines they would
     // reach (ToolbarReach: the selection, or every machine the "Telas" filter
     // shows), and words the screen-lock button for them. A room, or a
@@ -256,7 +260,7 @@ public partial class MainWindow : MidviewWindow
         }
 
         var (label, badge, toolTip) = ScreenLockText.ClassButton(
-            ScreenLockReach.Releases(ToolbarTiles(ToolbarAction.ScreenLock), tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0));
+            ScreenLockReach.Releases(ToolbarTiles(ToolbarAction.ScreenLock), tile => tile.Machine, _screenLocks.ContainsKey));
         ScreenLockButton.Content = label;
         ScreenLockButton.Badge = badge;
         ScreenLockButton.ToolTip = toolTip;
@@ -852,7 +856,7 @@ public partial class MainWindow : MidviewWindow
         {
             return;
         }
-        var (_, unlock) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0);
+        var (_, unlock) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
         if (unlock.Count > 0)
         {
             Unlock(unlock);
@@ -871,7 +875,7 @@ public partial class MainWindow : MidviewWindow
             return;
         }
         _screenLockLeftOut = leftOut;
-        var (toLock, _) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey, ToolbarSelection().Count > 0);
+        var (toLock, _) = ScreenLockReach.Plan(reach, tile => tile.Machine, _screenLocks.ContainsKey);
         foreach (var tile in toLock)
         {
             LockScreen(tile);
@@ -888,7 +892,7 @@ public partial class MainWindow : MidviewWindow
         }
         StatusTextBlock.Text = WithNotice(
             _screenLocks.Count > 0 ? $"Telas desbloqueadas. Continuam bloqueadas: {_screenLocks.Count}." : "Telas desbloqueadas.",
-            ReachNotice());
+            ScreenLockReachNotice());
     }
 
     // One item for both, like the toolbar's button: while any of the machines
@@ -1004,7 +1008,7 @@ public partial class MainWindow : MidviewWindow
             + (waiting > 0 ? $" Aguardando {waiting}." : string.Empty)
             + (gotOut.Count > 0 ? $" Saíram do bloqueio: {Names(gotOut)}." : string.Empty)
             + (failed.Count > 0 ? $" Não bloqueou: {Names(failed)}." : string.Empty),
-            Joined(_screenLockLeftOut, ReachNotice()));
+            Joined(_screenLockLeftOut, ScreenLockReachNotice()));
     }
 
     private void OnMessageClassClicked(object sender, RoutedEventArgs e)

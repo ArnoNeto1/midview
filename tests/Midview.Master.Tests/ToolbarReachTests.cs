@@ -4,8 +4,10 @@ using Xunit;
 
 // Every toolbar button reaches what the teacher sees (DeviceSupport.ToolbarReach):
 // the selection when there is one, otherwise every machine the "Telas" filter
-// shows. The toolbar's "Bloquear telas" locks or gives back only those
-// (ScreenLockReach), and switching the filter never unlocks anything.
+// shows. "Bloquear telas" alone always reaches every machine the filter shows,
+// selection or not (one screen is locked from its tile's menu). It locks or
+// gives back only those (ScreenLockReach), and switching the filter never
+// unlocks anything.
 public class ToolbarReachTests
 {
     private static readonly KnownMachine Pc1 = new("PC 01", "192.0.2.1", "ANY", null);
@@ -32,6 +34,17 @@ public class ToolbarReachTests
         return data;
     }
 
+    // Every toolbar action that goes by the selection.
+    public static TheoryData<ToolbarAction> SelectionActions()
+    {
+        var data = new TheoryData<ToolbarAction>();
+        foreach (var action in ToolbarActions().Select(row => (ToolbarAction)row[0]).Where(action => action != ToolbarAction.ScreenLock))
+        {
+            data.Add(action);
+        }
+        return data;
+    }
+
     [Theory]
     [MemberData(nameof(ToolbarActions))]
     public void Nothing_selected_reaches_every_machine_the_filter_shows(ToolbarAction action)
@@ -42,8 +55,17 @@ public class ToolbarReachTests
     }
 
     // The selection only ever holds tiles the grid shows; it is the reach under every filter.
+    // A student selected to look at is no reason to lock only that screen:
+    // the toolbar's "Bloquear telas" locks the whole room the filter shows.
+    [Fact]
+    public void The_screen_lock_button_reaches_every_shown_machine_even_with_a_selection()
+    {
+        Assert.Equal(Room, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Pc1 }, Room, DeviceFilter.All));
+        Assert.Equal(new[] { Pc1, Pc2 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Pc2 }, Room, DeviceFilter.Computers));
+    }
+
     [Theory]
-    [MemberData(nameof(ToolbarActions))]
+    [MemberData(nameof(SelectionActions))]
     public void A_selection_is_the_reach_under_every_filter(ToolbarAction action)
     {
         Assert.Equal(new[] { Cel1, Pc2 }, DeviceSupport.ToolbarReach(action, new[] { Cel1, Pc2 }, Room, DeviceFilter.All));
@@ -145,7 +167,8 @@ public class ToolbarReachTests
         Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.Tablets));
         Assert.Equal(new[] { Cel1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.PhonePin, None, room, DeviceFilter.Phones));
         Assert.Equal(new[] { Cel1, Tab1, Cel2 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, None, room, DeviceFilter.All));
-        Assert.Equal(new[] { Cel1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Cel1 }, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Tab1 }, DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, new[] { Cel1 }, room, DeviceFilter.Tablets));
+        Assert.Equal(new[] { Cel1 }, DeviceSupport.ToolbarReach(ToolbarAction.Optimize, new[] { Cel1 }, room, DeviceFilter.Tablets));
         Assert.Empty(DeviceSupport.ToolbarReach(ToolbarAction.Power, None, new[] { Pc1, Cel1 }, DeviceFilter.Tablets));
     }
 
@@ -185,24 +208,24 @@ public class ToolbarReachTests
         Assert.Equal("Nenhuma máquina na lista da sala para bloquear.", DeviceSupport.NoneReachedText(DeviceFilter.All, "bloquear"));
     }
 
-    // "Bloquear telas" under each filter and selection: what one press locks
+    // "Bloquear telas" under each filter (a selection changes nothing): what one press locks
     // or gives back, run against a set of locks the way MainWindow keeps them.
     private sealed class Locks
     {
         public HashSet<KnownMachine> Locked { get; } = new();
 
-        public bool Releases(IReadOnlyList<KnownMachine> reach, bool selection = false) =>
-            ScreenLockReach.Releases(reach, machine => machine, Locked.Contains, selection);
+        public bool Releases(IReadOnlyList<KnownMachine> reach) =>
+            ScreenLockReach.Releases(reach, machine => machine, Locked.Contains);
 
-        public void Press(IReadOnlyList<KnownMachine> reach, bool selection = false)
+        public void Press(IReadOnlyList<KnownMachine> reach)
         {
-            var (toLock, toUnlock) = ScreenLockReach.Plan(reach, machine => machine, Locked.Contains, selection);
+            var (toLock, toUnlock) = ScreenLockReach.Plan(reach, machine => machine, Locked.Contains);
             Locked.UnionWith(toLock);
             Locked.ExceptWith(toUnlock);
         }
 
         public void Press(DeviceFilter shown, params KnownMachine[] selected) =>
-            Press(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, selected, Room, shown), selection: selected.Length > 0);
+            Press(DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, selected, Room, shown));
     }
 
     [Fact]
@@ -238,16 +261,20 @@ public class ToolbarReachTests
         Assert.Empty(locks.Locked);
     }
 
+    // A student selected to look at: the press still locks every machine the
+    // filter shows, and the next one gives them back.
     [Fact]
-    public void Lock_with_a_selection_locks_only_the_selection_under_every_filter()
+    public void Lock_with_a_selection_still_locks_every_shown_machine()
     {
         var locks = new Locks();
 
         locks.Press(DeviceFilter.All, Pc2);
-        Assert.Equal(new[] { Pc2 }, locks.Locked);
+        Assert.Equal(Room, Room.Where(locks.Locked.Contains));
+        locks.Press(DeviceFilter.All, Pc2);
+        Assert.Empty(locks.Locked);
 
         locks.Press(DeviceFilter.Phones, Cel1);
-        Assert.Equal(new[] { Cel1, Pc2 }, Room.Where(locks.Locked.Contains));
+        Assert.Equal(new[] { Cel1, Cel2 }, Room.Where(locks.Locked.Contains));
     }
 
     // The PCs locked before stay locked when the teacher switches to Celulares:
@@ -287,25 +314,8 @@ public class ToolbarReachTests
         Assert.Equal(Room, Room.Where(locks.Locked.Contains));
     }
 
-    // A selection partly locked: the press locks the rest of it, and gives
-    // nothing back.
-    [Fact]
-    public void A_partly_locked_selection_is_locked_the_rest_of_the_way()
-    {
-        var locks = new Locks();
-        locks.Press(DeviceFilter.All, Cel1);
-
-        var selection = new[] { Pc1, Cel1, Pc2 };
-        Assert.False(locks.Releases(selection, selection: true));
-        var (toLock, toUnlock) = ScreenLockReach.Plan(selection, machine => machine, locks.Locked.Contains, selection: true);
-
-        Assert.Equal(new[] { Pc1, Pc2 }, toLock);
-        Assert.Empty(toUnlock);
-    }
-
-    // With nothing selected, as before the selection rule: one student
-    // locked from the tile's menu is given back by the toolbar's press, and
-    // the other 19 are not locked.
+    // One student locked from the tile's menu is given back by the toolbar's
+    // press, selected or not, and the other 19 are not locked.
     [Fact]
     public void One_of_20_locked_with_nothing_selected_is_given_back()
     {
@@ -315,8 +325,8 @@ public class ToolbarReachTests
         var locked = new HashSet<KnownMachine> { room[2] };
         var reach = DeviceSupport.ToolbarReach(ToolbarAction.ScreenLock, None, room, DeviceFilter.All);
 
-        Assert.True(ScreenLockReach.Releases(reach, machine => machine, locked.Contains, selection: false));
-        var (toLock, toUnlock) = ScreenLockReach.Plan(reach, machine => machine, locked.Contains, selection: false);
+        Assert.True(ScreenLockReach.Releases(reach, machine => machine, locked.Contains));
+        var (toLock, toUnlock) = ScreenLockReach.Plan(reach, machine => machine, locked.Contains);
 
         Assert.Empty(toLock);
         Assert.Equal(new[] { room[2] }, toUnlock);
@@ -336,28 +346,11 @@ public class ToolbarReachTests
         Assert.Empty(locks.Locked);
     }
 
-    // With a selection the rule stays: one locked among the selected ones
-    // locks the rest of them first.
     [Fact]
-    public void One_locked_in_a_selection_locks_the_rest_of_it()
+    public void Nothing_to_reach_neither_locks_nor_gives_back()
     {
-        var locks = new Locks();
-        locks.Locked.Add(Pc1);
-
-        locks.Press(DeviceFilter.All, Pc1, Pc2);
-        Assert.Equal(new[] { Pc1, Pc2 }, Room.Where(locks.Locked.Contains));
-
-        locks.Press(DeviceFilter.All, Pc1, Pc2);
-        Assert.Empty(locks.Locked);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Nothing_to_reach_neither_locks_nor_gives_back(bool selection)
-    {
-        Assert.False(ScreenLockReach.Releases(None, machine => machine, _ => true, selection));
-        var (toLock, toUnlock) = ScreenLockReach.Plan(None, machine => machine, _ => true, selection);
+        Assert.False(ScreenLockReach.Releases(None, machine => machine, _ => true));
+        var (toLock, toUnlock) = ScreenLockReach.Plan(None, machine => machine, _ => true);
 
         Assert.Empty(toLock);
         Assert.Empty(toUnlock);

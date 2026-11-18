@@ -43,7 +43,8 @@ public class ScreenLockTextTests
 
         Assert.Equal("Desbloquear\ntelas", button.Label);
         Assert.Equal("\uE72E", button.Badge); // closed padlock
-        Assert.Contains("os selecionados, ou todos os que a grade mostra", button.ToolTip);
+        Assert.Contains("todos os alunos que a grade mostra", button.ToolTip);
+        Assert.Contains("Para um aluno só, use o botão direito", button.ToolTip);
     }
 
     // One item in a machine's menu too, by the same rule for the machines it acts on.
