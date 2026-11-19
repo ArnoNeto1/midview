@@ -48,7 +48,10 @@ public sealed class LabPolicyWriter : IDisposable
     private const string AdblockExtensionId = "cfhdojbkjhnklbpkdaibdccddilifddb";
     private const string AdblockUpdateUrl = "https://clients2.google.com/service/update2/crx";
     private const string AdblockForcelistEntry = AdblockExtensionId + ";" + AdblockUpdateUrl;
-    // So the ad blocker is on in incognito/guest windows too, not just normal ones.
+    // allowed_incognito is not an ExtensionSettings field: Chrome ignores it,
+    // so the ad blocker runs only in normal windows (never as a guest, and in
+    // incognito only if someone allows it on that PC). Kept so the policy
+    // already written on the lab PCs stays the same.
     private const string AdblockSettings =
         "{\"installation_mode\":\"force_installed\",\"update_url\":\"" + AdblockUpdateUrl + "\",\"allowed_incognito\":true}";
 

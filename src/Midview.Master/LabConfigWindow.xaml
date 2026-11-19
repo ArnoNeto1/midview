@@ -62,7 +62,7 @@
                             <StackPanel>
                                 <TextBlock Text="Passo 1 — Bloqueador de anúncios" Style="{StaticResource FunctionName}" />
                                 <TextBlock Style="{StaticResource FunctionHint}"
-                                           Text="Instala o bloqueador no Chrome; aparece sozinho na próxima vez que o aluno abrir o Chrome (vale no modo anônimo também)." />
+                                           Text="Instala o bloqueador no Chrome; aparece sozinho na próxima vez que o aluno abrir o Chrome. Funciona nas janelas normais: no Modo visitante o Chrome não roda extensões, e no anônimo ele fica desligado." />
                                 <TextBlock x:Name="Note_adblock" Style="{StaticResource PhoneNote}" />
                             </StackPanel>
                         </DockPanel>
@@ -128,7 +128,7 @@
                             <StackPanel>
                                 <TextBlock Text="Modo visitante" Style="{StaticResource FunctionName}" />
                                 <TextBlock Style="{StaticResource FunctionHint}"
-                                           Text="O Chrome só abre como visitante, sem perfis, login nem histórico." />
+                                           Text="O Chrome só abre como visitante, sem perfis, login nem histórico. Atenção: como visitante o Chrome não roda extensões, então o bloqueador de anúncios do Passo 1 não funciona. Para apagar tudo ao fechar com o bloqueador funcionando, use o Passo 2 no lugar deste." />
                                 <TextBlock x:Name="Note_guest" Style="{StaticResource PhoneNote}" />
                             </StackPanel>
                         </DockPanel>
