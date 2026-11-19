@@ -154,9 +154,9 @@ function Check-AllOn {
     Check (((Get-DesktopDenies) -join '|') -ne ($script:denies -join '|')) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
 }
 
-# $Desktop: the Deny entries the Desktop must have again (with Midview
+# $ExpectedDenies: the Deny entries the Desktop must have again (with Midview
 # installed, its own protection of "Entregar ao professor" is one of them).
-function Check-AllOff([string]$After, [string[]]$Desktop = $script:denies) {
+function Check-AllOff([string]$After, [string[]]$ExpectedDenies = $script:denies) {
     Check (-not (Test-Path -LiteralPath "$chrome\ClearBrowsingDataOnExitList")) "$After - no clean-on-exit list"
     foreach ($name in @('IncognitoModeAvailability', 'BrowserSignin', 'BrowserAddPersonEnabled', 'HomepageLocation', 'DownloadRestrictions',
             'BrowserGuestModeEnforced', 'BrowserGuestModeEnabled')) {
@@ -173,11 +173,11 @@ function Check-AllOff([string]$After, [string[]]$Desktop = $script:denies) {
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) "$After - the machine-wide pin block is gone"
     Check ($null -eq (Get-Value $studentExplorer 'NoPinningToTaskbar')) "$After - the student's pin block is gone"
     $now = @(Get-DesktopDenies)
-    if (($now -join '|') -ne ($Desktop -join '|')) {
+    if (($now -join '|') -ne ($ExpectedDenies -join '|')) {
         Write-Host "Desktop Deny entries now: $($now -join ' / ')"
-        Write-Host "and expected: $($Desktop -join ' / ')"
+        Write-Host "and expected: $($ExpectedDenies -join ' / ')"
     }
-    Check (($now -join '|') -eq ($Desktop -join '|')) "$After - the Desktop is as it was before the panel"
+    Check (($now -join '|') -eq ($ExpectedDenies -join '|')) "$After - the Desktop is as it was before the panel"
 }
 
 # Edge is closed by the Agent's program blocking: it says so in its log.
