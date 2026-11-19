@@ -69,7 +69,7 @@ internal static class DeviceRoomText
     // Each card: its title, its line and its button.
     public static (string Title, string Line, string Button) Card(DeviceRoomAction action, AndroidDeviceKind kind) => action switch
     {
-        DeviceRoomAction.Optimize => ("Otimizar", "Tira apps que a turma não usa e liga o DNS sem anúncios.", "Otimizar..."),
+        DeviceRoomAction.Optimize => ("Otimizar", "Tira apps que a turma não usa, arruma a tela inicial e liga o DNS sem anúncios.", "Otimizar..."),
         DeviceRoomAction.Pin => ("Senha (PIN)", "PIN de 4 números que o aluno não troca.", "Definir PIN..."),
         DeviceRoomAction.Network => ("Wi-Fi e modo avião", "Travados. Libere por um tempo para trocar de rede.", "Liberar..."),
         DeviceRoomAction.Accounts => (
@@ -98,7 +98,9 @@ internal static class DeviceRoomText
         var words = DeviceSetupText.Words(kind);
         var line = action switch
         {
-            DeviceRoomAction.Optimize => $"Esconde os apps de propaganda dos {words} e liga o DNS sem anúncios.",
+            DeviceRoomAction.Optimize =>
+                $"Tira dos {words} os apps que a turma não usa (os mesmos da preparação pelo cabo), arruma a tela inicial do Android " +
+                "(com a tela acesa) e liga o DNS sem anúncios.",
             DeviceRoomAction.Pin => $"Põe ou tira o PIN de 4 números da tela de bloqueio dos {words}; o aluno não consegue trocá-lo.",
             DeviceRoomAction.Network => $"Libera por alguns minutos o Wi-Fi e o modo avião, que ficam travados nos {words}, ou trava de novo.",
             DeviceRoomAction.Accounts =>

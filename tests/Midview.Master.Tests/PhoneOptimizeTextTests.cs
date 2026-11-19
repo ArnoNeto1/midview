@@ -4,7 +4,7 @@ using Xunit;
 
 public class PhoneOptimizeTextTests
 {
-    private static PhoneOptimizeReport Report(int hidden, string dns, int failed = 0, int uninstalled = 0, int pending = 0) => new(
+    private static PhoneOptimizeReport Report(int hidden, string dns, int failed = 0, int uninstalled = 0, int pending = 0, string? home = null) => new(
         DateTimeOffset.UnixEpoch,
         Enumerable.Range(0, hidden).Select(i => $"com.anuncio.{i}").ToList(),
         Enumerable.Range(0, failed).Select(i => $"com.falhou.{i}").ToList(),
@@ -12,7 +12,60 @@ public class PhoneOptimizeTextTests
     {
         Uninstalled = Enumerable.Range(0, uninstalled).Select(i => $"com.jogo.{i}").ToList(),
         Pending = pending,
+        Home = home,
     };
+
+    [Theory]
+    [InlineData(PhoneHomeStates.Arranged, "tela inicial arrumada")]
+    [InlineData(PhoneHomeStates.Working, "tela inicial sendo arrumada no aparelho")]
+    [InlineData(PhoneHomeStates.ByHand, "tela inicial: algo inesperado apareceu na tela, arrume o resto à mão")]
+    [InlineData(PhoneHomeStates.ScreenOff, "tela inicial não arrumada: a tela estava apagada ou bloqueada (acenda-a e otimize de novo)")]
+    [InlineData(PhoneHomeStates.NoAccessibility, "tela inicial não arrumada: a acessibilidade do Midview está desligada (ligue pelo cabo)")]
+    [InlineData(PhoneHomeStates.OtherLauncher, "tela inicial deste aparelho só é arrumada pelo cabo")]
+    public void The_home_screen_is_said_last(string home, string said) =>
+        Assert.Equal($"28 apps desinstalados · 6 escondidos · DNS sem anúncios ligado · {said}",
+                     PhoneOptimizeText.Line(Report(6, PhoneDnsStates.On, uninstalled: 28, home: home)));
+
+    // An agent that says nothing of the home screen, or a state from a newer
+    // agent: the line is as it was.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("somethingNew")]
+    public void No_known_home_screen_says_nothing_of_it(string? home) =>
+        Assert.Equal("28 apps desinstalados · 6 escondidos · DNS sem anúncios ligado",
+                     PhoneOptimizeText.Line(Report(6, PhoneDnsStates.On, uninstalled: 28, home: home)));
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(PhoneHomeStates.Arranged, true)]
+    [InlineData(PhoneHomeStates.Working, true)]
+    [InlineData(PhoneHomeStates.OtherLauncher, true)]
+    [InlineData("somethingNew", true)]
+    [InlineData(PhoneHomeStates.ByHand, false)]
+    [InlineData(PhoneHomeStates.ScreenOff, false)]
+    [InlineData(PhoneHomeStates.NoAccessibility, false)]
+    public void A_home_screen_the_teacher_must_see_to_is_not_done(string? home, bool done) =>
+        Assert.Equal(done, PhoneOptimizeText.IsDone(Report(6, PhoneDnsStates.On, home: home)));
+
+    [Fact]
+    public void Arranging_is_only_a_home_still_being_arranged()
+    {
+        Assert.True(PhoneOptimizeText.IsArranging(Report(6, PhoneDnsStates.On, home: PhoneHomeStates.Working)));
+        Assert.False(PhoneOptimizeText.IsArranging(Report(6, PhoneDnsStates.On, home: PhoneHomeStates.Arranged)));
+        Assert.False(PhoneOptimizeText.IsArranging(Report(6, PhoneDnsStates.On)));
+        Assert.False(PhoneOptimizeText.IsArranging(null));
+    }
+
+    [Theory]
+    [InlineData(1, 1, 0, 1, "Quase pronto: o aparelho continua arrumando a tela inicial.")]
+    [InlineData(1, 1, 1, 1, "Quase pronto: o aparelho continua desinstalando os apps que faltam e arrumando a tela inicial.")]
+    [InlineData(3, 3, 0, 2, "Quase pronto nos 3 aparelhos: 2 continuam arrumando a tela inicial.")]
+    [InlineData(3, 3, 1, 1, "Quase pronto nos 3 aparelhos: 1 continua desinstalando os apps que faltam; 1 continua arrumando a tela inicial.")]
+    [InlineData(2, 3, 2, 1, "Otimizados 2 de 3 aparelhos (veja abaixo). Dos otimizados, 2 continuam desinstalando os apps que faltam; 1 continua arrumando a tela inicial.")]
+    [InlineData(3, 3, 1, 0, "Quase pronto nos 3 aparelhos: 1 continua desinstalando os apps que faltam.")]
+    [InlineData(3, 3, 0, 0, "Pronto nos 3 aparelhos.")]
+    public void Summary_while_arranging(int done, int total, int removing, int arranging, string expected) =>
+        Assert.Equal(expected, PhoneOptimizeText.Summary(done, total, removing, arranging));
 
     // Apps still leaving the phone in the background (0.0.75 on).
     [Fact]

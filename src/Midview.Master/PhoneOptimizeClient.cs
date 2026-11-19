@@ -9,7 +9,9 @@ namespace Midview.Master;
 // ad apps, tries the ad-free DNS, which can take ~40 s on a slow network
 // (its own checks are capped), and uninstalls the apps the school does not
 // use until 60 s after the question (the rest right after, in the
-// background), so the answer is awaited for ReadTimeout.
+// background), then arranges the home screen of Android's own launcher until
+// 70 s after it (the rest in the background too), so the answer is awaited
+// for ReadTimeout.
 public static class PhoneOptimizeClient
 {
     public static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(90);

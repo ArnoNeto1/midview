@@ -6,9 +6,10 @@ using Midview.Protocol;
 
 namespace Midview.Master;
 
-// "Otimizar" (CELULARES): every phone hides its ad apps and tries the ad-free
-// DNS, all at once, as soon as the window opens; each one's line says how it
-// went (PhoneOptimizeText). Running it again changes nothing that is already done.
+// "Otimizar" (CELULARES): every phone hides its ad apps, removes the apps the
+// class does not use, tries the ad-free DNS and arranges its home screen, all
+// at once, as soon as the window opens; each one's line says how it went
+// (PhoneOptimizeText). Running it again changes nothing that is already done.
 public partial class PhoneOptimizeWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
@@ -48,7 +49,7 @@ public partial class PhoneOptimizeWindow : MidviewWindow
         {
             var done = await Task.WhenAll(_rows.Select(row => Task.Run(() => OptimizeOne(row))));
             ProgressTextBlock.Text = PhoneOptimizeText.Summary(
-                done.Count(r => r.Done), _rows.Count, done.Count(r => r.Done && r.Removing));
+                done.Count(r => r.Done), _rows.Count, done.Count(r => r.Done && r.Removing), done.Count(r => r.Done && r.Arranging));
         }
         finally
         {
@@ -60,19 +61,19 @@ public partial class PhoneOptimizeWindow : MidviewWindow
     // Off the UI thread; the row is updated on it. Done: fully optimized;
     // Removing: apps still leaving the phone in the background (the row is
     // a check mark with the "saindo" note, and the summary is not "Pronto."
-    // yet).
-    private (bool Done, bool Removing) OptimizeOne(PhoneRow row)
+    // yet); Arranging: the home screen still being arranged, the same way.
+    private (bool Done, bool Removing, bool Arranging) OptimizeOne(PhoneRow row)
     {
-        var (state, line, done, removing) = Optimize(row.Phone);
+        var (state, line, done, report) = Optimize(row.Phone);
         Dispatcher.Invoke(() => row.Show(state, line));
-        return (done, removing);
+        return (done, PhoneOptimizeText.IsRemoving(report), PhoneOptimizeText.IsArranging(report));
     }
 
-    private (PhoneRowState State, string Line, bool Done, bool Removing) Optimize(KnownMachine phone)
+    private (PhoneRowState State, string Line, bool Done, PhoneOptimizeReport? Report) Optimize(KnownMachine phone)
     {
         if (phone.AgentThumbprint is not { Length: > 0 })
         {
-            return (PhoneRowState.Failed, "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"", false, false);
+            return (PhoneRowState.Failed, "falta a identidade do celular: pareie-o de novo em \"Máquinas da sala\"", false, null);
         }
         try
         {
@@ -80,14 +81,14 @@ public partial class PhoneOptimizeWindow : MidviewWindow
             var line = PhoneOptimizeText.Line(report);
             if (report is null)
             {
-                return (PhoneRowState.Failed, line, false, false);
+                return (PhoneRowState.Failed, line, false, null);
             }
             var done = PhoneOptimizeText.IsDone(report);
-            return (done ? PhoneRowState.Done : PhoneRowState.Partial, line, done, PhoneOptimizeText.IsRemoving(report));
+            return (done ? PhoneRowState.Done : PhoneRowState.Partial, line, done, report);
         }
         catch (Exception ex)
         {
-            return (PhoneRowState.Failed, FailureText.DescribePhoneAgent(ex), false, false);
+            return (PhoneRowState.Failed, FailureText.DescribePhoneAgent(ex), false, null);
         }
     }
 }

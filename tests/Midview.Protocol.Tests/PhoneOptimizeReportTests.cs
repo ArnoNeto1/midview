@@ -8,11 +8,18 @@ public class PhoneOptimizeReportTests
     private const string FullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
         + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
-        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}";
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}";
 
     private const string EmptyJson =
         "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\","
-        + "\"uninstalled\":[],\"pending\":0}";
+        + "\"uninstalled\":[],\"pending\":0,\"home\":null}";
+
+    // What an agent sends before the home screen was arranged over the
+    // network: "pending" but no "home".
+    private const string NoHomeJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}";
 
     // What a 0.0.74 agent sends: "uninstalled" but no "pending".
     private const string NoPendingJson =
@@ -48,6 +55,7 @@ public class PhoneOptimizeReportTests
     {
         Uninstalled = new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" },
         Pending = 22,
+        Home = PhoneHomeStates.Arranged,
     };
 
     [Fact]
@@ -69,6 +77,7 @@ public class PhoneOptimizeReportTests
         Assert.Equal("dns.adguard-dns.com", full.DnsHost);
         Assert.Equal(new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" }, full.Uninstalled);
         Assert.Equal(22, full.PendingCount);
+        Assert.Equal(PhoneHomeStates.Arranged, full.Home);
 
         Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(EmptyJson), out var empty));
         Assert.Null(empty.OptimizedAt);
@@ -77,6 +86,20 @@ public class PhoneOptimizeReportTests
         Assert.Equal("offInternetBlocked", empty.Dns);
         Assert.Empty(empty.Uninstalled);
         Assert.Equal(0, empty.PendingCount);
+        Assert.Null(empty.Home);
+    }
+
+    [Theory]
+    [InlineData(NoHomeJson, null)]
+    [InlineData(OlderJson, null)]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":null}", null)]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":\"byHand\"}", "byHand")]
+    // A newer agent's state is kept as it came: the report is not lost for it.
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":\"somethingNew\"}", "somethingNew")]
+    public void TryDecode_ReadsTheHome(string json, string? home)
+    {
+        Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out var report));
+        Assert.Equal(home, report.Home);
     }
 
     [Theory]
@@ -133,6 +156,8 @@ public class PhoneOptimizeReportTests
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":1.5}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":\"3\"}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":1}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":[\"arranged\"]}")]
     public void TryDecode_RefusesBadJson(string json) =>
         Assert.False(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out _));
 
@@ -150,6 +175,20 @@ public class PhoneOptimizeReportTests
         Assert.Equal("offError", PhoneDnsStates.OffError);
         Assert.Equal("offByTeacher", PhoneDnsStates.OffByTeacher);
         Assert.True(PhoneDnsStates.IsKnown(PhoneDnsStates.OffByTeacher));
+    }
+
+    [Fact]
+    public void HomeStates_AreTheWireNames()
+    {
+        var states = new[] { "arranged", "byHand", "working", "screenOff", "noAccessibility", "otherLauncher" };
+        Assert.Equal(states, new[]
+        {
+            PhoneHomeStates.Arranged, PhoneHomeStates.ByHand, PhoneHomeStates.Working,
+            PhoneHomeStates.ScreenOff, PhoneHomeStates.NoAccessibility, PhoneHomeStates.OtherLauncher,
+        });
+        Assert.All(states, state => Assert.True(PhoneHomeStates.IsKnown(state)));
+        Assert.False(PhoneHomeStates.IsKnown("x"));
+        Assert.False(PhoneHomeStates.IsKnown(null));
     }
 
     [Fact]

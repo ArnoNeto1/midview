@@ -21,14 +21,38 @@ public static class PhoneDnsStates
         state is On or OffNoInternet or OffNetworkBlocks or OffInternetBlocked or OffError or OffByTeacher;
 }
 
+// How "Otimizar" left the device's home screen (PhoneOptimizeReport.Home),
+// arranged over the network as the cable does for Android's own launcher
+// (Launcher3): arranged; begun and stopped at something unexpected, for the
+// teacher to finish by hand; still being arranged in the background after
+// the answer; or not tried, and why: the screen off or locked (it is arranged
+// by driving the screen), the Midview accessibility service not running, or
+// a home other than Android's own launcher (MIUI's is arranged only over the
+// cable).
+public static class PhoneHomeStates
+{
+    public const string Arranged = "arranged";
+    public const string ByHand = "byHand";
+    public const string Working = "working";
+    public const string ScreenOff = "screenOff";
+    public const string NoAccessibility = "noAccessibility";
+    public const string OtherLauncher = "otherLauncher";
+
+    public static bool IsKnown(string? state) =>
+        state is Arranged or ByHand or Working or ScreenOff or NoAccessibility or OtherLauncher;
+}
+
 // Payload of MessageType.PhoneOptimizeReport (UTF-8 JSON): when the phone was
 // last optimized (null if never), the packages hidden and those neither
 // hidden nor uninstalled, the DNS state (PhoneDnsStates), the DNS server's
-// host name, the packages uninstalled ("uninstalled", since 0.0.74) and how
+// host name, the packages uninstalled ("uninstalled", since 0.0.74), how
 // many listed apps are still being uninstalled in the background ("pending",
-// since 0.0.75). Both are written last. A report without them (an older
-// agent), or with null, has none; an older Master ignores them. pending is a
-// whole number, never negative.
+// since 0.0.75) and how the home screen was left ("home", PhoneHomeStates,
+// the newest). Each is written after the ones before it. A report without
+// them (an older agent), or with null, has none (home: not tried); an older
+// Master ignores them. pending is a whole number, never negative. A home
+// state this Master does not know (a newer agent's) is read as it is and
+// shown as nothing, so the rest of the report is not lost for it.
 public sealed record PhoneOptimizeReport(
     [property: JsonPropertyName("optimizedAt")] DateTimeOffset? OptimizedAt,
     [property: JsonPropertyName("hidden")] IReadOnlyList<string> Hidden,
@@ -46,6 +70,10 @@ public sealed record PhoneOptimizeReport(
     // The apps still leaving the phone (0 when none or unknown).
     [JsonIgnore]
     public int PendingCount => Pending ?? 0;
+
+    // Null: not tried (an older agent, or not the school's device).
+    [JsonPropertyName("home")]
+    public string? Home { get; init; }
 
     private static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.Never };
 
