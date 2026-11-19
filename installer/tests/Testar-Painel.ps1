@@ -120,7 +120,10 @@ function Get-NewWarnings([int]$From) {
         return @()
     }
     @(Get-Content -LiteralPath $log | Select-Object -Skip $From |
-        Where-Object { $_ -match "Couldn't|could not|failed|Failed|exception|Exception|denied|Denied" })
+        Where-Object { $_ -match "Couldn't|could not|failed|Failed|exception|Exception|denied|Denied" } |
+        # Edge's helper processes close with the browser the Agent ended: the
+        # Agent then finds them gone. Edge being ended is checked on its own.
+        Where-Object { $_ -notmatch "Program blocking couldn't end msedge.exe" })
 }
 
 function Get-LogLength {
