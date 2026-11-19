@@ -212,7 +212,7 @@ try {
             Set-ItemProperty -LiteralPath $key -Name 'EnableScripts' -Value 1 -Type DWord
             Set-ItemProperty -LiteralPath $key -Name 'ExecutionPolicy' -Value 'Restricted' -Type String
         }
-        $policies = (& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command 'Get-ExecutionPolicy -List | ForEach-Object { "$($_.Scope)=$($_.ExecutionPolicy)" }') -join ' '
+        $policies = "MachinePolicy=$(Get-ExecutionPolicy -Scope MachinePolicy) UserPolicy=$(Get-ExecutionPolicy -Scope UserPolicy)"
         Write-Host $policies
         Check ($policies -match 'MachinePolicy=Restricted' -and $policies -match 'UserPolicy=Restricted') 'scripts are forbidden by policy, for the machine and the user'
         $probe = Join-Path $work 'probe.ps1'
