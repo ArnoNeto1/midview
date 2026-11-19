@@ -3,8 +3,11 @@
      while the teacher controls the phone ("Controlar"), the teacher's touches
      (gestures) and typing into the focused text field (window content, read
      on demand); while the teacher locks the student's touch, the student's
-     Back, Home, Recents and volume keys (key filter). No events, nothing
-     read on its own. -->
+     Back, Home, Recents and volume keys (key filter); and at the end of the
+     teacher's "Otimizar", the home screen of Android's own launcher arranged
+     (home/AccessibilityHomeDriver: window content and gestures, with
+     resource ids and unimportant views asked for at run time only while it
+     arranges). No events, nothing read on its own. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeAnnouncement"
     android:accessibilityFeedbackType="feedbackGeneric"

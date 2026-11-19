@@ -25,14 +25,37 @@ object PhoneDnsStates {
             state == OFF_INTERNET_BLOCKED || state == OFF_ERROR || state == OFF_BY_TEACHER
 }
 
+// How "Otimizar" left the home screen (PhoneOptimizeReport.home), as
+// src/Midview.Protocol/PhoneOptimizeReport.cs: arranged; begun and stopped at
+// something unexpected, for the teacher to finish by hand; still being
+// arranged in the background after the answer; or not tried, and why: the
+// screen off or locked (it is arranged by driving the screen), the Midview
+// accessibility service not running, or a home other than Android's own
+// launcher (MIUI's is arranged only over the cable).
+object PhoneHomeStates {
+    const val ARRANGED = "arranged"
+    const val BY_HAND = "byHand"
+    const val WORKING = "working"
+    const val SCREEN_OFF = "screenOff"
+    const val NO_ACCESSIBILITY = "noAccessibility"
+    const val OTHER_LAUNCHER = "otherLauncher"
+
+    fun isKnown(state: String?): Boolean =
+        state == ARRANGED || state == BY_HAND || state == WORKING || state == SCREEN_OFF ||
+            state == NO_ACCESSIBILITY || state == OTHER_LAUNCHER
+}
+
 // Payload of PHONE_OPTIMIZE_REPORT (UTF-8 JSON), the same text as the .NET
 // PhoneOptimizeReport: when the phone was last optimized (null if never),
 // the packages hidden and those neither hidden nor uninstalled, the DNS state,
 // the DNS server's host name, the packages uninstalled ("uninstalled", since
-// 0.0.74) and how many listed apps are still being uninstalled in the
-// background ("pending", since 0.0.75). Both are written last; a report
-// without them, or with null, has none; older Masters ignore them. pending is
-// a whole number, never negative.
+// 0.0.74), how many listed apps are still being uninstalled in the
+// background ("pending", since 0.0.75) and how the home screen was left
+// ("home", PhoneHomeStates, the newest). Each is written after the ones
+// before it; a report without them, or with null, has none (home: not
+// tried); older Masters ignore them. pending is a whole number, never
+// negative. A home state this agent does not know (a newer agent's) is read
+// as it is, so the report is not lost for it.
 data class PhoneOptimizeReport(
     val optimizedAt: Instant?,
     val hidden: List<String>,
@@ -41,11 +64,13 @@ data class PhoneOptimizeReport(
     val dnsHost: String,
     val uninstalled: List<String> = emptyList(),
     val pending: Int = 0,
+    val home: String? = null,
 ) {
-    // Refuses (IllegalArgumentException) a DNS state the protocol does not have.
+    // Refuses (IllegalArgumentException) a DNS or home state the protocol does not have.
     fun encode(): ByteArray {
         require(PhoneDnsStates.isKnown(dns)) { "unknown dns state" }
         require(pending >= 0) { "negative pending" }
+        require(home == null || PhoneHomeStates.isKnown(home)) { "unknown home state" }
         return JsonText.obj(
             "optimizedAt" to JsonText.string(optimizedAt?.let { IsoTime.format(it) }),
             "hidden" to hidden.joinToString(",", "[", "]") { JsonText.string(it) },
@@ -54,6 +79,7 @@ data class PhoneOptimizeReport(
             "dnsHost" to JsonText.string(dnsHost),
             "uninstalled" to uninstalled.joinToString(",", "[", "]") { JsonText.string(it) },
             "pending" to pending.toString(),
+            "home" to JsonText.string(home),
         ).toByteArray(Charsets.UTF_8)
     }
 
@@ -81,7 +107,12 @@ data class PhoneOptimizeReport(
                 is Int -> if (raw >= 0) raw else return null
                 else -> return null
             }
-            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost, uninstalled, pending)
+            val home = when (val raw = if (json.has("home")) json.get("home") else JSONObject.NULL) {
+                JSONObject.NULL -> null
+                is String -> raw
+                else -> return null
+            }
+            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost, uninstalled, pending, home)
         }
 
         private fun strings(json: JSONObject, name: String): List<String>? {

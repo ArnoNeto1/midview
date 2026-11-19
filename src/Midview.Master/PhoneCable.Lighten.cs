@@ -36,7 +36,9 @@ public sealed partial class PhoneCable
     // block), what the Device Owner step needs, or Xiaomi's Find device (Mi
     // Cloud's service crashes at every start without its provider). A
     // system app comes back with "cmd package install-existing <app>" or a
-    // factory reset.
+    // factory reset. The Android agent keeps a copy of this list and of the
+    // two below (optimize/CableApps.kt), so "Otimizar" over the network
+    // removes the same apps: change both together (CableAppsListTests).
     internal static readonly IReadOnlyList<string> RemovedApps = new[]
     {
         "android.autoinstalls.config.Xiaomi.model",

@@ -13,10 +13,17 @@ class PhoneOptimizeReportTest {
     private val fullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
             "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
-            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}"
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}"
     private val emptyJson =
         "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\"," +
-            "\"uninstalled\":[],\"pending\":0}"
+            "\"uninstalled\":[],\"pending\":0,\"home\":null}"
+
+    // What an agent sends before the home screen was arranged over the
+    // network: "pending" but no "home".
+    private val noHomeJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
+            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22}"
 
     // What a 0.0.74 agent sends: "uninstalled" but no "pending".
     private val noPendingJson =
@@ -34,6 +41,7 @@ class PhoneOptimizeReportTest {
     private val full = PhoneOptimizeReport(
         at, listOf("com.miui.msa.global", "com.miui.analytics"), listOf("com.xiaomi.mipicks"),
         PhoneDnsStates.ON, "dns.adguard-dns.com", listOf("com.king.candycrushsaga", "com.zhiliaoapp.musically"), pending = 22,
+        home = PhoneHomeStates.ARRANGED,
     )
     private val empty = PhoneOptimizeReport(null, emptyList(), emptyList(), PhoneDnsStates.OFF_INTERNET_BLOCKED, "")
 
@@ -51,14 +59,49 @@ class PhoneOptimizeReportTest {
 
     @Test
     fun decode_readsAReportWithoutUninstalledAsNone() {
-        assertEquals(full.copy(uninstalled = emptyList(), pending = 0), PhoneOptimizeReport.decode(olderJson.toByteArray()))
-        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null,\"pending\":null}"
-        assertEquals(full.copy(uninstalled = emptyList(), pending = 0), PhoneOptimizeReport.decode(withNull.toByteArray()))
+        val older = full.copy(uninstalled = emptyList(), pending = 0, home = null)
+        assertEquals(older, PhoneOptimizeReport.decode(olderJson.toByteArray()))
+        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null,\"pending\":null,\"home\":null}"
+        assertEquals(older, PhoneOptimizeReport.decode(withNull.toByteArray()))
     }
 
     @Test
     fun decode_readsAReportWithoutPendingAsNone() {
-        assertEquals(full.copy(pending = 0), PhoneOptimizeReport.decode(noPendingJson.toByteArray()))
+        assertEquals(full.copy(pending = 0, home = null), PhoneOptimizeReport.decode(noPendingJson.toByteArray()))
+    }
+
+    @Test
+    fun decode_readsAReportWithoutHomeAsNotTried() {
+        assertEquals(full.copy(home = null), PhoneOptimizeReport.decode(noHomeJson.toByteArray()))
+    }
+
+    // A newer agent's home state is kept as it came: the report is not lost for it.
+    @Test
+    fun decode_keepsAHomeStateItDoesNotKnow() {
+        val newer = noHomeJson.dropLast(1) + ",\"home\":\"somethingNew\"}"
+        assertEquals(full.copy(home = "somethingNew"), PhoneOptimizeReport.decode(newer.toByteArray()))
+    }
+
+    @Test
+    fun encode_refusesAnUnknownHomeState() {
+        try {
+            full.copy(home = "maybe").encode()
+            fail("expected IllegalArgumentException")
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    @Test
+    fun homeStatesAreTheWireValues() {
+        assertEquals(
+            listOf("arranged", "byHand", "working", "screenOff", "noAccessibility", "otherLauncher"),
+            listOf(
+                PhoneHomeStates.ARRANGED, PhoneHomeStates.BY_HAND, PhoneHomeStates.WORKING,
+                PhoneHomeStates.SCREEN_OFF, PhoneHomeStates.NO_ACCESSIBILITY, PhoneHomeStates.OTHER_LAUNCHER,
+            ),
+        )
+        assertFalse(PhoneHomeStates.isKnown("x"))
+        assertFalse(PhoneHomeStates.isKnown(null))
     }
 
     @Test
@@ -88,6 +131,8 @@ class PhoneOptimizeReportTest {
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":1.5}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":\"3\"}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":1}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":[\"arranged\"]}",
         )
         for (json in bad) {
             assertNull(json, PhoneOptimizeReport.decode(json.toByteArray()))

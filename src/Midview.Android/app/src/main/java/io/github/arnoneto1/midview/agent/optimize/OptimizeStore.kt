@@ -4,6 +4,7 @@ import io.github.arnoneto1.midview.agent.identity.StoredText
 import io.github.arnoneto1.midview.agent.identity.writeAtomically
 import io.github.arnoneto1.midview.agent.protocol.IsoTime
 import io.github.arnoneto1.midview.agent.protocol.PhoneDnsStates
+import io.github.arnoneto1.midview.agent.protocol.PhoneHomeStates
 import io.github.arnoneto1.midview.agent.protocol.PhoneOptimizeReport
 import java.io.File
 import java.io.IOException
@@ -63,9 +64,13 @@ class OptimizeStore(
         // none), a "hidden=", "failed=" and "uninstalled=" per app, dns and
         // dnsHost. A file from before 0.0.74 has no "uninstalled=": none.
         // The report's pending is not kept: after a restart nothing is being
-        // uninstalled in the background any more, so it reads as 0.
+        // uninstalled in the background any more, so it reads as 0. Nor is
+        // a home still being arranged (PhoneHomeStates.WORKING): after a
+        // restart it is not, so it reads as not tried; any other home state
+        // is kept ("home=", none in a file from before it).
         fun encode(state: OptimizeState): ByteArray {
             val report = state.report
+            val home = report.home?.takeIf { it != PhoneHomeStates.WORKING }
             return StoredText.encode(
                 KIND,
                 listOf(
@@ -73,7 +78,8 @@ class OptimizeStore(
                     "optimizedAt" to (report.optimizedAt?.let { IsoTime.format(it) } ?: ""),
                 ) + report.hidden.map { "hidden" to it } + report.failed.map { "failed" to it } +
                     report.uninstalled.map { "uninstalled" to it } +
-                    listOf("dns" to report.dns, "dnsHost" to report.dnsHost),
+                    listOf("dns" to report.dns, "dnsHost" to report.dnsHost) +
+                    listOfNotNull(home?.let { "home" to it }),
             )
         }
 
@@ -84,9 +90,10 @@ class OptimizeStore(
             val stored = StoredText.decode(KIND, bytes) ?: return decodeOld(bytes)
             fun time(key: String) = stored.first(key)?.takeIf { it.isNotEmpty() }?.let { IsoTime.parse(it) }
             val dns = stored.first("dns")?.takeIf { PhoneDnsStates.isKnown(it) } ?: PhoneDnsStates.OFF_ERROR
+            val home = stored.first("home")?.takeIf { PhoneHomeStates.isKnown(it) && it != PhoneHomeStates.WORKING }
             val report = PhoneOptimizeReport(
                 time("optimizedAt"), stored.all("hidden"), stored.all("failed"), dns, stored.first("dnsHost") ?: AdblockDns.HOST,
-                stored.all("uninstalled"),
+                stored.all("uninstalled"), home = home,
             )
             return OptimizeState(report, time("lastDnsAttempt"))
         }

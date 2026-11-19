@@ -19,6 +19,7 @@ import io.github.arnoneto1.midview.agent.files.TeacherFiles
 import io.github.arnoneto1.midview.agent.find.AndroidRingOutput
 import io.github.arnoneto1.midview.agent.find.FindRinger
 import io.github.arnoneto1.midview.agent.find.Finder
+import io.github.arnoneto1.midview.agent.home.androidHomeArranger
 import io.github.arnoneto1.midview.agent.identity.AgentIdentity
 import io.github.arnoneto1.midview.agent.identity.TRUSTED_MASTERS_FILE
 import io.github.arnoneto1.midview.agent.identity.TrustedMasters
@@ -252,6 +253,7 @@ class AgentService : Service() {
         // ad-free DNS on.
         lateinit var chromeConfig: ChromeConfig
         lateinit var optimizer: Optimizer
+        lateinit var screenLock: ScreenLock
         val lab = LabConfigStore(
             File(filesDir, LAB_CONFIG_FILE), policyGateway::isDeviceOwner,
             downloads = { chromeConfig.setDownloadsBlocked(it) },
@@ -267,6 +269,8 @@ class AgentService : Service() {
             internetBlocked, adblockWanted = { lab.adblock }, log = log,
             remover = SilentUninstaller(this),
             tidiesByItself = { CableSetup(File(filesDir, CableSetup.FILE_NAME)).optimizes() },
+            tablet = { CableSetup(File(filesDir, CableSetup.FILE_NAME)).isTablet() },
+            homeArranger = androidHomeArranger(this, teacherLocked = { screenLock.locked }, log),
         )
         // The site block: Chrome's policy and the internet block, kept the
         // same way and applied again now. Other browsers are hidden, checked
@@ -305,7 +309,7 @@ class AgentService : Service() {
         lateinit var programs: TeacherPrograms
         // A closing asked for under the lock is done when it goes, and the
         // teacher's messages and conversations, sites and apps come up then.
-        val screenLock = ScreenLock(
+        screenLock = ScreenLock(
             show = { LockActivity.show(this) },
             hide = {
                 LockActivity.hide()

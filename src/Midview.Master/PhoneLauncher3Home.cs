@@ -22,7 +22,9 @@ namespace Midview.Master;
 // there goes with every shortcut in it (the apps stay in the drawer). The
 // date and the search bar cannot be removed and stay. Every step looks at
 // the screen first; anything unexpected ends it, and the teacher arranges
-// the rest by hand.
+// the rest by hand. The Android agent does the same over the network at the
+// end of "Otimizar", through its accessibility service (home/Launcher3Home.kt,
+// a port of this class): change both together.
 public sealed class PhoneLauncher3Home
 {
     // Measured on the M10: about 3 s a screen read, 7 s an item removed,

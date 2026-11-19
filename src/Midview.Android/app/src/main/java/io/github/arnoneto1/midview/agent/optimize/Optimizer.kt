@@ -49,9 +49,11 @@ fun interface AppRemover {
 // "Otimizar" on the school phone: hides the ad and bloat apps it has
 // (BloatList; hidden apps are gone from the home screen and do not run, and
 // stay so after a restart), turns the ad-free DNS on (AdblockDns) and
-// uninstalls the apps the school does not use (UnusedApps: those of the
+// uninstalls the apps the school does not use (UnusedApps, and the cable's
+// "Midview otimizado" lists for the device's kind, CableApps: those of the
 // system, which a Device Owner cannot uninstall, are hidden instead, and so
-// is one Android refuses to uninstall), keeping the report for the teacher
+// is one Android refuses to uninstall), and, at the end of a teacher's
+// "Otimizar" only, arranges the home screen (HomeStep), keeping the report for the teacher
 // (OptimizeStore), which counts every app it ever uninstalled that is still
 // gone. Uninstalling is slow (a second or more each), so the teacher waits
 // for it at most until UNINSTALL_WITHIN after asking (the Master waits 90 s):
@@ -91,15 +93,30 @@ class Optimizer(
     // Midview" the first trusted command does not optimize; the teacher's
     // "Otimizar" (run) still does.
     private val tidiesByItself: () -> Boolean = { true },
+    // Prepared as a tablet by cable (CableSetup.isTablet): which of the
+    // cable's lists (CableApps) the device's apps are checked against.
+    private val tablet: () -> Boolean = { false },
+    // The home screen, arranged at the end of a teacher's "Otimizar"
+    // (HomeStep), on homeBackground; null: never arranged.
+    homeArranger: HomeArranger? = null,
+    homeBackground: (Runnable) -> Unit = { Thread(it, "Midview home screen").apply { isDaemon = true }.start() },
 ) : PhoneOptimizer {
     private val lock = ReentrantLock()
+    private val home = HomeStep(homeArranger, lock, store, gw::isDeviceOwner, ticker, homeBackground, log)
     private val busy = AtomicBoolean(false)
     private val removing = AtomicBoolean(false)
     private val runs = AtomicLong()
     private val dnsSteps = AtomicLong()
 
+    // The teacher's "Otimizar": the apps and the DNS, then the home screen.
     override fun run(): PhoneOptimizeReport {
         val asked = ticker()
+        val report = tidy(asked)
+        return home.arrange(asked) ?: report
+    }
+
+    // The apps and the DNS, without the home screen.
+    private fun tidy(asked: Long = ticker()): PhoneOptimizeReport {
         val askedRuns = runs.get()
         val askedDns = dnsSteps.get()
         lock.withLock {
@@ -117,7 +134,7 @@ class Optimizer(
             val held = store.current
             val dnsState = held.report.dns
             when {
-                held.report.optimizedAt == null -> if (tidiesByItself()) inBackground { run() }
+                held.report.optimizedAt == null -> if (tidiesByItself()) inBackground { tidy() }
                 dnsState in RETRIED && OptimizeStore.retryDue(clock(), held.lastDnsAttempt) -> inBackground { retryDns() }
                 // Freed while the agent was not running to hear it.
                 dnsState == PhoneDnsStates.OFF_INTERNET_BLOCKED && !internetBlocked() -> inBackground { retryDns() }
@@ -242,14 +259,17 @@ class Optimizer(
             OptimizeState(
                 PhoneOptimizeReport(
                     now, (hidden + removed.hidden).distinct(), failed + removed.failed, dnsState, AdblockDns.HOST,
-                    uninstalled, pending = left.size,
+                    uninstalled, pending = left.size, home = held.report.home,
                 ),
                 lastDnsAttempt = attempt,
             )
         } else {
             // Not the school's phone: nothing can be hidden, uninstalled nor set.
             val failed = runCatching { toPlan().let { it.hide + it.uninstall } }.getOrDefault(emptyList())
-            OptimizeState(PhoneOptimizeReport(now, emptyList(), failed, PhoneDnsStates.OFF_ERROR, AdblockDns.HOST), held.lastDnsAttempt)
+            OptimizeState(
+                PhoneOptimizeReport(now, emptyList(), failed, PhoneDnsStates.OFF_ERROR, AdblockDns.HOST, home = held.report.home),
+                held.lastDnsAttempt,
+            )
         }
         store.save(next)
         val report = next.report
@@ -265,25 +285,16 @@ class Optimizer(
         return store.current.report
     }
 
-    // What "Otimizar" does to the phone's apps: those to hide (BloatList's,
-    // and UnusedApps' of the system) and those to uninstall.
-    private class Plan(val hide: List<String>, val uninstall: List<String>)
-
-    private fun plan(): Plan =
+    // What "Otimizar" does to the phone's apps (OptimizePlan).
+    private fun plan(): OptimizePlan =
         try {
             toPlan()
         } catch (e: Exception) {
             log("The phone's apps could not be read", e)
-            Plan(emptyList(), emptyList())
+            OptimizePlan(emptyList(), emptyList())
         }
 
-    private fun toPlan(): Plan {
-        val never = catalog.neverHide()
-        val bloat = BloatList.toHide(BloatList.PACKAGES.filter(catalog::isPresent).toSet(), never).toList()
-        val (system, other) = UnusedApps.toRemove(UnusedApps.PACKAGES.filter(catalog::isPresent).toSet(), never)
-            .partition(::cameWithPhone)
-        return Plan(bloat + system, other)
-    }
+    private fun toPlan(): OptimizePlan = OptimizePlan.of(catalog, tablet(), ::cameWithPhone)
 
     private fun cameWithPhone(pkg: String): Boolean =
         try {
