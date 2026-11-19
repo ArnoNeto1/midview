@@ -47,6 +47,7 @@ public partial class MachinesWindow : MidviewWindow
         Action<AndroidDeviceKind, bool> openPreparePhones, DeviceRoomCallbacks roomDevices)
     {
         InitializeComponent();
+        ShowPinToolbar();
         _roster = roster;
         _roomDevices = roomDevices;
         ShowPhoneSetup(PreparePhoneSpan, PhoneProvisioning.Setup, OpenCableSteps);
@@ -96,6 +97,34 @@ public partial class MachinesWindow : MidviewWindow
     private void OnNavChecked(object sender, RoutedEventArgs e) => ShowPage((MachinesPage)Array.IndexOf(Navs, sender));
 
     private void OnAdvancedClicked(object sender, RoutedEventArgs e) => _openAdvanced();
+
+    // "Fixar a barra de cima ao abrir a tela do aluno": saved at once, for
+    // the next student's screen window (ViewWindowSettings).
+    private bool _showingPinToolbar;
+
+    private void ShowPinToolbar()
+    {
+        _showingPinToolbar = true;
+        PinToolbarCheckBox.IsChecked = ViewWindowSettingsFile.Load().PinToolbar;
+        _showingPinToolbar = false;
+    }
+
+    private void OnPinToolbarChanged(object sender, RoutedEventArgs e)
+    {
+        if (_showingPinToolbar)
+        {
+            return;
+        }
+        try
+        {
+            ViewWindowSettingsFile.Save(new ViewWindowSettings(PinToolbarCheckBox.IsChecked == true));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MidviewMessage.Show(this, $"Não foi possível guardar a escolha: {ErrorText.Describe(ex)}",
+                "Tela do aluno", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     // The lab admin password lives only on this teacher PC (DPAPI CurrentUser);
     // it is never sent to a student machine. With one saved, "Preencher a senha

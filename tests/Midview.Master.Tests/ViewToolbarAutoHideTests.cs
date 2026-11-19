@@ -132,4 +132,18 @@ public class ViewToolbarAutoHideTests
         Assert.True(bar.Update(Start + ViewToolbarAutoHide.FirstHideDelay));
         return bar;
     }
+
+    // "Fixar a barra de cima ao abrir a tela do aluno": it never slides away.
+    [Fact]
+    public void Pinned_TheToolbarNeverHides()
+    {
+        var bar = new ViewToolbarAutoHide(pinned: true);
+
+        bar.PictureArrived(Start, mouseOnToolbar: false);
+        bar.MouseMoved(Start + TimeSpan.FromSeconds(1), atTopEdge: false, onToolbar: false);
+
+        Assert.False(bar.Waiting);
+        Assert.False(bar.Update(Start + TimeSpan.FromMinutes(1)));
+        Assert.True(bar.Shown);
+    }
 }

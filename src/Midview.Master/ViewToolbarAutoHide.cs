@@ -5,7 +5,8 @@ namespace Midview.Master;
 // it, and comes back when the mouse rests on the top edge (the way back to the
 // buttons in full screen) or leaves the window. Time comes in from outside,
 // so the window drives it with a timer and the tests with plain values.
-internal sealed class ViewToolbarAutoHide
+// Pinned ("Fixar a barra da tela do aluno"): always shown, never waiting.
+internal sealed class ViewToolbarAutoHide(bool pinned = false)
 {
     public static readonly TimeSpan FirstHideDelay = TimeSpan.FromSeconds(2.5);
     public static readonly TimeSpan HideDelay = TimeSpan.FromSeconds(1);
@@ -23,7 +24,7 @@ internal sealed class ViewToolbarAutoHide
     // Only the first picture counts: later ones are new resolutions.
     public void PictureArrived(DateTime now, bool mouseOnToolbar)
     {
-        if (_pictureIn)
+        if (_pictureIn || pinned)
         {
             return;
         }
@@ -36,6 +37,10 @@ internal sealed class ViewToolbarAutoHide
 
     public void MouseMoved(DateTime now, bool atTopEdge, bool onToolbar)
     {
+        if (pinned)
+        {
+            return;
+        }
         if (Shown)
         {
             _revealAt = null;

@@ -125,6 +125,7 @@ public partial class ViewControlWindow : MidviewWindow
     // visible -- without this, KeyDown/KeyUp never fire at all.
     private void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
+        PlaceToolbar();
         ScreenImage.Focus();
         if (_fitPending)
         {

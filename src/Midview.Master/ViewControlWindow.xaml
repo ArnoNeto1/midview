@@ -21,10 +21,15 @@
         </Style>
     </Window.Resources>
     <!-- The picture takes the whole window; the toolbar floats over its top and
-         slides away (ViewControlWindow.Layout.cs). -->
+         slides away (ViewControlWindow.Layout.cs). With the toolbar pinned, the
+         picture moves to the second row, under it. -->
     <Grid x:Name="ViewRoot" Background="Black" ClipToBounds="True"
           PreviewMouseMove="OnViewMouseMove" MouseLeave="OnViewMouseLeave">
-        <Image x:Name="ScreenImage" Stretch="Uniform"
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Image x:Name="ScreenImage" Grid.RowSpan="2" Stretch="Uniform"
                MouseMove="OnMouseMove" MouseLeftButtonDown="OnMouseLeftDown" MouseLeftButtonUp="OnMouseLeftUp"
                MouseRightButtonDown="OnMouseRightDown" MouseRightButtonUp="OnMouseRightUp"
                KeyDown="OnKeyDown" KeyUp="OnKeyUp" TextInput="OnTextInput" MouseWheel="OnMouseWheel" Focusable="True" />

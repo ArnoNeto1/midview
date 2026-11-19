@@ -260,9 +260,19 @@
             <Grid x:Name="AdvancedPanel" Style="{StaticResource PagePanel}">
                 <StackPanel>
                     <local:DialogHeader Icon="&#xE713;" Heading="Avançado" Accent="{StaticResource ConfigurarBrush}"
-                        Content="Identidade deste computador e adição manual de máquina (em outra rede, ou para corrigir o endereço)." />
+                        Content="Identidade deste computador, adição manual de máquina (em outra rede, ou para corrigir o endereço) e como a tela do aluno abre." />
                     <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                         <Button Content="Ajustes avançados..." Click="OnAdvancedClicked" HorizontalAlignment="Left" Padding="14,6" />
+                    </Border>
+                    <!-- For every student's screen window, kept on this PC (ViewWindowSettings). -->
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Tela do aluno" Style="{StaticResource CardTitle}" />
+                            <CheckBox x:Name="PinToolbarCheckBox" Margin="0,10,0,0" Checked="OnPinToolbarChanged" Unchecked="OnPinToolbarChanged"
+                                      Content="Fixar a barra de cima ao abrir a tela do aluno" />
+                            <TextBlock Style="{StaticResource Hint}" FontSize="12.5" Margin="24,4,0,0"
+                                       Text="A barra com Controlar, Tela Cheia e Desconectar fica sempre à mostra, e a tela do aluno vem logo abaixo dela. Sem marcar, ela some sozinha e volta com o mouse na beirada de cima. Vale para todos os alunos, a partir da próxima tela aberta." />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </Grid>

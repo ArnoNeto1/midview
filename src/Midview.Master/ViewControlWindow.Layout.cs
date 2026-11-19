@@ -17,7 +17,10 @@ public partial class ViewControlWindow
     // The mouse is on the top edge within this many units of it.
     private const double TopEdge = 1;
 
-    private readonly ViewToolbarAutoHide _toolbarAutoHide = new();
+    // "Fixar a barra da tela do aluno" (Máquinas da sala > Avançado), read as the window opens.
+    private readonly bool _toolbarPinned = ViewWindowSettingsFile.Load().PinToolbar;
+    private ViewToolbarAutoHide? _autoHide;
+    private ViewToolbarAutoHide _toolbarAutoHide => _autoHide ??= new ViewToolbarAutoHide(_toolbarPinned);
     private DispatcherTimer? _toolbarTimer;
     private bool _toolbarShownOnScreen = true;
     private bool _fullScreen;
@@ -41,6 +44,17 @@ public partial class ViewControlWindow
         }
         _toolbarAutoHide.MouseLeftWindow();
         SyncToolbar();
+    }
+
+    // Pinned: the picture under the toolbar, which stays (the window's Loaded).
+    private void PlaceToolbar()
+    {
+        if (!_toolbarPinned)
+        {
+            return;
+        }
+        System.Windows.Controls.Grid.SetRow(ScreenImage, 1);
+        System.Windows.Controls.Grid.SetRowSpan(ScreenImage, 1);
     }
 
     // Called each time the picture is made at a new size.
@@ -100,9 +114,10 @@ public partial class ViewControlWindow
             return;
         }
 
-        // The title bar and the borders: what the window has beyond its content.
+        // The title bar and the borders: what the window has beyond its
+        // content; with the toolbar pinned, the toolbar too, as the picture is under it.
         var frameWidth = ActualWidth - content.ActualWidth;
-        var frameHeight = ActualHeight - content.ActualHeight;
+        var frameHeight = ActualHeight - content.ActualHeight + (_toolbarPinned ? Toolbar.ActualHeight : 0);
         var work = ViewWindowFit.WorkArea(this);
         var dpi = VisualTreeHelper.GetDpi(this);
         var client = ViewWindowFit.ClientSize(_bitmapWidth, _bitmapHeight, dpi.DpiScaleX, dpi.DpiScaleY,
