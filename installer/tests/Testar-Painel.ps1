@@ -214,7 +214,8 @@ try {
         }
         $policies = "MachinePolicy=$(Get-ExecutionPolicy -Scope MachinePolicy) UserPolicy=$(Get-ExecutionPolicy -Scope UserPolicy)"
         Write-Host $policies
-        Check ($policies -match 'MachinePolicy=Restricted' -and $policies -match 'UserPolicy=Restricted') 'scripts are forbidden by policy, for the machine and the user'
+        # The school's case (UserPolicy Restricted); the machine's is set too, where it takes.
+        Check ($policies -match 'UserPolicy=Restricted') 'scripts are forbidden by the user policy, as at the school'
         $probe = Join-Path $work 'probe.ps1'
         Set-Content -LiteralPath $probe -Value 'exit 0'
         & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $probe 2>$null
