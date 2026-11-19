@@ -16,8 +16,8 @@ public class ScreensMenuTests
         {
             var menu = MainWindow.ScreensMenu(DeviceFilter.Phones, hasPhones: true, hasTablets: true, _ => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets" }, Headers(menu));
-            var items = menu.Items.OfType<MenuItem>().ToList();
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Escondidas (0)" }, Headers(menu));
+            var items = menu.Items.OfType<MenuItem>().Take(4).ToList();
             Assert.Equal(new[] { false, false, true, false }, items.Select(item => item.IsChecked));
             Assert.All(items, item => Assert.True(item.IsEnabled));
             Assert.All(items, item => Assert.Equal(string.Empty, item.InputGestureText));
@@ -51,7 +51,7 @@ public class ScreensMenuTests
         {
             var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: false, hasTablets: false, _ => { });
 
-            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets" }, Headers(menu));
+            Assert.Equal(new[] { "Todos", "Computadores", "Celulares", "Tablets", "-", "Escondidas (0)" }, Headers(menu));
             var phones = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Celulares"));
             Assert.False(phones.IsEnabled);
             Assert.Equal("nenhum na sala", phones.InputGestureText);
@@ -76,7 +76,7 @@ public class ScreensMenuTests
             Assert.False(Item(tabletsOnly, "Celulares").IsEnabled);
             Assert.True(Item(tabletsOnly, "Tablets").IsEnabled);
             Assert.True(Item(tabletsOnly, "Tablets").IsChecked);
-            Assert.Equal(4, tabletsOnly.Items.Count);
+            Assert.Equal(6, tabletsOnly.Items.Count);
         });
     }
 
@@ -177,5 +177,60 @@ public class ScreensMenuTests
         {
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
+    }
+
+    // "Esconder da sala" (a notebook a teacher took away): with none hidden,
+    // "Escondidas (0)" is greyed and says how to hide one.
+    [Fact]
+    public void With_no_machine_hidden_escondidas_is_greyed_and_says_how()
+    {
+        InSta(() =>
+        {
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: true, _ => { });
+
+            var hidden = Item(menu, "Escondidas (0)");
+            Assert.False(hidden.IsEnabled);
+            Assert.Contains("Esconder da sala", (string)hidden.ToolTip);
+        });
+    }
+
+    [Fact]
+    public void Each_hidden_machine_can_be_shown_again_alone_or_all_together()
+    {
+        InSta(() =>
+        {
+            var note = new KnownMachine("NOTE-PROF", "10.0.0.9", "S9", "A9", Hidden: true);
+            var other = new KnownMachine("Aluno-31", "10.0.0.31", "S31", "A31", Hidden: true);
+            var shown = new List<IReadOnlyList<KnownMachine>>();
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: true, _ => { },
+                hidden: new[] { note, other }, showHidden: shown.Add);
+
+            var hidden = Item(menu, "Escondidas (2)");
+            Assert.True(hidden.IsEnabled);
+            var items = hidden.Items.Cast<object>().Select(item => item is MenuItem menuItem ? (string)menuItem.Header : "-").ToList();
+            Assert.Equal(new[] { "Mostrar Aluno-31", "Mostrar NOTE-PROF", "-", "Mostrar todas" }, items);
+
+            hidden.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Mostrar NOTE-PROF"))
+                .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            hidden.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "Mostrar todas"))
+                .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+            Assert.Equal(new[] { note }, shown[0]);
+            Assert.Equal(new[] { note, other }, shown[1]);
+        });
+    }
+
+    [Fact]
+    public void A_single_hidden_machine_has_no_mostrar_todas()
+    {
+        InSta(() =>
+        {
+            var note = new KnownMachine("NOTE-PROF", "10.0.0.9", "S9", "A9", Hidden: true);
+            var menu = MainWindow.ScreensMenu(DeviceFilter.All, hasPhones: true, hasTablets: true, _ => { },
+                hidden: new[] { note }, showHidden: _ => { });
+
+            var hidden = Item(menu, "Escondidas (1)");
+            Assert.Equal(new[] { "Mostrar NOTE-PROF" }, hidden.Items.OfType<MenuItem>().Select(item => (string)item.Header));
+        });
     }
 }

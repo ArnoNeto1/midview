@@ -45,8 +45,9 @@ public sealed class ScreenConsentClientTests
     [Fact]
     public void Status_line_names_the_phone_and_the_failure()
     {
-        Assert.Equal("Pedido mostrado no celular Cel 01.", ScreenConsentClient.Summary("Cel 01", true, "pedido mostrado"));
-        Assert.Equal("Cel 01: a tela já está liberada", ScreenConsentClient.Summary("Cel 01", true, "a tela já está liberada"));
+        Assert.Equal("Cel 01: pedido mostrado na tela, o aluno toca em \"Iniciar agora\".", ScreenConsentClient.Summary("Cel 01", true, "pedido mostrado"));
+        Assert.Equal("Tablet 03: a tela já aparece no Midview, não precisa pedir de novo.",
+            ScreenConsentClient.Summary("Tablet 03", true, "a tela já está liberada"));
         Assert.Equal("Cel 01: a tela está bloqueada", ScreenConsentClient.Summary("Cel 01", false, "a tela está bloqueada"));
     }
 

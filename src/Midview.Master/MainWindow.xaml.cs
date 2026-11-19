@@ -111,7 +111,20 @@ public partial class MainWindow : MidviewWindow
 
         foreach (var machine in LoadRoster())
         {
-            InsertTile(_tiles.Count, machine);
+            if (machine.Hidden)
+            {
+                _hiddenMachines.Add(machine);
+            }
+            else
+            {
+                InsertTile(_tiles.Count, machine);
+            }
+        }
+        ShowScreensBadge();
+        // A machine hidden from the room: said at once, so it is not forgotten.
+        if (_hiddenMachines.Count > 0 && string.IsNullOrEmpty(StatusTextBlock.Text))
+        {
+            StatusTextBlock.Text = SelectionStatus();
         }
         UpdateEmptyHint();
         ShowClassLesson();
@@ -219,7 +232,7 @@ public partial class MainWindow : MidviewWindow
         var selected = ToolbarSelection();
         return selected.Count switch
         {
-            0 => ReachNotice() ?? string.Empty,
+            0 => string.Join(" ", new[] { ReachNotice(), HiddenMachinesText.Reminder(_hiddenMachines.Count) }.OfType<string>()),
             1 => $"Selecionada: {selected[0].Name}",
             _ => $"Selecionadas: {selected.Count}",
         };
@@ -553,13 +566,12 @@ public partial class MainWindow : MidviewWindow
         var targets = TargetsOf(tile);
         ShowMenuFor(menu, targets.Count);
         GreyUnsupportedItems(menu.Items, targets);
-        ShowWipePhoneItem(menu.Items, targets);
         ShowPhoneItems(menu, targets.Select(target => target.Machine).ToList());
         NameBlockProgramsItem(menu, targets.Select(target => target.Machine).ToList());
-        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => DeviceActions.Of(item) == ToolbarAction.UpdatePhones))
+        foreach (var item in menu.Items.OfType<MenuItem>().Where(item => item.Uid == ConfigureDevicesUid))
         {
-            var phones = targets.Select(target => target.Machine).Where(machine => machine.IsPhone).ToList();
-            item.Header = PhoneUpdateText.MenuItem(phones.Count, PhoneUpdateText.KindOf(phones));
+            var (kind, devices) = DevicesToConfigure(tile);
+            item.Header = DeviceRoomText.MenuItem(kind, devices.Count);
         }
         foreach (var item in menu.Items.OfType<MenuItem>().Where(item => Equals(item.Tag, ScreenLockTag)))
         {
@@ -1576,7 +1588,8 @@ public partial class MainWindow : MidviewWindow
                 kind => OpenPhoneUpdateWindow(RoomPhones(kind), kind), (kind, optimize) => OpenPreparePhonesWindow((kind, optimize)),
                 new DeviceRoomCallbacks(
                     ActOnRoomDevices,
-                    devices => _ringing.AllRinging(devices, DateTime.Now))) { Owner = this };
+                    devices => _ringing.AllRinging(devices, DateTime.Now),
+                    CanWipe)) { Owner = this };
             window.Closed += (_, _) => _machinesWindow = null;
             _machinesWindow = window;
             OwnedWindow.ReturnToOwnerWhenClosed(window);
@@ -1726,8 +1739,15 @@ public partial class MainWindow : MidviewWindow
         }
     }
 
-    private void SaveRoster() =>
-        KnownMachinesFile.Save(KnownMachinesFile.DefaultPath, _tiles.Select(tile => tile.Machine));
+    // The tiles, then the machines hidden from the room (HiddenMachines); a
+    // hidden one that came back as a tile since is dropped from them.
+    private void SaveRoster()
+    {
+        var shown = _tiles.Select(tile => tile.Machine).ToList();
+        var away = HiddenMachines.StillAway(_hiddenMachines, shown);
+        _hiddenMachines.RemoveAll(machine => !away.Contains(machine));
+        KnownMachinesFile.Save(KnownMachinesFile.DefaultPath, shown.Concat(away));
+    }
 
     private void InsertTile(int index, KnownMachine machine)
     {

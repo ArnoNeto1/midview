@@ -9,9 +9,14 @@ namespace Midview.Master;
 // MacAddress ("AA-BB-CC-DD-EE-FF") is what turns it on over the network
 // (MainWindow's "Ligar"); it comes from the installer's machine file or from the
 // Agent itself, the first time Master sees the machine on.
+// Hidden: kept out of the grid by "Esconder da sala" (a notebook a teacher
+// took away): still paired and saved, but out of sight and out of every
+// button's reach until "Telas" > "Escondidas" shows it again. Written only
+// when true, so the file of a room with none hidden stays as it was.
 public sealed record KnownMachine(
     string Name, string HostAddress, string SessionThumbprint, string? AgentThumbprint, string? MacAddress = null,
-    DeviceKind Kind = DeviceKind.Windows)
+    DeviceKind Kind = DeviceKind.Windows,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Hidden = false)
 {
     // An Android phone, not a Windows PC. Not saved: it follows from Kind.
     [JsonIgnore]

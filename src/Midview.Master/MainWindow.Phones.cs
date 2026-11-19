@@ -15,32 +15,33 @@ public partial class MainWindow
     private IReadOnlyList<KnownMachine> RoomPhones(AndroidDeviceKind kind) =>
         _tiles.Select(tile => tile.Machine).Where(machine => DeviceSupport.IsAndroidOf(machine, kind)).ToList();
 
-    private void OnOptimizeMachineClicked(object sender, RoutedEventArgs e)
+    private const string ConfigureDevicesUid = "configurar";
+
+    // "Configurar tablet..." of a tile's menu: the "Configurar tablet" page of
+    // "Máquinas da sala", acting only on these devices (DeviceRoomSection).
+    private void OnConfigureDevicesClicked(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
+        if (((FrameworkElement)sender).DataContext is not MachineTile tile)
         {
-            OpenOptimizeWindow(PhonesSaying(MachinesOf(tile)));
+            return;
         }
+        var (kind, devices) = DevicesToConfigure(tile);
+        if (devices.Count == 0)
+        {
+            return;
+        }
+        OpenMachinesWindow(search: false);
+        _machinesWindow?.ShowDevices(kind, devices);
     }
 
-    private void OnUpdatePhonesMachineClicked(object sender, RoutedEventArgs e)
+    // The kind of the tile clicked (of the first phone or tablet among the
+    // menu's machines, if it is a PC), and the menu's devices of that kind.
+    private (AndroidDeviceKind Kind, IReadOnlyList<KnownMachine> Devices) DevicesToConfigure(MachineTile tile)
     {
-        if (((FrameworkElement)sender).DataContext is MachineTile tile)
-        {
-            var phones = PhonesSaying(MachinesOf(tile));
-            OpenPhoneUpdateWindow(phones, PhoneUpdateText.KindOf(phones));
-        }
-    }
-
-    // The phones among a menu's machines; the status bar says the PCs among
-    // them were left out.
-    private IReadOnlyList<KnownMachine> PhonesSaying(IReadOnlyList<KnownMachine> targets)
-    {
-        if (DeviceSupport.PhoneOnlyLeftOutNotice(targets) is { } notice)
-        {
-            ShowNotice(notice);
-        }
-        return targets.Where(machine => machine.IsPhone).ToList();
+        var machines = MachinesOf(tile);
+        var first = tile.Machine.IsPhone ? tile.Machine : machines.FirstOrDefault(machine => machine.IsPhone);
+        var kind = first is null ? AndroidDeviceKind.Phone : PhoneNumber.KindOf(first.Name);
+        return (kind, DeviceSupport.RoomTargets(kind, machines));
     }
 
     // A card of "Configurar celular" ("Configurar tablet"): its window on the
@@ -72,6 +73,12 @@ public partial class MainWindow
                 break;
             case DeviceRoomAction.Find:
                 FindPhones(devices);
+                break;
+            case DeviceRoomAction.Update:
+                OpenPhoneUpdateWindow(devices, PhoneUpdateText.KindOf(devices));
+                break;
+            case DeviceRoomAction.Wipe when devices is [var one]:
+                WipeAndPrepareAgain(one);
                 break;
             case DeviceRoomAction.Remove:
                 OpenPhoneRemoveWindow(devices);

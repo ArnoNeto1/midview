@@ -163,4 +163,29 @@ public class KnownMachinesFileTests
 
     private static string TempPath() =>
         Path.Combine(Path.GetTempPath(), $"midview-roster-{Guid.NewGuid():N}", "known-machines.json");
+
+    // "Esconder da sala": the mark is kept, and written only when on.
+    [Fact]
+    public void A_hidden_machine_stays_hidden_and_the_others_are_written_as_before()
+    {
+        var path = TempPath();
+        try
+        {
+            var saved = new[]
+            {
+                new KnownMachine("Aluno-1", "192.168.0.11", "SESSIONTHUMB1", "AGENTTHUMB1"),
+                new KnownMachine("NOTE-PROF", "192.168.0.9", "SESSIONTHUMB9", "AGENTTHUMB9", Hidden: true),
+            };
+
+            KnownMachinesFile.Save(path, saved);
+            var loaded = KnownMachinesFile.Load(path, out _);
+
+            Assert.Equal(saved, loaded);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(path), "\"Hidden\""));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

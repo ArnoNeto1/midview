@@ -218,24 +218,18 @@ public partial class MainWindow
             ? tile.Presence == TilePresence.Online
             : null;
 
-    // The tile menu's "Apagar e preparar de novo...": only for one school
-    // phone or tablet (named from a number; not one paired earlier by code),
-    // and only once the phone setup is ready; active when it answers now.
-    private static void ShowWipePhoneItem(ItemCollection items, IReadOnlyList<MachineTile> targets)
-    {
-        var item = items.OfType<MenuItem>().FirstOrDefault(item => DeviceActions.Of(item) == ToolbarAction.WipePhone);
-        if (item is null)
-        {
-            return;
-        }
-        var phone = targets is [var only] && PhoneWipe.ShowsItem(only.Machine) ? only : null;
-        item.Visibility = PhoneProvisioning.WizardReady && phone is not null ? Visibility.Visible : Visibility.Collapsed;
-        item.IsEnabled = phone is not null && PhoneWipe.CanWipe(phone.Machine, phone.Presence == TilePresence.Online);
-    }
+    // "Apagar e preparar de novo" of "Configurar tablet..." (opened from the
+    // tile's menu): only for one school phone or tablet (named from a number;
+    // not one paired earlier by code) that answers now, and only once the
+    // phone setup is ready.
+    private bool CanWipe(KnownMachine machine) =>
+        PhoneProvisioning.WizardReady
+        && _tiles.FirstOrDefault(tile => ReferenceEquals(tile.Machine, machine)) is { } tile
+        && PhoneWipe.CanWipe(tile.Machine, tile.Presence == TilePresence.Online);
 
-    private async void OnWipePhoneMachineClicked(object sender, RoutedEventArgs e)
+    private async void WipeAndPrepareAgain(KnownMachine machine)
     {
-        if (((FrameworkElement)sender).DataContext is not MachineTile tile
+        if (_tiles.FirstOrDefault(tile => ReferenceEquals(tile.Machine, machine)) is not { } tile
             || !PhoneWipe.CanWipe(tile.Machine, tile.Presence == TilePresence.Online)
             || PhoneWipe.TargetOf(tile.Machine.Name) is not { } target
             || !PhoneWipe.Confirm(this, tile.Machine.Name))

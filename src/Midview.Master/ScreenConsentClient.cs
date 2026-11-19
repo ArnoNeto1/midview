@@ -13,14 +13,18 @@ public static class ScreenConsentClient
     // What the phone says when it did put the request on the screen.
     public const string RequestShown = "pedido mostrado";
 
+    // What it says when the teacher already sees its screen: nothing to ask.
+    public const string AlreadyAllowed = "a tela já está liberada";
+
     public static (bool Succeeded, string Detail) Ask(
         KnownMachine phone, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>
         CommandClient.SendCommandForResult(
             phone.HostAddress, port, AgentThumbprint(phone), masterCertificate, MessageType.RequestScreenConsent, Array.Empty<byte>());
 
-    // One line for the status bar.
+    // One line for the status bar (a tablet's name says it is a tablet).
     public static string Summary(string phoneName, bool succeeded, string detail) =>
-        succeeded && detail == RequestShown ? $"Pedido mostrado no celular {phoneName}."
+        succeeded && detail == RequestShown ? $"{phoneName}: pedido mostrado na tela, o aluno toca em \"Iniciar agora\"."
+        : succeeded && detail == AlreadyAllowed ? $"{phoneName}: a tela já aparece no Midview, não precisa pedir de novo."
         : $"{phoneName}: {detail}";
 
     private static string AgentThumbprint(KnownMachine machine) =>

@@ -284,24 +284,27 @@
                                                  reads in full text, but the mouse and the arrow keys pass over it. -->
                                             <MenuItem Tag="varias" Focusable="False" IsHitTestVisible="False" FontWeight="SemiBold" Visibility="Collapsed" />
                                             <Separator Tag="varias" Visibility="Collapsed" />
-                                            <!-- Energia first, as on the toolbar. -->
+                                            <!-- The toolbar's groups, in its order and with its divisions: Energia,
+                                                 Tela, Turma, Programas e sites, Configurar. What only the toolbar has
+                                                 (Agendar, Pasta da turma, Máquinas da sala, Telas) is for the whole room. -->
                                             <MenuItem Header="Desligar..." local:DeviceActions.Action="Power" Click="OnPowerMachineClicked" />
                                             <MenuItem Header="Reiniciar..." local:DeviceActions.Action="Power" Click="OnRestartMachineClicked" />
                                             <MenuItem Header="Ligar" local:DeviceActions.Action="Wake" Click="OnWakeMachineClicked" />
                                             <Separator />
                                             <MenuItem Tag="uma" Header="Ver a tela" local:DeviceActions.Action="View" Click="OnViewMachineClicked" />
                                             <MenuItem Tag="uma" Header="Controlar (trava o teclado e o mouse do aluno)" local:DeviceActions.Action="Control" Click="OnControlMachineClicked" />
+                                            <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
+                                            <MenuItem Tag="bloqueio" Header="Bloquear a tela" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockMachineClicked" />
                                             <!-- Only for phones: shown by OnMachineMenuOpening when one is among the machines. -->
                                             <MenuItem Tag="celular" Header="Pedir de novo para ver a tela" Visibility="Collapsed" Click="OnAskScreenAgainClicked" />
                                             <!-- "Tocar para encontrar", or "Parar o toque" while they ring (OnMachineMenuOpening). -->
                                             <MenuItem Tag="celular" Uid="tocar" Header="Tocar para encontrar" Visibility="Collapsed" Click="OnFindPhoneMachineClicked" />
-                                            <!-- "Bloquear a tela" or "Desbloquear a tela", as OnMachineMenuOpening finds the machines. -->
-                                            <MenuItem Tag="bloqueio" Header="Bloquear a tela" local:DeviceActions.Action="ScreenLock" Click="OnScreenLockMachineClicked" />
                                             <Separator />
                                             <MenuItem Header="Enviar mensagem..." local:DeviceActions.Action="Message" Click="OnMessageMachineClicked" />
                                             <MenuItem Tag="uma" Header="Conversar (chat)..." local:DeviceActions.Action="Chat" Click="OnChatMachineClicked" />
                                             <MenuItem Header="Enviar arquivo..." local:DeviceActions.Action="SendFile" Click="OnFileMachineClicked" />
                                             <MenuItem Header="Recolher arquivos..." local:DeviceActions.Action="CollectFiles" Click="OnCollectMachineClicked" />
+                                            <Separator />
                                             <!-- Filled with the saved items when opened (MainWindow.LaunchMenu.cs). -->
                                             <MenuItem local:DeviceActions.Action="OpenWebsite" Header="Abrir site" SubmenuOpened="OnWebsiteSubmenuOpened" PreviewKeyDown="OnWebsiteSubmenuKeyDown">
                                                 <MenuItem Header="Outro site..." Click="OnOpenWebsiteMachineClicked" />
@@ -309,22 +312,19 @@
                                             <MenuItem local:DeviceActions.Action="OpenProgram" Header="Abrir programa" SubmenuOpened="OnProgramSubmenuOpened" PreviewKeyDown="OnProgramSubmenuKeyDown">
                                                 <MenuItem Header="Outro programa..." Click="OnOpenProgramMachineClicked" />
                                             </MenuItem>
-                                            <Separator />
+                                            <MenuItem Header="Instalar programa..." local:DeviceActions.Action="Install" Click="OnInstallMachineClicked" />
+                                            <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
                                             <MenuItem Header="Fechar programas..." local:DeviceActions.Action="CloseApps" Click="OnCloseAppsMachineClicked" />
                                             <MenuItem Header="Bloquear programas..." local:DeviceActions.Action="BlockPrograms" Click="OnBlockAppsMachineClicked" />
                                             <MenuItem Header="Bloquear sites..." local:DeviceActions.Action="BlockSites" Click="OnSiteBlockMachineClicked" />
+                                            <Separator />
                                             <MenuItem Header="Painel do laboratório..." local:DeviceActions.Action="LabConfig" Click="OnLabConfigMachineClicked" />
-                                            <MenuItem Header="Instalar programa..." local:DeviceActions.Action="Install" Click="OnInstallMachineClicked" />
-                                            <MenuItem Tag="uma" Header="Desinstalar programa..." local:DeviceActions.Action="Uninstall" Click="OnUninstallMachineClicked" />
-                                            <!-- Phones only, and only with the phone setup ready (OnMachineMenuOpening). -->
-                                            <MenuItem Tag="uma" Header="Apagar e preparar de novo..." local:DeviceActions.Action="WipePhone" Click="OnWipePhoneMachineClicked" />
-                                            <!-- Made for phones: shown only when a phone is among the machines. -->
-                                            <Separator Tag="celular" Visibility="Collapsed" />
-                                            <MenuItem Tag="celular" Header="Otimizar..." local:DeviceActions.Action="Optimize" Visibility="Collapsed" Click="OnOptimizeMachineClicked" />
-                                            <MenuItem Tag="celular" Header="Atualizar o Midview do celular..." local:DeviceActions.Action="UpdatePhones" Visibility="Collapsed" Click="OnUpdatePhonesMachineClicked" />
-                                            <!-- "uma" too: with only "uma" items after it, it would end the menu. -->
-                                            <Separator Tag="uma" />
+                                            <!-- Phones and tablets only: their "Configurar" page, for these devices (MainWindow.Phones.cs). -->
+                                            <MenuItem Tag="celular" Uid="configurar" Header="Configurar tablet..." Visibility="Collapsed" Click="OnConfigureDevicesClicked" />
                                             <MenuItem Tag="uma" Header="Editar a máquina (avançado)..." Click="OnEditMachineClicked" />
+                                            <!-- All the selected ones, like the actions above (MainWindow.HiddenMachines.cs). -->
+                                            <MenuItem Header="Esconder da sala" Click="OnHideMachineClicked"
+                                                      ToolTip="Tira a máquina da grade e de todos os botões, sem desparear. Use para um notebook que um professor levou. Volta em Telas &gt; Escondidas." />
                                             <MenuItem Tag="uma" Header="Remover da lista da sala" Click="OnRemoveMachineClicked" />
                                         </ContextMenu>
                                     </Button.ContextMenu>

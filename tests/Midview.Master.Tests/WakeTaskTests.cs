@@ -196,4 +196,22 @@ public class WakeTaskTests : IDisposable
     [Fact]
     public void LastRun_NoLogYet_IsNull() =>
         Assert.Null(WakeTask.LastRun(Path.Combine(_directory, "missing.log")));
+
+    // "Esconder da sala": a notebook a teacher took away is not turned on with the room.
+    [Fact]
+    public void RunFromCommandLine_LeavesHiddenMachinesOut()
+    {
+        var roster = Path.Combine(_directory, "known-machines.json");
+        var log = Path.Combine(_directory, "ligar-turma.log");
+        KnownMachinesFile.Save(roster, new[]
+        {
+            new KnownMachine("Aluno-1", "10.0.0.1", "S1", "A1", "00-1A-2B-3C-4D-5E"),
+            new KnownMachine("NOTE-PROF", "10.0.0.9", "S9", "A9", "00-1A-2B-3C-4D-5F", Hidden: true),
+        });
+
+        var exitCode = WakeTask.RunFromCommandLine("07:00", Monday.AddHours(7), roster, log, macAddresses => (macAddresses.Count, null));
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("28/09/2026 07:00: pedido para ligar enviado para 1 máquina(s)", WakeTask.LastRun(log));
+    }
 }

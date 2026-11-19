@@ -171,7 +171,9 @@ public static class WakeTask
         {
             // Phones and tablets: nothing turns one on (no Wake-on-LAN), so
             // none is reported as a machine without its network card known.
-            machines = KnownMachinesFile.Load(rosterPath, out _).Where(machine => !DeviceSupport.IsAndroid(machine)).ToList();
+            // A machine hidden from the room ("Esconder da sala") is left alone.
+            machines = KnownMachinesFile.Load(rosterPath, out _)
+                .Where(machine => !DeviceSupport.IsAndroid(machine) && !machine.Hidden).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

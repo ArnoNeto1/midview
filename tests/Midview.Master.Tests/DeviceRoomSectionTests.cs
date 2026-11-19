@@ -20,6 +20,11 @@ public class DeviceRoomSectionTests
     private static readonly KnownMachine Tablet01 = Android("Tablet 01");
     private static readonly KnownMachine[] Room = { Pc01, Celular01, Celular02, Tablet01 };
 
+    // The room's cards: all but "Atualizar o Midview" and "Apagar e preparar
+    // de novo", which are for the devices picked from a tile's menu.
+    private static readonly DeviceRoomAction[] RoomCards = Enum.GetValues<DeviceRoomAction>()
+        .Where(action => action is not (DeviceRoomAction.Update or DeviceRoomAction.Wipe)).ToArray();
+
     // Every device of that kind in the room, whatever is selected in the
     // grid (a few are reached from a tile's right-click menu).
     [Fact]
@@ -43,7 +48,7 @@ public class DeviceRoomSectionTests
                 block.Text == "Nenhum celular na sala ainda." && block.Visibility == Visibility.Visible);
 
             section.Show(AndroidDeviceKind.Phone, 2, ringing: false);
-            Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
+            Assert.All(RoomCards, action => Assert.True(section.ButtonOf(action).IsEnabled));
             Assert.DoesNotContain(section.Children.OfType<TextBlock>(), block => block.Text.StartsWith("Nenhum") && block.Visibility == Visibility.Visible);
         });
     }
@@ -80,8 +85,10 @@ public class DeviceRoomSectionTests
                     "Otimizar...", "Definir PIN...", "Liberar...", "Liberar...", "Escolher imagem...", "Sair das contas...", "Tocar...",
                     "Liberar...", "Tirar o Midview...",
                 },
-                Enum.GetValues<DeviceRoomAction>().Select(action => (string)section.ButtonOf(action).Content));
-            Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
+                RoomCards.Select(action => (string)section.ButtonOf(action).Content));
+            Assert.All(RoomCards, action => Assert.True(section.ButtonOf(action).IsEnabled));
+            Assert.All(new[] { DeviceRoomAction.Update, DeviceRoomAction.Wipe },
+                action => Assert.Equal(Visibility.Collapsed, CardOf(section.ButtonOf(action)).Visibility));
             var texts = Texts(section);
             Assert.Contains("CELULARES DA SALA (2)", texts);
             Assert.Contains("Toca alto para achar um celular perdido.", texts);
@@ -111,7 +118,7 @@ public class DeviceRoomSectionTests
             Assert.True(ToolTipService.GetShowOnDisabled(section.ButtonOf(DeviceRoomAction.Optimize)));
 
             section.Show(AndroidDeviceKind.Tablet, 1, ringing: false);
-            Assert.All(Enum.GetValues<DeviceRoomAction>(), action => Assert.True(section.ButtonOf(action).IsEnabled));
+            Assert.All(RoomCards, action => Assert.True(section.ButtonOf(action).IsEnabled));
         });
     }
 
@@ -202,5 +209,66 @@ public class DeviceRoomSectionTests
         {
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
+    }
+
+    // "Configurar tablet..." of a tile's menu: the cards name the device and
+    // add "Atualizar o Midview" and "Apagar e preparar de novo".
+    [Fact]
+    public void Opened_for_one_tablet_it_names_it_and_adds_update_and_wipe()
+    {
+        InSta(() =>
+        {
+            var section = new DeviceRoomSection();
+            section.Show(AndroidDeviceKind.Tablet, 1, ringing: false,
+                new DeviceFocus(DeviceRoomText.FocusSection(AndroidDeviceKind.Tablet, new[] { "Tablet 04" }), CanWipe: true));
+
+            Assert.Contains("TABLET 04", Texts(section));
+            Assert.Contains("Atualizar o Midview", Texts(section));
+            Assert.Contains("Apagar e preparar de novo", Texts(section));
+            Assert.All(Enum.GetValues<DeviceRoomAction>(), action =>
+            {
+                Assert.True(section.ButtonOf(action).IsEnabled);
+                Assert.Equal(Visibility.Visible, CardOf(section.ButtonOf(action)).Visibility);
+            });
+            Assert.DoesNotContain("botão direito", (string)section.ButtonOf(DeviceRoomAction.Pin).ToolTip);
+        });
+    }
+
+    // Wiping is for one school device that answers now: off otherwise, and it says why.
+    [Fact]
+    public void Wiping_is_off_when_it_cannot_work()
+    {
+        InSta(() =>
+        {
+            var section = new DeviceRoomSection();
+            section.Show(AndroidDeviceKind.Tablet, 3, ringing: false,
+                new DeviceFocus(DeviceRoomText.FocusSection(AndroidDeviceKind.Tablet, new[] { "Tablet 04", "Tablet 12", "Tablet 16" }), CanWipe: false));
+
+            Assert.Contains("3 TABLETS: TABLET 04, TABLET 12, TABLET 16", Texts(section));
+            Assert.False(section.ButtonOf(DeviceRoomAction.Wipe).IsEnabled);
+            Assert.True(ToolTipService.GetShowOnDisabled(section.ButtonOf(DeviceRoomAction.Wipe)));
+            Assert.Contains("Só para um aparelho", (string)section.ButtonOf(DeviceRoomAction.Wipe).ToolTip);
+            Assert.True(section.ButtonOf(DeviceRoomAction.Update).IsEnabled);
+        });
+    }
+
+    [Fact]
+    public void The_menu_item_and_the_line_say_whom_it_is_for()
+    {
+        Assert.Equal("Configurar tablet...", DeviceRoomText.MenuItem(AndroidDeviceKind.Tablet, 1));
+        Assert.Equal("Configurar 3 celulares...", DeviceRoomText.MenuItem(AndroidDeviceKind.Phone, 3));
+        Assert.Equal("Só no Tablet 04.", DeviceRoomText.FocusLine(new[] { "Tablet 04" }));
+        Assert.Equal("Só nestes 2: Celular 01, Celular 02.", DeviceRoomText.FocusLine(new[] { "Celular 01", "Celular 02" }));
+        Assert.Equal("Ver todos os tablets da sala", DeviceRoomText.AllOfTheRoom(AndroidDeviceKind.Tablet));
+    }
+
+    private static Border CardOf(DependencyObject button)
+    {
+        var parent = System.Windows.Media.VisualTreeHelper.GetParent(button) ?? LogicalTreeHelper.GetParent(button);
+        while (parent is not Border)
+        {
+            parent = LogicalTreeHelper.GetParent(parent) ?? System.Windows.Media.VisualTreeHelper.GetParent(parent);
+        }
+        return (Border)parent;
     }
 }

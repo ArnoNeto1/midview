@@ -24,7 +24,8 @@ public partial class MainWindow
         var room = _tiles.Select(tile => tile.Machine).ToList();
         var menu = ScreensMenu(
             _devices, DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Phone),
-            DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Tablet), ShowDevices, PhoneProvisioning.Setup);
+            DeviceSupport.HasAndroidOf(room, AndroidDeviceKind.Tablet), ShowDevices, PhoneProvisioning.Setup,
+            _hiddenMachines.ToList(), ShowHiddenMachines);
         menu.PlacementTarget = (UIElement)sender;
         menu.Placement = PlacementMode.Bottom;
         menu.IsOpen = true;
@@ -32,8 +33,9 @@ public partial class MainWindow
 
     private void ShowScreensBadge()
     {
-        ScreensButton.Badge = _devices == DeviceFilter.All ? string.Empty : FilterBadge;
-        ScreensButton.ToolTip = ScreensToolTip(_devices);
+        ScreensButton.Badge = _devices == DeviceFilter.All && _hiddenMachines.Count == 0 ? string.Empty : FilterBadge;
+        ScreensButton.ToolTip = ScreensToolTip(_devices)
+            + (HiddenMachinesText.Reminder(_hiddenMachines.Count) is { } hidden ? " " + hidden : string.Empty);
     }
 
     internal static string ScreensToolTip(DeviceFilter shown) => shown switch
@@ -46,10 +48,12 @@ public partial class MainWindow
 
     // Built at each click, so it follows the room as it is then. phoneSetup
     // decides what the greyed Celulares (Tablets) says about getting the
-    // first phone (tablet).
+    // first phone (tablet). Last, "Escondidas (N)": the machines hidden from
+    // the room ("Esconder da sala"), each one to show again (showHidden).
     internal static ContextMenu ScreensMenu(
         DeviceFilter shown, bool hasPhones, bool hasTablets, Action<DeviceFilter> show,
-        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon)
+        PhoneSetupOffer phoneSetup = PhoneSetupOffer.Soon,
+        IReadOnlyList<KnownMachine>? hidden = null, Action<IReadOnlyList<KnownMachine>>? showHidden = null)
     {
         var menu = new ContextMenu();
         MenuItem Choice(string header, DeviceFilter devices, string toolTip)
@@ -74,6 +78,8 @@ public partial class MainWindow
         {
             NoneInTheRoom(tablets, AndroidDeviceKind.Tablet);
         }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(HiddenItem(hidden ?? Array.Empty<KnownMachine>(), showHidden ?? (_ => { })));
         return menu;
 
         // With the "Preparar celulares" assistant out, the empty Celulares (or
@@ -85,5 +91,35 @@ public partial class MainWindow
             item.ToolTip = PhoneProvisioning.NoDeviceYet(kind, phoneSetup);
             ToolTipService.SetShowOnDisabled(item, true);
         }
+    }
+
+    // "Escondidas (N)": greyed with none hidden (its tooltip says how to
+    // hide one); else one "Mostrar <nome>" per machine, and "Mostrar todas".
+    private static MenuItem HiddenItem(IReadOnlyList<KnownMachine> hidden, Action<IReadOnlyList<KnownMachine>> showHidden)
+    {
+        var item = new MenuItem { Header = HiddenMachinesText.MenuHeader(hidden.Count) };
+        if (hidden.Count == 0)
+        {
+            item.IsEnabled = false;
+            item.ToolTip = HiddenMachinesText.NoneToolTip;
+            ToolTipService.SetShowOnDisabled(item, true);
+            return item;
+        }
+
+        item.ToolTip = HiddenMachinesText.SomeToolTip;
+        foreach (var machine in hidden.OrderBy(machine => machine.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var one = new MenuItem { Header = HiddenMachinesText.ShowHeader(machine.Name) };
+            one.Click += (_, _) => showHidden(new[] { machine });
+            item.Items.Add(one);
+        }
+        if (hidden.Count > 1)
+        {
+            item.Items.Add(new Separator());
+            var all = new MenuItem { Header = HiddenMachinesText.ShowAllHeader };
+            all.Click += (_, _) => showHidden(hidden);
+            item.Items.Add(all);
+        }
+        return item;
     }
 }

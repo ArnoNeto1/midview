@@ -110,6 +110,29 @@ public partial class DeviceSetupPage : UserControl
     // "Como preparar pelo cabo USB...", while only the README's steps are out.
     public event Action? CableSteps;
 
+    // "Ver todos os tablets da sala": back from the devices picked in a tile's menu.
+    public event Action? ShowAll;
+
+    public void ScrollToTop() => ((ScrollViewer)Content).ScrollToTop();
+
+    // names: the devices picked from a tile's menu ("Configurar tablet..."),
+    // or null for the whole room. With them, "Preparar um tablet novo" is
+    // out of the way: they are prepared already.
+    public void ShowFocus(IReadOnlyList<string>? names)
+    {
+        NewSection.Visibility = names is null ? Visibility.Visible : Visibility.Collapsed;
+        FocusLine.Visibility = names is null ? Visibility.Collapsed : Visibility.Visible;
+        FocusLine.Inlines.Clear();
+        if (names is null)
+        {
+            return;
+        }
+        FocusLine.Inlines.Add(new Run(DeviceRoomText.FocusLine(names) + " "));
+        var all = new Hyperlink(new Run(DeviceRoomText.AllOfTheRoom(_kind)));
+        all.Click += (_, _) => ShowAll?.Invoke();
+        FocusLine.Inlines.Add(all);
+    }
+
     public void Show(AndroidDeviceKind kind, PhoneSetupOffer setup)
     {
         _kind = kind;
