@@ -218,8 +218,8 @@ try {
         Check ($policies -match 'UserPolicy=Restricted') 'scripts are forbidden by the user policy, as at the school'
         $probe = Join-Path $work 'probe.ps1'
         Set-Content -LiteralPath $probe -Value 'exit 0'
-        & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $probe 2>$null
-        Check ($LASTEXITCODE -ne 0) 'a script file cannot run, even with -ExecutionPolicy Bypass (the school''s case)'
+        $probeRun = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $probe) -Wait -PassThru -WindowStyle Hidden
+        Check ($probeRun.ExitCode -ne 0) 'a script file cannot run, even with -ExecutionPolicy Bypass (the school''s case)'
     }
 
     Step 'Instalar com o instalador e parear um professor de teste'
