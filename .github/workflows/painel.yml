@@ -60,10 +60,24 @@ jobs:
           -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
           -Registros "%RUNNER_TEMP%\registros-painel"
 
+      # The same, with the Group Policy a school had that forbids PowerShell
+      # scripts: the setup must not need to run a script file.
+      - name: De novo, com a política de grupo que proíbe scripts do PowerShell
+        if: success()
+        shell: cmd
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer	ests\Testar-Painel.ps1
+          -Pacote "%RUNNER_TEMP%\Midview-Instalador"
+          -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
+          -Registros "%RUNNER_TEMP%\registros-painel-politica"
+          -ProibirScripts
+
       - name: Guardar os registros do Agent
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: registros-do-painel
-          path: ${{ runner.temp }}/registros-painel
+          path: |
+            ${{ runner.temp }}/registros-painel
+            ${{ runner.temp }}/registros-painel-politica
           if-no-files-found: ignore

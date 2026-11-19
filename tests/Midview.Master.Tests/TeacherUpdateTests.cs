@@ -307,11 +307,21 @@ public sealed class TeacherUpdateTests : IDisposable
         Assert.False(info.UseShellExecute);
         Assert.True(info.CreateNoWindow);
         var args = info.ArgumentList.ToList();
-        Assert.Equal(@"C:\Dados\aplicar.ps1", args[args.IndexOf("-File") + 1]);
-        Assert.Equal("1234", args[args.IndexOf("-EsperarPid") + 1]);
-        Assert.Equal(SetupSha256, args[args.IndexOf("-Sha256") + 1]);
-        Assert.Equal(@"C:\Program Files\Midview Professor\Midview.Master.exe", args[args.IndexOf("-Programa") + 1]);
-        Assert.Equal("0.0.38", args[args.IndexOf("-Versao") + 1]);
+        // A command, not a script file: a Group Policy against scripts must not stop it.
+        Assert.DoesNotContain("-File", args);
+        var command = args[args.IndexOf("-Command") + 1];
+        Assert.Equal(args.Count - 1, args.IndexOf("-Command") + 1);
+        Assert.Contains(@"ReadAllText('C:\Dados\aplicar.ps1', [Text.Encoding]::UTF8)", command);
+        Assert.Contains(" -EsperarPid 1234 ", command);
+        Assert.Contains($" -Sha256 '{SetupSha256}' ", command);
+        Assert.Contains(@" -Programa 'C:\Program Files\Midview Professor\Midview.Master.exe' ", command);
+        Assert.Contains(" -Versao '0.0.38'; exit $LASTEXITCODE", command);
+    }
+
+    [Fact]
+    public void A_quote_in_a_path_cannot_end_the_command_early()
+    {
+        Assert.Equal("'C:\\Users\\D''Avila\\a.ps1'", TeacherUpdate.Quoted(@"C:\Users\D'Avila\a.ps1"));
     }
 
     private sealed class SyncProgress(Action<int> report) : IProgress<int>

@@ -24,7 +24,11 @@ param(
     [string]$Pacote,
     [Parameter(Mandatory = $true)]
     [string]$Ferramenta,
-    [string]$Registros
+    [string]$Registros,
+    # Turns on, for the whole run, the Group Policy "Ativar a execucao de
+    # scripts" a school had (Restricted for users and the machine): the setup
+    # and the uninstaller must work all the same.
+    [switch]$ProibirScripts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -197,8 +201,26 @@ function Check-EdgeEnded([string]$What) {
     Check $ended $What
 }
 
+$policyKeys = @('HKCU:\SOFTWARE\Policies\Microsoft\Windows\PowerShell', 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell')
+
 $failed = $false
 try {
+    if ($ProibirScripts) {
+        Step 'Ligar a politica que proibe scripts do PowerShell'
+        foreach ($key in $policyKeys) {
+            New-Item -Path $key -Force | Out-Null
+            Set-ItemProperty -LiteralPath $key -Name 'EnableScripts' -Value 1 -Type DWord
+            Set-ItemProperty -LiteralPath $key -Name 'ExecutionPolicy' -Value 'Restricted' -Type String
+        }
+        $policies = (& "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command 'Get-ExecutionPolicy -List | ForEach-Object { "$($_.Scope)=$($_.ExecutionPolicy)" }') -join ' '
+        Write-Host $policies
+        Check ($policies -match 'MachinePolicy=Restricted' -and $policies -match 'UserPolicy=Restricted') 'scripts are forbidden by policy, for the machine and the user'
+        $probe = Join-Path $work 'probe.ps1'
+        Set-Content -LiteralPath $probe -Value 'exit 0'
+        & "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File $probe 2>$null
+        Check ($LASTEXITCODE -ne 0) 'a script file cannot run, even with -ExecutionPolicy Bypass (the school''s case)'
+    }
+
     Step 'Instalar com o instalador e parear um professor de teste'
     $script:original = @(Get-DesktopDenies)
     Check ($null -ne $setup) "the setup is in $Pacote"
@@ -266,6 +288,10 @@ try {
 }
 catch {
     $failed = $true
+    if (Test-Path -LiteralPath "$Registros\instalar.log") {
+        Write-Host '--- instalar.log (scripts) ---'
+        Get-Content -LiteralPath "$Registros\instalar.log" | Where-Object { $_ -match '\.ps1|exit code|script' } | Out-Host
+    }
     Write-Host ''
     Write-Host $_.Exception.Message -ForegroundColor Red
     if (Test-Path -LiteralPath $log) {
@@ -273,6 +299,12 @@ catch {
         Write-Host ''
         Write-Host '--- agent.log (end) ---'
         Get-Content -LiteralPath $log -Tail 60 | Out-Host
+    }
+}
+
+if ($ProibirScripts) {
+    foreach ($key in $policyKeys) {
+        Remove-Item -LiteralPath $key -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 

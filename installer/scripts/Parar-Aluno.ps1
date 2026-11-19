@@ -8,7 +8,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'Comum.ps1')
+# A pasta deste script: $PSScriptRoot quando roda como arquivo, ou a que o
+# instalador deu (MidviewScriptRoot) quando roda como comando, o jeito que o
+# instalador usa para uma política de grupo que proíbe scripts não o barrar
+# (RodarScript em Midview.iss). Comum.ps1 é carregado pelo texto, também sem
+# rodar um arquivo de script.
+$PastaDoScript = if ($PSScriptRoot) { $PSScriptRoot } else { $global:MidviewScriptRoot }
+. ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $PastaDoScript 'Comum.ps1'), [Text.Encoding]::UTF8)))
 
 $trava = $null
 try {

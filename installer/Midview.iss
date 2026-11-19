@@ -203,11 +203,29 @@ begin
   Result := Trim(Result);
 end;
 
+{ A text for a single-quoted PowerShell string: ' doubled. }
+function EntreAspasSimples(const Texto: String): String;
+begin
+  Result := Texto;
+  StringChangeEx(Result, '''', '''''', True);
+  Result := '''' + Result + '''';
+end;
+
+{ The script's text is handed to PowerShell as a command (-Command), never
+  run as a script file (-File): a school's Group Policy "Ativar a execução de
+  scripts" (Restricted or AllSigned, user or machine) wins over
+  -ExecutionPolicy Bypass and stopped every script file, so the setup failed
+  with "o script terminou com o código 1"; it does not apply to commands.
+  MidviewScriptRoot stands for $PSScriptRoot, which a command does not have
+  (the scripts read it to find Comum.ps1 and their folder). The text is read
+  as UTF-8, which the scripts are. }
 function RodarScript(const Script, Argumentos, ArquivoDeErro: String; var Codigo: Integer): Boolean;
 begin
   DeleteFile(ArquivoDeErro);
   Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" -Erro "' + ArquivoDeErro + '"' + Argumentos,
+    '-NoProfile -ExecutionPolicy Bypass -Command "& { $global:MidviewScriptRoot = ' + EntreAspasSimples(ExtractFileDir(Script)) +
+    '; & ([scriptblock]::Create([IO.File]::ReadAllText(' + EntreAspasSimples(Script) + ', [Text.Encoding]::UTF8)))' +
+    ' -Erro ' + EntreAspasSimples(ArquivoDeErro) + Argumentos + '; exit $LASTEXITCODE }"',
     '', SW_HIDE, ewWaitUntilTerminated, Codigo);
   Log(Format('%s%s: started=%d, exit code=%d', [Script, Argumentos, Ord(Result), Codigo]));
 end;

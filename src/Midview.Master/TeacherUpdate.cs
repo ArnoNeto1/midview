@@ -257,6 +257,11 @@ public static class TeacherUpdate
 
     // Windows PowerShell, hidden, running the script for that setup. waitFor:
     // this Midview's process, which must be gone before the setup runs.
+    // The script's text is handed over as a command (-Command), never run as
+    // a script file (-File): a school's Group Policy "Ativar a execução de
+    // scripts" (Restricted or AllSigned) wins over -ExecutionPolicy Bypass
+    // and stops every script file, but not commands (as the setup's
+    // RodarScript in Midview.iss).
     public static ProcessStartInfo ApplyStartInfo(
         string script, string setup, string sha256, int waitFor, string program, string log, Version version)
     {
@@ -265,17 +270,20 @@ public static class TeacherUpdate
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var argument in new[]
-                 {
-                     "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", script,
-                     "-Instalador", setup, "-Sha256", sha256, "-EsperarPid", waitFor.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                     "-Programa", program, "-Registro", log, "-Versao", version.ToString(),
-                 })
+        var command =
+            $"& ([scriptblock]::Create([IO.File]::ReadAllText({Quoted(script)}, [Text.Encoding]::UTF8)))"
+            + $" -Instalador {Quoted(setup)} -Sha256 {Quoted(sha256)}"
+            + $" -EsperarPid {waitFor.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            + $" -Programa {Quoted(program)} -Registro {Quoted(log)} -Versao {Quoted(version.ToString())}; exit $LASTEXITCODE";
+        foreach (var argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", command })
         {
             info.ArgumentList.Add(argument);
         }
         return info;
     }
+
+    // A single-quoted PowerShell string: ' doubled.
+    internal static string Quoted(string text) => "'" + text.Replace("'", "''", StringComparison.Ordinal) + "'";
 
     // The setup's log for that version, in folder.
     public static string LogPath(string folder, Version version) => Path.Combine(folder, $"instalacao-{version}.log");

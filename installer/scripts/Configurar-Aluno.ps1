@@ -15,13 +15,18 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# A pasta deste script: $PSScriptRoot quando roda como arquivo, ou a que o
+# instalador deu (MidviewScriptRoot) quando roda como comando, o jeito que o
+# instalador usa para uma política de grupo que proíbe scripts não o barrar
+# (RodarScript em Midview.iss). Comum.ps1 é carregado pelo texto, também sem
+# rodar um arquivo de script.
+$PastaDoScript = if ($PSScriptRoot) { $PSScriptRoot } else { $global:MidviewScriptRoot }
 # O Windows PowerShell 5.1 deixa $PSScriptRoot vazio nos valores padrão do
-# param() quando o script roda com -File, como o instalador o roda: a pasta
-# é calculada aqui.
+# param(): a pasta é calculada aqui.
 if (-not $Destino) {
-    $Destino = Split-Path -Path $PSScriptRoot -Parent
+    $Destino = Split-Path -Path $PastaDoScript -Parent
 }
-. (Join-Path $PSScriptRoot 'Comum.ps1')
+. ([scriptblock]::Create([IO.File]::ReadAllText((Join-Path $PastaDoScript 'Comum.ps1'), [Text.Encoding]::UTF8)))
 
 $trava = $null
 try {
