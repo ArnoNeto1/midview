@@ -22,6 +22,13 @@ using Midview.Protocol;
 //       applies a program block to the machine and reads it back
 //   block-status <machine.json> <teacher.pfx>
 //       prints the block the machine follows
+//   lab <machine.json> <teacher.pfx> [clean] [lockdown] [downloads] [guest] [adblock] [edge] [taskbar] [desktop]
+//       applies the "Painel do laboratório" with just those functions on
+//       (none: everything off) and prints the Agent's answer
+//   lab-reset <machine.json> <teacher.pfx>
+//       "RESET geral"
+//   lab-status <machine.json> <teacher.pfx>
+//       prints the functions the machine has on
 //   facts
 //       prints this process's session, the console session and whether it
 //       is elevated (what program blocking looks at)
@@ -42,6 +49,9 @@ return args switch
     ["push", var machineFile, var update, var pfx, var expected] => Push(machineFile, update, pfx, expected),
     ["block", var machineFile, var pfx, var mode, .. var programs] => Block(machineFile, pfx, mode, programs),
     ["block-status", var machineFile, var pfx] => BlockStatus(machineFile, pfx),
+    ["lab", var machineFile, var pfx, .. var functions] => Lab(machineFile, pfx, functions),
+    ["lab-reset", var machineFile, var pfx] => LabReset(machineFile, pfx),
+    ["lab-status", var machineFile, var pfx] => LabStatus(machineFile, pfx),
     ["facts"] => Facts(),
     ["launch", var exe, .. var rest] => Launch(exe, rest, verify: true),
     ["launch-raw", var exe, .. var rest] => Launch(exe, rest, verify: false),
@@ -69,6 +79,49 @@ static int Block(string machineFile, string pfx, string mode, string[] programs)
     var (succeeded, detail) = AppBlockClient.Apply(machine, teacher, policy);
     Say($"block {mode} [{string.Join(", ", programs)}]: {(succeeded ? "ok" : "refused")} - {detail}");
     return succeeded ? 0 : 1;
+}
+
+static int Lab(string machineFile, string pfx, string[] functions)
+{
+    var known = new[] { "clean", "lockdown", "downloads", "guest", "adblock", "edge", "taskbar", "desktop" };
+    if (functions.FirstOrDefault(name => !known.Contains(name)) is { } unknown)
+    {
+        Say($"unknown function {unknown}");
+        return 2;
+    }
+    using var teacher = LoadTeacher(pfx);
+    var machine = InstalledMachine(machineFile);
+    bool On(string name) => functions.Contains(name);
+    // Newer than whatever the machine has, as the panel's saves are.
+    var current = LabConfigClient.GetStatus(machine, teacher).Config;
+    var savedAt = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeSeconds(), (current?.SavedAt ?? 0) + 1);
+    var config = new LabConfig(savedAt, On("clean"), On("lockdown"), On("downloads"), On("guest"), On("adblock"), On("edge"),
+        On("taskbar"), On("desktop"));
+    var (succeeded, detail) = LabConfigClient.Apply(machine, teacher, config);
+    Say($"lab [{string.Join(", ", functions)}]: {(succeeded ? "ok" : "refused")} - {detail}");
+    return succeeded ? 0 : 1;
+}
+
+static int LabReset(string machineFile, string pfx)
+{
+    using var teacher = LoadTeacher(pfx);
+    var (succeeded, detail) = LabConfigClient.Reset(InstalledMachine(machineFile), teacher);
+    Say($"lab reset: {(succeeded ? "ok" : "refused")} - {detail}");
+    return succeeded ? 0 : 1;
+}
+
+static int LabStatus(string machineFile, string pfx)
+{
+    using var teacher = LoadTeacher(pfx);
+    var status = LabConfigClient.GetStatus(InstalledMachine(machineFile), teacher);
+    if (status.OldAgent || status.Config is not { } config)
+    {
+        Say("the Agent doesn't know the lab panel");
+        return 1;
+    }
+    Say($"lab on: clean={config.CleanOnExit} lockdown={config.Lockdown} downloads={config.BlockDownloads} guest={config.ForceGuest} "
+        + $"adblock={config.Adblock} edge={config.BlockEdge} taskbar={config.LockTaskbar} desktop={config.LockDesktop}");
+    return 0;
 }
 
 static int BlockStatus(string machineFile, string pfx)
@@ -321,7 +374,7 @@ static void Say(string line) => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {l
 
 static int Usage()
 {
-    Console.WriteLine("usage: pair <pfx> <machine.json> | status <machine.json> <pfx> [<expected student folder>] | push <machine.json> <new student folder> <pfx> <committed|rolledBack> | block <machine.json> <pfx> <mode> [programs...] | block-status <machine.json> <pfx> | facts | launch <exe> [args...] | launch-raw <exe> [args...]");
+    Console.WriteLine("usage: pair <pfx> <machine.json> | status <machine.json> <pfx> [<expected student folder>] | push <machine.json> <new student folder> <pfx> <committed|rolledBack> | block <machine.json> <pfx> <mode> [programs...] | block-status <machine.json> <pfx> | lab <machine.json> <pfx> [functions...] | lab-reset <machine.json> <pfx> | lab-status <machine.json> <pfx> | facts | launch <exe> [args...] | launch-raw <exe> [args...]");
     return 2;
 }
 

@@ -1,0 +1,69 @@
+# Installs Midview on a real Windows machine (the runner, a throwaway VM)
+# with the lab installer and goes through every function of "Painel do
+# laboratório": what each one writes, that Edge is closed, that they hold
+# across a service restart, and that turning them off, "RESET geral" and
+# uninstalling leave nothing behind (installer/tests/Testar-Painel.ps1).
+# A Windows runner bills 2x the minutes of a Linux one, so this runs only
+# for changes to what it exercises, on test branches, or by hand.
+name: Painel do laboratório (Windows de verdade)
+
+on:
+  push:
+    branches: [master, 'teste/**']
+    paths:
+      - 'src/Midview.Agent/**'
+      - 'src/Midview.Protocol/**'
+      - 'src/Midview.Master/LabConfig*'
+      - 'src/Midview.Master/CommandClient.cs'
+      - 'installer/**'
+      - 'Directory.Build.props'
+      - 'tests/Midview.E2E/**'
+      - '.github/workflows/painel.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: painel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  painel:
+    name: Conferir o Painel do laboratório de verdade
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Instalar o Inno Setup (se faltar)
+        shell: pwsh
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      # powershell.exe is Windows PowerShell 5.1, what lab machines run.
+      - name: Gerar o instalador (Windows PowerShell 5.1)
+        shell: cmd
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\Gerar-Instalador.ps1 -Output "%RUNNER_TEMP%\Midview-Instalador"
+
+      - name: Compilar o professor de teste
+        run: dotnet build tests/Midview.E2E --configuration Release --output "${{ runner.temp }}/professor-de-teste"
+
+      - name: Instalar, ativar cada função, reiniciar o serviço, desativar, RESET geral e desinstalar
+        shell: cmd
+        run: >
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Painel.ps1
+          -Pacote "%RUNNER_TEMP%\Midview-Instalador"
+          -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
+          -Registros "%RUNNER_TEMP%\registros-painel"
+
+      - name: Guardar os registros do Agent
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registros-do-painel
+          path: ${{ runner.temp }}/registros-painel
+          if-no-files-found: ignore
