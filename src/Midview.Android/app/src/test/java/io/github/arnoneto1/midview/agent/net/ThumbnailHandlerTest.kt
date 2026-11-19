@@ -19,6 +19,7 @@ class ThumbnailHandlerTest {
     private val trusted by lazy { TrustedMasters(File(folder.newFolder(), "trusted-masters.txt")) }
     private val asked = mutableListOf<Pair<Int, Int>>()
     private var teachers = 0
+    private var wakes = 0
     private val streamed = mutableListOf<Channel>()
     private val locks = mutableListOf<Channel>()
     private val handler by lazy {
@@ -28,6 +29,7 @@ class ThumbnailHandlerTest {
             teacherConnected = { teachers++ },
             stream = { streamed += it },
             lockScreen = { locks += it },
+            wakeScreen = { wakes++ },
         )
     }
 
@@ -111,5 +113,30 @@ class ThumbnailHandlerTest {
         assertTrue(streamed.isEmpty())
         assertTrue(locks.isEmpty())
         assertTrue(asked.isEmpty())
+    }
+
+    // "Ver a tela" on a phone whose screen went dark: it lights up.
+    @Test fun theBigWindowWakesTheScreen() {
+        trusted.add(teacher)
+
+        handler.handle(FakeChannel(teacher, Message(MessageType.SCREEN_STREAM, ByteArray(0))))
+
+        assertEquals(1, wakes)
+    }
+
+    // The grid asks every few seconds: lighting every phone up each time would drain them.
+    @Test fun theGridsThumbnailsNeverWakeTheScreen() {
+        trusted.add(teacher)
+
+        handler.handle(FakeChannel(teacher, request(byteArrayOf(0, 83, 0, 120)), request()))
+        handler.handle(FakeChannel(teacher, Message(MessageType.LOCK_SCREEN, ByteArray(0))))
+
+        assertEquals(0, wakes)
+    }
+
+    @Test fun anUntrustedTeacherCannotWakeTheScreen() {
+        handler.handle(FakeChannel(teacher, Message(MessageType.SCREEN_STREAM, ByteArray(0))))
+
+        assertEquals(0, wakes)
     }
 }

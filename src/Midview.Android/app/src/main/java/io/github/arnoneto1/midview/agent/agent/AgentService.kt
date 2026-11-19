@@ -53,6 +53,7 @@ import io.github.arnoneto1.midview.agent.screen.BitmapJpeg
 import io.github.arnoneto1.midview.agent.screen.CaptureCadence
 import io.github.arnoneto1.midview.agent.screen.FrameCredit
 import io.github.arnoneto1.midview.agent.screen.ScreenCaptureService
+import io.github.arnoneto1.midview.agent.screen.ScreenWake
 import io.github.arnoneto1.midview.agent.screen.ThumbnailPicture
 import io.github.arnoneto1.midview.agent.sites.BlockVpnService
 import io.github.arnoneto1.midview.agent.sites.ChromeConfig
@@ -408,6 +409,7 @@ class AgentService : Service() {
             },
             lockScreen = { LockScreenHandler(it, screenLock, isDeviceOwner = policy::canLockScreen).run() },
             classFolder = ClassFolderHandler(classFolder.folder)::serve,
+            wakeScreen = { ScreenWake.wake(this) },
         )
         val otherNotifications = otherAppsNotifications(log)
         NotificationSweeper.wake(this)

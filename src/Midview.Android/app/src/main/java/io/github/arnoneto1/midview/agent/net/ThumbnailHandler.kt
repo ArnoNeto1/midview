@@ -24,6 +24,9 @@ import java.io.EOFException
 // for the screen (a thumbnail or the big window) is teacherConnected: the
 // moment the student is asked to let the screen be seen. A lock does not
 // ask: the request would only wait under the padlock.
+// The big window ("Ver a tela", "Controlar") lights the screen up when it
+// went dark (wakeScreen), so the teacher sees it; the grid's thumbnails
+// never do, or every phone would light up every few seconds.
 class ThumbnailHandler(
     private val trusted: TrustedMasters,
     private val render: (width: Int, height: Int) -> ByteArray,
@@ -31,6 +34,7 @@ class ThumbnailHandler(
     private val stream: (Channel) -> Unit = {},
     private val lockScreen: (Channel) -> Unit = {},
     private val classFolder: ((Channel, Message) -> Unit)? = null,
+    private val wakeScreen: () -> Unit = {},
 ) {
     fun handle(channel: Channel) {
         if (!trusted.isTrusted(channel.remoteThumbprint)) {
@@ -54,6 +58,7 @@ class ThumbnailHandler(
                 thumbnails(channel, first)
             }
             MessageType.SCREEN_STREAM -> {
+                wakeScreen()
                 teacherConnected()
                 stream(channel)
             }
