@@ -286,6 +286,9 @@ try {
     Check ($code -eq 0) 'the uninstaller finishes'
     Check ($null -eq (Get-CimInstance -ClassName Win32_Service -Filter "Name='MidviewAgent'")) 'the service is gone'
     Check-AllOff 'Desinstalar' $script:original
+    # The uninstaller keeps the paired teachers (a reinstall stays paired):
+    # gone too, so a next run of this test can pair its own teacher.
+    Remove-Item -LiteralPath $data -Recurse -Force -ErrorAction SilentlyContinue
 }
 catch {
     $failed = $true
