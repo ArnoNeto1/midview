@@ -148,7 +148,7 @@ function Check-AllOn {
     Check ($null -ne (Get-Value "$chrome\ExtensionSettings" 'cfhdojbkjhnklbpkdaibdccddilifddb')) 'Passo 1: its settings are there'
     Check ((Get-Value $explorer 'NoPinningToTaskbar') -eq 1) 'Travar a barra de tarefas: the machine-wide pin block'
     Check ((Get-Value $studentExplorer 'NoPinningToTaskbar') -eq 1) "Travar a barra de tarefas: the pin block in the student's own hive"
-    Check ((Get-DesktopDenies).Count -gt $script:denies.Count) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
+    Check (((Get-DesktopDenies) -join '|') -ne ($script:denies -join '|')) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
 }
 
 function Check-AllOff([string]$After) {
@@ -226,7 +226,7 @@ try {
         Check ($answer.Code -eq 0) "only ${one}: accepted"
     }
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) 'after the last one alone (desktop), the taskbar lock is off again'
-    Check ((Get-DesktopDenies).Count -gt $script:denies.Count) 'and the Desktop is locked'
+    Check (((Get-DesktopDenies) -join '|') -ne ($script:denies -join '|')) 'and the Desktop is locked'
 
     Step 'Desativar tudo'
     $start = Get-LogLength
