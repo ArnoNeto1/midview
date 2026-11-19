@@ -154,7 +154,9 @@ function Check-AllOn {
     Check (((Get-DesktopDenies) -join '|') -ne ($script:denies -join '|')) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
 }
 
-function Check-AllOff([string]$After) {
+# $Desktop: the Deny entries the Desktop must have again (with Midview
+# installed, its own protection of "Entregar ao professor" is one of them).
+function Check-AllOff([string]$After, [string[]]$Desktop = $script:denies) {
     Check (-not (Test-Path -LiteralPath "$chrome\ClearBrowsingDataOnExitList")) "$After - no clean-on-exit list"
     foreach ($name in @('IncognitoModeAvailability', 'BrowserSignin', 'BrowserAddPersonEnabled', 'HomepageLocation', 'DownloadRestrictions',
             'BrowserGuestModeEnforced', 'BrowserGuestModeEnabled')) {
@@ -171,11 +173,11 @@ function Check-AllOff([string]$After) {
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) "$After - the machine-wide pin block is gone"
     Check ($null -eq (Get-Value $studentExplorer 'NoPinningToTaskbar')) "$After - the student's pin block is gone"
     $now = @(Get-DesktopDenies)
-    if (($now -join '|') -ne ($script:denies -join '|')) {
+    if (($now -join '|') -ne ($Desktop -join '|')) {
         Write-Host "Desktop Deny entries now: $($now -join ' / ')"
-        Write-Host "and before Midview: $($script:denies -join ' / ')"
+        Write-Host "and expected: $($Desktop -join ' / ')"
     }
-    Check (($now -join '|') -eq ($script:denies -join '|')) "$After - the Desktop is as it was before Midview"
+    Check (($now -join '|') -eq ($Desktop -join '|')) "$After - the Desktop is as it was before the panel"
 }
 
 # Edge is closed by the Agent's program blocking: it says so in its log.
@@ -198,13 +200,14 @@ function Check-EdgeEnded([string]$What) {
 $failed = $false
 try {
     Step 'Instalar com o instalador e parear um professor de teste'
+    $script:original = @(Get-DesktopDenies)
     Check ($null -ne $setup) "the setup is in $Pacote"
     Check ((Invoke-Setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/TIPO=aluno', "/LOG=$Registros\instalar.log")) -eq 0) 'the setup finishes'
     Check ((Get-ServiceState) -eq 'Running') 'the service runs'
     Check ((Invoke-Tool @('pair', $teacher, $machine)).Code -eq 0) 'the test teacher pairs with the machine'
     Check ((Invoke-Tool @('lab-status', $machine, $teacher)).Code -eq 0) 'the Agent knows the lab panel'
     $script:denies = @(Get-DesktopDenies)
-    Write-Host "The Desktop's own Deny entries before Midview: $($script:denies.Count)"
+    Write-Host "The Desktop's Deny entries before Midview: $($script:original.Count); once installed: $($script:denies.Count)"
     $script:denies | Out-Host
     Check-AllOff 'Before anything'
 
@@ -259,7 +262,7 @@ try {
     $code = (Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', "/LOG=$Registros\desinstalar.log") -Wait -PassThru).ExitCode
     Check ($code -eq 0) 'the uninstaller finishes'
     Check ($null -eq (Get-CimInstance -ClassName Win32_Service -Filter "Name='MidviewAgent'")) 'the service is gone'
-    Check-AllOff 'Desinstalar'
+    Check-AllOff 'Desinstalar' $script:original
 }
 catch {
     $failed = $true
