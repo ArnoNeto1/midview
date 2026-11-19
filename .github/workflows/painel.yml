@@ -66,7 +66,7 @@ jobs:
         if: success()
         shell: cmd
         run: >
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer	ests\Testar-Painel.ps1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File installer\tests\Testar-Painel.ps1
           -Pacote "%RUNNER_TEMP%\Midview-Instalador"
           -Ferramenta "%RUNNER_TEMP%\professor-de-teste\Midview.E2E.exe"
           -Registros "%RUNNER_TEMP%\registros-painel-politica"
