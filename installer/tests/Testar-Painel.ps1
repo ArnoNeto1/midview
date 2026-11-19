@@ -217,7 +217,7 @@ try {
     Step 'Uma funcao de cada vez'
     foreach ($one in $all) {
         $answer = Set-Lab @($one)
-        Check ($answer.Code -eq 0) "only $one: accepted"
+        Check ($answer.Code -eq 0) "only ${one}: accepted"
     }
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) 'after the last one alone (desktop), the taskbar lock is off again'
     Check ((Get-DesktopDenies).Count -gt 0) 'and the Desktop is locked'
