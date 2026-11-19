@@ -15,9 +15,12 @@ public static class UninstallCleanup
         string statePath, string hostsFilePath, IFirewallController firewall, IInputDeviceController devices,
         Action<string[]> runNetsh, string? appBlockStatePath = null,
         IEnumerable<(string Desktop, SecurityIdentifier Student)>? studentDesktops = null,
-        string? pendingUninstallsPath = null, Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null)
+        string? pendingUninstallsPath = null, Func<SecurityIdentifier, RegistryKey?>? openUserSoftware = null,
+        LabPolicyWriter? labPolicies = null, string? labStatePath = null, string? taskbarLockStatePath = null)
     {
         var failures = new List<string>();
+        var students = (studentDesktops ?? Array.Empty<(string, SecurityIdentifier)>()).ToList();
+        studentDesktops = students;
 
         // The students' "Arquivos do professor" and "Entregar ao professor",
         // and a lesson's "Pasta da turma – <turma>", can be deleted and renamed
@@ -122,6 +125,38 @@ public static class UninstallCleanup
                 File.Delete(appBlockStatePath + ".tmp");
             });
         }
+        // "Painel do laboratório": Chrome's and the other browsers' policies,
+        // the wallpaper and the taskbar locks, as "RESET geral" leaves them
+        // (labPolicies); the pin block Midview put in each student's own hive
+        // (taskbarLockStatePath says which, before it goes); and the saved
+        // panel, so a later reinstall brings none of it back. Without this,
+        // a school that removed the Midview kept Chrome locked with nothing
+        // left to unlock it.
+        if (labPolicies is not null)
+        {
+            Step(failures, "desfazer o Painel do laboratório", labPolicies.ResetAll);
+        }
+        if (taskbarLockStatePath is not null && openUserSoftware is not null)
+        {
+            foreach (var (_, student) in students)
+            {
+                var sid = student;
+                Step(failures, "devolver a barra de tarefas ao aluno", () =>
+                    new StudentTaskbarLock(() => sid.Value, _ => openUserSoftware(sid), taskbarLockStatePath, _ => { }).Keep(false));
+            }
+        }
+        foreach (var path in new[] { labStatePath, taskbarLockStatePath })
+        {
+            if (path is not null)
+            {
+                Step(failures, "esquecer o Painel do laboratório", () =>
+                {
+                    File.Delete(path);
+                    File.Delete(path + ".tmp");
+                });
+            }
+        }
+
         // Nor the programs a teacher once asked to remove, from the students
         // who hadn't logged on since (PendingUninstalls).
         if (pendingUninstallsPath is not null)

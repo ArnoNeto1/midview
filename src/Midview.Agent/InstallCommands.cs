@@ -43,12 +43,14 @@ public static class InstallCommands
 
     public static int RunUninstallCleanup()
     {
+        using var labPolicies = LabPolicyWriter.OpenMachine();
         var failures = UninstallCleanup.Run(
             AgentServerWorker.SiteBlockStatePath, AgentServerWorker.HostsFilePath,
             new NetshFirewallController(AgentServerWorker.AgentPort, AgentServerWorker.SessionPort),
             new WindowsInputDeviceController(), args => AgentServerWorker.RunNetsh(args),
             AppBlockCommandHandler.DefaultStatePath, ProtectedStudentFolders.AllStudentDesktops(),
-            PendingUninstalls.DefaultPath, DownloadFolderPolicy.OpenUserSoftware);
+            PendingUninstalls.DefaultPath, DownloadFolderPolicy.OpenUserSoftware,
+            labPolicies, LabConfigCommandHandler.DefaultStatePath, StudentTaskbarLock.StatePath);
         foreach (var failure in failures)
         {
             Console.Error.WriteLine(failure);

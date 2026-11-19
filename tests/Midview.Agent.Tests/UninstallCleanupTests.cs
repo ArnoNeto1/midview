@@ -373,4 +373,46 @@ public class UninstallCleanupTests : IDisposable
 
         public bool EnableInputDevices() => false;
     }
+
+    // "Painel do laboratório": uninstalling leaves the browsers' policies and
+    // the locks as "RESET geral" does, and forgets the saved panel, so Chrome
+    // is not left locked on a school that removed the Midview.
+    [Fact]
+    public void UndoesThePanelAndForgetsIt()
+    {
+        var rootPath = $@"Software\MidviewTests\uninstall-lab-{Guid.NewGuid():N}";
+        var labState = Path.Combine(Path.GetTempPath(), $"midview-lab-{Guid.NewGuid()}.json");
+        var noDownloads = Path.Combine(Path.GetTempPath(), $"midview-sem-downloads-{Guid.NewGuid()}");
+        try
+        {
+            using var writer = new LabPolicyWriter(
+                Microsoft.Win32.Registry.CurrentUser.CreateSubKey(rootPath, writable: true), Path.Combine(noDownloads, "sem-layout.xml"), noDownloads);
+            writer.Apply(new Midview.Protocol.LabConfig(1, true, true, true, true, true, true, true, true));
+            File.WriteAllText(labState, "{}");
+            using (var chrome = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{rootPath}\Policies\Google\Chrome"))
+            {
+                Assert.NotNull(chrome);
+            }
+
+            var failures = UninstallCleanup.Run(_statePath, _hostsPath, new FakeFirewallController(), new FakeInputDeviceController(),
+                _netshCalls.Add, labPolicies: writer, labStatePath: labState);
+
+            Assert.Empty(failures);
+            Assert.Null(Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{rootPath}\Policies\Google\Chrome"));
+            using (var explorer = Microsoft.Win32.Registry.CurrentUser.OpenSubKey($@"{rootPath}\Policies\Microsoft\Windows\Explorer"))
+            {
+                Assert.Null(explorer?.GetValue("NoPinningToTaskbar"));
+            }
+            Assert.False(File.Exists(labState));
+        }
+        finally
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(rootPath, throwOnMissingSubKey: false);
+            File.Delete(labState);
+            if (Directory.Exists(noDownloads))
+            {
+                Directory.Delete(noDownloads, true);
+            }
+        }
+    }
 }
