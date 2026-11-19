@@ -100,11 +100,11 @@ function Get-List([string]$Key) {
     return @($item.GetValueNames() | ForEach-Object { $item.GetValue($_) })
 }
 
-# The Deny entries for this account on the Desktop folder ("Travar a Area de Trabalho").
+# The Deny entries on the Desktop folder ("Travar a Area de Trabalho"),
+# as text: compared with the ones the machine had before Midview.
 function Get-DesktopDenies {
-    @((Get-Acl -LiteralPath $desktop).Access | Where-Object {
-        $_.AccessControlType -eq 'Deny' -and $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq $sid
-    })
+    @((Get-Acl -LiteralPath $desktop).Access | Where-Object { $_.AccessControlType -eq 'Deny' } |
+        ForEach-Object { "$($_.IdentityReference) $($_.FileSystemRights) $($_.InheritanceFlags)" })
 }
 
 function Set-Lab([string[]]$Functions) {
@@ -112,12 +112,15 @@ function Set-Lab([string[]]$Functions) {
     return $result
 }
 
-# The Agent's warnings written since the given line count.
+# The Agent's failures written since the given line count (every line of
+# agent.log is WARN, the normal ones too: these are the ones saying something
+# could not be done).
 function Get-NewWarnings([int]$From) {
     if (-not (Test-Path -LiteralPath $log)) {
         return @()
     }
-    @(Get-Content -LiteralPath $log | Select-Object -Skip $From | Where-Object { $_ -match ' WARN ' })
+    @(Get-Content -LiteralPath $log | Select-Object -Skip $From |
+        Where-Object { $_ -match "Couldn't|could not|failed|Failed|exception|Exception|denied|Denied" })
 }
 
 function Get-LogLength {
@@ -145,7 +148,7 @@ function Check-AllOn {
     Check ($null -ne (Get-Value "$chrome\ExtensionSettings" 'cfhdojbkjhnklbpkdaibdccddilifddb')) 'Passo 1: its settings are there'
     Check ((Get-Value $explorer 'NoPinningToTaskbar') -eq 1) 'Travar a barra de tarefas: the machine-wide pin block'
     Check ((Get-Value $studentExplorer 'NoPinningToTaskbar') -eq 1) "Travar a barra de tarefas: the pin block in the student's own hive"
-    Check ((Get-DesktopDenies).Count -gt 0) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
+    Check ((Get-DesktopDenies).Count -gt $script:denies.Count) 'Travar a Area de Trabalho: the Desktop denies creating and deleting'
 }
 
 function Check-AllOff([string]$After) {
@@ -164,7 +167,7 @@ function Check-AllOff([string]$After) {
     Check ($null -eq (Get-Value $firefox 'DownloadDirectory')) "$After - Firefox downloads are free"
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) "$After - the machine-wide pin block is gone"
     Check ($null -eq (Get-Value $studentExplorer 'NoPinningToTaskbar')) "$After - the student's pin block is gone"
-    Check ((Get-DesktopDenies).Count -eq 0) "$After - the Desktop is free"
+    Check (((Get-DesktopDenies) -join '|') -eq ($script:denies -join '|')) "$After - the Desktop is as it was before Midview"
 }
 
 # Edge is closed by the Agent's program blocking: it says so in its log.
@@ -192,6 +195,9 @@ try {
     Check ((Get-ServiceState) -eq 'Running') 'the service runs'
     Check ((Invoke-Tool @('pair', $teacher, $machine)).Code -eq 0) 'the test teacher pairs with the machine'
     Check ((Invoke-Tool @('lab-status', $machine, $teacher)).Code -eq 0) 'the Agent knows the lab panel'
+    $script:denies = @(Get-DesktopDenies)
+    Write-Host "The Desktop's own Deny entries before Midview: $($script:denies.Count)"
+    $script:denies | Out-Host
     Check-AllOff 'Before anything'
 
     Step 'Ativar tudo de uma vez'
@@ -205,7 +211,7 @@ try {
     Check-EdgeEnded 'Passo 4: Edge is closed when the student opens it'
     $warnings = Get-NewWarnings $start
     $warnings | Out-Host
-    Check ($warnings.Count -eq 0) 'the Agent wrote no warning while applying'
+    Check ($warnings.Count -eq 0) 'the Agent reported no failure while applying'
 
     Step 'Continua valendo depois de reiniciar o servico'
     Restart-Service -Name 'MidviewAgent'
@@ -220,7 +226,7 @@ try {
         Check ($answer.Code -eq 0) "only ${one}: accepted"
     }
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) 'after the last one alone (desktop), the taskbar lock is off again'
-    Check ((Get-DesktopDenies).Count -gt 0) 'and the Desktop is locked'
+    Check ((Get-DesktopDenies).Count -gt $script:denies.Count) 'and the Desktop is locked'
 
     Step 'Desativar tudo'
     $start = Get-LogLength
@@ -228,7 +234,7 @@ try {
     Check-AllOff 'Desativar tudo'
     $warnings = Get-NewWarnings $start
     $warnings | Out-Host
-    Check ($warnings.Count -eq 0) 'the Agent wrote no warning while removing'
+    Check ($warnings.Count -eq 0) 'the Agent reported no failure while removing'
 
     Step 'RESET geral'
     Check ((Set-Lab $all).Code -eq 0) 'everything on again'
