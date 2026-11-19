@@ -170,7 +170,12 @@ function Check-AllOff([string]$After) {
     Check ($null -eq (Get-Value $firefox 'DownloadDirectory')) "$After - Firefox downloads are free"
     Check ($null -eq (Get-Value $explorer 'NoPinningToTaskbar')) "$After - the machine-wide pin block is gone"
     Check ($null -eq (Get-Value $studentExplorer 'NoPinningToTaskbar')) "$After - the student's pin block is gone"
-    Check (((Get-DesktopDenies) -join '|') -eq ($script:denies -join '|')) "$After - the Desktop is as it was before Midview"
+    $now = @(Get-DesktopDenies)
+    if (($now -join '|') -ne ($script:denies -join '|')) {
+        Write-Host "Desktop Deny entries now: $($now -join ' / ')"
+        Write-Host "and before Midview: $($script:denies -join ' / ')"
+    }
+    Check (($now -join '|') -eq ($script:denies -join '|')) "$After - the Desktop is as it was before Midview"
 }
 
 # Edge is closed by the Agent's program blocking: it says so in its log.

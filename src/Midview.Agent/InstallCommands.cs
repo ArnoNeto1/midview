@@ -43,6 +43,8 @@ public static class InstallCommands
 
     public static int RunUninstallCleanup()
     {
+        // So the Desktop of an administrator who is also the locked student can be given back (RestorePrivilege).
+        RestorePrivilege.TryEnable();
         using var labPolicies = LabPolicyWriter.OpenMachine();
         var failures = UninstallCleanup.Run(
             AgentServerWorker.SiteBlockStatePath, AgentServerWorker.HostsFilePath,
