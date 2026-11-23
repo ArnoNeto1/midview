@@ -152,6 +152,22 @@ public class DeviceRoomSectionTests
     }
 
     // "Depuração USB" says the page's kind on its card and in its tooltip.
+    // Before pressing, the teacher reads that the apps someone installed go
+    // and the "Instalar programa" ones stay.
+    [Theory]
+    [InlineData(AndroidDeviceKind.Phone, "celulares")]
+    [InlineData(AndroidDeviceKind.Tablet, "tablets")]
+    public void The_optimize_card_says_installed_apps_go_and_the_teachers_stay(AndroidDeviceKind kind, string words)
+    {
+        var line = DeviceRoomText.Card(DeviceRoomAction.Optimize, kind).Line;
+        Assert.Contains("os que alguém instalou", line);
+        Assert.Contains("\"Instalar programa\" ficam", line);
+        var tip = DeviceRoomText.ToolTip(DeviceRoomAction.Optimize, kind);
+        Assert.Contains($"Tira dos {words} os apps que a turma não usa", tip);
+        Assert.Contains("alguém instalou depois, pela Play Store ou por fora", tip);
+        Assert.Contains("ficam os que você instalou pelo \"Instalar programa\" do Midview", tip);
+    }
+
     [Fact]
     public void The_debugging_card_speaks_of_the_pages_kind()
     {

@@ -13,14 +13,17 @@ public static class PhoneOptimizeText
 
     // One line per phone; null report: an older agent. One that sends no
     // uninstalled apps (before 0.0.74) only hides; one that sends no home
-    // screen (or a state this Master does not know) says nothing about it.
+    // screen (or a state this Master does not know) says nothing about it;
+    // one that sends no apps someone installed (before it took them off)
+    // counts its uninstalled apps alone.
     public static string Line(PhoneOptimizeReport? report)
     {
         if (report is null)
         {
             return OldAgent;
         }
-        var line = $"{Apps(report.Uninstalled.Count, report.Hidden.Count, report.Failed.Count, report.PendingCount)} · {Dns(report.Dns)}";
+        var apps = Apps(report.Uninstalled.Count, report.Hidden.Count, report.Failed.Count, report.PendingCount, report.UserInstalled.Count);
+        var line = $"{apps} · {Dns(report.Dns)}";
         return Home(report.Home) is { } home ? $"{line} · {home}" : line;
     }
 
@@ -58,13 +61,18 @@ public static class PhoneOptimizeText
 
     // "28 apps desinstalados · 6 escondidos", and those Android refused
     // both ways (failed); pending: still leaving the phone in the background,
-    // "13 apps desinstalados (mais 22 saindo no celular) · 21 escondidos".
-    public static string Apps(int uninstalled, int hidden, int failed, int pending = 0)
+    // "13 apps desinstalados (mais 22 saindo no celular) · 21 escondidos";
+    // userInstalled: how many of the uninstalled someone had installed (the
+    // Play Store's, a downloaded APK's), "30 apps desinstalados (2 deles
+    // instalados por alguém) · 6 escondidos", so the teacher sees that what a
+    // student put on the device went.
+    public static string Apps(int uninstalled, int hidden, int failed, int pending = 0, int userInstalled = 0)
     {
         if (pending > 0)
         {
-            var removed = uninstalled == 0 ? "nenhum app desinstalado ainda" : Uninstalled(uninstalled);
-            var leaving = $"{removed} (mais {pending} saindo no celular)";
+            var leaving = uninstalled == 0
+                ? $"nenhum app desinstalado ainda (mais {pending} saindo no celular)"
+                : Uninstalled(uninstalled, userInstalled, pending);
             var withHidden = hidden switch
             {
                 0 => leaving,
@@ -80,9 +88,9 @@ public static class PhoneOptimizeText
             (0, 0, _) => "nenhum app desinstalado nem escondido",
             (0, 1, _) => "1 app escondido",
             (0, _, _) => $"{hidden} apps escondidos",
-            (_, 0, _) => Uninstalled(uninstalled),
-            (_, 1, _) => $"{Uninstalled(uninstalled)} · 1 escondido",
-            _ => $"{Uninstalled(uninstalled)} · {hidden} escondidos",
+            (_, 0, _) => Uninstalled(uninstalled, userInstalled),
+            (_, 1, _) => $"{Uninstalled(uninstalled, userInstalled)} · 1 escondido",
+            _ => $"{Uninstalled(uninstalled, userInstalled)} · {hidden} escondidos",
         };
         return Refused(apps, failed);
     }
@@ -94,7 +102,26 @@ public static class PhoneOptimizeText
         _ => $"{apps} ({failed} não puderam ser removidos)",
     };
 
-    private static string Uninstalled(int count) => count == 1 ? "1 app desinstalado" : $"{count} apps desinstalados";
+    // "13 apps desinstalados (3 deles instalados por alguém; mais 22 saindo no celular)".
+    private static string Uninstalled(int count, int userInstalled, int pending = 0)
+    {
+        var apps = count == 1 ? "1 app desinstalado" : $"{count} apps desinstalados";
+        var notes = new List<string>();
+        if (userInstalled > 0)
+        {
+            notes.Add((count, userInstalled) switch
+            {
+                (1, _) => "instalado por alguém",
+                (_, 1) => "1 deles instalado por alguém",
+                _ => $"{userInstalled} deles instalados por alguém",
+            });
+        }
+        if (pending > 0)
+        {
+            notes.Add($"mais {pending} saindo no celular");
+        }
+        return notes.Count == 0 ? apps : $"{apps} ({string.Join("; ", notes)})";
+    }
 
     public static string Dns(string state) => state switch
     {

@@ -7,7 +7,8 @@ using Midview.Protocol;
 namespace Midview.Master;
 
 // "Otimizar" (CELULARES): every phone hides its ad apps, removes the apps the
-// class does not use, tries the ad-free DNS and arranges its home screen, all
+// class does not use and those someone installed (the teacher's "Instalar
+// programa" ones stay), tries the ad-free DNS and arranges its home screen, all
 // at once, as soon as the window opens; each one's line says how it went
 // (PhoneOptimizeText). Running it again changes nothing that is already done.
 public partial class PhoneOptimizeWindow : MidviewWindow

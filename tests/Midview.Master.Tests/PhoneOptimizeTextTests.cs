@@ -4,7 +4,8 @@ using Xunit;
 
 public class PhoneOptimizeTextTests
 {
-    private static PhoneOptimizeReport Report(int hidden, string dns, int failed = 0, int uninstalled = 0, int pending = 0, string? home = null) => new(
+    private static PhoneOptimizeReport Report(
+        int hidden, string dns, int failed = 0, int uninstalled = 0, int pending = 0, string? home = null, int userInstalled = 0) => new(
         DateTimeOffset.UnixEpoch,
         Enumerable.Range(0, hidden).Select(i => $"com.anuncio.{i}").ToList(),
         Enumerable.Range(0, failed).Select(i => $"com.falhou.{i}").ToList(),
@@ -13,6 +14,7 @@ public class PhoneOptimizeTextTests
         Uninstalled = Enumerable.Range(0, uninstalled).Select(i => $"com.jogo.{i}").ToList(),
         Pending = pending,
         Home = home,
+        UserInstalled = Enumerable.Range(0, userInstalled).Select(i => $"com.jogo.{i}").ToList(),
     };
 
     [Theory]
@@ -131,6 +133,29 @@ public class PhoneOptimizeTextTests
     [InlineData(0, 6, "6 apps escondidos")]
     public void Uninstalled_and_hidden_are_counted(int uninstalled, int hidden, string apps) =>
         Assert.Equal($"{apps} · DNS sem anúncios ligado", PhoneOptimizeText.Line(Report(hidden, PhoneDnsStates.On, uninstalled: uninstalled)));
+
+    // The apps someone installed are among the uninstalled, said apart.
+    [Theory]
+    [InlineData(1, 1, 0, 0, "1 app desinstalado (instalado por alguém)")]
+    [InlineData(5, 1, 0, 0, "5 apps desinstalados (1 deles instalado por alguém)")]
+    [InlineData(30, 2, 6, 0, "30 apps desinstalados (2 deles instalados por alguém) · 6 escondidos")]
+    [InlineData(13, 3, 1, 22, "13 apps desinstalados (3 deles instalados por alguém; mais 22 saindo no celular) · 1 escondido")]
+    [InlineData(0, 0, 21, 22, "nenhum app desinstalado ainda (mais 22 saindo no celular) · 21 escondidos")]
+    [InlineData(28, 0, 6, 0, "28 apps desinstalados · 6 escondidos")]
+    public void The_apps_someone_installed_are_counted(int uninstalled, int userInstalled, int hidden, int pending, string apps) =>
+        Assert.Equal($"{apps} · DNS sem anúncios ligado",
+                     PhoneOptimizeText.Line(Report(hidden, PhoneDnsStates.On, uninstalled: uninstalled, pending: pending, userInstalled: userInstalled)));
+
+    // An agent before it took them off sends no "userInstalled".
+    [Fact]
+    public void An_agent_that_sends_no_apps_someone_installed_counts_the_uninstalled_alone()
+    {
+        Assert.True(PhoneOptimizeReport.TryDecode(
+            System.Text.Encoding.UTF8.GetBytes(
+                "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"uninstalled\":[\"a.b\",\"c.d\"]}"),
+            out var report));
+        Assert.Equal("2 apps desinstalados · DNS sem anúncios ligado", PhoneOptimizeText.Line(report));
+    }
 
     [Fact]
     public void No_app_to_remove() =>

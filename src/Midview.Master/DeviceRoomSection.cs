@@ -59,6 +59,12 @@ internal static class DeviceRoomText
     public const string WipeOneOnly =
         "Só para um aparelho da escola de cada vez, ligado agora e com o assistente Preparar pronto.";
 
+    // The teacher reads, before pressing, that the apps someone installed
+    // go too (the school wants every device as freshly optimized) and that
+    // the teacher's own installs stay.
+    public const string OptimizeLine =
+        "Tira apps que a turma não usa e os que alguém instalou (os do \"Instalar programa\" ficam), arruma a tela inicial e liga o DNS sem anúncios.";
+
     public static string FindLine(AndroidDeviceKind kind) => $"Toca alto para achar um {DeviceSetupText.Word(kind)} perdido.";
 
     public const string FindButton = "Tocar...";
@@ -69,7 +75,7 @@ internal static class DeviceRoomText
     // Each card: its title, its line and its button.
     public static (string Title, string Line, string Button) Card(DeviceRoomAction action, AndroidDeviceKind kind) => action switch
     {
-        DeviceRoomAction.Optimize => ("Otimizar", "Tira apps que a turma não usa, arruma a tela inicial e liga o DNS sem anúncios.", "Otimizar..."),
+        DeviceRoomAction.Optimize => ("Otimizar", OptimizeLine, "Otimizar..."),
         DeviceRoomAction.Pin => ("Senha (PIN)", "PIN de 4 números que o aluno não troca.", "Definir PIN..."),
         DeviceRoomAction.Network => ("Wi-Fi e modo avião", "Travados. Libere por um tempo para trocar de rede.", "Liberar..."),
         DeviceRoomAction.Accounts => (
@@ -99,8 +105,9 @@ internal static class DeviceRoomText
         var line = action switch
         {
             DeviceRoomAction.Optimize =>
-                $"Tira dos {words} os apps que a turma não usa (os mesmos da preparação pelo cabo), arruma a tela inicial do Android " +
-                "(com a tela acesa) e liga o DNS sem anúncios.",
+                $"Tira dos {words} os apps que a turma não usa (os mesmos da preparação pelo cabo) e os que alguém instalou depois, " +
+                "pela Play Store ou por fora; ficam os que você instalou pelo \"Instalar programa\" do Midview. Arruma a tela inicial " +
+                "do Android (com a tela acesa) e liga o DNS sem anúncios.",
             DeviceRoomAction.Pin => $"Põe ou tira o PIN de 4 números da tela de bloqueio dos {words}; o aluno não consegue trocá-lo.",
             DeviceRoomAction.Network => $"Libera por alguns minutos o Wi-Fi e o modo avião, que ficam travados nos {words}, ou trava de novo.",
             DeviceRoomAction.Accounts =>
