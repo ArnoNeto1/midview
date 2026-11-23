@@ -8,11 +8,19 @@ public class PhoneOptimizeReportTests
     private const string FullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
         + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
-        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}";
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\","
+        + "\"userInstalled\":[\"com.zhiliaoapp.musically\"]}";
 
     private const string EmptyJson =
         "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\","
-        + "\"uninstalled\":[],\"pending\":0,\"home\":null}";
+        + "\"uninstalled\":[],\"pending\":0,\"home\":null,\"userInstalled\":[]}";
+
+    // What an agent sends before it uninstalled the apps someone installed:
+    // "home" but no "userInstalled".
+    private const string NoUserInstalledJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"],"
+        + "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\","
+        + "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}";
 
     // What an agent sends before the home screen was arranged over the
     // network: "pending" but no "home".
@@ -56,6 +64,7 @@ public class PhoneOptimizeReportTests
         Uninstalled = new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" },
         Pending = 22,
         Home = PhoneHomeStates.Arranged,
+        UserInstalled = new[] { "com.zhiliaoapp.musically" },
     };
 
     [Fact]
@@ -78,6 +87,7 @@ public class PhoneOptimizeReportTests
         Assert.Equal(new[] { "com.king.candycrushsaga", "com.zhiliaoapp.musically" }, full.Uninstalled);
         Assert.Equal(22, full.PendingCount);
         Assert.Equal(PhoneHomeStates.Arranged, full.Home);
+        Assert.Equal(new[] { "com.zhiliaoapp.musically" }, full.UserInstalled);
 
         Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(EmptyJson), out var empty));
         Assert.Null(empty.OptimizedAt);
@@ -87,6 +97,18 @@ public class PhoneOptimizeReportTests
         Assert.Empty(empty.Uninstalled);
         Assert.Equal(0, empty.PendingCount);
         Assert.Null(empty.Home);
+        Assert.Empty(empty.UserInstalled);
+    }
+
+    [Theory]
+    [InlineData(NoUserInstalledJson)]
+    [InlineData(OlderJson)]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":null}")]
+    public void TryDecode_AReportWithoutUserInstalled_HasNone(string json)
+    {
+        Assert.True(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out var report));
+        Assert.NotNull(report.UserInstalled);
+        Assert.Empty(report.UserInstalled);
     }
 
     [Theory]
@@ -158,6 +180,9 @@ public class PhoneOptimizeReportTests
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":1}")]
     [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":[\"arranged\"]}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":[1]}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":[null]}")]
+    [InlineData("{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":\"x\"}")]
     public void TryDecode_RefusesBadJson(string json) =>
         Assert.False(PhoneOptimizeReport.TryDecode(Encoding.UTF8.GetBytes(json), out _));
 

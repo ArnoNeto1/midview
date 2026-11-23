@@ -11,49 +11,15 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-// What the commands port asks of "Otimizar" (Optimizer).
-interface PhoneOptimizer {
-    // "Otimizar" (OptimizePhone): runs now, answered with the report.
-    fun run(): PhoneOptimizeReport
-
-    // A trusted teacher sent a command: the first optimization, or the DNS
-    // tried again, in the background when due.
-    fun teacherSeen()
-}
-
-// What the optimizer needs to know about the phone's apps (InstalledApps).
-interface BloatCatalog {
-    // On the phone for this user, hidden or not (an app removed for the
-    // user is not).
-    fun isPresent(pkg: String): Boolean
-
-    // Never hidden on this phone (BloatList.neverHide).
-    fun neverHide(): Set<String>
-
-    // A system app or an update of one, which a Device Owner cannot
-    // uninstall (only hide); true when it cannot be told.
-    fun cameWithPhone(pkg: String): Boolean
-}
-
-// The Device Owner's silent uninstall (SilentUninstaller), for UnusedApps.
-fun interface AppRemover {
-    // Waits at most waitMillis for Android: null once uninstalled, NO_ANSWER
-    // when Android said nothing in time, otherwise why not.
-    fun uninstall(pkg: String, waitMillis: Long): String?
-
-    companion object {
-        const val NO_ANSWER = "o Android não respondeu sobre a desinstalação"
-    }
-}
-
 // "Otimizar" on the school phone: hides the ad and bloat apps it has
 // (BloatList; hidden apps are gone from the home screen and do not run, and
 // stay so after a restart), turns the ad-free DNS on (AdblockDns) and
 // uninstalls the apps the school does not use (UnusedApps, and the cable's
 // "Midview otimizado" lists for the device's kind, CableApps: those of the
 // system, which a Device Owner cannot uninstall, are hidden instead, and so
-// is one Android refuses to uninstall), and, at the end of a teacher's
-// "Otimizar" only, arranges the home screen (HomeStep), keeping the report for the teacher
+// is one Android refuses to uninstall), and, in a teacher's "Otimizar" only,
+// uninstalls the apps someone installed since (InstalledAppsSweep) and at the
+// end arranges the home screen (HomeStep), keeping the report for the teacher
 // (OptimizeStore), which counts every app it ever uninstalled that is still
 // gone. Uninstalling is slow (a second or more each), so the teacher waits
 // for it at most until UNINSTALL_WITHIN after asking (the Master waits 90 s):
@@ -96,36 +62,44 @@ class Optimizer(
     // Prepared as a tablet by cable (CableSetup.isTablet): which of the
     // cable's lists (CableApps) the device's apps are checked against.
     private val tablet: () -> Boolean = { false },
+    // The device's installed apps, for the teacher's "Otimizar" to uninstall
+    // those someone installed (InstalledAppsSweep); null: none ever is.
+    deviceApps: DeviceApps? = null,
     // The home screen, arranged at the end of a teacher's "Otimizar"
     // (HomeStep), on homeBackground; null: never arranged.
     homeArranger: HomeArranger? = null,
     homeBackground: (Runnable) -> Unit = { Thread(it, "Midview home screen").apply { isDaemon = true }.start() },
 ) : PhoneOptimizer {
     private val lock = ReentrantLock()
+    private val sweep = InstalledAppsSweep(deviceApps, catalog, log)
     private val home = HomeStep(homeArranger, lock, store, gw::isDeviceOwner, ticker, homeBackground, log)
     private val busy = AtomicBoolean(false)
     private val removing = AtomicBoolean(false)
+    private val sweepLater = AtomicBoolean(false)
     private val runs = AtomicLong()
     private val dnsSteps = AtomicLong()
 
-    // The teacher's "Otimizar": the apps and the DNS, then the home screen.
+    // The teacher's "Otimizar": the apps (those someone installed too) and
+    // the DNS, then the home screen.
     override fun run(): PhoneOptimizeReport {
         val asked = ticker()
-        val report = tidy(asked)
+        val report = tidy(asked, sweepApps = true)
         return home.arrange(asked) ?: report
     }
 
-    // The apps and the DNS, without the home screen.
-    private fun tidy(asked: Long = ticker()): PhoneOptimizeReport {
+    // The apps and the DNS, without the home screen; sweepApps: the apps
+    // someone installed go too (the teacher's "Otimizar" only).
+    private fun tidy(asked: Long = ticker(), sweepApps: Boolean = false): PhoneOptimizeReport {
         val askedRuns = runs.get()
         val askedDns = dnsSteps.get()
         lock.withLock {
             // One ended while this waited (the first one, in the background):
-            // its report is as new as another run's would be.
-            if (runs.get() != askedRuns) return store.current.report
+            // its report is as new as another run's would be, unless this one
+            // also sweeps, which that one never did.
+            if (!sweepApps && runs.get() != askedRuns) return store.current.report
             // A DNS try ended while this waited: the apps are seen to again,
             // the DNS's answer is reused.
-            return optimize(reuseDns = dnsSteps.get() != askedDns, asked).also { runs.incrementAndGet() }
+            return optimize(reuseDns = dnsSteps.get() != askedDns, asked, sweepApps).also { runs.incrementAndGet() }
         }
     }
 
@@ -244,22 +218,25 @@ class Optimizer(
         return PhoneDnsStates.OFF_BY_TEACHER
     }
 
-    private fun optimize(reuseDns: Boolean, asked: Long): PhoneOptimizeReport {
+    private fun optimize(reuseDns: Boolean, asked: Long, sweepApps: Boolean): PhoneOptimizeReport {
         val now = clock()
         val held = store.current
         var left = emptyList<String>()
         val next = if (gw.isDeviceOwner()) {
             showAgain(held.report.hidden)
             val plan = plan()
+            val swept = if (sweepApps) sweep.targets(plan.hide + plan.uninstall) else emptyList()
             val (hidden, failed) = hideApps(plan.hide)
             val (dnsState, attempt) = if (reuseDns) held.report.dns to held.lastDnsAttempt else dnsStep() to clock()
-            val removed = removeApps(plan.uninstall, until = asked + UNINSTALL_WITHIN_NANOS)
+            // The apps someone installed after the listed ones, in the same time.
+            val removed = removeApps(plan.uninstall + swept, until = asked + UNINSTALL_WITHIN_NANOS)
             left = removed.left
             val uninstalled = (held.report.uninstalled.filter(::isGone) + removed.uninstalled).distinct()
+            val userInstalled = (held.report.userInstalled.filter(::isGone) + removed.uninstalled.filter { it in swept }).distinct()
             OptimizeState(
                 PhoneOptimizeReport(
                     now, (hidden + removed.hidden).distinct(), failed + removed.failed, dnsState, AdblockDns.HOST,
-                    uninstalled, pending = left.size, home = held.report.home,
+                    uninstalled, pending = left.size, home = held.report.home, userInstalled = userInstalled,
                 ),
                 lastDnsAttempt = attempt,
             )
@@ -274,11 +251,12 @@ class Optimizer(
         store.save(next)
         val report = next.report
         log(
-            "Optimized: ${report.uninstalled.size} app(s) uninstalled ${report.uninstalled}, ${report.hidden.size} hidden " +
+            "Optimized: ${report.uninstalled.size} app(s) uninstalled ${report.uninstalled} (installed by someone: " +
+                "${report.userInstalled}), ${report.hidden.size} hidden " +
                 "${report.hidden}, refused ${report.failed}, ${left.size} left for later $left, DNS ${report.dns}.",
             null,
         )
-        if (left.isNotEmpty()) removeLater()
+        if (left.isNotEmpty()) removeLater(sweepApps)
         // As kept: pending is 0 again if the background could not start.
         // (The background waits for this run's lock, so it changed nothing
         // else yet.)
@@ -397,20 +375,26 @@ class Optimizer(
     // The apps a "Otimizar" left uninstalled in the background, one at a
     // time, each added to the report kept (the next "Otimizar" sends it).
     // The lock is held for one app at a time, so a teacher's "Otimizar"
-    // waits for one uninstall at most (APP_WAIT).
-    private fun removeLater() {
+    // waits for one uninstall at most (APP_WAIT). sweepApps: those someone
+    // installed too, as the teacher's "Otimizar" that left them; asked while
+    // the first run's background (which leaves them) works, it goes on to
+    // them once that is done.
+    private fun removeLater(sweepApps: Boolean) {
+        if (sweepApps) sweepLater.set(true)
         if (!removing.compareAndSet(false, true)) return
         try {
             background(
                 Runnable {
                     try {
-                        val target = lock.withLock { if (gw.isDeviceOwner()) plan().uninstall else emptyList() }
-                        for ((done, pkg) in target.withIndex()) {
-                            lock.withLock {
-                                val removal = if (isGone(pkg)) Removal() else removeApps(listOf(pkg), until = null)
-                                keep(removal, pending = target.size - done - 1)
+                        do {
+                            val (target, swept) = lock.withLock { laterTargets(sweepLater.getAndSet(false)) }
+                            for ((done, pkg) in target.withIndex()) {
+                                lock.withLock {
+                                    val removal = if (isGone(pkg)) Removal() else removeApps(listOf(pkg), until = null)
+                                    keep(removal, pending = target.size - done - 1, swept)
+                                }
                             }
-                        }
+                        } while (sweepLater.get())
                     } catch (e: Exception) {
                         log("The apps left could not be uninstalled", e)
                     } finally {
@@ -420,10 +404,19 @@ class Optimizer(
                 },
             )
         } catch (e: Exception) {
+            sweepLater.set(false)
             noneLeft()
             removing.set(false)
             log("The apps left could not be uninstalled", e)
         }
+    }
+
+    // The apps to uninstall in the background, and which of them someone installed.
+    private fun laterTargets(sweepApps: Boolean): Pair<List<String>, Set<String>> {
+        if (!gw.isDeviceOwner()) return emptyList<String>() to emptySet()
+        val plan = plan()
+        val swept = if (sweepApps) sweep.targets(plan.hide + plan.uninstall) else emptyList()
+        return plan.uninstall + swept to swept.toSet()
     }
 
     // Nothing is being uninstalled in the background any more.
@@ -439,8 +432,8 @@ class Optimizer(
     }
 
     // One app done in the background (or found gone already); pending: how
-    // many are still to go.
-    private fun keep(removal: Removal, pending: Int) {
+    // many are still to go; swept: the apps someone installed.
+    private fun keep(removal: Removal, pending: Int, swept: Set<String>) {
         val held = store.current
         val report = held.report
         val done = (removal.uninstalled + removal.hidden).toSet()
@@ -452,6 +445,7 @@ class Optimizer(
             held.copy(
                 report = report.copy(
                     uninstalled = (report.uninstalled + removal.uninstalled).distinct(),
+                    userInstalled = (report.userInstalled + removal.uninstalled.filter { it in swept }).distinct(),
                     hidden = (report.hidden + removal.hidden).distinct(),
                     failed = (report.failed.filter { it !in done } + removal.failed).distinct(),
                     pending = pending,

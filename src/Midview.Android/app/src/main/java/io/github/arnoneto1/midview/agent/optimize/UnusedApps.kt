@@ -9,9 +9,11 @@ import io.github.arnoneto1.midview.agent.policy.Lockdown
 // (silently); one that came with the phone's system (a system app, or an
 // update of one) cannot be uninstalled by a Device Owner, so it is hidden
 // instead, like BloatList's. A package the phone does not have is skipped.
-// Nothing else is ever removed: this list is a vetted path of its own, apart
-// from the teacher's "Desinstalar programa" (which removes only what the
-// Midview installed), and no app of PROTECTED nor of the phone's never-hidden
+// Nothing else is ever removed by this list: it is a vetted path of its own,
+// apart from the teacher's "Desinstalar programa" (which removes only what the
+// Midview installed) and from the apps someone installed, which the teacher's
+// "Otimizar" also removes (InstalledAppsSweep, which keeps PROTECTED too),
+// and no app of PROTECTED nor of the phone's never-hidden
 // apps (BloatList.neverHide) is ever touched, whatever the list says.
 object UnusedApps {
     val GAMES: List<String> = listOf(

@@ -47,8 +47,11 @@ public static class PhoneHomeStates
 // hidden nor uninstalled, the DNS state (PhoneDnsStates), the DNS server's
 // host name, the packages uninstalled ("uninstalled", since 0.0.74), how
 // many listed apps are still being uninstalled in the background ("pending",
-// since 0.0.75) and how the home screen was left ("home", PhoneHomeStates,
-// the newest). Each is written after the ones before it. A report without
+// since 0.0.75), how the home screen was left ("home", PhoneHomeStates)
+// and, the newest, which of the uninstalled were apps someone installed on
+// the device ("userInstalled": the teacher's "Otimizar" takes those off too;
+// each is in "uninstalled" as well, so an older Master still counts it).
+// Each is written after the ones before it. A report without
 // them (an older agent), or with null, has none (home: not tried); an older
 // Master ignores them. pending is a whole number, never negative. A home
 // state this Master does not know (a newer agent's) is read as it is and
@@ -75,6 +78,9 @@ public sealed record PhoneOptimizeReport(
     [JsonPropertyName("home")]
     public string? Home { get; init; }
 
+    [JsonPropertyName("userInstalled")]
+    public IReadOnlyList<string> UserInstalled { get; init; } = Array.Empty<string>();
+
     private static readonly JsonSerializerOptions Options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.Never };
 
     public byte[] Encode() => JsonSerializer.SerializeToUtf8Bytes(this, Options);
@@ -90,6 +96,7 @@ public sealed record PhoneOptimizeReport(
                 || !PhoneDnsStates.IsKnown(decoded.Dns)
                 || decoded.Hidden.Any(p => p is null) || decoded.Failed.Any(p => p is null)
                 || (decoded.Uninstalled is not null && decoded.Uninstalled.Any(p => p is null))
+                || (decoded.UserInstalled is not null && decoded.UserInstalled.Any(p => p is null))
                 || decoded.Pending < 0)
             {
                 return false;
@@ -97,6 +104,7 @@ public sealed record PhoneOptimizeReport(
             report = decoded with
             {
                 Uninstalled = decoded.Uninstalled ?? Array.Empty<string>(),
+                UserInstalled = decoded.UserInstalled ?? Array.Empty<string>(),
                 Pending = decoded.Pending ?? 0,
             };
             return true;

@@ -241,7 +241,8 @@ class AgentService : Service() {
         val appBlock = AppBlockStore(File(filesDir, APP_BLOCK_FILE), apply = suspender::apply, log = log)
         // "Otimizar": the ad apps hidden, the apps the school does not use
         // uninstalled (or hidden) and the ad-free DNS, run by itself at
-        // the first command of a trusted teacher and repeated by "Otimizar";
+        // the first command of a trusted teacher and repeated by "Otimizar",
+        // which also uninstalls the apps someone installed (InstalledAppsSweep);
         // the DNS is tried again when the internet block is freed, and goes
         // back to automatic if the network stops validating it (DnsWatcher).
         val policyGateway = AndroidDevicePolicyGateway(this)
@@ -270,6 +271,7 @@ class AgentService : Service() {
             remover = SilentUninstaller(this),
             tidiesByItself = { CableSetup(File(filesDir, CableSetup.FILE_NAME)).optimizes() },
             tablet = { CableSetup(File(filesDir, CableSetup.FILE_NAME)).isTablet() },
+            deviceApps = installedApps,
             homeArranger = androidHomeArranger(this, teacherLocked = { screenLock.locked }, log),
         )
         // The site block: Chrome's policy and the internet block, kept the

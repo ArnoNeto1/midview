@@ -42,6 +42,27 @@ class FakeBloatCatalog(
     override fun cameWithPhone(pkg: String) = pkg in system
 }
 
+// The device's installed apps for the sweep: those of apps still in the
+// catalog (an app uninstalled leaves it), and the device admins; failing
+// throws on reading either.
+class FakeDeviceApps(
+    private val catalog: FakeBloatCatalog,
+    var apps: List<DeviceApp> = emptyList(),
+    var admins: Set<String> = emptySet(),
+) : DeviceApps {
+    var failing: RuntimeException? = null
+
+    override fun all(): List<DeviceApp> {
+        failing?.let { throw it }
+        return apps.filter { it.pkg in catalog.present }
+    }
+
+    override fun deviceAdmins(): Set<String> {
+        failing?.let { throw it }
+        return admins
+    }
+}
+
 // The Device Owner's uninstall: an app uninstalled leaves the catalog; one
 // in refuse is refused with its reason, one in noAnswer gets no answer in
 // time, one in throwing throws. before runs ahead of each (a clock moved).

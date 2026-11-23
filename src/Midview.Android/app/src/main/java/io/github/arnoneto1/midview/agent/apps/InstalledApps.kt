@@ -1,5 +1,6 @@
 package io.github.arnoneto1.midview.agent.apps
 
+import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -15,6 +16,8 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import io.github.arnoneto1.midview.agent.optimize.BloatCatalog
 import io.github.arnoneto1.midview.agent.optimize.BloatList
+import io.github.arnoneto1.midview.agent.optimize.DeviceApp
+import io.github.arnoneto1.midview.agent.optimize.DeviceApps
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppPolicy
@@ -28,8 +31,9 @@ import java.util.Locale
 // (with its label and icon, for the teacher's list), what is never suspended
 // and what is suspended now; its browsers (OtherBrowsers); and, for
 // "Otimizar", which listed apps it has, which came with the phone and what
-// is never hidden (Optimizer).
-class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog {
+// is never hidden (Optimizer), and every app installed, with its origin, and
+// the device admins (InstalledAppsSweep).
+class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog, DeviceApps {
     private val app = context.applicationContext
     private val pm = app.packageManager
 
@@ -109,6 +113,19 @@ class InstalledApps(context: Context) : AppCatalog, BrowserCatalog, BloatCatalog
         } catch (_: PackageManager.NameNotFoundException) {
             true
         }
+
+    // Hidden apps too (MATCH_UNINSTALLED_PACKAGES), not one removed for this
+    // user (no FLAG_INSTALLED); the installer as "Desinstalar programa" reads it.
+    @Suppress("DEPRECATION")
+    override fun all(): List<DeviceApp> {
+        val origin = AppOrigin(pm, app.packageName)
+        return pm.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES)
+            .filter { (it.flags and ApplicationInfo.FLAG_INSTALLED) != 0 }
+            .map { DeviceApp(it.packageName, origin.cameWithPhone(it), origin.installer(it.packageName)) }
+    }
+
+    override fun deviceAdmins(): Set<String> =
+        app.getSystemService(DevicePolicyManager::class.java)?.activeAdmins.orEmpty().map { it.packageName }.toSet()
 
     // The phone's own cameras: the system apps that take a picture for
     // another app or open as the camera.

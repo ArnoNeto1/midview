@@ -50,10 +50,13 @@ object PhoneHomeStates {
 // the packages hidden and those neither hidden nor uninstalled, the DNS state,
 // the DNS server's host name, the packages uninstalled ("uninstalled", since
 // 0.0.74), how many listed apps are still being uninstalled in the
-// background ("pending", since 0.0.75) and how the home screen was left
-// ("home", PhoneHomeStates, the newest). Each is written after the ones
-// before it; a report without them, or with null, has none (home: not
-// tried); older Masters ignore them. pending is a whole number, never
+// background ("pending", since 0.0.75), how the home screen was left
+// ("home", PhoneHomeStates) and, the newest, which of the uninstalled were
+// apps someone installed on the device ("userInstalled",
+// InstalledAppsSweep; each one is in "uninstalled" too, so an older Master
+// still counts it). Each is written after the ones before it; a report
+// without them, or with null, has none (home: not tried); older Masters
+// ignore them. pending is a whole number, never
 // negative. A home state this agent does not know (a newer agent's) is read
 // as it is, so the report is not lost for it.
 data class PhoneOptimizeReport(
@@ -65,6 +68,7 @@ data class PhoneOptimizeReport(
     val uninstalled: List<String> = emptyList(),
     val pending: Int = 0,
     val home: String? = null,
+    val userInstalled: List<String> = emptyList(),
 ) {
     // Refuses (IllegalArgumentException) a DNS or home state the protocol does not have.
     fun encode(): ByteArray {
@@ -80,6 +84,7 @@ data class PhoneOptimizeReport(
             "uninstalled" to uninstalled.joinToString(",", "[", "]") { JsonText.string(it) },
             "pending" to pending.toString(),
             "home" to JsonText.string(home),
+            "userInstalled" to userInstalled.joinToString(",", "[", "]") { JsonText.string(it) },
         ).toByteArray(Charsets.UTF_8)
     }
 
@@ -112,7 +117,8 @@ data class PhoneOptimizeReport(
                 is String -> raw
                 else -> return null
             }
-            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost, uninstalled, pending, home)
+            val userInstalled = if (json.isNull("userInstalled")) emptyList() else strings(json, "userInstalled") ?: return null
+            return PhoneOptimizeReport(optimizedAt, hidden, failed, dns, dnsHost, uninstalled, pending, home, userInstalled)
         }
 
         private fun strings(json: JSONObject, name: String): List<String>? {

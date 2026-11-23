@@ -67,7 +67,9 @@ class OptimizeStore(
         // uninstalled in the background any more, so it reads as 0. Nor is
         // a home still being arranged (PhoneHomeStates.WORKING): after a
         // restart it is not, so it reads as not tried; any other home state
-        // is kept ("home=", none in a file from before it).
+        // is kept ("home=", none in a file from before it). The uninstalled
+        // apps someone installed (InstalledAppsSweep) are a "userInstalled="
+        // each, none in a file from before them.
         fun encode(state: OptimizeState): ByteArray {
             val report = state.report
             val home = report.home?.takeIf { it != PhoneHomeStates.WORKING }
@@ -79,7 +81,8 @@ class OptimizeStore(
                 ) + report.hidden.map { "hidden" to it } + report.failed.map { "failed" to it } +
                     report.uninstalled.map { "uninstalled" to it } +
                     listOf("dns" to report.dns, "dnsHost" to report.dnsHost) +
-                    listOfNotNull(home?.let { "home" to it }),
+                    listOfNotNull(home?.let { "home" to it }) +
+                    report.userInstalled.map { "userInstalled" to it },
             )
         }
 
@@ -93,7 +96,7 @@ class OptimizeStore(
             val home = stored.first("home")?.takeIf { PhoneHomeStates.isKnown(it) && it != PhoneHomeStates.WORKING }
             val report = PhoneOptimizeReport(
                 time("optimizedAt"), stored.all("hidden"), stored.all("failed"), dns, stored.first("dnsHost") ?: AdblockDns.HOST,
-                stored.all("uninstalled"), home = home,
+                stored.all("uninstalled"), home = home, userInstalled = stored.all("userInstalled"),
             )
             return OptimizeState(report, time("lastDnsAttempt"))
         }

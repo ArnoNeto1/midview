@@ -13,10 +13,18 @@ class PhoneOptimizeReportTest {
     private val fullJson =
         "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
             "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
-            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}"
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"," +
+            "\"userInstalled\":[\"com.zhiliaoapp.musically\"]}"
     private val emptyJson =
         "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"offInternetBlocked\",\"dnsHost\":\"\"," +
-            "\"uninstalled\":[],\"pending\":0,\"home\":null}"
+            "\"uninstalled\":[],\"pending\":0,\"home\":null,\"userInstalled\":[]}"
+
+    // What an agent sends before it uninstalled the apps someone installed:
+    // "home" but no "userInstalled".
+    private val noUserInstalledJson =
+        "{\"optimizedAt\":\"2026-11-12T15:30:45+00:00\",\"hidden\":[\"com.miui.msa.global\",\"com.miui.analytics\"]," +
+            "\"failed\":[\"com.xiaomi.mipicks\"],\"dns\":\"on\",\"dnsHost\":\"dns.adguard-dns.com\"," +
+            "\"uninstalled\":[\"com.king.candycrushsaga\",\"com.zhiliaoapp.musically\"],\"pending\":22,\"home\":\"arranged\"}"
 
     // What an agent sends before the home screen was arranged over the
     // network: "pending" but no "home".
@@ -41,7 +49,7 @@ class PhoneOptimizeReportTest {
     private val full = PhoneOptimizeReport(
         at, listOf("com.miui.msa.global", "com.miui.analytics"), listOf("com.xiaomi.mipicks"),
         PhoneDnsStates.ON, "dns.adguard-dns.com", listOf("com.king.candycrushsaga", "com.zhiliaoapp.musically"), pending = 22,
-        home = PhoneHomeStates.ARRANGED,
+        home = PhoneHomeStates.ARRANGED, userInstalled = listOf("com.zhiliaoapp.musically"),
     )
     private val empty = PhoneOptimizeReport(null, emptyList(), emptyList(), PhoneDnsStates.OFF_INTERNET_BLOCKED, "")
 
@@ -59,27 +67,34 @@ class PhoneOptimizeReportTest {
 
     @Test
     fun decode_readsAReportWithoutUninstalledAsNone() {
-        val older = full.copy(uninstalled = emptyList(), pending = 0, home = null)
+        val older = full.copy(uninstalled = emptyList(), pending = 0, home = null, userInstalled = emptyList())
         assertEquals(older, PhoneOptimizeReport.decode(olderJson.toByteArray()))
-        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null,\"pending\":null,\"home\":null}"
+        val withNull = olderJson.dropLast(1) + ",\"uninstalled\":null,\"pending\":null,\"home\":null,\"userInstalled\":null}"
         assertEquals(older, PhoneOptimizeReport.decode(withNull.toByteArray()))
     }
 
     @Test
     fun decode_readsAReportWithoutPendingAsNone() {
-        assertEquals(full.copy(pending = 0, home = null), PhoneOptimizeReport.decode(noPendingJson.toByteArray()))
+        assertEquals(full.copy(pending = 0, home = null, userInstalled = emptyList()), PhoneOptimizeReport.decode(noPendingJson.toByteArray()))
+    }
+
+    @Test
+    fun decode_readsAReportWithoutUserInstalledAsNone() {
+        assertEquals(full.copy(userInstalled = emptyList()), PhoneOptimizeReport.decode(noUserInstalledJson.toByteArray()))
+        val withNull = noUserInstalledJson.dropLast(1) + ",\"userInstalled\":null}"
+        assertEquals(full.copy(userInstalled = emptyList()), PhoneOptimizeReport.decode(withNull.toByteArray()))
     }
 
     @Test
     fun decode_readsAReportWithoutHomeAsNotTried() {
-        assertEquals(full.copy(home = null), PhoneOptimizeReport.decode(noHomeJson.toByteArray()))
+        assertEquals(full.copy(home = null, userInstalled = emptyList()), PhoneOptimizeReport.decode(noHomeJson.toByteArray()))
     }
 
     // A newer agent's home state is kept as it came: the report is not lost for it.
     @Test
     fun decode_keepsAHomeStateItDoesNotKnow() {
         val newer = noHomeJson.dropLast(1) + ",\"home\":\"somethingNew\"}"
-        assertEquals(full.copy(home = "somethingNew"), PhoneOptimizeReport.decode(newer.toByteArray()))
+        assertEquals(full.copy(home = "somethingNew", userInstalled = emptyList()), PhoneOptimizeReport.decode(newer.toByteArray()))
     }
 
     @Test
@@ -133,6 +148,8 @@ class PhoneOptimizeReportTest {
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"pending\":true}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":1}",
             "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"home\":[\"arranged\"]}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":[1]}",
+            "{\"optimizedAt\":null,\"hidden\":[],\"failed\":[],\"dns\":\"on\",\"dnsHost\":\"\",\"userInstalled\":\"x\"}",
         )
         for (json in bad) {
             assertNull(json, PhoneOptimizeReport.decode(json.toByteArray()))

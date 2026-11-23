@@ -54,6 +54,13 @@ class OptimizeStoreTest {
         )
     }
 
+    @Test fun theAppsSomeoneInstalledAreKept() {
+        val swept = state.copy(report = state.report.copy(uninstalled = listOf("com.pou3d"), userInstalled = listOf("com.pou3d")))
+        OptimizeStore(file).save(swept)
+        assertTrue(file.readText(Charsets.UTF_8).endsWith("dnsHost=${AdblockDns.HOST}\nuserInstalled=com.pou3d\n"))
+        assertEquals(swept, OptimizeStore(file).current)
+    }
+
     @Test fun theUninstalledAppsAreKept() {
         val withUninstalled = state.copy(report = state.report.copy(uninstalled = listOf("com.king.candycrushsaga", "com.booking")))
         OptimizeStore(file).save(withUninstalled)
