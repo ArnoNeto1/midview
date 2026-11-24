@@ -95,28 +95,32 @@ object FolderWalk {
     // Everything in root removed (Android has no Recycle Bin the student
     // can open): files, and subfolders whole. A linked folder is left where
     // it is (it could point anywhere), and so is a file still on its way in
-    // (".pending-"). How many entries went, and what could not.
-    fun clear(root: File): Pair<Int, List<String>> {
+    // (".pending-"). How many entries went, and what could not. removed: each
+    // file deleted, so Android's index of the storage can forget it too.
+    fun clear(root: File, removed: (File) -> Unit = {}): Pair<Int, List<String>> {
         val problems = mutableListOf<String>()
         val entries = (root.listFiles() ?: return 0 to problems)
             .filter { !it.name.startsWith(".pending-") && !(it.isDirectory && isClassFolder(it.name)) }
             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-        var removed = 0
+        var count = 0
         for (entry in entries) {
             if (Files.isSymbolicLink(entry.toPath())) {
                 problems += "${entry.name} (pasta vinculada)"
                 continue
             }
-            if (deleteTree(entry)) removed++ else problems += entry.name
+            if (deleteTree(entry, removed)) count++ else problems += entry.name
         }
-        return removed to problems
+        return count to problems
     }
 
     // A link inside is removed itself, never what it points to.
-    private fun deleteTree(entry: File): Boolean {
-        if (entry.isDirectory && !Files.isSymbolicLink(entry.toPath())) {
-            entry.listFiles()?.forEach { deleteTree(it) }
+    private fun deleteTree(entry: File, removed: (File) -> Unit): Boolean {
+        val folder = entry.isDirectory && !Files.isSymbolicLink(entry.toPath())
+        if (folder) {
+            entry.listFiles()?.forEach { deleteTree(it, removed) }
         }
-        return entry.delete()
+        val gone = entry.delete()
+        if (gone && !folder) removed(entry)
+        return gone
     }
 }

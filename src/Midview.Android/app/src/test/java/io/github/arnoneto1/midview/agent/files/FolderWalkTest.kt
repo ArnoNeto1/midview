@@ -107,4 +107,22 @@ class FolderWalkTest {
         assertTrue(File(root, "Pasta da turma – 3º A/trabalho.docx").exists())
         assertTrue(File(root, ".midview-turmas/0101/antigo.txt").exists())
     }
+
+    // Each file deleted is named, so Android's index can forget it; folders,
+    // a file on its way in and what was left are not.
+    @Test
+    fun clearingNamesEachFileItDeleted() {
+        val root = temp.newFolder("Apagados")
+        file(root, "a.pdf")
+        file(root, "sub/b.png")
+        file(root, ".pending-1700000000-c.pdf")
+        file(root, "Pasta da turma – 7A/d.txt")
+        val gone = mutableListOf<String>()
+
+        FolderWalk.clear(root) { gone += it.relativeTo(root).path.replace(File.separatorChar, '/') }
+
+        assertEquals(listOf("a.pdf", "sub/b.png"), gone.sorted())
+        assertTrue(File(root, ".pending-1700000000-c.pdf").exists())
+        assertTrue(File(root, "Pasta da turma – 7A/d.txt").exists())
+    }
 }

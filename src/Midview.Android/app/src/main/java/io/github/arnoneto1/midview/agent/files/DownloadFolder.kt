@@ -6,6 +6,7 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -82,8 +83,16 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
     override fun list(maxFiles: Int): List<PhoneFile> =
         if (seesEverything) FolderWalk.list(directory, maxFiles) else ownFiles().take(maxFiles + 1)
 
+    // Read straight from the storage, the files are deleted there too, and
+    // Android's index (MediaStore, which the Files app lists) is told after:
+    // a file deleted only from the storage stays listed, and cannot be opened.
     override fun clear(): Pair<Int, List<String>> {
-        if (seesEverything) return FolderWalk.clear(directory)
+        if (seesEverything) {
+            val gone = mutableListOf<File>()
+            val result = FolderWalk.clear(directory) { gone += it }
+            forget(gone)
+            return result
+        }
         var removed = 0
         val problems = mutableListOf<String>()
         for (file in ownRows()) {
@@ -187,7 +196,7 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
 
     private fun removeOld(name: String): Boolean =
         if (seesEverything) {
-            File(directory, name).let { it.isFile && it.delete() }
+            File(directory, name).let { file -> (file.isFile && file.delete()).also { if (it) forget(listOf(file)) } }
         } else {
             ownRows().firstOrNull { it.path.equals(name, ignoreCase = true) }?.let {
                 try {
@@ -207,6 +216,17 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
     }
 
     private class Row(val uri: Uri, val path: String, val size: Long)
+
+    // Files deleted from the storage, dropped from MediaStore too: a scan
+    // of a path that is gone removes its entry (in the background).
+    private fun forget(files: List<File>) {
+        if (files.isEmpty()) return
+        try {
+            MediaScannerConnection.scanFile(app, files.map { it.absolutePath }.toTypedArray(), null, null)
+        } catch (e: RuntimeException) {
+            // Only the listing is late: Android's own scan catches up.
+        }
+    }
 
     // What MediaStore shows the agent of the folder: its own published files
     // (and, with all-files access, everyone's), the path inside the folder.
