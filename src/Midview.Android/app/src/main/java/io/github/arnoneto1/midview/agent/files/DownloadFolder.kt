@@ -90,7 +90,8 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
         if (seesEverything) {
             val gone = mutableListOf<File>()
             val result = FolderWalk.clear(directory) { gone += it }
-            forget(gone)
+            // And what an older Midview deleted the same way, still listed.
+            forget((gone + staleEntries()).distinctBy { it.absolutePath })
             return result
         }
         var removed = 0
@@ -227,6 +228,30 @@ class DownloadFolder(private val app: Context) : PhoneFolder {
             // Only the listing is late: Android's own scan catches up.
         }
     }
+
+    // MediaStore's entries in the folder whose file is no longer on the
+    // storage (only an agent that sees everything reads them all).
+    @Suppress("DEPRECATION")
+    private fun staleEntries(): List<File> =
+        try {
+            val storage = Environment.getExternalStorageDirectory()
+            resolver.query(
+                MediaStore.Files.getContentUri("external"),
+                arrayOf(MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?", arrayOf("$RELATIVE_PATH%"), null,
+            )?.use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val path = cursor.getString(0) ?: continue
+                        val name = cursor.getString(1) ?: continue
+                        val file = File(storage, path + name)
+                        if (!file.exists()) add(file)
+                    }
+                }
+            } ?: emptyList()
+        } catch (e: RuntimeException) {
+            emptyList()
+        }
 
     // What MediaStore shows the agent of the folder: its own published files
     // (and, with all-files access, everyone's), the path inside the folder.
