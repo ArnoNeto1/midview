@@ -9,13 +9,16 @@ namespace Midview.Master;
 // "Otimizar" (CELULARES): every phone hides its ad apps, removes the apps the
 // class does not use and those someone installed (the teacher's "Instalar
 // programa" ones stay), tries the ad-free DNS and arranges its home screen, all
-// at once, as soon as the window opens; each one's line says how it went
-// (PhoneOptimizeText). Running it again changes nothing that is already done.
+// at once, as soon as the window opens; then it gets the school's admin
+// password, when one is saved (PhoneOptimizeAdmin). Each one's line says how
+// it went (PhoneOptimizeText). Running it again changes nothing that is
+// already done.
 public partial class PhoneOptimizeWindow : MidviewWindow
 {
     private readonly X509Certificate2 _masterCertificate;
     private readonly ObservableCollection<PhoneRow> _rows;
     private bool _running;
+    private byte[]? _adminPayload;
 
     // allPhones: phones is every phone in the classroom list.
     public PhoneOptimizeWindow(IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate)
@@ -40,6 +43,8 @@ public partial class PhoneOptimizeWindow : MidviewWindow
 
         _running = true;
         RunButton.IsEnabled = false;
+        // The school's admin password saved in "Preparar celulares" (its hash), if any.
+        _adminPayload = PhoneDefaultsFile.Load().AdminPassword;
         ProgressTextBlock.Text = _rows.Count == 1 ? "Otimizando o celular..." : $"Otimizando os {_rows.Count} celulares...";
         foreach (var row in _rows)
         {
@@ -79,7 +84,9 @@ public partial class PhoneOptimizeWindow : MidviewWindow
         try
         {
             var report = PhoneOptimizeClient.Optimize(phone, _masterCertificate);
-            var line = PhoneOptimizeText.Line(report);
+            var adminNote = PhoneOptimizeAdmin.Send(
+                report, _adminPayload, payload => PhoneNetworkClient.SetAdminPassword(phone, payload, _masterCertificate));
+            var line = PhoneOptimizeAdmin.Line(PhoneOptimizeText.Line(report), adminNote);
             if (report is null)
             {
                 return (PhoneRowState.Failed, line, false, null);

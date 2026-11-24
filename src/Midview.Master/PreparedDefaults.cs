@@ -2,37 +2,54 @@ namespace Midview.Master;
 
 // The school's defaults (PhoneDefaultsFile) put on a phone or tablet the
 // cable just prepared, once it answers on the network: the picture for its
-// kind, then the PIN. One line says how it went, for the teacher's status
-// bar; nothing when there is nothing to put.
+// kind, then the PIN, then the phones' admin password (its salted hash). One
+// line says how it went, for the teacher's status bar; nothing when there is
+// nothing to put.
 public static class PreparedDefaults
 {
-    // sendWallpaper and sendPin: PhoneWallpaperClient.Send and
-    // PhonePinClient.Send for this device (null from an agent too old for it).
+    // sendWallpaper, sendPin and sendAdminPassword: PhoneWallpaperClient.Send,
+    // PhonePinClient.Send and PhoneNetworkClient.SetAdminPassword for this
+    // device (null from an agent too old for it).
     public static string? Apply(
         string name,
         AndroidDeviceKind kind,
         PhoneDefaultsFile.Defaults defaults,
         Func<PhoneDefaultsFile.Wallpaper, (bool Succeeded, string Detail)?> sendWallpaper,
-        Func<string, (bool Succeeded, string Detail)?> sendPin)
+        Func<string, (bool Succeeded, string Detail)?> sendPin,
+        Func<byte[], (bool Succeeded, string Detail)?>? sendAdminPassword = null)
     {
-        var done = new List<string>();
+        var done = new List<Part>();
         var failed = new List<string>();
         if (defaults.For(kind) is { } wallpaper)
         {
-            Tally("papel de parede", Try(() => sendWallpaper(wallpaper)), done, failed);
+            Tally(Wallpaper, Try(() => sendWallpaper(wallpaper)), done, failed);
         }
         if (defaults.Pin is { } pin)
         {
-            Tally("PIN", Try(() => sendPin(pin)), done, failed);
+            Tally(Pin, Try(() => sendPin(pin)), done, failed);
+        }
+        if (defaults.AdminPassword is { } admin && sendAdminPassword is not null)
+        {
+            Tally(AdminPassword, Try(() => sendAdminPassword(admin)), done, failed);
         }
         if (done.Count == 0 && failed.Count == 0)
         {
             return null;
         }
-        var put = done.Count == 0 ? "" : $"{string.Join(" e ", done)} da escola {(done.Count == 1 ? "posto" : "postos")}";
+        // "posto" with anything masculine among them; "posta" for the password alone.
+        var put = done.Count == 0
+            ? ""
+            : $"{PhoneDefaultsText.List(done.Select(part => part.What).ToList())} da escola " +
+              $"{(done.Count > 1 ? "postos" : done[0].Feminine ? "posta" : "posto")}";
         var notPut = failed.Count == 0 ? "" : $"não deu para pôr {string.Join("; ", failed)}";
         return $"{name}: {put}{(put.Length > 0 && notPut.Length > 0 ? "; " : "")}{notPut}.";
     }
+
+    private sealed record Part(string What, bool Feminine);
+
+    private static readonly Part Wallpaper = new("papel de parede", false);
+    private static readonly Part Pin = new("PIN", false);
+    private static readonly Part AdminPassword = new("senha de administrador", true);
 
     private static (bool Succeeded, string Detail)? Try(Func<(bool Succeeded, string Detail)?> send)
     {
@@ -48,15 +65,15 @@ public static class PreparedDefaults
         }
     }
 
-    private static void Tally(string what, (bool Succeeded, string Detail)? answer, List<string> done, List<string> failed)
+    private static void Tally(Part part, (bool Succeeded, string Detail)? answer, List<Part> done, List<string> failed)
     {
         if (answer is { Succeeded: true })
         {
-            done.Add(what);
+            done.Add(part);
         }
         else
         {
-            failed.Add($"o {what} ({answer?.Detail})");
+            failed.Add($"{(part.Feminine ? "a" : "o")} {part.What} ({answer?.Detail})");
         }
     }
 }

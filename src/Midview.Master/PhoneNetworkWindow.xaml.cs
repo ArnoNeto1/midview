@@ -11,8 +11,9 @@ namespace Midview.Master;
 // Wi-Fi and airplane mode locked; the teacher frees them on every device at
 // once for 10, 30 or 60 minutes ("Liberar"), after which they lock again by
 // themselves, or locks them now ("Travar agora"). Below, the phones' admin
-// password, with which the same is done on the phone itself: only its salted
-// hash is sent, and nothing here keeps the password. Each device's line says
+// password, with which the same (and USB debugging and the accounts) is done
+// on the phone itself: only its salted hash is sent, and nothing here keeps
+// the password ("Preparar celulares" may keep that hash). Each device's line says
 // how it went (PhoneNetworkText).
 public partial class PhoneNetworkWindow : MidviewWindow
 {

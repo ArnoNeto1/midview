@@ -431,9 +431,9 @@ public enum MessageType : byte
     // Master -> Android agent, from a trusted teacher only: the phones' admin
     // password, as a salted PBKDF2 hash (a PhoneAdminPassword payload; empty
     // to remove it). With it typed on the phone ("Ajustes da escola" in the
-    // Midview notification) the Wi-Fi and airplane mode are freed for 10
-    // minutes. The password itself never leaves the Master. Answered as
-    // FreePhoneNetwork.
+    // Midview notification) the Wi-Fi and airplane mode, USB debugging or the
+    // accounts are freed for 10 minutes. The password itself never leaves the
+    // Master. Answered as FreePhoneNetwork.
     SetPhoneAdminPassword = 104,
 
     // Master -> Android agent, from a trusted teacher only: "Papel de parede

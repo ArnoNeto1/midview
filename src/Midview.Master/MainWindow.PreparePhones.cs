@@ -169,8 +169,9 @@ public partial class MainWindow
         }
     }
 
-    // The school's picture and PIN on each device just prepared that answers
-    // now, once; the teacher reads how it went in the status bar.
+    // The school's picture, PIN and admin password (its hash) on each device
+    // just prepared that answers now, once; the teacher reads how it went in
+    // the status bar.
     private void PutDefaultsOnArrivals()
     {
         foreach (var agent in _defaultsPending.Where(IsPhoneOnline).ToList())
@@ -183,7 +184,8 @@ public partial class MainWindow
             _ = Task.Run(() => PreparedDefaults.Apply(
                     device.Name, kind, PhoneDefaultsFile.Load(),
                     wallpaper => PhoneWallpaperClient.Send(device, wallpaper.Screens, wallpaper.Jpeg, certificate),
-                    pin => PhonePinClient.Send(device, pin, certificate)))
+                    pin => PhonePinClient.Send(device, pin, certificate),
+                    admin => PhoneNetworkClient.SetAdminPassword(device, admin, certificate)))
                 .ContinueWith(done =>
                 {
                     if (done.Status == TaskStatus.RanToCompletion && done.Result is { } said)

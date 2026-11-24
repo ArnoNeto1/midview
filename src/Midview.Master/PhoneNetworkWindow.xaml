@@ -31,7 +31,7 @@
                 <StackPanel>
                     <TextBlock Style="{StaticResource CardTitle}" Text="Senha de administrador dos celulares" />
                     <TextBlock Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0,4,0,0"
-                               Text="Com ela, alguém da escola libera o Wi-Fi e o modo avião por 10 minutos no próprio aparelho: na notificação do Midview, toque em &quot;Ajustes da escola&quot;. De 6 a 12 letras ou números, diferente do PIN da tela. A senha não fica guardada neste computador e não vai para os aparelhos (só uma impressão dela): anote-a." />
+                               Text="Com ela, alguém da escola libera por 10 minutos no próprio aparelho, sem internet, o Wi-Fi e o modo avião, a depuração USB ou as contas, ou tira o Midview: na notificação do Midview, toque em &quot;Ajustes da escola&quot;. De 6 a 12 letras ou números, diferente do PIN da tela. A senha não fica guardada neste computador e não vai para os aparelhos (só uma impressão dela): anote-a." />
                     <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                         <TextBlock Text="Senha" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" />
                         <Grid Width="170">

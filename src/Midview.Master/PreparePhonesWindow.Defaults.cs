@@ -15,7 +15,9 @@ namespace Midview.Master;
 // is saved here is the school's default (PhoneDefaultsFile), the same one
 // "Pôr também nos próximos preparados" keeps in "Papel de parede" and
 // "Senha (PIN)": put on each device prepared next as it joins the class.
-// "Pular" saves nothing and is not asked again.
+// The third card, the phones' admin password, is in
+// PreparePhonesWindow.AdminPassword.cs. "Pular" saves nothing and is not
+// asked again.
 public partial class PreparePhonesWindow
 {
     // The picture on the page: the saved one, or one just chosen; null for none.
@@ -57,6 +59,8 @@ public partial class PreparePhonesWindow
         DefaultsPinText.Text = saved.Pin ?? "";
         DefaultsPinBox.Visibility = Visibility.Visible;
         DefaultsPinText.Visibility = Visibility.Collapsed;
+
+        ShowDefaultsAdmin(saved);
 
         Footer(back: true, next: PhoneDefaultsText.Save, other: PhoneDefaultsText.Skip);
     }
@@ -154,9 +158,10 @@ public partial class PreparePhonesWindow
         ShowPage();
     }
 
-    // "Guardar e seguir": the picture for this kind and the PIN (4 digits,
-    // or none) become the school's defaults. False, said on the page, for a
-    // PIN that is not 4 digits or a disk that refused.
+    // "Guardar e seguir": the picture for this kind, the PIN (4 digits, or
+    // none) and the admin password (its hash) become the school's defaults.
+    // False, said on the page, for a PIN that is not 4 digits, an admin
+    // password not complete or not repeated the same, or a disk that refused.
     private bool SaveDefaults()
     {
         if (_defaultsBusy)
@@ -169,11 +174,17 @@ public partial class PreparePhonesWindow
             DefaultsErrorText.Text = "O PIN tem 4 números. Digite os 4 ou deixe em branco para não pôr PIN.";
             return false;
         }
+        if (DefaultsAdminProblem() is { } adminProblem)
+        {
+            DefaultsErrorText.Text = adminProblem;
+            return false;
+        }
         try
         {
             PhoneDefaultsFile.SaveWallpaper(
                 _progress.Kind, _defaultsJpeg is { Length: > 0 } jpeg ? new PhoneDefaultsFile.Wallpaper(DefaultsScreens, jpeg) : null);
             PhoneDefaultsFile.SavePin(pin);
+            SaveDefaultsAdmin();
             PhoneDefaultsFile.MarkAsked(_progress.Kind);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
@@ -188,6 +199,8 @@ public partial class PreparePhonesWindow
     // "Pular": nothing saved, not asked again for this kind.
     private void SkipDefaults()
     {
+        // A password typed and skipped is not kept on the page either.
+        ClearDefaultsAdmin();
         try
         {
             PhoneDefaultsFile.MarkAsked(_progress.Kind);

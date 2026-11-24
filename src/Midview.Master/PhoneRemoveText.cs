@@ -28,7 +28,8 @@ public static class PhoneRemoveText
 
     // Said once, under the choices.
     public const string OnThePhone =
-        "No próprio aparelho também dá: na notificação do Midview, toque em \"Ajustes da escola\" e em \"Tirar o Midview deste celular\" (pede a senha de administrador dos celulares).";
+        "No próprio aparelho também dá: na notificação do Midview, toque em \"Ajustes da escola\" e em \"Tirar o Midview deste celular\" " +
+        "(pede a senha de administrador dos celulares, a mesma que ali libera o Wi-Fi, a depuração USB e as contas).";
 
     public const string LeavesTheRoom = "Os aparelhos em que der certo saem da lista da sala.";
 

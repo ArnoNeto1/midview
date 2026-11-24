@@ -5,7 +5,8 @@ using System.Text;
 namespace Midview.Protocol;
 
 // The phones' admin password ("senha de administrador dos celulares"): typed
-// on a school phone, it frees the Wi-Fi and airplane mode for 10 minutes.
+// on a school phone, it frees the Wi-Fi and airplane mode, USB debugging or
+// the accounts for 10 minutes.
 // The Master never sends the password itself, only a salted hash of it: the
 // payload of MessageType.SetPhoneAdminPassword is a version byte (1), the
 // PBKDF2-HMAC-SHA256 iterations (uint32, big-endian), a 16-byte salt and the

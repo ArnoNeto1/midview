@@ -98,6 +98,54 @@
                             <TextBlock x:Name="DefaultsPinHint" Style="{StaticResource Hint}" FontSize="12" Margin="0,8,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
+                    <!-- The phones' admin password: only its salted hash is saved (PhoneDefaultsFile). -->
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock x:Name="DefaultsAdminTitle" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock x:Name="DefaultsAdminLine" Style="{StaticResource Hint}" FontSize="12.5" Margin="0,4,0,10" TextWrapping="Wrap" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Senha" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <Grid Grid.Row="0" Grid.Column="1" Width="170">
+                                    <PasswordBox x:Name="DefaultsAdminBox" MaxLength="12" FontSize="16" Padding="8,4"
+                                                 AutomationProperties.Name="Senha de administrador"
+                                                 PasswordChanged="OnDefaultsAdminChanged" PreviewTextInput="OnDefaultsAdminTyping"
+                                                 PreviewKeyDown="OnDefaultsAdminKeyDown" />
+                                    <TextBox x:Name="DefaultsAdminText" MaxLength="12" FontSize="16" Padding="8,4" Visibility="Collapsed"
+                                             AutomationProperties.Name="Senha de administrador"
+                                             TextChanged="OnDefaultsAdminChanged" PreviewTextInput="OnDefaultsAdminTyping"
+                                             PreviewKeyDown="OnDefaultsAdminKeyDown" />
+                                </Grid>
+                                <CheckBox x:Name="DefaultsShowAdmin" Grid.Row="0" Grid.Column="2" Content="Mostrar" VerticalAlignment="Center"
+                                          Margin="12,0,0,0" Click="OnDefaultsShowAdminClicked" />
+                                <TextBlock x:Name="DefaultsAdminRepeatLabel" Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Margin="0,8,10,0" />
+                                <Grid Grid.Row="1" Grid.Column="1" Width="170" Margin="0,8,0,0">
+                                    <PasswordBox x:Name="DefaultsAdminRepeatBox" MaxLength="12" FontSize="16" Padding="8,4"
+                                                 AutomationProperties.Name="Repita a senha de administrador"
+                                                 PasswordChanged="OnDefaultsAdminChanged" PreviewTextInput="OnDefaultsAdminTyping"
+                                                 PreviewKeyDown="OnDefaultsAdminKeyDown" />
+                                    <TextBox x:Name="DefaultsAdminRepeatText" MaxLength="12" FontSize="16" Padding="8,4" Visibility="Collapsed"
+                                             AutomationProperties.Name="Repita a senha de administrador"
+                                             TextChanged="OnDefaultsAdminChanged" PreviewTextInput="OnDefaultsAdminTyping"
+                                             PreviewKeyDown="OnDefaultsAdminKeyDown" />
+                                </Grid>
+                            </Grid>
+                            <DockPanel Margin="0,8,0,0">
+                                <TextBlock x:Name="DefaultsAdminRemoveLink" DockPanel.Dock="Right" FontSize="12" Margin="12,0,0,0">
+                                    <Hyperlink Click="OnDefaultsAdminRemoveClicked"><Run x:Name="DefaultsAdminRemoveRun" /></Hyperlink>
+                                </TextBlock>
+                                <TextBlock x:Name="DefaultsAdminHint" Style="{StaticResource Hint}" FontSize="12" TextWrapping="Wrap" />
+                            </DockPanel>
+                        </StackPanel>
+                    </Border>
                     <TextBlock x:Name="DefaultsErrorText" Style="{StaticResource ErrorText}" TextWrapping="Wrap" />
                 </StackPanel>
 
