@@ -9,7 +9,8 @@ namespace Midview.Master;
 // Saved here, it goes at once to every phone and tablet of the room that
 // answers (PhoneNetworkClient.SetAdminPassword), so all of them have the
 // same; the others get it at their next "Otimizar". "Remover" only stops
-// sending it: the devices keep the one they have.
+// sending it: the devices keep the one they have. "Mostrar a senha" shows the
+// saved one, for the teacher who forgot it.
 public partial class MachinesWindow
 {
     private bool _sendingDeviceAdmin;
@@ -22,6 +23,8 @@ public partial class MachinesWindow
         DeviceAdminButton.Content = saved ? "Trocar a senha..." : "Definir a senha...";
         DeviceAdminButton.IsEnabled = !_sendingDeviceAdmin;
         RemoveDeviceAdminButton.IsEnabled = saved && !_sendingDeviceAdmin;
+        ShowDeviceAdminButton.Content = PhoneDefaultsText.ShowButton;
+        ShowDeviceAdminButton.Visibility = saved ? Visibility.Visible : Visibility.Collapsed;
         DeviceAdminStatus.Text = PhoneDefaultsText.CardStatus(saved);
     }
 
@@ -76,6 +79,10 @@ public partial class MachinesWindow
             return false;
         }
     }
+
+    private void OnShowDeviceAdminClicked(object sender, RoutedEventArgs e) =>
+        MidviewMessage.Show(this, PhoneDefaultsText.Shown(PhoneDefaultsFile.Load().AdminText), PhoneDefaultsText.AdminTitle,
+            MessageBoxButton.OK, MessageBoxImage.Information);
 
     private void OnRemoveDeviceAdminClicked(object sender, RoutedEventArgs e)
     {

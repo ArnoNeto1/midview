@@ -34,7 +34,7 @@ internal static class PhoneDefaultsText
 
     // Under the boxes, before anything is typed: nothing saved yet, or one saved.
     public const string AdminHint =
-        "Deixe em branco para não pôr senha. Fica guardada só uma impressão dela neste computador: anote-a.";
+        "Deixe em branco para não pôr senha. Fica guardada neste computador, protegida pelo Windows: dá para vê-la em Máquinas da sala → Senha de administrador.";
 
     public const string AdminSavedHint =
         "Já há uma senha guardada. Deixe em branco para mantê-la, ou digite outra.";
@@ -78,7 +78,7 @@ internal static class PhoneDefaultsText
         "o Wi-Fi, a depuração USB e as contas, ou tira o Midview. O Otimizar põe a senha em cada celular e tablet.";
 
     public const string AskHint =
-        "De 6 a 12 letras ou números. Fica guardada só uma impressão dela neste computador, a mesma do Preparar celulares: anote-a.";
+        "De 6 a 12 letras ou números. Fica guardada neste computador, protegida pelo Windows, a mesma do Preparar celulares: dá para vê-la em Máquinas da sala → Senha de administrador.";
 
     public const string AskSave = "Guardar e otimizar";
 
@@ -114,7 +114,16 @@ internal static class PhoneDefaultsText
         "A mesma senha para todos os celulares e tablets da sala.";
 
     public static string CardStatus(bool saved) =>
-        saved ? "Uma senha está guardada (só uma impressão dela)." : "Nenhuma senha guardada ainda.";
+        saved ? "Uma senha está guardada neste computador." : "Nenhuma senha guardada ainda.";
+
+    public const string ShowButton = "Mostrar a senha";
+
+    // "Mostrar a senha": the saved password, or why it can't be shown (one
+    // saved before it could be).
+    public static string Shown(string? text) =>
+        text is null
+            ? "Esta senha foi guardada antes de dar para vê-la. Se você não lembra dela, aperte \"Trocar a senha...\" e digite uma nova: ela vai para todos os aparelhos."
+            : $"A senha de administrador dos celulares e tablets é:\n\n{text}";
 
     public const string Sending = "Pondo a senha nos aparelhos...";
 

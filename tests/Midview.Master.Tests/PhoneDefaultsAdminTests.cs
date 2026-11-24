@@ -185,6 +185,25 @@ public sealed class PhoneDefaultsAdminTests : IDisposable
         Assert.Null(PhoneOptimizeAdmin.Send(null, Payload("abc123"), _ => throw new InvalidOperationException("not sent")));
     }
 
+    // "Mostrar a senha": the password saved is the one shown, kept through
+    // the other defaults, gone with it, and never in plain text on disk.
+    [Fact]
+    public void The_saved_admin_password_can_be_shown_again()
+    {
+        PhoneDefaultsFile.SaveAdminPassword("Escola2026", _folder);
+        PhoneDefaultsFile.SavePin("1357", _folder);
+        Assert.Equal("Escola2026", PhoneDefaultsFile.Load(_folder).AdminText);
+        Assert.Contains("Escola2026", PhoneDefaultsText.Shown(PhoneDefaultsFile.Load(_folder).AdminText));
+        foreach (var file in Directory.GetFiles(_folder))
+        {
+            Assert.DoesNotContain("Escola2026", Encoding.UTF8.GetString(File.ReadAllBytes(file)));
+        }
+
+        PhoneDefaultsFile.SaveAdminPassword(null, _folder);
+        Assert.Null(PhoneDefaultsFile.Load(_folder).AdminText);
+        Assert.Contains("Trocar a senha", PhoneDefaultsText.Shown(null));
+    }
+
     // The page keeps nothing of the password anywhere but the defaults'
     // DPAPI blob (PhoneDefaultsFile), and never logs it.
     [Fact]

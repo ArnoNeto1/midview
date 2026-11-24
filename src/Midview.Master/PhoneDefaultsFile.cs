@@ -13,15 +13,19 @@ namespace Midview.Master;
 // prepared as soon as it answers on the network (PreparedDefaults). On disk
 // only as a DPAPI CurrentUser blob, like the lab Wi-Fi: the PIN is the
 // lock screen's. The phones' admin password ("Senha de administrador dos
-// celulares") is not kept at all: only the SetPhoneAdminPassword payload made
-// from it (PhoneAdminPassword.Encode, a salted hash), the very bytes each
-// device gets, inside the same blob.
+// celulares e tablets"): the SetPhoneAdminPassword payload made from it
+// (PhoneAdminPassword.Encode, a salted hash), the very bytes each device
+// gets, and, so the teacher who forgot it can see it again ("Mostrar a
+// senha" in "Senha de administrador"), the password itself, both inside the
+// same DPAPI blob. One saved before that has no text (AdminText null).
 public static class PhoneDefaultsFile
 {
     public sealed record Wallpaper(PhoneWallpaperScreens Screens, byte[] Jpeg);
 
-    // AdminPassword: PhoneAdminPassword.Encode's payload, or null for none.
-    public sealed record Defaults(string? Pin, Wallpaper? Phone, Wallpaper? Tablet, byte[]? AdminPassword = null)
+    // AdminPassword: PhoneAdminPassword.Encode's payload, or null for none;
+    // AdminText: the password it was made from, when known.
+    public sealed record Defaults(
+        string? Pin, Wallpaper? Phone, Wallpaper? Tablet, byte[]? AdminPassword = null, string? AdminText = null)
     {
         public static Defaults None { get; } = new(null, null, null);
 
@@ -32,7 +36,8 @@ public static class PhoneDefaultsFile
 
     private sealed record StoredWallpaper(byte Screens, string Jpeg);
 
-    private sealed record Stored(string? Pin, StoredWallpaper? Phone, StoredWallpaper? Tablet, string? AdminPassword = null);
+    private sealed record Stored(
+        string? Pin, StoredWallpaper? Phone, StoredWallpaper? Tablet, string? AdminPassword = null, string? AdminText = null);
 
     private static string PathIn(string? folder) => Path.Combine(folder ?? MasterData.Folder, "phone-defaults.bin");
 
@@ -47,11 +52,13 @@ public static class PhoneDefaultsFile
             {
                 return Defaults.None;
             }
+            var admin = AdminPayload(stored.AdminPassword);
             return new Defaults(
                 IsPin(stored.Pin) ? stored.Pin : null,
                 Picture(stored.Phone),
                 Picture(stored.Tablet),
-                AdminPayload(stored.AdminPassword));
+                admin,
+                admin is not null && PhoneAdminPassword.IsValid(stored.AdminText) ? stored.AdminText : null);
         }
         catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException or JsonException or FormatException)
         {
@@ -77,7 +84,7 @@ public static class PhoneDefaultsFile
 
     // password: the phones' admin password as typed (6 to 12 letters or
     // digits, PhoneAdminPassword.IsValid), or null (or none) to stop putting
-    // one. Only its salted hash is kept, one salt for every device.
+    // one. Kept as its salted hash (one salt for every device) and as typed.
     public static void SaveAdminPassword(string? password, string? folder = null)
     {
         byte[]? payload = null;
@@ -89,7 +96,7 @@ public static class PhoneDefaultsFile
             }
             payload = PhoneAdminPassword.Encode(password);
         }
-        Save(Load(folder) with { AdminPassword = payload }, folder);
+        Save(Load(folder) with { AdminPassword = payload, AdminText = payload is null ? null : password }, folder);
     }
 
     private static byte[]? AdminPayload(string? stored)
@@ -154,7 +161,8 @@ public static class PhoneDefaultsFile
         }
         var json = JsonSerializer.Serialize(new Stored(
             defaults.Pin, Stored_(defaults.Phone), Stored_(defaults.Tablet),
-            defaults.AdminPassword is { } admin ? Convert.ToBase64String(admin) : null));
+            defaults.AdminPassword is { } admin ? Convert.ToBase64String(admin) : null,
+            defaults.AdminPassword is null ? null : defaults.AdminText));
         var blob = ProtectedData.Protect(Encoding.UTF8.GetBytes(json), optionalEntropy: null, DataProtectionScope.CurrentUser);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, blob);
