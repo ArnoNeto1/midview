@@ -9,7 +9,8 @@ namespace Midview.Master;
 // "Otimizar" (CELULARES): every phone hides its ad apps, removes the apps the
 // class does not use and those someone installed (the teacher's "Instalar
 // programa" ones stay), tries the ad-free DNS and arranges its home screen, all
-// at once, as soon as the window opens; then it gets the school's admin
+// at once, as soon as the window opens (asking first for the admin
+// password when none is saved: OptimizeAdminWindow); then it gets the school's admin
 // password, when one is saved (PhoneOptimizeAdmin). Each one's line says how
 // it went (PhoneOptimizeText). Running it again changes nothing that is
 // already done.
@@ -29,7 +30,22 @@ public partial class PhoneOptimizeWindow : MidviewWindow
         TargetsTextBlock.Text = PhoneAppBlockText.Targets(phones.Select(phone => phone.Name).ToList(), allPhones);
         _rows = new ObservableCollection<PhoneRow>(phones.Select(phone => new PhoneRow(phone)));
         PhonesList.ItemsSource = _rows;
-        Loaded += async (_, _) => await RunAsync();
+        Loaded += async (_, _) =>
+        {
+            AskAdminPassword();
+            await RunAsync();
+        };
+    }
+
+    // None saved yet: the teacher is asked for one first (OptimizeAdminWindow),
+    // so every device optimized gets it; skipping optimizes without one.
+    private void AskAdminPassword()
+    {
+        if (PhoneDefaultsFile.Load().AdminPassword is not null)
+        {
+            return;
+        }
+        new OptimizeAdminWindow { Owner = this }.ShowDialog();
     }
 
     private async void OnRunClicked(object sender, RoutedEventArgs e) => await RunAsync();

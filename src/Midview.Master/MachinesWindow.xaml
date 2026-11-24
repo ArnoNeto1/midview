@@ -244,13 +244,33 @@
             <Grid x:Name="AdminPasswordPanel" Style="{StaticResource PagePanel}">
                 <StackPanel>
                     <local:DialogHeader Icon="&#xE72E;" Heading="Senha de administrador" Accent="{StaticResource ConfigurarBrush}"
-                        Content="Guardada só neste PC (protegida pelo Windows) para preencher o UAC do aluno com um clique." />
+                        Content="As senhas de administrador da sala: a dos computadores dos alunos e a dos celulares e tablets." />
                     <Border Style="{StaticResource Card}" Margin="0,16,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <Button x:Name="AdminPasswordButton" Content="Definir a senha..." Click="OnSetAdminPasswordClicked" Padding="14,6" />
-                            <Button x:Name="RemoveAdminPasswordButton" Content="Remover" Click="OnRemoveAdminPasswordClicked"
-                                    Style="{StaticResource DangerButton}" Margin="8,0,0,0" Padding="14,6" />
-                            <TextBlock x:Name="AdminPasswordStatusTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
+                        <StackPanel>
+                            <TextBlock Text="Computadores dos alunos" Style="{StaticResource CardTitle}" />
+                            <TextBlock Style="{StaticResource Hint}" FontSize="12.5" Margin="0,4,0,10" TextWrapping="Wrap"
+                                       Text="Guardada só neste PC (protegida pelo Windows) para preencher o UAC do aluno com um clique." />
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="AdminPasswordButton" Content="Definir a senha..." Click="OnSetAdminPasswordClicked" Padding="14,6" />
+                                <Button x:Name="RemoveAdminPasswordButton" Content="Remover" Click="OnRemoveAdminPasswordClicked"
+                                        Style="{StaticResource DangerButton}" Margin="8,0,0,0" Padding="14,6" />
+                                <TextBlock x:Name="AdminPasswordStatusTextBlock" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <!-- The phones' and tablets' admin password: only its salted hash is saved (PhoneDefaultsFile). -->
+                    <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="DeviceAdminTitle" Style="{StaticResource CardTitle}" />
+                            <TextBlock x:Name="DeviceAdminLine" Style="{StaticResource Hint}" FontSize="12.5" Margin="0,4,0,10" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="DeviceAdminButton" Content="Definir a senha..." Click="OnSetDeviceAdminClicked" Padding="14,6" />
+                                <Button x:Name="RemoveDeviceAdminButton" Content="Remover" Click="OnRemoveDeviceAdminClicked"
+                                        Style="{StaticResource DangerButton}" Margin="8,0,0,0" Padding="14,6" />
+                                <TextBlock x:Name="DeviceAdminStatus" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="14,0,0,0" />
+                            </StackPanel>
+                            <TextBlock x:Name="DeviceAdminSent" Style="{StaticResource Hint}" FontSize="12.5" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Visibility="Collapsed" />
                         </StackPanel>
                     </Border>
                 </StackPanel>

@@ -24,7 +24,7 @@ internal static class PhoneDefaultsText
 
     // The third card: the phones' admin password (PhoneAdminPassword), the
     // same one as in "Wi-Fi e modo avião" of "Configurar celular".
-    public const string AdminTitle = "Senha de administrador dos celulares";
+    public const string AdminTitle = "Senha de administrador dos celulares e tablets";
 
     public const string AdminLine =
         "Para liberar no próprio aparelho, sem internet, o Wi-Fi, a depuração USB e as contas, ou tirar o Midview. " +
@@ -70,6 +70,63 @@ internal static class PhoneDefaultsText
         }
         return password == repeat ? null : AdminMismatch;
     }
+
+    // The question "Otimizar" asks when no admin password is saved yet
+    // (OptimizeAdminWindow).
+    public const string AskLine =
+        "Ainda não há senha guardada. Com ela, quando o aparelho ficar sem rede, alguém da escola libera no próprio aparelho " +
+        "o Wi-Fi, a depuração USB e as contas, ou tira o Midview. O Otimizar põe a senha em cada celular e tablet.";
+
+    public const string AskHint =
+        "De 6 a 12 letras ou números. Fica guardada só uma impressão dela neste computador, a mesma do Preparar celulares: anote-a.";
+
+    public const string AskSave = "Guardar e otimizar";
+
+    public const string AskSkip = "Otimizar sem senha";
+
+    public const string AskEmpty = "Digite a senha nas duas caixas, ou aperte \"Otimizar sem senha\".";
+
+    // The same question in "Senha de administrador" of "Máquinas da sala"
+    // (change), which puts the password on every device of the room.
+    public const string ChangeLine =
+        "A mesma senha vai para todos os celulares e tablets da sala que estão ligados agora; os outros recebem no próximo Otimizar. " +
+        "Com ela, alguém da escola libera no próprio aparelho, sem rede, o Wi-Fi, a depuração USB e as contas, ou tira o Midview.";
+
+    public const string ChangeSave = "Guardar e pôr nos aparelhos";
+
+    public const string ChangeCancel = "Cancelar";
+
+    public const string ChangeEmpty = "Digite a senha nas duas caixas.";
+
+    // Null when the two boxes hold the same valid password; else what the question says.
+    public static string? AskProblem(string password, string repeat, bool change = false) =>
+        password.Length == 0 && repeat.Length == 0 ? (change ? ChangeEmpty : AskEmpty)
+        : !PhoneNetworkText.IsPasswordReady(password) ? AskInvalid
+        : password == repeat ? null : AdminMismatch;
+
+    public const string AskInvalid = "A senha de administrador tem de 6 a 12 letras ou números.";
+
+    // The card of the phones and tablets in "Senha de administrador" (MachinesWindow).
+    public const string CardTitle = "Celulares e tablets";
+
+    public const string CardLine =
+        "Para liberar no próprio aparelho, sem rede, o Wi-Fi, a depuração USB e as contas, ou tirar o Midview. " +
+        "A mesma senha para todos os celulares e tablets da sala.";
+
+    public static string CardStatus(bool saved) =>
+        saved ? "Uma senha está guardada (só uma impressão dela)." : "Nenhuma senha guardada ainda.";
+
+    public const string Sending = "Pondo a senha nos aparelhos...";
+
+    // After the password was saved and sent to the room's devices: put on
+    // how many of how many.
+    public static string Sent(int put, int total) =>
+        total == 0 ? "Senha guardada. Não há celulares nem tablets na sala ainda: cada um recebe ao ser preparado."
+        : put == total ? (total == 1 ? "Senha posta no aparelho da sala." : $"Senha posta nos {total} aparelhos da sala.")
+        : $"Senha posta em {put} de {total} aparelhos. Os desligados ou fora da rede recebem no próximo Otimizar.";
+
+    public const string RemoveQuestion =
+        "Parar de pôr a senha nos próximos aparelhos? Os celulares e tablets que já têm a senha continuam com ela.";
 
     // "a", "a e b", "a, b e c".
     public static string List(IReadOnlyList<string> parts) => parts.Count switch

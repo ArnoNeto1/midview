@@ -65,6 +65,7 @@ public partial class MachinesWindow : MidviewWindow
         ShowPhoneUpdateCard();
         CheckTeacherVersion();
         RefreshAdminPasswordStatus();
+        RefreshDeviceAdminStatus();
         ShowPage(MachinesPage.Search);
     }
 

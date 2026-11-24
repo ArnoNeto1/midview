@@ -149,7 +149,7 @@ public sealed class PhoneDefaultsAdminTests : IDisposable
     [Fact]
     public void The_card_says_what_the_password_frees()
     {
-        Assert.Equal("Senha de administrador dos celulares", PhoneDefaultsText.AdminTitle);
+        Assert.Equal("Senha de administrador dos celulares e tablets", PhoneDefaultsText.AdminTitle);
         Assert.Equal(
             "Para liberar no próprio aparelho, sem internet, o Wi-Fi, a depuração USB e as contas, ou tirar o Midview. " +
             "Pelo menos 6 letras ou números.",
@@ -197,6 +197,30 @@ public sealed class PhoneDefaultsAdminTests : IDisposable
         Assert.DoesNotContain("Registry", code);
         Assert.DoesNotContain("Log", code);
         Assert.DoesNotContain("Trace", code);
+    }
+
+    [Fact]
+    public void Otimizar_asks_for_both_boxes_with_the_same_valid_password()
+    {
+        Assert.Equal(PhoneDefaultsText.AskEmpty, PhoneDefaultsText.AskProblem("", ""));
+        Assert.Equal(PhoneDefaultsText.AskInvalid, PhoneDefaultsText.AskProblem("abc", "abc"));
+        Assert.Equal(PhoneDefaultsText.ChangeEmpty, PhoneDefaultsText.AskProblem("", "", change: true));
+        Assert.Equal(PhoneDefaultsText.AdminMismatch, PhoneDefaultsText.AskProblem("Escola2026", "Escola2027"));
+        Assert.Equal(PhoneDefaultsText.AdminMismatch, PhoneDefaultsText.AskProblem("Escola2026", ""));
+        Assert.Null(PhoneDefaultsText.AskProblem("Escola2026", "Escola2026"));
+    }
+
+    [Fact]
+    public void Otimizar_asks_only_when_no_admin_password_is_saved_and_never_keeps_the_typed_one()
+    {
+        var code = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Midview.Master", "PhoneOptimizeWindow.xaml.cs"));
+        Assert.Contains("PhoneDefaultsFile.Load().AdminPassword is not null", code);
+        Assert.Contains("new OptimizeAdminWindow", code);
+        var ask = File.ReadAllText(Path.Combine(RepoRoot(), "src", "Midview.Master", "OptimizeAdminWindow.xaml.cs"))
+            .Replace("PhoneDefaultsFile.", "");
+        Assert.DoesNotContain("File.", ask);
+        Assert.DoesNotContain("MasterData", ask);
+        Assert.DoesNotContain("Log", ask);
     }
 
     private static string RepoRoot()
