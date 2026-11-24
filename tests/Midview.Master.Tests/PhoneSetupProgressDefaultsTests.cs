@@ -100,7 +100,7 @@ public sealed class PhoneSetupProgressDefaultsTests : IDisposable
     [Fact]
     public void The_page_says_where_the_defaults_go_and_how_to_skip()
     {
-        Assert.Equal("Papel de parede e PIN da escola", PhoneDefaultsText.Heading);
+        Assert.Equal("Papel de parede, PIN e senha da escola", PhoneDefaultsText.Heading);
         Assert.Contains("cada tablet preparado", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
         Assert.Contains("Pule", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
         Assert.Contains("Configurar tablet", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));

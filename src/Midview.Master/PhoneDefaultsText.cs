@@ -5,7 +5,7 @@ namespace Midview.Master;
 // devices prepared next.
 internal static class PhoneDefaultsText
 {
-    public const string Heading = "Papel de parede e PIN da escola";
+    public const string Heading = "Papel de parede, PIN e senha da escola";
 
     public static string Intro(AndroidDeviceKind kind) =>
         $"Vão sozinhos para cada {DeviceSetupText.Word(kind)} preparado, assim que ele aparecer no Midview. " +
@@ -20,7 +20,7 @@ internal static class PhoneDefaultsText
 
     public const string Skip = "Pular";
 
-    public const string ChangeLink = "Papel de parede e PIN";
+    public const string ChangeLink = "Papel de parede, PIN e senha";
 
     // The third card: the phones' admin password (PhoneAdminPassword), the
     // same one as in "Wi-Fi e modo avião" of "Configurar celular".

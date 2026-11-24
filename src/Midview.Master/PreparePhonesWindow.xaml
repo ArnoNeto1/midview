@@ -14,7 +14,7 @@
                        TextTrimming="CharacterEllipsis" MaxWidth="360" Margin="12,0,0,0">
                 <Run Text="Wi-Fi:" /> <Run x:Name="WifiNameRun" Tag="AsIs" /> ·
                 <Hyperlink Click="OnChangeWifiClicked">trocar</Hyperlink> ·
-                <Hyperlink Click="OnChangeDefaultsClicked"><Run Text="Papel de parede e PIN" /></Hyperlink>
+                <Hyperlink Click="OnChangeDefaultsClicked"><Run Text="Papel de parede, PIN e senha" /></Hyperlink>
             </TextBlock>
             <TextBlock x:Name="CaptionText" Style="{StaticResource Hint}" FontWeight="SemiBold" />
         </DockPanel>
