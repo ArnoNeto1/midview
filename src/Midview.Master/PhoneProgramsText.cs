@@ -35,7 +35,7 @@ public static class PhoneProgramsText
 
     // How the machines are counted: "celulares" alone, "aparelhos" with PCs.
     public static string Noun(IReadOnlyCollection<KnownMachine> targets) =>
-        OnlyPhones(targets) ? "celulares" : HasPhones(targets) ? "aparelhos" : "máquinas";
+        OnlyPhones(targets) ? AndroidWords.Many(targets) : HasPhones(targets) ? "aparelhos" : "máquinas";
 
     public static string Describe(IReadOnlyList<KnownMachine> targets, bool wholeClass) =>
         TargetsText.Describe(TargetsPreposition.In, targets, wholeClass, Noun(targets));

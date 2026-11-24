@@ -25,27 +25,28 @@ public static class FileTargets
     public const string SendPcHint =
         "O arquivo é salvo na pasta \"Arquivos do professor\" na Área de Trabalho do aluno, que recebe um aviso.";
 
-    public const string SendPhoneHint =
-        "O arquivo é salvo na pasta Download/Midview do celular, que o aluno abre no app Arquivos, e o aluno recebe um aviso.";
+    // one, many: what the phones and tablets are called (AndroidWords).
+    public static string SendPhoneHint(string one) =>
+        $"O arquivo é salvo na pasta Download/Midview do {one}, que o aluno abre no app Arquivos, e o aluno recebe um aviso.";
 
-    public const string SendPhoneNote = " Nos celulares, na pasta Download/Midview (app Arquivos).";
+    public static string SendPhoneNote(string many) => $" Nos {many}, na pasta Download/Midview (app Arquivos).";
 
     public const string CollectPcHint =
         "Traz o que cada aluno colocou na pasta \"Entregar ao professor\" da Área de Trabalho (subpastas também). Os arquivos continuam no aluno, que recebe um aviso. Até 1000 arquivos e 500 MB por máquina.";
 
-    public const string CollectPhoneHint =
-        "Traz o que está na pasta Download/Midview de cada celular (subpastas também), inclusive os arquivos que o professor enviou. Os arquivos continuam no celular, e o aluno recebe um aviso. Até 1000 arquivos e 500 MB por celular.";
+    public static string CollectPhoneHint(string one) =>
+        $"Traz o que está na pasta Download/Midview de cada {one} (subpastas também), inclusive os arquivos que o professor enviou. Os arquivos continuam no {one}, e o aluno recebe um aviso. Até 1000 arquivos e 500 MB por {one}.";
 
-    public const string CollectPhoneNote =
-        " Nos celulares, a pasta Download/Midview, inclusive os arquivos que o professor enviou.";
+    public static string CollectPhoneNote(string many) =>
+        $" Nos {many}, a pasta Download/Midview, inclusive os arquivos que o professor enviou.";
 
     public const string ClearPcHint =
         "Para começar a próxima aula com tudo vazio. Os arquivos vão para a Lixeira, de onde ainda podem ser recuperados.";
 
-    public const string ClearPhoneHint =
-        "Para começar a próxima aula com tudo vazio. No celular não há Lixeira: o que está em Download/Midview é apagado de vez.";
+    public static string ClearPhoneHint(string one) =>
+        $"Para começar a próxima aula com tudo vazio. No {one} não há Lixeira: o que está em Download/Midview é apagado de vez.";
 
-    public const string ClearPhoneNote = " No celular não há Lixeira: o que está em Download/Midview é apagado de vez.";
+    public static string ClearPhoneNote(string one) => $" No {one} não há Lixeira: o que está em Download/Midview é apagado de vez.";
 
     private static bool OnlyPhones(IReadOnlyCollection<KnownMachine> targets) => CloseAppsTargets.OnlyPhones(targets);
 
@@ -56,25 +57,27 @@ public static class FileTargets
     private static string Hint(IReadOnlyCollection<KnownMachine> targets, string pc, string phone, string note) =>
         OnlyPhones(targets) ? phone : SomePhones(targets) ? pc + note : pc;
 
-    public static string SendHint(IReadOnlyCollection<KnownMachine> targets) => Hint(targets, SendPcHint, SendPhoneHint, SendPhoneNote);
+    public static string SendHint(IReadOnlyCollection<KnownMachine> targets) =>
+        Hint(targets, SendPcHint, SendPhoneHint(AndroidWords.One(targets)), SendPhoneNote(AndroidWords.Many(targets)));
 
     public static string CollectHint(IReadOnlyCollection<KnownMachine> targets) =>
-        Hint(targets, CollectPcHint, CollectPhoneHint, CollectPhoneNote);
+        Hint(targets, CollectPcHint, CollectPhoneHint(AndroidWords.One(targets)), CollectPhoneNote(AndroidWords.Many(targets)));
 
-    public static string ClearHint(IReadOnlyCollection<KnownMachine> targets) => Hint(targets, ClearPcHint, ClearPhoneHint, ClearPhoneNote);
+    public static string ClearHint(IReadOnlyCollection<KnownMachine> targets) =>
+        Hint(targets, ClearPcHint, ClearPhoneHint(AndroidWords.One(targets)), ClearPhoneNote(AndroidWords.One(targets)));
 
     // "Depois de enviar": the folder and the file, where they are.
     public static string OpenFolderChoice(IReadOnlyCollection<KnownMachine> targets) =>
-        OnlyPhones(targets) ? "Abrir a pasta Download/Midview no celular"
-        : SomePhones(targets) ? "Abrir a pasta \"Arquivos do professor\" no aluno (Download/Midview no celular)"
+        OnlyPhones(targets) ? $"Abrir a pasta Download/Midview no {AndroidWords.One(targets)}"
+        : SomePhones(targets) ? $"Abrir a pasta \"Arquivos do professor\" no aluno (Download/Midview no {AndroidWords.One(targets)})"
         : "Abrir a pasta \"Arquivos do professor\" no aluno";
 
     public static string OpenFileChoice(IReadOnlyCollection<KnownMachine> targets) =>
-        OnlyPhones(targets) ? "Abrir o arquivo no celular" : "Abrir ou executar o arquivo no aluno";
+        OnlyPhones(targets) ? $"Abrir o arquivo no {AndroidWords.One(targets)}" : "Abrir ou executar o arquivo no aluno";
 
-    // Under the heading ("Para 3 celulares: ...").
+    // Under the heading ("Para 3 celulares: ...", "Para 11 tablets: ...").
     public static string Describe(TargetsPreposition preposition, IReadOnlyList<KnownMachine> targets, bool wholeClass) =>
-        TargetsText.Describe(preposition, targets, wholeClass, OnlyPhones(targets) ? "celulares" : "máquinas");
+        TargetsText.Describe(preposition, targets, wholeClass, OnlyPhones(targets) ? AndroidWords.Many(targets) : "máquinas");
 
     // "Apagar as pastas dos alunos" with phones among them asks first: there
     // it cannot be undone. Null when no phone is among them.
@@ -85,9 +88,10 @@ public static class FileTargets
         {
             return null;
         }
-        var which = phones == 1 ? "do celular" : $"dos {phones} celulares";
+        var one = AndroidWords.One(targets);
+        var which = phones == 1 ? $"do {one}" : $"dos {phones} {AndroidWords.Many(targets)}";
         var pcs = phones < targets.Count ? " Nos computadores, vai para a Lixeira, como sempre." : string.Empty;
-        return $"O que está na pasta Download/Midview {which} vai ser apagado de vez (no celular não há Lixeira), inclusive os arquivos que o professor enviou.{pcs}";
+        return $"O que está na pasta Download/Midview {which} vai ser apagado de vez (no {one} não há Lixeira), inclusive os arquivos que o professor enviou.{pcs}";
     }
 
     // The question as the window asks it ("Sim, apagar" or "Cancelar",

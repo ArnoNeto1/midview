@@ -44,7 +44,7 @@ public static class CloseAppsTargets
 
     // Under the heading: whom it closes ("Em 3 celulares: ...").
     public static string Describe(IReadOnlyList<KnownMachine> targets, bool wholeClass) =>
-        TargetsText.Describe(TargetsPreposition.In, targets, wholeClass, OnlyPhones(targets) ? "celulares" : "máquinas");
+        TargetsText.Describe(TargetsPreposition.In, targets, wholeClass, OnlyPhones(targets) ? AndroidWords.Many(targets) : "máquinas");
 
     // Above the list, once every machine answered (or didn't).
     public static string Done(int total, int failures, bool onlyPhones = false) => failures == 0

@@ -30,13 +30,13 @@ public class PhoneFilesTests : IDisposable
         var both = new[] { Pc(), Phone() };
 
         Assert.Equal(FileTargets.SendPcHint, FileTargets.SendHint(pcs));
-        Assert.Equal(FileTargets.SendPhoneHint, FileTargets.SendHint(phones));
-        Assert.Equal(FileTargets.SendPcHint + FileTargets.SendPhoneNote, FileTargets.SendHint(both));
-        Assert.Contains("Download/Midview", FileTargets.SendPhoneHint);
+        Assert.Equal(FileTargets.SendPhoneHint("celular"), FileTargets.SendHint(phones));
+        Assert.Equal(FileTargets.SendPcHint + FileTargets.SendPhoneNote("celulares"), FileTargets.SendHint(both));
+        Assert.Contains("Download/Midview", FileTargets.SendPhoneHint("celular"));
 
         Assert.Equal(FileTargets.CollectPcHint, FileTargets.CollectHint(pcs));
-        Assert.Equal(FileTargets.CollectPhoneHint, FileTargets.CollectHint(phones));
-        Assert.Equal(FileTargets.CollectPcHint + FileTargets.CollectPhoneNote, FileTargets.CollectHint(both));
+        Assert.Equal(FileTargets.CollectPhoneHint("celular"), FileTargets.CollectHint(phones));
+        Assert.Equal(FileTargets.CollectPcHint + FileTargets.CollectPhoneNote("celulares"), FileTargets.CollectHint(both));
 
         Assert.Equal(FileTargets.ClearPcHint, FileTargets.ClearHint(pcs));
         Assert.Contains("apagado de vez", FileTargets.ClearHint(phones));
@@ -50,6 +50,28 @@ public class PhoneFilesTests : IDisposable
         Assert.Equal("Para 2 celulares: Celular 01, Celular 02",
             FileTargets.Describe(TargetsPreposition.To, new[] { Phone(), Phone("Celular 02") }, wholeClass: false));
         Assert.Equal("Da turma toda (2 máquinas)", FileTargets.Describe(TargetsPreposition.From, both, wholeClass: true));
+    }
+
+    // Tablets alone are called tablets, and phones with tablets both.
+    [Fact]
+    public void The_windows_call_tablets_tablets()
+    {
+        var tablets = new[] { Phone("Tablet 04"), Phone("Tablet 16") };
+        var mixed = new[] { Phone("Tablet 04"), Phone("Celular 07") };
+
+        Assert.Equal("Para 2 tablets: Tablet 04, Tablet 16", FileTargets.Describe(TargetsPreposition.To, tablets, wholeClass: false));
+        Assert.Equal(FileTargets.SendPhoneHint("tablet"), FileTargets.SendHint(tablets));
+        Assert.Contains("pasta Download/Midview do tablet", FileTargets.SendHint(tablets));
+        Assert.Equal("Abrir a pasta Download/Midview no tablet", FileTargets.OpenFolderChoice(tablets));
+        Assert.Equal("Abrir o arquivo no tablet", FileTargets.OpenFileChoice(tablets));
+        Assert.Contains("por tablet", FileTargets.CollectHint(tablets));
+        Assert.Contains("No tablet não há Lixeira", FileTargets.ClearHint(tablets));
+        Assert.Equal(
+            "O que está na pasta Download/Midview dos 2 tablets vai ser apagado de vez (no tablet não há Lixeira), inclusive os arquivos que o professor enviou.",
+            FileTargets.ClearQuestion(tablets));
+        Assert.Equal("Para 2 celulares e tablets: Tablet 04, Celular 07", FileTargets.Describe(TargetsPreposition.To, mixed, wholeClass: false));
+        Assert.Equal("Abrir o arquivo no celular ou tablet", FileTargets.OpenFileChoice(mixed));
+        Assert.Equal("Em 2 tablets: Tablet 04, Tablet 16", CloseAppsTargets.Describe(tablets, wholeClass: false));
     }
 
     // A phone has no Recycle Bin: emptying it is asked first; PCs alone are not.

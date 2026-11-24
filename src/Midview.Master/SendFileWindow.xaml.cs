@@ -95,7 +95,7 @@ public partial class SendFileWindow : MidviewWindow
         var delivered = results.Length - failures.Count;
         ProgressTextBlock.Text = failures.Count == 0
             ? results.Length == 1 ? "Arquivo enviado."
-            : CloseAppsTargets.OnlyPhones(_targets) ? $"Arquivo enviado para os {delivered} celulares."
+            : CloseAppsTargets.OnlyPhones(_targets) ? $"Arquivo enviado para os {delivered} {AndroidWords.Many(_targets)}."
             : $"Arquivo enviado para as {delivered} máquinas."
             : $"Enviado para {delivered} de {results.Length}.";
         ResultTextBlock.Text = string.Join("\n", results.Select(result => result.Saved
