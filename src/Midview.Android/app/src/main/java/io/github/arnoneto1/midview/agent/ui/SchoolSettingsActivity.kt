@@ -19,31 +19,41 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import io.github.arnoneto1.midview.agent.agent.DeviceWord
 import io.github.arnoneto1.midview.agent.policy.AdminUnlock
 import io.github.arnoneto1.midview.agent.policy.SchoolNetwork
 import io.github.arnoneto1.midview.agent.protocol.PhoneAdminPassword
 
 // "Ajustes da escola", from the agent's notification: whoever knows the
-// phones' admin password frees the Wi-Fi and airplane mode for 10 minutes
-// (AdminUnlock), and then may open the Wi-Fi settings from here or lock them
-// again at once. With a password set, "Tirar o Midview deste celular..."
-// opens LeaveActivity, which asks for it again. It opens nothing else: the only way out to the system is
-// Android's own Wi-Fi screen, and only while the network is free. Without a
-// password set by the teacher it says so; after five wrong ones it waits.
-// Kept out of the screenshots (the teacher's view of the screen too).
+// phones' admin password unlocks this screen for a moment (AdminUnlock's
+// Grant, kept only by this screen) and frees for 10 minutes the Wi-Fi and
+// airplane mode, USB debugging or the device's accounts, the same timed locks
+// as the teacher's commands; then may open the Wi-Fi settings from here (while
+// the network is free) or lock all again at once. With a password set, "Tirar
+// o Midview deste celular..." opens LeaveActivity, which asks for it again. It
+// opens nothing else: the only way out to the system is Android's own Wi-Fi
+// screen. Without a password set by the teacher it says so; after five wrong
+// ones it waits. Kept out of the screenshots (the teacher's view of the
+// screen too). "celular" becomes "tablet" on a tablet (DeviceWord).
 class SchoolSettingsActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
+    private lateinit var freedText: TextView
     private lateinit var note: TextView
     private lateinit var input: EditText
-    private lateinit var freeButton: Button
+    private lateinit var unlockButton: Button
+    private lateinit var choiceButtons: Map<AdminUnlock.Freeable, Button>
     private lateinit var wifiButton: Button
     private lateinit var lockButton: Button
     private lateinit var leaveButton: Button
     private lateinit var leaveNote: TextView
     private var checking = false
     private var afterAttempt: String? = null
+
+    // The right password's unlock; only in this screen's memory.
+    private var grant: AdminUnlock.Grant? = null
     private val refresh = object : Runnable {
         override fun run() {
             render()
@@ -55,7 +65,7 @@ class SchoolSettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         title = SchoolSettingsTexts.TITLE
-        setContentView(layout())
+        setContentView(ScrollView(this).apply { addView(layout()) })
     }
 
     override fun onResume() {
@@ -68,33 +78,60 @@ class SchoolSettingsActivity : Activity() {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        grant = null
+        super.onDestroy()
+    }
+
     private fun render() {
         // The check holds the password's lock for a moment: nothing asks it meanwhile.
         if (checking) {
             note.text = SchoolSettingsTexts.CHECKING
             note.visibility = View.VISIBLE
             input.isEnabled = false
-            freeButton.isEnabled = false
+            unlockButton.isEnabled = false
             return
         }
-        val until = SchoolNetwork.network(this).freeUntil()
-        val state = if (until == null) SchoolNetwork.admin(this).state() else null
-        status.text = when {
-            until != null -> SchoolSettingsTexts.freeUntil(SchoolSettingsTexts.clock(until))
-            state is AdminUnlock.State.NoPassword -> SchoolSettingsTexts.NO_PASSWORD
-            state is AdminUnlock.State.LockedOut -> SchoolSettingsTexts.lockedOut(SchoolSettingsTexts.clock(state.untilMillis))
-            else -> SchoolSettingsTexts.ASK
+        val admin = SchoolNetwork.admin(this)
+        val unlocked = admin.isValid(grant)
+        // An unlock that ran out: the password is asked again, afresh.
+        if (!unlocked && grant != null) {
+            grant = null
+            afterAttempt = null
         }
-        val asking = state is AdminUnlock.State.Ready
+        val state = admin.state()
+        status.text = say(
+            when {
+                unlocked -> SchoolSettingsTexts.CHOOSE
+                state is AdminUnlock.State.NoPassword -> SchoolSettingsTexts.NO_PASSWORD
+                state is AdminUnlock.State.LockedOut -> SchoolSettingsTexts.lockedOut(SchoolSettingsTexts.clock(state.untilMillis))
+                else -> SchoolSettingsTexts.ASK
+            },
+        )
+
+        val network = SchoolNetwork.network(this).freeUntil()
+        val anyFree = network != null || SchoolNetwork.debugging(this).freeUntil() != null ||
+            SchoolNetwork.accounts(this).freeUntil() != null
+        freedText.text = say(
+            SchoolSettingsTexts.freed(
+                network?.let(SchoolSettingsTexts::clock),
+                SchoolNetwork.debugging(this).freeUntil()?.let(SchoolSettingsTexts::clock),
+                SchoolNetwork.accounts(this).freeUntil()?.let(SchoolSettingsTexts::clock),
+            ),
+        )
+        freedText.visibility = if (anyFree) View.VISIBLE else View.GONE
+
+        val asking = !unlocked && state is AdminUnlock.State.Ready
         input.visibility = if (asking) View.VISIBLE else View.GONE
-        freeButton.visibility = input.visibility
-        freeButton.isEnabled = true
+        unlockButton.visibility = input.visibility
+        unlockButton.isEnabled = true
         input.isEnabled = true
-        note.text = afterAttempt.takeIf { asking }.orEmpty()
+        choiceButtons.values.forEach { it.visibility = if (unlocked) View.VISIBLE else View.GONE }
+        note.text = afterAttempt.takeIf { asking || unlocked }.orEmpty()
         note.visibility = if (note.text.isEmpty()) View.GONE else View.VISIBLE
-        wifiButton.visibility = if (until != null) View.VISIBLE else View.GONE
-        lockButton.visibility = wifiButton.visibility
-        val hasPassword = SchoolNetwork.admin(this).state() !is AdminUnlock.State.NoPassword
+        wifiButton.visibility = if (network != null) View.VISIBLE else View.GONE
+        lockButton.visibility = if (anyFree) View.VISIBLE else View.GONE
+        val hasPassword = state !is AdminUnlock.State.NoPassword
         leaveButton.visibility = if (hasPassword) View.VISIBLE else View.GONE
         leaveNote.visibility = if (hasPassword) View.GONE else View.VISIBLE
     }
@@ -112,10 +149,24 @@ class SchoolSettingsActivity : Activity() {
             val attempt = admin.tryPassword(typed)
             runOnUiThread {
                 checking = false
+                if (attempt is AdminUnlock.Attempt.Unlocked) grant = attempt.grant
                 afterAttempt = SchoolSettingsTexts.after(attempt)
                 render()
             }
         }, "Midview admin password").start()
+    }
+
+    // One of the choices, with the unlock this screen holds.
+    private fun free(what: AdminUnlock.Freeable) {
+        val held = grant ?: return render()
+        val admin = SchoolNetwork.admin(this)
+        Thread({
+            val result = admin.free(held, what)
+            runOnUiThread {
+                afterAttempt = SchoolSettingsTexts.afterFree(result)
+                render()
+            }
+        }, "Midview admin free").start()
     }
 
     private fun openWifi() {
@@ -130,12 +181,15 @@ class SchoolSettingsActivity : Activity() {
         }
     }
 
+    // Everything free now locked again; locking needs no password.
     private fun lockNow() {
-        val network = SchoolNetwork.network(this)
+        val app = applicationContext
         Thread({
-            network.lockNow()
+            if (SchoolNetwork.network(app).freeUntil() != null) SchoolNetwork.network(app).lockNow()
+            if (SchoolNetwork.debugging(app).freeUntil() != null) SchoolNetwork.debugging(app).lockNow()
+            if (SchoolNetwork.accounts(app).freeUntil() != null) SchoolNetwork.accounts(app).lockNow()
             runOnUiThread { render() }
-        }, "Midview lock network").start()
+        }, "Midview lock now").start()
     }
 
     private fun layout(): LinearLayout = LinearLayout(this).apply {
@@ -144,6 +198,7 @@ class SchoolSettingsActivity : Activity() {
         setPadding(padding, padding, padding, padding)
         addView(text(SchoolSettingsTexts.TITLE, 24f).apply { typeface = Typeface.DEFAULT_BOLD })
         status = text("", 17f).also { addView(it) }
+        freedText = text("", 15f).also { addView(it) }
         input = EditText(this@SchoolSettingsActivity).apply {
             hint = "Senha de administrador"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -164,14 +219,19 @@ class SchoolSettingsActivity : Activity() {
             }
         }
         addView(input)
+        unlockButton = button(SchoolSettingsTexts.UNLOCK) { submit() }.also { addView(it) }
+        choiceButtons = AdminUnlock.Freeable.entries.associateWith { what ->
+            button(SchoolSettingsTexts.choice(what)) { free(what) }.also { addView(it) }
+        }
         note = text("", 15f).also { addView(it) }
-        freeButton = button("Liberar") { submit() }.also { addView(it) }
         wifiButton = button("Abrir Wi-Fi") { openWifi() }.also { addView(it) }
-        lockButton = button("Travar agora") { lockNow() }.also { addView(it) }
-        leaveButton = button(LeaveTexts.OPEN) { startActivity(LeaveActivity.intent(this@SchoolSettingsActivity)) }.also { addView(it) }
-        leaveNote = text(LeaveTexts.NEEDS_PASSWORD, 15f).also { addView(it) }
+        lockButton = button(SchoolSettingsTexts.LOCK_NOW) { lockNow() }.also { addView(it) }
+        leaveButton = button(say(LeaveTexts.OPEN)) { startActivity(LeaveActivity.intent(this@SchoolSettingsActivity)) }.also { addView(it) }
+        leaveNote = text(say(LeaveTexts.NEEDS_PASSWORD), 15f).also { addView(it) }
         addView(button("Fechar") { finish() })
     }
+
+    private fun say(text: String) = DeviceWord.say(text)
 
     private fun text(value: String, size: Float) = TextView(this).apply {
         text = value

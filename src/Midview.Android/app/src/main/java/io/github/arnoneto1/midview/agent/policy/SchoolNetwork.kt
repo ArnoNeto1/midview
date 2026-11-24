@@ -94,7 +94,14 @@ object SchoolNetwork {
                 val app = context.applicationContext
                 AdminUnlock(
                     File(app.filesDir, ADMIN_PASSWORD_FILE), File(app.filesDir, ADMIN_ATTEMPTS_FILE),
-                    free = { network(app).free(it) },
+                    // The same timed locks as the teacher's commands.
+                    freeLocks = { what, minutes ->
+                        when (what) {
+                            AdminUnlock.Freeable.NETWORK -> network(app).free(minutes)
+                            AdminUnlock.Freeable.DEBUGGING -> debugging(app).free(minutes)
+                            AdminUnlock.Freeable.ACCOUNTS -> accounts(app).free(minutes)
+                        }
+                    },
                     log = log,
                 )
             }.also { admin = it }

@@ -64,7 +64,7 @@ internal fun AgentService.hideCode() {
 }
 
 // With "Ajustes da escola": the admin password frees the Wi-Fi and airplane
-// mode for a while (SchoolSettingsActivity).
+// mode, USB debugging or the accounts for a while (SchoolSettingsActivity).
 internal fun AgentService.goForeground(text: String) {
     val settings = PendingIntent.getActivity(
         this, 0, SchoolSettingsActivity.intent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,

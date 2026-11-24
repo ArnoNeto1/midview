@@ -181,7 +181,8 @@
             android:windowSoftInputMode="adjustResize|stateHidden" />
 
         <!-- "Ajustes da escola", from the agent's notification: the phones'
-             admin password frees the Wi-Fi and airplane mode for a while. -->
+             admin password frees the Wi-Fi and airplane mode, USB debugging or
+             the accounts for a while. -->
         <activity
             android:name=".ui.SchoolSettingsActivity"
             android:excludeFromRecents="true"

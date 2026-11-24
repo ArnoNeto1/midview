@@ -44,7 +44,7 @@ class CommandHandlerNetworkTest {
     }
     private val admin by lazy {
         val dir = folder.newFolder()
-        AdminUnlock(File(dir, "admin-password.bin"), File(dir, "admin-attempts.txt"), network::free, now = { 1_000_000L })
+        AdminUnlock(File(dir, "admin-password.bin"), File(dir, "admin-attempts.txt"), { _, minutes -> network.free(minutes) }, now = { 1_000_000L })
     }
 
     private fun handler(withNetwork: Boolean): CommandHandler {
