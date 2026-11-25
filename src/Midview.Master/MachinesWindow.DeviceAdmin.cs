@@ -27,6 +27,21 @@ public partial class MachinesWindow
         ShowDeviceAdminButton.Content = PhoneDefaultsText.ShowButton;
         ShowDeviceAdminButton.Visibility = saved ? Visibility.Visible : Visibility.Collapsed;
         DeviceAdminStatus.Text = PhoneDefaultsText.CardStatus(saved);
+        var waiting = saved ? PendingNames() : Array.Empty<string>();
+        DeviceAdminPending.Text = PhoneDefaultsText.Pending(waiting);
+        DeviceAdminPending.Visibility = waiting.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // The room's devices the password has not reached yet (DeviceAdminPendingFile), by name.
+    private IReadOnlyList<string> PendingNames()
+    {
+        var agents = DeviceAdminPendingFile.Load();
+        return _roster()
+            .Where(machine => machine.IsPhone && machine.AgentThumbprint is { } agent && agents.Contains(agent.Trim().ToUpperInvariant()))
+            .Select(machine => machine.Name)
+            .Distinct()
+            .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     private async void OnSetDeviceAdminClicked(object sender, RoutedEventArgs e)

@@ -123,6 +123,13 @@ internal static class PhoneDefaultsText
 
     public const string ShowButton = "Mostrar a senha";
 
+    // Under the card: the devices still waiting for the password
+    // (DeviceAdminPendingFile), or nothing.
+    public static string Pending(IReadOnlyList<string> names) =>
+        names.Count == 0 ? ""
+        : names.Count == 1 ? $"Ainda sem a senha: {names[0]}. Ele recebe assim que aparecer online."
+        : $"Ainda sem a senha: {List(names)}. Cada um recebe assim que aparecer online.";
+
     // "Mostrar a senha": the saved password, or why it can't be shown (one
     // saved before it could be).
     public static string Shown(string? text) =>

@@ -206,6 +206,15 @@ public sealed class PhoneDefaultsAdminTests : IDisposable
         Assert.Contains("Trocar a senha", PhoneDefaultsText.Shown(null));
     }
 
+    [Fact]
+    public void The_card_names_the_devices_still_waiting()
+    {
+        Assert.Equal("", PhoneDefaultsText.Pending(Array.Empty<string>()));
+        Assert.Equal("Ainda sem a senha: Tablet 60. Ele recebe assim que aparecer online.", PhoneDefaultsText.Pending(new[] { "Tablet 60" }));
+        Assert.Equal("Ainda sem a senha: Celular 11 e Tablet 60. Cada um recebe assim que aparecer online.",
+            PhoneDefaultsText.Pending(new[] { "Celular 11", "Tablet 60" }));
+    }
+
     // The page keeps nothing of the password anywhere but the defaults'
     // DPAPI blob (PhoneDefaultsFile), and never logs it.
     [Fact]
