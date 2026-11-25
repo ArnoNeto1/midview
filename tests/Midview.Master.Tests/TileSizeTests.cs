@@ -153,4 +153,27 @@ public class TileSizeTests
             }
         }
     }
+
+    // A tablet or phone stands up, much narrower than a computer: several
+    // fit beside a computer in its row, so "Visualizar todos" must not count
+    // each as a whole computer. 25 computers and 6 tablets in a row 1500
+    // wide: 7 across, the tablets beside the last 4 computers, 4 rows.
+    [Fact]
+    public void ToFitAll_TabletsBesideTheComputers_TakeNoRowOfTheirOwn()
+    {
+        var shown = Enumerable.Repeat(false, 25).Concat(Enumerable.Repeat(true, 6)).ToList();
+
+        Assert.Equal(196, TileSize.ToFitAll(shown, 1500, 690, 18, 50));
+        Assert.Equal(169, TileSize.ToFitAll(31, 1500, 690, 18, 50));
+    }
+
+    [Fact]
+    public void RowsOf_FlowsLikeTheGrid()
+    {
+        var shown = Enumerable.Repeat(false, 25).Concat(Enumerable.Repeat(true, 6)).ToList();
+
+        Assert.Equal(4, TileSize.RowsOf(shown, 196, 1500, 18));
+        Assert.Equal(5, TileSize.RowsOf(shown, 232, 1500, 18));
+        Assert.Equal(0, TileSize.RowsOf(new List<bool>(), 196, 1500, 18));
+    }
 }

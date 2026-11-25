@@ -92,6 +92,8 @@ public partial class MainWindow : MidviewWindow
         MachinesItemsControl.ItemsSource = _tiles;
         _shownTiles = (ListCollectionView)CollectionViewSource.GetDefaultView(_tiles);
         _shownTiles.Filter = item => GridFilter.Shows((MachineTile)item, _onlineOnly, _devices);
+        // By name, whatever order the list has them in (TileOrder).
+        _shownTiles.CustomSort = TileOrder.Instance;
         _shownTiles.IsLiveFiltering = true;
         _shownTiles.LiveFilteringProperties.Add(nameof(MachineTile.Presence));
         ((INotifyCollectionChanged)_shownTiles).CollectionChanged += OnShownTilesChanged;

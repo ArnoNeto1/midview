@@ -286,7 +286,7 @@ public partial class MainWindow
         }
         else
         {
-            width = TileSize.ToFitAll(containers.Count, RowWidth(), availableHeight, TileChromeWidth, chromeHeight);
+            width = TileSize.ToFitAll(shown.Select(tile => tile.IsPhone).ToList(), RowWidth(), availableHeight, TileChromeWidth, chromeHeight);
         }
         if (width != _tileWidth)
         {

@@ -68,7 +68,15 @@ public static class TileSize
     // below it). When even the smallest doesn't fit, the smallest: as many
     // as possible in view.
     public static int ToFitAll(
-        int machines, double availableWidth, double availableHeight, double chromeWidth, double chromeHeight)
+        int machines, double availableWidth, double availableHeight, double chromeWidth, double chromeHeight) =>
+        ToFitAll(Enumerable.Repeat(false, machines).ToList(), availableWidth, availableHeight, chromeWidth, chromeHeight);
+
+    // The same for the machines as the grid shows them, in its order: each
+    // true is a phone or tablet, which stands up (PhoneWidthOf) and so takes
+    // far less of a row than a computer -- counting it as one made the
+    // tiles smaller than needed, with room left over below.
+    public static int ToFitAll(
+        IReadOnlyList<bool> phones, double availableWidth, double availableHeight, double chromeWidth, double chromeHeight)
     {
         for (var columns = 1; ; columns++)
         {
@@ -77,13 +85,38 @@ public static class TileSize
             {
                 break;
             }
-            var rows = (machines + columns - 1) / columns;
+            var rows = RowsOf(phones, width, availableWidth, chromeWidth);
             if (rows * (HeightOf(width) + chromeHeight) <= availableHeight)
             {
                 return Clamp(width);
             }
         }
         return Smallest;
+    }
+
+    // How many rows the tiles take in a row rowWidth wide at this width,
+    // laid out as the grid does (TileGridPanel): left to right, a new row
+    // when the next tile doesn't fit. A phone's tile is as tall as a
+    // computer's, so every row is as tall.
+    public static int RowsOf(IReadOnlyList<bool> phones, int width, double rowWidth, double chromeWidth)
+    {
+        if (phones.Count == 0)
+        {
+            return 0;
+        }
+        var rows = 1;
+        double x = 0;
+        foreach (var phone in phones)
+        {
+            var tile = (phone ? PhoneWidthOf(width) : width) + chromeWidth;
+            if (x > 0 && x + tile > rowWidth)
+            {
+                rows++;
+                x = 0;
+            }
+            x += tile;
+        }
+        return rows;
     }
 
     // "Visualizar todos" with the tiles placed by hand: the largest width at
