@@ -279,7 +279,9 @@ public partial class MainWindow
         int width;
         if (_arranged)
         {
-            var (columns, rows) = TileArrangement.Extent(shown.Select(tile => tile.Cell ?? new TileCell(0, 0)));
+            var (columns, rows) = TileArrangement.Extent(RoomCompacted
+                ? TileArrangement.Compacted(shown.Select(tile => tile.Name).ToList(), RoomColumns())
+                : shown.Select(tile => tile.Cell ?? new TileCell(0, 0)));
             width = TileSize.ToFitRoom(columns, rows, RowWidth(), availableHeight, TileChromeWidth, chromeHeight);
         }
         else
@@ -299,7 +301,30 @@ public partial class MainWindow
     {
         _tilePanel = (TileGridPanel)sender;
         _tilePanel.Arranged = _arranged;
+        UpdateCompactRoom();
     }
+
+    // "Só online" with the room organized: the machines switched off leave
+    // no gaps, the tiles shown closing up in the order of their names, as
+    // many to a row as the whole room is wide (TileArrangement.Compacted). The places
+    // the teacher gave them stay as they are, so they can't be dragged then.
+    private bool RoomCompacted => _arranged && _onlineOnly;
+
+    private void UpdateCompactRoom()
+    {
+        if (_tilePanel is null)
+        {
+            return;
+        }
+        _tilePanel.CompactColumns = RoomCompacted ? RoomColumns() : 0;
+    }
+
+    // How wide the whole room is, machines hidden or not.
+    private int RoomColumns() =>
+        (int)Math.Ceiling(TileArrangement.Extent(_tiles.Select(tile => tile.Cell).OfType<TileCell>()).Columns);
+
+    private const string CompactedRoomHint =
+        "Com \"Só online\" ligado, as telas ficam juntas, sem os espaços das desligadas. Para arrastar as telas, desligue \"Só online\".";
 
     private void OnArrangeClicked(object sender, RoutedEventArgs e)
     {
@@ -316,11 +341,14 @@ public partial class MainWindow
             TileSizeSlider.Value = _tileWidth;
         }
         FillRows();
+        UpdateCompactRoom();
         SaveGridView();
         FitSoon();
-        StatusTextBlock.Text = _arranged
-            ? "Arraste as telas para ficarem como as máquinas estão na sala. Arrastar uma tela selecionada leva junto as outras selecionadas."
-            : string.Empty;
+        StatusTextBlock.Text = !_arranged
+            ? string.Empty
+            : RoomCompacted
+                ? CompactedRoomHint
+                : "Arraste as telas para ficarem como as máquinas estão na sala. Arrastar uma tela selecionada leva junto as outras selecionadas.";
     }
 
     private void OnAlignClicked(object sender, RoutedEventArgs e)
@@ -362,6 +390,7 @@ public partial class MainWindow
         {
             SaveCells();
         }
+        UpdateCompactRoom();
     }
 
     private void SaveCells()
@@ -373,6 +402,7 @@ public partial class MainWindow
                 _cells[tile.Name] = cell;
             }
         }
+        UpdateCompactRoom();
         try
         {
             TileCellsFile.Save(TileCellsFile.DefaultPath, _cells);
@@ -392,7 +422,7 @@ public partial class MainWindow
         {
             _doubleClickedTile = null;
         }
-        if (_arranged && ((FrameworkElement)sender).DataContext is MachineTile tile)
+        if (_arranged && !RoomCompacted && ((FrameworkElement)sender).DataContext is MachineTile tile)
         {
             _dragStart = e.GetPosition(GridSurface);
             _dragTile = tile;

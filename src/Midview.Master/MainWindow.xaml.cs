@@ -388,8 +388,13 @@ public partial class MainWindow : MidviewWindow
         // The view's own Refresh: MachinesItemsControl.Items.Refresh() left
         // the hidden tiles in when tried.
         _shownTiles.Refresh();
+        UpdateCompactRoom();
         UpdateEmptyHint();
         SaveGridView();
+        if (_arranged)
+        {
+            StatusTextBlock.Text = onlineOnly ? CompactedRoomHint : string.Empty;
+        }
     }
 
     // A tile the grid stopped showing ("Só online") leaves the selection, so

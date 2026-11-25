@@ -18,14 +18,38 @@ public sealed class TileGridPanel : Panel
         "Cell", typeof(TileCell?), typeof(TileGridPanel),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
 
+    // The machine's name, set like Cell: what the tiles close up by
+    // (CompactColumns).
+    public static readonly DependencyProperty SortNameProperty = DependencyProperty.RegisterAttached(
+        "SortName", typeof(string), typeof(TileGridPanel),
+        new FrameworkPropertyMetadata(string.Empty, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
+
+    public static string GetSortName(DependencyObject element) => (string)element.GetValue(SortNameProperty);
+
+    public static void SetSortName(DependencyObject element, string value) => element.SetValue(SortNameProperty, value);
+
     public static TileCell? GetCell(DependencyObject element) => (TileCell?)element.GetValue(CellProperty);
 
     public static void SetCell(DependencyObject element, TileCell? value) => element.SetValue(CellProperty, value);
+
+    // Placed like the room, but "Só online" hides the machines switched off:
+    // the tiles shown close up by name (SortName), this many to a row
+    // (TileArrangement.Compacted).
+    // 0 leaves every tile at its Cell.
+    public static readonly DependencyProperty CompactColumnsProperty = DependencyProperty.Register(
+        nameof(CompactColumns), typeof(int), typeof(TileGridPanel),
+        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public bool Arranged
     {
         get => (bool)GetValue(ArrangedProperty);
         set => SetValue(ArrangedProperty, value);
+    }
+
+    public int CompactColumns
+    {
+        get => (int)GetValue(CompactColumnsProperty);
+        set => SetValue(CompactColumnsProperty, value);
     }
 
     // One cell of the room, as last laid out: what a drag moves a tile by.
@@ -51,19 +75,29 @@ public sealed class TileGridPanel : Panel
             LayOutRows(finalSize.Width, arrange: true);
             return finalSize;
         }
-        foreach (UIElement child in InternalChildren)
+        var cells = RoomCells();
+        for (var i = 0; i < InternalChildren.Count; i++)
         {
-            var cell = GetCell(child) ?? new TileCell(0, 0);
+            var child = InternalChildren[i];
             child.Arrange(new Rect(
-                new Point(cell.X * CellSize.Width, cell.Y * CellSize.Height), child.DesiredSize));
+                new Point(cells[i].X * CellSize.Width, cells[i].Y * CellSize.Height), child.DesiredSize));
         }
         return finalSize;
     }
 
+    // Where each child shows, in InternalChildren's order: at its Cell, or
+    // closed up by name (CompactColumns).
+    private IReadOnlyList<TileCell> RoomCells()
+    {
+        var children = InternalChildren.Cast<UIElement>().ToList();
+        return CompactColumns > 0
+            ? TileArrangement.Compacted(children.Select(GetSortName).ToList(), CompactColumns)
+            : children.Select(child => GetCell(child) ?? new TileCell(0, 0)).ToList();
+    }
+
     private Size RoomSize()
     {
-        var extent = TileArrangement.Extent(
-            InternalChildren.Cast<UIElement>().Select(child => GetCell(child) ?? new TileCell(0, 0)));
+        var extent = TileArrangement.Extent(RoomCells());
         return InternalChildren.Count == 0
             ? new Size()
             : new Size(extent.Columns * CellSize.Width, extent.Rows * CellSize.Height);

@@ -103,4 +103,25 @@ public class TileArrangementTests
         Assert.Equal(new TileCell(3, 1), cells["ALUNO-23"]);
         Assert.Single(cells);
     }
+
+    // "Só online" with the room organized: the machines left close up in
+    // the order of their names, numbers counted as numbers (ALUNO-2 before
+    // ALUNO-10), 3 to a row. Returned in the order given.
+    [Fact]
+    public void Compacted_ClosesTheGaps_InTheOrderOfTheNames()
+    {
+        var shown = new[] { "ALUNO-10", "Tablet 04", "ALUNO-02", "ALUNO-7", "Tablet 01" };
+
+        var compacted = TileArrangement.Compacted(shown, columns: 3);
+
+        Assert.Equal(
+            new[] { new TileCell(2, 0), new TileCell(1, 1), new TileCell(0, 0), new TileCell(1, 0), new TileCell(0, 1) },
+            compacted);
+    }
+
+    [Fact]
+    public void Compacted_NoRoomWidthYet_OneAcross() =>
+        Assert.Equal(
+            new[] { new TileCell(0, 1), new TileCell(0, 0) },
+            TileArrangement.Compacted(new[] { "ALUNO-2", "ALUNO-1" }, columns: 0));
 }

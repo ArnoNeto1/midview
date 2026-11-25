@@ -262,10 +262,12 @@
                                 <local:TileGridPanel Loaded="OnTilePanelLoaded" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <!-- Where each tile sits when placed like the room ("Organizar sala"). -->
+                        <!-- Where each tile sits when placed like the room ("Organizar sala"),
+                             and the name it closes up by with "Só online". -->
                         <ItemsControl.ItemContainerStyle>
                             <Style TargetType="ContentPresenter">
                                 <Setter Property="local:TileGridPanel.Cell" Value="{Binding Cell}" />
+                                <Setter Property="local:TileGridPanel.SortName" Value="{Binding Name}" />
                             </Style>
                         </ItemsControl.ItemContainerStyle>
                         <ItemsControl.ItemTemplate>

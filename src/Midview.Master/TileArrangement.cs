@@ -66,6 +66,23 @@ public static class TileArrangement
         }
     }
 
+    // "Só online" with the room organized: the tiles shown close up, so the
+    // ones switched off leave no gaps. In the order of the machines' names,
+    // numbers counted as numbers (ALUNO-2 before ALUNO-10: NaturalOrder), as
+    // many to a row as the room is wide. Returned in the order given; the
+    // places the teacher gave the tiles are left as they are.
+    public static IReadOnlyList<TileCell> Compacted(IReadOnlyList<string> names, int columns)
+    {
+        var compacted = new TileCell[names.Count];
+        var byName = Enumerable.Range(0, names.Count).OrderBy(index => names[index], NaturalOrder.Instance);
+        var place = 0;
+        foreach (var index in byName)
+        {
+            compacted[index] = FromRows(place++, columns);
+        }
+        return compacted;
+    }
+
     // How many cells across and down the room takes, from its top-left
     // corner; at least one of each.
     public static (double Columns, double Rows) Extent(IEnumerable<TileCell> cells)
