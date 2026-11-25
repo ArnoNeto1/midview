@@ -253,4 +253,12 @@ object MessageType {
     // lock it again now; DebuggingFree), answered with a CommandAck
     // (CommandResult). Number 111 as the C# FreePhoneDebugging.
     const val FREE_PHONE_DEBUGGING = 111
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Rede
+    // Wi-Fi nova da escola" (a PhoneWifiNetwork payload: the network's name
+    // and password). The Device Owner saves it beside the device's networks,
+    // where the student can neither change nor forget it, and Android joins
+    // it by itself once it is in reach. Answered with a CommandAck
+    // (CommandResult). Number 112 as the C# AddPhoneWifi.
+    const val ADD_PHONE_WIFI = 112
 }

@@ -102,7 +102,7 @@ public sealed class PhoneSetupProgressDefaultsTests : IDisposable
     {
         Assert.Equal("Papel de parede, PIN e senha da escola", PhoneDefaultsText.Heading);
         Assert.Contains("cada tablet preparado", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
-        Assert.Contains("Pule", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
+        Assert.Contains("senha de administrador é obrigatória", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
         Assert.Contains("Configurar tablet", PhoneDefaultsText.Intro(AndroidDeviceKind.Tablet));
         Assert.Contains("cada celular preparado", PhoneDefaultsText.Intro(AndroidDeviceKind.Phone));
         Assert.Contains("Configurar celular", PhoneDefaultsText.Intro(AndroidDeviceKind.Phone));

@@ -12,6 +12,7 @@ import io.github.arnoneto1.midview.agent.policy.DevicePolicyGateway
 import io.github.arnoneto1.midview.agent.protocol.CommandResult
 import io.github.arnoneto1.midview.agent.protocol.Message
 import io.github.arnoneto1.midview.agent.protocol.MessageType
+import io.github.arnoneto1.midview.agent.protocol.PhoneWifiNetwork
 import io.github.arnoneto1.midview.agent.protocol.NetworkUpdateCodec
 import io.github.arnoneto1.midview.agent.protocol.PhoneApp
 import io.github.arnoneto1.midview.agent.protocol.PhoneAppList
@@ -279,6 +280,10 @@ class CommandHandler(
             val (done, detail) = freeAccounts(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
         }
+        MessageType.ADD_PHONE_WIFI -> {
+            val (done, detail) = addWifi(message.payload)
+            Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
+        }
         MessageType.FREE_PHONE_DEBUGGING -> {
             val (done, detail) = freeDebugging(message.payload)
             Message(MessageType.COMMAND_ACK, CommandResult.encode(done, detail))
@@ -371,8 +376,25 @@ class CommandHandler(
         return if (consent.isLocked) false to SCREEN_LOCKED else true to REQUEST_SHOWN
     }
 
+    // "Rede Wi-Fi nova da escola": the network saved as the Device Owner's,
+    // beside the ones the device has (none is forgotten), so it joins it by
+    // itself once it is in reach.
+    private fun addWifi(payload: ByteArray): Pair<Boolean, String> {
+        val network = PhoneWifiNetwork.decode(payload) ?: return false to INVALID_REQUEST
+        if (!gateway.isDeviceOwner()) return false to NOT_PREPARED
+        return try {
+            gateway.addWifi(network.name, network.password.ifEmpty { null })
+            true to WIFI_SAVED
+        } catch (e: RuntimeException) {
+            log("The Wi-Fi network the teacher sent was not saved", e)
+            false to WIFI_REFUSED
+        }
+    }
+
     companion object {
         const val REQUEST_SHOWN = "pedido mostrado"
+        const val WIFI_SAVED = "rede guardada: o aparelho entra nela quando ela estiver ao alcance"
+        const val WIFI_REFUSED = "o Android não guardou a rede"
         const val SCREEN_ALREADY_ALLOWED = "a tela já está liberada"
         const val WIPING = "apagando"
         const val NOT_PREPARED = "Este celular não foi preparado pelo Midview."

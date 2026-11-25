@@ -9,6 +9,7 @@ public enum PhoneNetworkAction
     Lock,
     SetPassword,
     RemovePassword,
+    AddWifi,
 }
 
 // How the "Liberar Wi-Fi e modo avião" window words the admin password and
@@ -55,6 +56,7 @@ public static class PhoneNetworkText
         PhoneNetworkAction.Free => "liberando…",
         PhoneNetworkAction.Lock => "travando…",
         PhoneNetworkAction.SetPassword => "pondo a senha…",
+        PhoneNetworkAction.AddWifi => "pondo a rede…",
         _ => "tirando a senha…",
     };
 
@@ -66,10 +68,19 @@ public static class PhoneNetworkText
             PhoneNetworkAction.Free => ("Liberando o Wi-Fi e o modo avião", "no", "nos"),
             PhoneNetworkAction.Lock => ("Travando o Wi-Fi e o modo avião", "no", "nos"),
             PhoneNetworkAction.SetPassword => ("Pondo a senha de administrador", "no", "nos"),
+            PhoneNetworkAction.AddWifi => ("Pondo a rede Wi-Fi nova", "no", "nos"),
             _ => ("Tirando a senha de administrador", "do", "dos"),
         };
         return devices == 1 ? $"{verb} {into} aparelho..." : $"{verb} {outOf} {devices} aparelhos...";
     }
+
+    // The card "Rede Wi-Fi nova da escola".
+    public const string WifiCardLine =
+        "Vai trocar o roteador ou o nome do Wi-Fi? Ponha a rede nova nos aparelhos antes, enquanto eles ainda estão na rede de hoje: " +
+        "eles guardam as duas e entram sozinhos na nova quando ela aparecer, e o aluno não consegue apagá-la. " +
+        "Numa rede com voucher, o aparelho ainda passa pela página de voucher. Use só se precisar.";
+
+    public const string WifiPasswordHint = "Em branco para uma rede aberta.";
 
     // Above the list, once every device answered (or didn't).
     public static string Summary(PhoneNetworkAction action, int minutes, int done, int total)
@@ -79,6 +90,7 @@ public static class PhoneNetworkText
             PhoneNetworkAction.Free => $"Wi-Fi e modo avião liberados por {Minutes(minutes)}",
             PhoneNetworkAction.Lock => "Wi-Fi e modo avião travados",
             PhoneNetworkAction.SetPassword => "Senha de administrador posta",
+            PhoneNetworkAction.AddWifi => "Rede Wi-Fi nova posta",
             _ => "Senha de administrador tirada",
         };
         var place = action == PhoneNetworkAction.RemovePassword ? "dos" : "nos";

@@ -9,7 +9,7 @@ internal static class PhoneDefaultsText
 
     public static string Intro(AndroidDeviceKind kind) =>
         $"Vão sozinhos para cada {DeviceSetupText.Word(kind)} preparado, assim que ele aparecer no Midview. " +
-        $"Não quer agora? Pule: dá para escolher depois em Configurar {DeviceSetupText.Word(kind)}.";
+        $"O papel de parede e o PIN podem ficar para depois, em Configurar {DeviceSetupText.Word(kind)}; a senha de administrador é obrigatória.";
 
     public const string PinHint =
         "4 números que o aluno não troca. Deixe em branco para não pôr PIN. Fica guardado só neste computador, protegido pelo Windows.";
@@ -39,7 +39,7 @@ internal static class PhoneDefaultsText
         "Obrigatória. Fica guardada neste computador, protegida pelo Windows: dá para vê-la em Máquinas da sala → Senha de administrador.";
 
     public const string AdminRequired =
-        "Digite a senha de administrador para seguir. Sem ela, um tablet ou celular que ficar sem rede não pode ser destravado nem pelo Midview nem na própria tela.";
+        "Digite a senha de administrador para seguir. Sem ela, um aparelho que ficar sem rede não pode ser destravado nem pelo Midview nem na própria tela.";
 
     public const string AdminSavedHint =
         "Já há uma senha guardada. Deixe em branco para mantê-la, ou digite outra.";

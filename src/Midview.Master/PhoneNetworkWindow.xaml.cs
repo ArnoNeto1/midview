@@ -22,6 +22,9 @@ public partial class PhoneNetworkWindow : MidviewWindow
     private bool _running;
     private bool _syncing;
 
+    // The network "Pôr nos aparelhos" sends, while it is being sent.
+    private (string Name, string Password)? _wifi;
+
     // allPhones: phones is every Android device in the classroom list.
     public PhoneNetworkWindow(IReadOnlyList<KnownMachine> phones, bool allPhones, X509Certificate2 masterCertificate)
     {
@@ -109,6 +112,33 @@ public partial class PhoneNetworkWindow : MidviewWindow
         PasswordHintTextBlock.Text = PhoneNetworkText.PasswordHint(Password);
         FreeButton.IsEnabled = LockButton.IsEnabled = RemovePasswordButton.IsEnabled = !_running;
         SetPasswordButton.IsEnabled = !_running && PhoneNetworkText.IsPasswordReady(Password);
+        WifiCardTextBlock.Text = PhoneNetworkText.WifiCardLine;
+        var wifiProblem = WifiNameTextBox.Text.Length == 0 ? null : PhoneWifiNetwork.Problem(WifiNameTextBox.Text, WifiPasswordBox.Password);
+        WifiPasswordHintTextBlock.Text = wifiProblem ?? PhoneNetworkText.WifiPasswordHint;
+        AddWifiButton.IsEnabled = !_running && WifiNameTextBox.Text.Length > 0 && wifiProblem is null;
+    }
+
+    private void OnWifiChanged(object sender, RoutedEventArgs e) => ShowState();
+
+    // "Pôr nos aparelhos": the network goes as typed; the boxes empty after.
+    private async void OnAddWifiClicked(object sender, RoutedEventArgs e)
+    {
+        var name = WifiNameTextBox.Text;
+        var password = WifiPasswordBox.Password;
+        if (PhoneWifiNetwork.Problem(name, password) is not null)
+        {
+            return;
+        }
+        _wifi = (name, password);
+        try
+        {
+            await RunAsync(PhoneNetworkAction.AddWifi, 0, null);
+        }
+        finally
+        {
+            _wifi = null;
+            WifiPasswordBox.Clear();
+        }
     }
 
     private async void OnFreeClicked(object sender, RoutedEventArgs e) => await RunAsync(PhoneNetworkAction.Free, ChosenMinutes, null);
@@ -172,9 +202,13 @@ public partial class PhoneNetworkWindow : MidviewWindow
         }
         try
         {
-            var answer = action is PhoneNetworkAction.Free or PhoneNetworkAction.Lock
-                ? PhoneNetworkClient.Free(phone, minutes, _masterCertificate)
-                : PhoneNetworkClient.SetAdminPassword(phone, passwordPayload, _masterCertificate);
+            var answer = action switch
+            {
+                PhoneNetworkAction.Free or PhoneNetworkAction.Lock => PhoneNetworkClient.Free(phone, minutes, _masterCertificate),
+                PhoneNetworkAction.AddWifi when _wifi is { } wifi =>
+                    PhoneNetworkClient.AddWifi(phone, wifi.Name, wifi.Password, _masterCertificate),
+                _ => PhoneNetworkClient.SetAdminPassword(phone, passwordPayload, _masterCertificate),
+            };
             return (answer is { Succeeded: true } ? PhoneRowState.Done : PhoneRowState.Failed, PhoneNetworkText.Line(answer));
         }
         catch (Exception ex)

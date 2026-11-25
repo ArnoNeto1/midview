@@ -101,7 +101,7 @@
                     <!-- The phones' admin password: only its salted hash is saved (PhoneDefaultsFile). -->
                     <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                         <StackPanel>
-                            <TextBlock x:Name="DefaultsAdminTitle" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock x:Name="DefaultsAdminTitle" FontSize="14" FontWeight="SemiBold" Tag="AsIs" />
                             <TextBlock x:Name="DefaultsAdminLine" Style="{StaticResource Hint}" FontSize="12.5" Margin="0,4,0,10" TextWrapping="Wrap" />
                             <Grid>
                                 <Grid.ColumnDefinitions>

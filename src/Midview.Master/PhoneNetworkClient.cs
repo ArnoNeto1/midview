@@ -27,6 +27,11 @@ public static class PhoneNetworkClient
         return Send(phone, MessageType.SetPhoneAdminPassword, passwordPayload, masterCertificate, port);
     }
 
+    // "Rede Wi-Fi nova da escola": the network saved on the device beside its own.
+    public static (bool Succeeded, string Detail)? AddWifi(
+        KnownMachine phone, string name, string? password, X509Certificate2 masterCertificate, int port = ConnectionClient.AgentPort) =>
+        Send(phone, MessageType.AddPhoneWifi, PhoneWifiNetwork.Encode(name, password), masterCertificate, port);
+
     private static (bool Succeeded, string Detail)? Send(
         KnownMachine phone, MessageType type, byte[] payload, X509Certificate2 masterCertificate, int port)
     {

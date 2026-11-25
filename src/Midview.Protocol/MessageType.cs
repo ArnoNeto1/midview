@@ -495,4 +495,12 @@ public enum MessageType : byte
     // free the agent turns USB debugging on itself; at the end it turns it off
     // and locks it again. Answered and refused by an older agent alike.
     FreePhoneDebugging = 111,
+
+    // Master -> Android agent (port 28900), trusted teacher only: "Rede
+    // Wi-Fi nova da escola" (a PhoneWifiNetwork payload: the network's name
+    // and password). The device saves it beside its networks, where the
+    // student can neither change nor forget it, and joins it by itself once
+    // it is in reach. Answered with one CommandAck (CommandResult); an agent
+    // from before this answers "Ainda não funciona em celular.".
+    AddPhoneWifi = 112,
 }
