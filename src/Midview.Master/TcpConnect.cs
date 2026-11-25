@@ -5,7 +5,13 @@ namespace Midview.Master;
 internal static class TcpConnect
 {
     // Without a timeout, connecting to a machine that's switched off waits
-    // for Windows' own TCP connect timeout (~21 s).
+    // for Windows' own TCP connect timeout (~21 s). Out of time, it fails as
+    // that connect would: a SocketException (TimedOut), which every caller
+    // handles as a machine that's off ("Offline"). Thrown as the
+    // cancellation it is underneath, it slipped past callers that only
+    // expect network errors, and closed the Master ("Salvar a senha de
+    // administrador" with a tablet off). Cancelled by the caller, it stays
+    // a cancellation.
     public static TcpClient WithTimeout(
         string hostAddress, int port, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
@@ -16,6 +22,11 @@ internal static class TcpConnect
             linked.CancelAfter(timeout);
             tcpClient.ConnectAsync(hostAddress, port, linked.Token).AsTask().GetAwaiter().GetResult();
             return tcpClient;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            tcpClient.Dispose();
+            throw new SocketException((int)SocketError.TimedOut);
         }
         catch
         {
