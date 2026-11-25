@@ -196,9 +196,14 @@ public partial class PreparePhonesWindow
         return true;
     }
 
-    // "Pular": nothing saved, not asked again for this kind.
-    private void SkipDefaults()
+    // "Pular": nothing saved, not asked again for this kind; false, said on
+    // the page, while no admin password is saved (CanSkipDefaults).
+    private bool SkipDefaults()
     {
+        if (!CanSkipDefaults())
+        {
+            return false;
+        }
         // A password typed and skipped is not kept on the page either.
         ClearDefaultsAdmin();
         try
@@ -209,5 +214,6 @@ public partial class PreparePhonesWindow
         {
             // Asked again next time; nothing else is lost.
         }
+        return true;
     }
 }

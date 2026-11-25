@@ -61,8 +61,8 @@ public partial class PreparePhonesWindow
     private void ShowAdminHint()
     {
         DefaultsAdminHint.Text = PhoneDefaultsText.AdminTyping(DefaultsAdmin, _adminSaved, _adminRemove);
-        DefaultsAdminRemoveLink.Visibility =
-            _adminSaved && !_adminRemove && DefaultsAdmin.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // The password is required: no "Não pôr senha" here (Senha de administrador still removes it).
+        DefaultsAdminRemoveLink.Visibility = Visibility.Collapsed;
     }
 
     // Letters and digits only, as in "Wi-Fi e modo avião".
@@ -121,7 +121,19 @@ public partial class PreparePhonesWindow
     }
 
     // Null when fine to save; else what the page says (SaveDefaults).
-    private string? DefaultsAdminProblem() => PhoneDefaultsText.AdminProblem(DefaultsAdmin, DefaultsAdminRepeat);
+    private string? DefaultsAdminProblem() => PhoneDefaultsText.AdminProblem(DefaultsAdmin, DefaultsAdminRepeat, _adminSaved && !_adminRemove);
+
+    // "Pular" goes on only with a password saved: it is the one default the
+    // devices cannot do without.
+    private bool CanSkipDefaults()
+    {
+        if (_adminSaved && !_adminRemove)
+        {
+            return true;
+        }
+        DefaultsErrorText.Text = PhoneDefaultsText.AdminRequired;
+        return false;
+    }
 
     // After the picture and the PIN: a typed password replaces the saved
     // one, "Não pôr senha" takes it off, blank keeps what there is.

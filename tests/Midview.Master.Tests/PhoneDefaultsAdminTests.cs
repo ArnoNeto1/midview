@@ -128,7 +128,9 @@ public sealed class PhoneDefaultsAdminTests : IDisposable
     [Fact]
     public void The_boxes_are_checked_with_the_network_windows_rules()
     {
-        Assert.Null(PhoneDefaultsText.AdminProblem("", ""));
+        // Required: empty only when one is saved already.
+        Assert.Equal(PhoneDefaultsText.AdminRequired, PhoneDefaultsText.AdminProblem("", ""));
+        Assert.Null(PhoneDefaultsText.AdminProblem("", "", saved: true));
         Assert.Null(PhoneDefaultsText.AdminProblem("abc123", "abc123"));
         Assert.Equal(PhoneDefaultsText.AdminInvalid, PhoneDefaultsText.AdminProblem("abc12", "abc12"));
         Assert.Equal(PhoneDefaultsText.AdminInvalid, PhoneDefaultsText.AdminProblem("", "abc123"));

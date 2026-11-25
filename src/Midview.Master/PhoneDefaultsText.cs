@@ -33,8 +33,13 @@ internal static class PhoneDefaultsText
     public const string AdminRepeat = "Repita a senha";
 
     // Under the boxes, before anything is typed: nothing saved yet, or one saved.
+    // The password is required: without it a device that loses the network
+    // cannot be freed, neither by the Midview nor on its own screen.
     public const string AdminHint =
-        "Deixe em branco para não pôr senha. Fica guardada neste computador, protegida pelo Windows: dá para vê-la em Máquinas da sala → Senha de administrador.";
+        "Obrigatória. Fica guardada neste computador, protegida pelo Windows: dá para vê-la em Máquinas da sala → Senha de administrador.";
+
+    public const string AdminRequired =
+        "Digite a senha de administrador para seguir. Sem ela, um tablet ou celular que ficar sem rede não pode ser destravado nem pelo Midview nem na própria tela.";
 
     public const string AdminSavedHint =
         "Já há uma senha guardada. Deixe em branco para mantê-la, ou digite outra.";
@@ -56,13 +61,13 @@ internal static class PhoneDefaultsText
             ? PhoneNetworkText.PasswordHint(typed) is { Length: > 0 } missing ? missing : "Senha completa."
             : removed ? AdminRemovedHint : saved ? AdminSavedHint : AdminHint;
 
-    // Null when the two boxes are fine to save (both empty, or the same
-    // valid password); else what the page says.
-    public static string? AdminProblem(string password, string repeat)
+    // Null when the two boxes are fine to save (the same valid password, or
+    // both empty when one is saved already); else what the page says.
+    public static string? AdminProblem(string password, string repeat, bool saved = false)
     {
         if (password.Length == 0 && repeat.Length == 0)
         {
-            return null;
+            return saved ? null : AdminRequired;
         }
         if (!PhoneNetworkText.IsPasswordReady(password))
         {

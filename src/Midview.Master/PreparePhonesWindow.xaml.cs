@@ -69,7 +69,8 @@ public partial class PreparePhonesWindow : MidviewWindow
         _progress.Start(_wifi is not null, gathered:
             _devicesInClass(AndroidDeviceKind.Phone) + _devicesInClass(AndroidDeviceKind.Tablet) > 0
             || PhoneTotalFile.Asked() || PhoneTotalFile.Asked(kind: AndroidDeviceKind.Tablet),
-            defaultsAsked: PhoneDefaultsFile.Asked(kind));
+            // Asked again while no admin password is saved: it is required.
+            defaultsAsked: PhoneDefaultsFile.Asked(kind) && PhoneDefaultsFile.Load().AdminPassword is not null);
         InitializeCable();
         PhoneSetupGuide.FollowDeviceWords(this, () => _progress.Kind);
         ShowPage();
@@ -172,7 +173,10 @@ public partial class PreparePhonesWindow : MidviewWindow
         // "Pular": on to the steps, no default saved.
         if (_progress.Page == SetupPage.Defaults)
         {
-            SkipDefaults();
+            if (!SkipDefaults())
+            {
+                return;
+            }
             _progress.Next();
             ShowPage();
             return;
