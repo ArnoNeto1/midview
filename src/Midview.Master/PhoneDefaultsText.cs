@@ -89,7 +89,7 @@ internal static class PhoneDefaultsText
     // The same question in "Senha de administrador" of "Máquinas da sala"
     // (change), which puts the password on every device of the room.
     public const string ChangeLine =
-        "A mesma senha vai para todos os celulares e tablets da sala que estão ligados agora; os outros recebem no próximo Otimizar. " +
+        "A mesma senha vai para todos os celulares e tablets da sala que estão ligados agora; os outros recebem sozinhos assim que aparecerem online. " +
         "Com ela, alguém da escola libera no próprio aparelho, sem rede, o Wi-Fi, a depuração USB e as contas, ou tira o Midview.";
 
     public const string ChangeSave = "Guardar e pôr nos aparelhos";
@@ -132,7 +132,7 @@ internal static class PhoneDefaultsText
     public static string Sent(int put, int total) =>
         total == 0 ? "Senha guardada. Não há celulares nem tablets na sala ainda: cada um recebe ao ser preparado."
         : put == total ? (total == 1 ? "Senha posta no aparelho da sala." : $"Senha posta nos {total} aparelhos da sala.")
-        : $"Senha posta em {put} de {total} aparelhos. Os desligados ou fora da rede recebem no próximo Otimizar.";
+        : $"Senha posta em {put} de {total} aparelhos. Os desligados ou fora da rede recebem sozinhos assim que aparecerem online.";
 
     public const string RemoveQuestion =
         "Parar de pôr a senha nos próximos aparelhos? Os celulares e tablets que já têm a senha continuam com ela.";

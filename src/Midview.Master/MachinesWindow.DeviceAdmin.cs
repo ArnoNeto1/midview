@@ -8,7 +8,8 @@ namespace Midview.Master;
 // alone), the same one "Preparar celulares" keeps and "Otimizar" sends.
 // Saved here, it goes at once to every phone and tablet of the room that
 // answers (PhoneNetworkClient.SetAdminPassword), so all of them have the
-// same; the others get it at their next "Otimizar". "Remover" only stops
+// same; the others get it as soon as they show up online
+// (DeviceAdminPendingFile, MainWindow.DeviceAdminArrivals). "Remover" only stops
 // sending it: the devices keep the one they have. "Mostrar a senha" shows the
 // saved one, for the teacher who forgot it.
 public partial class MachinesWindow
@@ -48,6 +49,7 @@ public partial class MachinesWindow
         {
             var certificate = _masterCertificate;
             var put = await Task.WhenAll(devices.Select(device => Task.Run(() => PutDeviceAdmin(device, payload, certificate))));
+            KeepLeftOut(devices.Where((_, index) => !put[index]).Select(device => device.AgentThumbprint!));
             if (!_closed)
             {
                 DeviceAdminSent.Text = PhoneDefaultsText.Sent(put.Count(done => done), devices.Count);
@@ -60,6 +62,20 @@ public partial class MachinesWindow
             {
                 RefreshDeviceAdminStatus();
             }
+        }
+    }
+
+    // The devices the password didn't reach wait for it (DeviceAdminPendingFile):
+    // MainWindow sends it as each shows up online. Not kept, they get it at
+    // their next "Otimizar", as before.
+    private static void KeepLeftOut(IEnumerable<string> agents)
+    {
+        try
+        {
+            DeviceAdminPendingFile.Save(agents);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -94,6 +110,7 @@ public partial class MachinesWindow
         try
         {
             PhoneDefaultsFile.SaveAdminPassword(null);
+            DeviceAdminPendingFile.Save(Array.Empty<string>());
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
                                        or System.Security.Cryptography.CryptographicException)
